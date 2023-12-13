@@ -41,8 +41,10 @@ type TCEnv = {
   tyConEnv : use Ast in Map Name (Level, [Name], Type),
   typeDeps : Map Name (Set Name), -- The set of type names recursively occuring in a type
   conDeps  : Map Name (Set Name), -- The set of constructors in scope for a type
-  matches : use NormPat in [Map Name NormPat],
-  currentLvl : Level,
+  matches : use NormPat in [Map Name NormPat], -- The possible ways of reaching the current branch
+  matchVars : Map Name Level, -- The maximum match level each matched variable appears at
+  matchLvl : Level, -- The current nesting level of match terms
+  currentLvl : Level, -- The current nesting level of binder bodies
   disableRecordPolymorphism : Bool,
 
   -- Reptypes relevant fields
@@ -69,6 +71,8 @@ let typcheckEnvEmpty = {
   typeDeps = mapEmpty nameCmp,
   conDeps  = mapEmpty nameCmp,
   matches  = [mapEmpty nameCmp],
+  matchVars = mapEmpty nameCmp,
+  matchLvl = 0,
   currentLvl = 0,
   disableRecordPolymorphism = true,
   reptypes = {
@@ -725,15 +729,18 @@ lang IsEmpty =
   | ROpen a
   | Neither a
 
-  -- Merge two assignments of meta variables to upper bound
-  -- constructor sets.  If either assignment is more open than the
-  -- other, that one is returned.  If either one is more open on the
-  -- set of overlapping keys, we take the union and prefer that one
-  -- whenever overlap is encountered.  Otherwise, we indicate that
-  -- neither is more open and take the union on overlapping keys.
-  sem mergeBounds :  Bounds -> Bounds -> Open Bounds
-  sem mergeBounds m1 =
-  | m2 ->
+  -- Compare two assignments of meta variables to upper bound
+  -- constructor sets, according to:
+  -- 1. Is one more open than the other?
+  -- 2. Does one carry a higher level than the other?
+  -- 3. Is either one more open on the set of overlapping keys?
+  -- If either assignment is preferred according to 1. or 2., then
+  -- that one is indicated with a payload of None ().  Otherwise, a
+  -- payload of Some m is returned, where m is an appropriate merging
+  -- of the two input maps.
+  sem compareBounds : ((Level, Bounds), (Level, Bounds)) -> Open (Option Bounds)
+  sem compareBounds =
+  | ((lvl1, m1), (lvl2, m2)) ->
     let dataMoreOpen = lam d1. lam d2.
       mapAllWithKey
         (lam t. lam ks1.
@@ -744,15 +751,18 @@ lang IsEmpty =
     in
 
     let combine = lam e1. lam e2.
-        switch (e1, e2)
-        case (Neither _ | LOpen _, LOpen _) then Some (LOpen ())
-        case (Neither _ | ROpen _, ROpen _) then Some (ROpen ())
-        case _ then None ()
-        end
+      switch (e1, e2)
+      case (Neither _ | LOpen _, LOpen _) then Some (LOpen ())
+      case (Neither _ | ROpen _, ROpen _) then Some (ROpen ())
+      case _ then None ()
+      end
     in
 
-    if mapIsEmpty m1 then LOpen m1 else
-      if mapIsEmpty m2 then ROpen m2 else
+    let strictLhs = LOpen (None ()) in
+    let strictRhs = ROpen (None ()) in
+
+    if mapIsEmpty m1 then strictLhs else
+      if mapIsEmpty m2 then strictRhs else
 
         let middle =
           mapFoldlOption
@@ -767,33 +777,31 @@ lang IsEmpty =
             m1
         in
 
+        match (gti lvl1 lvl2, gti lvl2 lvl1) with (lhsHigher, rhsHigher) in
+
         switch middle
         case Some (LOpen ()) then
-          LOpen
-            (if mapAllWithKey (lam ty. lam. mapMem ty m2) m1 then m1
-             else mapUnionWith (lam x. lam. x) m1 m2)
+          if mapAllWithKey (lam ty. lam. mapMem ty m2) m1 then strictLhs else
+            if rhsHigher then strictRhs else
+              LOpen (Some (mapUnionWith (lam x. lam. x) m1 m2))
         case Some (ROpen ()) then
-          ROpen
-            (if mapAllWithKey (lam ty. lam. mapMem ty m1) m2 then m2
-             else mapUnionWith (lam x. lam. x) m2 m1)
+          if mapAllWithKey (lam ty. lam. mapMem ty m1) m2 then strictRhs else
+            if lhsHigher then strictLhs else
+              ROpen (Some (mapUnionWith (lam x. lam. x) m2 m1))
         case Some (Neither ()) then
-          -- The two have no overlap, so we can assign either one as more open.
-          LOpen (mapUnion m1 m2)
+          if rhsHigher then strictRhs else
+            if lhsHigher then strictLhs else
+              LOpen (Some (mapUnion m1 m2))
         case None () then
-          Neither (mapUnionWith (mapUnionWith setUnion) m1 m2)
+          if rhsHigher then strictRhs else
+            if lhsHigher then strictLhs else
+              Neither (Some (mapUnionWith (mapUnionWith setUnion) m1 m2))
         end
 
-  sem addBounds : [Bounds] -> [Bounds] -> [Bounds]
-  sem addBounds b1 =
+  sem boundsCompatible : Bounds -> Bounds -> Bool
+  sem boundsCompatible b1 =
   | b2 ->
-    joinMap (lam m1.
-      (joinMap (lam m2.
-        let compatible =
-          mapAll (mapAll (lam x. x))
-            (mapIntersectWith (mapIntersectWith setEq) m1 m2) in
-        if compatible then [mapUnionWith mapUnion m1 m2] else [])
-         b2))
-      b1
+    mapAll (mapAll (lam x. x)) (mapIntersectWith (mapIntersectWith setEq) b1 b2)
 
   -- Perform an emptiness check for the given pattern and type.
   -- Returns a list of mappings from meta variables of Data kind to
@@ -804,7 +812,13 @@ lang IsEmpty =
   sem normpatIsEmpty env =
   | (ty, np) ->
     foldl
-      (lam ms. lam p. addBounds ms (npatIsEmpty env (ty, p)))
+      (lam ms. lam p.
+        joinMap (lam m1.
+          (joinMap (lam m2.
+            if boundsCompatible m1 m2 then [mapUnionWith mapUnion m1 m2]
+            else [])
+             ms))
+          (npatIsEmpty env (ty, p)))
       [mapEmpty cmpType]
       np
 
@@ -840,6 +854,7 @@ lang IsEmpty =
               if setSubset ks.lower cons then [mkBounds ()] else []
             else error "Invalid data in npatIsEmpty!"
           else [mkBounds ()]
+      case _ then []
       end
     case (TyBool _, _) then
       if forAll (lam b. setMem (BoolCon b) cons) [true, false] then
@@ -858,7 +873,7 @@ lang IsEmpty =
   -- point could be reached.  Returns `Left ms` if this program point
   -- can be made unreachable by closing some variables' types as
   -- indicated by the alternatives in `ms`.
-  sem matchesPossible : TCEnv -> Either [Bounds] (Map Name NormPat)
+  sem matchesPossible : TCEnv -> Either [(Level, Bounds)] (Map Name NormPat)
   sem matchesPossible =
   | env ->
     recursive let work = lam f. lam a. lam bs.
@@ -869,38 +884,51 @@ lang IsEmpty =
     in
     work
       (lam acc. lam m.
-        addBounds acc
-          (mapFoldWithKey
-             (lam acc. lam n. lam p.
-               match mapLookup n env.varEnv with Some ty then
-                 let ty = inst (infoTy ty) env.currentLvl ty in
-                 concat acc (normpatIsEmpty env (ty, p))
-               else
-                 error "Unknown variable in matchesPossible!")
-             [] m))
-      [mapEmpty cmpType]
+        let bs =
+          mapFoldWithKey
+            (lam acc. lam n. lam p.
+              match mapLookup n env.varEnv with Some ty then
+                match mapLookup n env.matchVars with Some lvl then
+                  let ty = inst (infoTy ty) env.currentLvl ty in
+                  concat acc (map (lam x. (lvl, x)) (normpatIsEmpty env (ty, p)))
+                else error "Unknown variable in matchesPossible!"
+              else error "Unknown variable in matchesPossible!")
+            [] m
+        in
+        joinMap (lam x.
+          (joinMap (lam y.
+            if boundsCompatible x.1 y.1 then
+              [(maxi x.0 y.0, mapUnionWith mapUnion x.1 y.1)]
+            else [])
+             acc))
+          bs)
+      [(0, mapEmpty cmpType)]
       env.matches
 
   -- Take a (non-empty) sequence of closing assignments and attempt to
-  -- merge them into a single most open one by iterating mergeBounds.
-  sem mergeBoundsSeq : [Bounds] -> Option Bounds
-  sem mergeBoundsSeq =
+  -- merge them into a single most open one by iterating compareBounds.
+  sem mergeBounds : [(Level, Bounds)] -> Option Bounds
+  sem mergeBounds =
   | ms ->
+    let getBounds = lam l. lam r. lam res.
+      optionMapOr l (lam x. (maxi l.0 r.0, x)) res
+    in
     let merge = lam acc. lam m.
       switch acc
       case Left a then
-        switch mergeBounds m a
-        case LOpen res then Right res
-        case ROpen res | Neither res then Left res
+        switch compareBounds (m, (mini m.0 a.0, a.1))
+        case LOpen res then Right (getBounds m a res)
+        case ROpen res | Neither res then Left (getBounds a m res)
         end
       case Right a then
-        switch mergeBounds m a
-        case LOpen res | ROpen res then Right res
-        case Neither res then Left res
+        switch compareBounds (m, a)
+        case LOpen res then Right (getBounds m a res)
+        case ROpen res then Right (getBounds a m res)
+        case Neither res then Left (getBounds m a res)
         end
       end
     in
-    match foldl merge (Right (head ms)) (tail ms) with Right m then
+    match foldl merge (Right (head ms)) (tail ms) with Right (_, m) then
       Some m
     else
       None ()
@@ -1227,19 +1255,31 @@ lang MatchTypeCheck = TypeCheck + PatTypeCheck + MatchAst + NormPatMatch
     let target = typeCheckExpr env t.target in
     match typeCheckPat env (mapEmpty nameCmp) t.pat with (patEnv, pat) in
     unify env [infoTm target, infoPat pat] (tyPat pat) (tyTm target);
+
+    let matchLvl = addi 1 env.matchLvl in
     let np = patToNormpat pat in
-    let mkMatches = lam p.
+    let posMatches = matchNormpat (t.target, np) in
+    let negMatches = matchNormpat (t.target, normpatComplement np) in
+    let mkMatches = lam matches.
       joinMap (lam a.
         (joinMap (lam b.
           let m = mapUnionWith normpatIntersect a b in
           if mapAll (lam np. not (null np)) m then [m] else [])
            env.matches))
-        (matchNormpat (t.target, p))
+        matches
     in
-    let thnEnv = {env with varEnv = mapUnion env.varEnv patEnv,
-                           matches = mkMatches np} in
-    let elsEnv = {env with varEnv = mapUnion env.varEnv patEnv,
-                           matches = mkMatches (normpatComplement np)} in
+    let mkMatchVars = lam matches.
+      foldl
+        (mapFoldWithKey (lam acc. lam n. lam. mapInsert n matchLvl acc))
+        env.matchVars matches
+    in
+
+    let baseEnv = {env with varEnv = mapUnion env.varEnv patEnv,
+                            matchLvl = matchLvl} in
+    let thnEnv = {baseEnv with matches = mkMatches posMatches,
+                               matchVars = mkMatchVars posMatches} in
+    let elsEnv = {baseEnv with matches = mkMatches negMatches,
+                               matchVars = mkMatchVars negMatches} in
     let thn = typeCheckExpr thnEnv t.thn in
     let els = typeCheckExpr elsEnv t.els in
     unify env [infoTm thn, infoTm els] (tyTm thn) (tyTm els);
@@ -1413,7 +1453,7 @@ lang NeverTypeCheck = TypeCheck + NeverAst + IsEmpty
   | TmNever t ->
     switch matchesPossible env
     case Left ms then
-      match mergeBoundsSeq ms with Some m then
+      match mergeBounds ms with Some m then
         iter
           (lam x.
             let data =
@@ -1442,7 +1482,7 @@ lang NeverTypeCheck = TypeCheck + NeverAst + IsEmpty
                            (env, []) m
                        with (env, consstr) in
                        (env, join [ acc.1, "*   ", tystr, " :: {", strJoin ", " consstr, "}\n" ]))
-                     (acc.0, "") m
+                     (acc.0, "") m.1
                  with (env, mstr) in
                  (env, snoc acc.1 mstr))
                (pprintEnvEmpty, [])
