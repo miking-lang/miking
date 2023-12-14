@@ -3,13 +3,11 @@
 include "option.mc"
 include "string.mc"
 
-lang AVLTreeBase
+lang AVLTreeImpl
   syn AVL k v =
   | Leaf ()
   | Node {key : k, value : v, l : AVL k v, r : AVL k v, h : Int}
-end
 
-lang AVLTreeImpl = AVLTreeBase
   sem avlSize : all k. all v. AVL k v -> Int
   sem avlSize =
   | Leaf _ -> 0
@@ -46,7 +44,6 @@ lang AVLTreeImpl = AVLTreeBase
   sem avlRotateLeft k v l =
   | Node (rt & {l = rl, r = rr}) ->
     avlCreate rt.key rt.value (avlCreate k v l rl) rr
-  | Node _ -> error "avlRotateLeft: invalid shape of tree"
   | Leaf _ -> error "avlRotateLeft: empty tree"
 
   sem avlRotateRightLeft : all k. all v. k -> v -> AVL k v -> AVL k v -> AVL k v
@@ -62,7 +59,6 @@ lang AVLTreeImpl = AVLTreeBase
   sem avlRotateRight k v r =
   | Node (lt & {l = ll, r = lr}) ->
     avlCreate lt.key lt.value ll (avlCreate k v lr r)
-  | Node _ -> error "avlRotateRight: invalid shape of tree"
   | Leaf _ -> error "avlRotateRight: empty tree"
 
   sem avlRotateLeftRight : all k. all v. k -> v -> AVL k v -> AVL k v -> AVL k v
