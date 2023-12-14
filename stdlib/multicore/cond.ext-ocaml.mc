@@ -2,7 +2,7 @@ include "map.mc"
 include "ocaml/ast.mc"
 include "mutex.ext-ocaml.mc"
 
-let impl = lam arg : { expr : String, ty : Type }.
+let impl = lam arg : { expr : String, ty : use Ast in Type }.
   { expr = arg.expr, ty = arg.ty, libraries = [], cLibraries = [] }
 
 let tycond_ = tyunknown_

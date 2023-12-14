@@ -30,14 +30,14 @@ include "mexpr/unify.mc"
 include "mexpr/value.mc"
 include "mexpr/repr-ast.mc"
 
-type ReprSubst = {vars : [Name], pat : Type, repr : Type}
+type ReprSubst = use Ast in {vars : [Name], pat : Type, repr : Type}
 
 type TCEnv = {
   -- Normal typechecking related fields
-  varEnv: Map Name Type,
-  conEnv: Map Name Type,
+  varEnv: Map Name (use Ast in Type),
+  conEnv: Map Name (use Ast in Type),
   tyVarEnv: Map Name Level,
-  tyConEnv: Map Name (Level, [Name], Type),
+  tyConEnv: Map Name (Level, [Name], use Ast in Type),
   currentLvl: Level,
   disableRecordPolymorphism: Bool,
 
@@ -587,6 +587,9 @@ lang TypeCheck = TCUnify + Generalize + RemoveMetaVar
   -- Type check `expr' under the type environment `env'. The resulting
   -- type may contain unification variables and links.
   sem typeCheckExpr : TCEnv -> Expr -> Expr
+  sem typeCheckExpr env =
+  | tm ->
+    dprint tm; print "\n"; error ""
 end
 
 lang PatTypeCheck = TCUnify

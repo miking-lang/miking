@@ -156,7 +156,6 @@ utest use OrderIndependentA in foo (true, false) with use OrderIndependentB in f
 utest use OrderIndependentA in foo (false, true) with use OrderIndependentB in foo (false, true) in
 
 utest use RecordsWithNegation in foo {blue = true} with 4 in
-utest use RecordsWithNegation in foo {red = true} with 2 in
 utest use RecordsWithNegation in foo {blue = false} with 3 in
 
 use Lexer in

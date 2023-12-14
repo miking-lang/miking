@@ -25,7 +25,7 @@ include "cmp.mc"
 -- This type is added specifically for the type lifting to allow distinguishing
 -- between variant types in the type environment before their constructors have
 -- been added.
-lang VariantNameTypeAst = Eq
+lang VariantNameTypeAst = Ast + Eq
   syn Type =
   | TyVariantName {ident : Name,
                    info : Info}
@@ -80,25 +80,6 @@ lang TypeLiftBase = MExprAst + VariantNameTypeAst
       else ty
     in
     assocSeqMap f env.typeEnv
-end
-
-lang TypeLiftAddRecordToEnv = TypeLiftBase + RecordTypeAst
-  sem addRecordToEnv (env : TypeLiftEnv) =
-  | TyRecord {fields = fields, info = info} & ty ->
-    switch mapLookup fields env.records
-    case Some name then
-      let tycon = TyCon {ident = name, info = info} in
-      (env, tycon)
-    case None _ then
-      let name = nameSym "Rec" in
-      let tycon = TyCon {ident = name, info = info} in
-      let env = {{env
-                  with records = mapInsert fields name env.records}
-                  with typeEnv = assocSeqInsert name ty env.typeEnv}
-      in
-      (env, tycon)
-    end
-  -- | ty -> (env, ty) -- NOTE(dlunde,2021-10-06): I commented this out, so that it gives an error if a TyRecord is not supplied (less error-prone)
 end
 
 -- Define function for adding sequence types to environment
@@ -185,6 +166,25 @@ lang TypeLift = TypeLiftBase + Cmp
       let typeEnv = _replaceVariantNamesInTypeEnv env in
       (typeEnv, t)
     else never
+end
+
+lang TypeLiftAddRecordToEnv = TypeLift + RecordTypeAst
+  sem addRecordToEnv (env : TypeLiftEnv) =
+  | TyRecord {fields = fields, info = info} & ty ->
+    switch mapLookup fields env.records
+    case Some name then
+      let tycon = TyCon {ident = name, info = info} in
+      (env, tycon)
+    case None _ then
+      let name = nameSym "Rec" in
+      let tycon = TyCon {ident = name, info = info} in
+      let env = {{env
+                  with records = mapInsert fields name env.records}
+                  with typeEnv = assocSeqInsert name ty env.typeEnv}
+      in
+      (env, tycon)
+    end
+  -- | ty -> (env, ty) -- NOTE(dlunde,2021-10-06): I commented this out, so that it gives an error if a TyRecord is not supplied (less error-prone)
 end
 
 lang TypeTypeLift = TypeLift + TypeAst + VariantTypeAst + UnknownTypeAst +

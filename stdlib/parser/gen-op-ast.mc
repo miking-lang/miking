@@ -1,13 +1,13 @@
 include "gen-ast.mc"
 
 type OperatorUnsplitter
-con AtomUnsplit :
+con AtomUnsplit : use Ast in
   ({record : Expr, info : Expr} -> Expr) -> OperatorUnsplitter
-con PrefixUnsplit :
+con PrefixUnsplit : use Ast in
   ({record : Expr, info : Expr, right : Expr} -> Expr) -> OperatorUnsplitter
-con PostfixUnsplit :
+con PostfixUnsplit : use Ast in
   ({record : Expr, info : Expr, left : Expr} -> Expr) -> OperatorUnsplitter
-con InfixUnsplit :
+con InfixUnsplit : use Ast in
   ({record : Expr, info : Expr, left : Expr, right : Expr} -> Expr) -> OperatorUnsplitter
 
 type Ordering
@@ -26,7 +26,7 @@ con NAssoc : () -> Assoc
 con LAssoc : () -> Assoc
 con RAssoc : () -> Assoc
 
-type GenOperator =
+type GenOperator = use Ast in
   { requiredFragments : [Name]
   , opConstructorName : Name
   , precedenceKey : Option Name
@@ -131,28 +131,28 @@ let _geither = nconapp_ _incNames.c.geither unit_
 let _infoTy = ntycon_ _incNames.t.infoTy
 let _permanentNode_ = lam ty. tyapp_ (ntycon_ _incNames.t.permanentNode) ty
 
-let _mergeInfos_ : [Expr] -> Expr = lam exprs. switch exprs
+let _mergeInfos_ : use Ast in [Expr] -> Expr = lam exprs. switch exprs
   case [] then nconapp_ _incNames.c.noInfo unit_
   case [x] then x
   case [a, b] then appf2_ (nvar_ _incNames.v.mergeInfo) a b
   case [first] ++ exprs then appf3_ (nvar_ _incNames.v.foldl) (nvar_ _incNames.v.mergeInfo) first (seq_ exprs)
   end
 
-let _nletin_ : Name -> Type -> Expr -> Expr -> Expr
+let _nletin_ : use Ast in Name -> Type -> Expr -> Expr -> Expr
   = lam name. lam ty. lam val. lam body.
     use MExprAst in
     TmLet {ident = name, tyAnnot = ty, tyBody = tyunknown_, body = val, inexpr = body, ty = tyunknown_, info = NoInfo ()}
 
-let _nuletin_ : Name -> Expr -> Expr -> Expr
+let _nuletin_ : use Ast in Name -> Expr -> Expr -> Expr
   = lam name. lam val. lam body.
     _nletin_ name tyunknown_ val body
 
-let _uletin_ : String -> Expr -> Expr -> Expr
+let _uletin_ : use Ast in String -> Expr -> Expr -> Expr
   = lam name. lam val. lam body.
     _nletin_ (nameNoSym name) tyunknown_ val body
 
 let _mkBaseFragment
-  : (Name, InternalSynDesc) -> Decl
+  : use LangDeclAst in (Name, InternalSynDesc) -> Decl
   = lam names.
     use SemDeclAst in
     use SynDeclAst in
@@ -416,7 +416,7 @@ lang GenOpAstLang = SynDeclAst + SemDeclAst + LangDeclAst
 end
 
 let _mkGroupingSem
-  : Map Name {canBeLeft : Bool, canBeRight : Bool, assoc : Assoc, conName : Name}
+  : use SemDeclAst in Map Name {canBeLeft : Bool, canBeRight : Bool, assoc : Assoc, conName : Name}
   -> InternalSynDesc
   -> Decl
   = lam opMap. lam desc.
@@ -459,7 +459,7 @@ let _mkGroupingSem
     }
 
 let _mkComposedFragment
-  : GenOpInput -> Map Name InternalSynDesc -> [Decl] -> Decl
+  : use LangDeclAst in GenOpInput -> Map Name InternalSynDesc -> [Decl] -> Decl
   = lam config. lam synDescs. lam fragments.
     use LangDeclAst in
     let opFragments : [Name] = mapOption
@@ -490,7 +490,7 @@ let _mkComposedFragment
     , info = NoInfo ()
     }
 
-type WrapperInfo =
+type WrapperInfo = use Ast in
   { addAtom_ : Expr -> Expr -> Expr -> Expr
   , addInfix_ : Expr -> Expr -> Expr -> Expr
   , addPrefix_ : Expr -> Expr -> Expr -> Expr
@@ -601,7 +601,7 @@ let _mkBrWrappersFor
     , finalize_ = appf2_ (nvar_ finalizeName)
     }
 
-type GenOpResult =
+type GenOpResult = use LangDeclAst in use Ast in
   { fragments : [Decl]
   -- NOTE(vipa, 2022-04-12): This function wraps an expression such
   -- that the remaining functions (`addAtomFor`, etc.) can be used.

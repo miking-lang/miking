@@ -90,8 +90,12 @@ lang AppANFAll = ANF + AppAst
 
 end
 
+lang NormalizeLams
+  sem normalizeLams =
+end
+
 -- Version analogous to AppANF, where each individual lambda is not name-bound.
-lang LamANF = ANF + LamAst
+lang LamANF = ANF + NormalizeLams + LamAst
 
   sem normalize (k : Expr -> Expr) =
   | TmLam _ & t -> k (normalizeLams t)
@@ -103,7 +107,7 @@ lang LamANF = ANF + LamAst
 end
 
 -- Version where each individual lambda is name-bound.
-lang LamANFAll = ANF + LamAst
+lang LamANFAll = ANF + NormalizeLams + LamAst
 
   sem normalize (k : Expr -> Expr) =
   | TmLam _ & t -> k (normalizeLams t)
@@ -153,10 +157,7 @@ lang TypeANF = ANF + TypeAst
     TmType {t with inexpr = normalizeName k t.inexpr}
 end
 
-lang RecLetsANFBase = ANF + RecLetsAst + LamAst
-
-  sem normalizeLams =
-  -- Intentionally left blank
+lang RecLetsANFBase = ANF + NormalizeLams + RecLetsAst + LamAst
 
   sem normalize (k : Expr -> Expr) =
   -- We do not allow lifting things outside of reclets, since they might

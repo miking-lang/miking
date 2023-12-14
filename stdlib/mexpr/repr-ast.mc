@@ -193,14 +193,14 @@ end
 lang RepTypesAst = ReprTypeAst + ReprSubstAst + OpDeclAst + OpImplAst + OpVarAst + ReprDeclAst + TyWildAst
 end
 
-type CollectedImpl =
+type CollectedImpl = use Ast in
   { selfCost : OpCost
   , body : Expr
   , specType : Type
   , info : Info
   }
 
-type ImplData =
+type ImplData = use Ast in
   { impls : Map SID [CollectedImpl]
   , reprs : Map Name {vars : [Name], pat : Type, repr : Type}
   }

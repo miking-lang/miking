@@ -351,27 +351,27 @@ end
 -- CONSTANTS --
 ---------------
 
-lang IntEq = IntAst
+lang IntEq = Eq + IntAst
   sem eqConstH =
   | (CInt l, CInt r) -> eqi l.val r.val
 end
 
-lang FloatEq = FloatAst
+lang FloatEq = Eq + FloatAst
   sem eqConstH =
   | (CFloat l, CFloat r) -> eqf l.val r.val
 end
 
-lang BoolEq = BoolAst
+lang BoolEq = Eq + BoolAst
   sem eqConstH =
   | (CBool l, CBool r) -> eqBool l.val r.val
 end
 
-lang CharEq = CharAst
+lang CharEq = Eq + CharAst
   sem eqConstH =
   | (CChar l, CChar r) -> eqChar l.val r.val
 end
 
-lang SymbEq = SymbAst
+lang SymbEq = Eq + SymbAst
   sem eqConstH =
   | (CSymb l, CSymb r) -> eqsym l.val r.val
 end
@@ -394,7 +394,7 @@ let _eqpatname : BiNameMap -> EqEnv -> PatName -> PatName -> Option (EqEnv, BiNa
     else match (p1,p2) with (PWildcard _,PWildcard _) then Some (free,penv)
     else None ()
 
-lang NamedPatEq = NamedPat
+lang NamedPatEq = MatchEq + NamedPat
   sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : BiNameMap) (lhs : Pat) =
   | PatNamed {ident = p2} ->
     match lhs with PatNamed {ident = p1} then
@@ -402,7 +402,7 @@ lang NamedPatEq = NamedPat
     else None ()
 end
 
-lang SeqTotPatEq = SeqTotPat
+lang SeqTotPatEq = MatchEq + SeqTotPat
   sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : BiNameMap) (lhs : Pat) =
   | PatSeqTot {pats = ps2} ->
     match lhs with PatSeqTot {pats = ps1} then
@@ -417,7 +417,7 @@ lang SeqTotPatEq = SeqTotPat
     else None ()
 end
 
-lang SeqEdgePatEq = SeqEdgePat
+lang SeqEdgePatEq = MatchEq + SeqEdgePat
   sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : BiNameMap) (lhs : Pat) =
   | PatSeqEdge {prefix = pre2, middle = mid2, postfix = post2} ->
     match lhs with PatSeqEdge {prefix = pre1, middle = mid1, postfix = post1} then
@@ -446,7 +446,7 @@ lang SeqEdgePatEq = SeqEdgePat
     else None ()
 end
 
-lang RecordPatEq = RecordPat
+lang RecordPatEq = MatchEq + RecordPat
   sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : BiNameMap) (lhs : Pat) =
   | PatRecord {bindings = bs2} ->
     match lhs with PatRecord {bindings = bs1} then
@@ -463,7 +463,7 @@ lang RecordPatEq = RecordPat
     else None ()
 end
 
-lang DataPatEq = DataPat
+lang DataPatEq = MatchEq + DataPat
   sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : BiNameMap) (lhs : Pat) =
   | PatCon {ident = i2, subpat = s2} ->
     match lhs with PatCon {ident = i1, subpat = s1} then
@@ -475,7 +475,7 @@ lang DataPatEq = DataPat
     else None ()
 end
 
-lang IntPatEq = IntPat
+lang IntPatEq = MatchEq + IntPat
   sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : BiNameMap) (lhs : Pat) =
   | PatInt {val = i2} ->
     match lhs with PatInt {val = i1} then
@@ -483,7 +483,7 @@ lang IntPatEq = IntPat
     else None ()
 end
 
-lang CharPatEq = CharPat
+lang CharPatEq = MatchEq + CharPat
   sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : BiNameMap) (lhs : Pat) =
   | PatChar {val = c2} ->
     match lhs with PatChar {val = c1} then
@@ -491,7 +491,7 @@ lang CharPatEq = CharPat
     else None ()
 end
 
-lang BoolPatEq = BoolPat
+lang BoolPatEq = MatchEq + BoolPat
   sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : BiNameMap) (lhs : Pat) =
   | PatBool {val = b2} ->
     match lhs with PatBool {val = b1} then
@@ -499,7 +499,7 @@ lang BoolPatEq = BoolPat
     else None ()
 end
 
-lang AndPatEq = AndPat
+lang AndPatEq = MatchEq + AndPat
   sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : BiNameMap) (lhs : Pat) =
   | PatAnd {lpat = l2, rpat = r2} ->
     match lhs with PatAnd {lpat = l1, rpat = r1} then
@@ -512,7 +512,7 @@ lang AndPatEq = AndPat
     else None ()
 end
 
-lang OrPatEq = OrPat
+lang OrPatEq = MatchEq + OrPat
   sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : BiNameMap) (lhs : Pat) =
   | PatOr {lpat = l2, rpat = r2} ->
     match lhs with PatOr {lpat = l1, rpat = r1} then
@@ -525,7 +525,7 @@ lang OrPatEq = OrPat
     else None ()
 end
 
-lang NotPatEq = NotPat
+lang NotPatEq = MatchEq + NotPat
   sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : BiNameMap) (lhs : Pat) =
   | PatNot {subpat = p2} ->
     match lhs with PatNot {subpat = p1} then

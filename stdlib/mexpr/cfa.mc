@@ -276,6 +276,8 @@ lang CFA = CFABase
 
   sem propagateConstraint: (IName,AbsVal) -> CFAGraph -> Constraint -> CFAGraph
 
+  sem propagateConstraintConst: ConstPropFun
+
   -- Returns both the new graph, and a Boolean that is true iff the new edge was
   -- added to the graph.
   -- NOTE(Linnea, 2022-06-21): Updates the graph by a side effect
@@ -698,8 +700,6 @@ lang AppCFA = CFA + ConstCFA + BaseConstraint + LamCFA + AppAst + MExprArity
         { graph with cstrs = concat cstrs graph.cstrs }
       else errorSingle [infoTm app.rhs] "Not a TmVar in application"
     else errorSingle [infoTm app.lhs] "Not a TmVar in application"
-
-  sem propagateConstraintConst: ConstPropFun
 end
 
 lang RecordCFA = CFA + BaseConstraint + RecordAst

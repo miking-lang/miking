@@ -14,7 +14,7 @@ include "mexpr/type.mc"
 -- TYPE UNIFICATION --
 ----------------------
 
-lang Unify = Ast
+lang Unify = KindAst
   type UnifyEnv = {
     wrappedLhs: Type,  -- The currently examined left-hand subtype, before resolving aliases
     wrappedRhs: Type,  -- The currently examined right-hand subtype, before resolving aliases
@@ -441,7 +441,7 @@ let pufFilter
       (pufEmpty (mapGetCmpFun puf))
       puf
 
-type Unification =
+type Unification = use Ast in
   { reprs : PureUnionFind Symbol () Name
   , types : PureUnionFind Name () Type
   }

@@ -35,13 +35,13 @@ type ExprStatus
 con Once : ProgramPos -> ExprStatus
 con Multiple : ProgramPos -> ExprStatus
 
-type CSESearchEnv = {
+type CSESearchEnv = use Ast in {
   index : PosIndex,
   subexprs : Map Expr ExprStatus,
   recursiveIdents : Set Name
 }
 
-type CSEApplyEnv = {
+type CSEApplyEnv = use Ast in {
   index : PosIndex,
   posToSubexpr : Map PosIndex [(Name, Expr)],
   exprIdent : Map Expr Name

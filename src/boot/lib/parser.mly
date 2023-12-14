@@ -216,12 +216,13 @@ toputest:
 
 mlang:
   | LANG ident lang_includes decls END
-    { let fi = if List.length $3 > 0 then
-                 mkinfo $1.i (List.nth $3 (List.length $3 - 1)).i
+    { let incs, withs = $3 in
+      let fi = if List.length incs > 0 then
+                 mkinfo $1.i (List.nth incs (List.length incs - 1)).i
                else
                  mkinfo $1.i $2.i
       in
-      Lang (fi, $2.v, List.map (fun l -> l.v) $3, $4) }
+      Lang (fi, $2.v, List.map (fun l -> l.v) incs, withs, $4) }
 
 topext:
   | EXTERNAL ident COLON ty
@@ -232,15 +233,34 @@ topext:
       Ext (fi, $2.v, true, $5) }
 
 lang_includes:
-  | EQ lang_list
-    { $2 }
+  | EQ lang_list with_list
+    { $2, List.rev $3 }
   |
-    { [] }
+    { [], [] }
 lang_list:
   | ident ADD lang_list
     { $1 :: $3 }
   | ident
     { [$1] }
+with_list:
+  |
+    { [] }
+  | with_list WITH type_ident EQ with_type_list
+    { let fi = mkinfo $2.i $4.i in
+      With (fi, WithType, $3.v, List.rev $5) :: $1 }
+  | with_list WITH var_ident EQ with_var_list
+    { let fi = mkinfo $2.i $4.i in
+      With (fi, WithValue, $3.v, List.rev $5) :: $1 }
+with_type_list:
+  | with_type_list ADD ident DOT type_ident
+    { ($3.v, $5.v) :: $1 }
+  | ident DOT type_ident
+    { [($1.v, $3.v)] }
+with_var_list:
+  | with_var_list ADD ident DOT var_ident
+    { ($3.v, $5.v) :: $1 }
+  | ident DOT var_ident
+    { [($1.v, $3.v)] }
 
 decls:
   | decl decls
@@ -555,6 +575,9 @@ ty:
   | ALL var_ident DOT ty
       { let fi = mkinfo $1.i (ty_info $4) in
         TyAll(fi, $2.v, $4) }
+  | USE ident IN ty
+      { let fi = mkinfo $1.i $3.i in
+        TyUse(fi, $2.v, $4) }
 
 ty_left:
   | ty_atom

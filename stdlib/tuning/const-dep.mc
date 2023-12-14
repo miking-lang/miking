@@ -8,12 +8,16 @@ let _constDepExe = (false,true)
 let _constDepBoth = (true,true)
 let _constDepNone = (false,false)
 
-lang IntDep = IntAst
+lang ConstDep
+  sem constDep =
+end
+
+lang IntDep = ConstDep + IntAst
   sem constDep =
   | CInt _ -> []
 end
 
-lang ArithIntDep = ArithIntAst
+lang ArithIntDep = ConstDep + ArithIntAst
   sem constDep =
   | CAddi _ -> [_constDepData, _constDepData]
   | CSubi _ -> [_constDepData, _constDepData]
@@ -23,19 +27,19 @@ lang ArithIntDep = ArithIntAst
   | CModi _ -> [_constDepData]
 end
 
-lang ShiftIntDep = ShiftIntAst
+lang ShiftIntDep = ConstDep + ShiftIntAst
   sem constDep =
   | CSlli _ -> [_constDepData]
   | CSrli _ -> [_constDepData]
   | CSrai _ -> [_constDepData]
 end
 
-lang FloatDep = FloatAst
+lang FloatDep = ConstDep + FloatAst
   sem constDep =
   | CFloat _ -> []
 end
 
-lang ArithFloatDep = ArithFloatAst
+lang ArithFloatDep = ConstDep + ArithFloatAst
   sem constDep =
   | CAddf _ -> [_constDepData, _constDepData]
   | CSubf _ -> [_constDepData, _constDepData]
@@ -44,7 +48,7 @@ lang ArithFloatDep = ArithFloatAst
   | CNegf _ -> [_constDepData]
 end
 
-lang FloatIntConversionDep = FloatIntConversionAst
+lang FloatIntConversionDep = ConstDep + FloatIntConversionAst
   sem constDep =
   | CFloorfi _ -> [_constDepData]
   | CCeilfi _ -> [_constDepData]
@@ -52,12 +56,12 @@ lang FloatIntConversionDep = FloatIntConversionAst
   | CInt2float _ -> [_constDepData]
 end
 
-lang BoolDep = BoolAst
+lang BoolDep = ConstDep + BoolAst
   sem constDep =
   | CBool _ -> []
 end
 
-lang CmpIntDep = CmpIntAst
+lang CmpIntDep = ConstDep + CmpIntAst
   sem constDep =
   | CEqi _ -> [_constDepData, _constDepData]
   | CNeqi _ -> [_constDepData, _constDepData]
@@ -67,7 +71,7 @@ lang CmpIntDep = CmpIntAst
   | CGeqi _ -> [_constDepData, _constDepData]
 end
 
-lang CmpFloatDep = CmpFloatAst
+lang CmpFloatDep = ConstDep + CmpFloatAst
   sem constDep =
   | CEqf _ -> [_constDepData, _constDepData]
   | CLtf _ -> [_constDepData, _constDepData]
@@ -77,23 +81,23 @@ lang CmpFloatDep = CmpFloatAst
   | CNeqf _ -> [_constDepData, _constDepData]
 end
 
-lang CharDep = CharAst
+lang CharDep = ConstDep + CharAst
   sem constDep =
   | CChar _ -> []
 end
 
-lang CmpCharDep = CmpCharAst
+lang CmpCharDep = ConstDep + CmpCharAst
   sem constDep =
   | CEqc _ -> [_constDepData, _constDepData]
 end
 
-lang IntCharConversionDep = IntCharConversionAst
+lang IntCharConversionDep = ConstDep + IntCharConversionAst
   sem constDep =
   | CInt2Char _ -> [_constDepData]
   | CChar2Int _ -> [_constDepData]
 end
 
-lang FloatStringConversionDep = FloatStringConversionAst
+lang FloatStringConversionDep = ConstDep + FloatStringConversionAst
   sem constDep =
   -- NOTE(Linnea,2021-11-19): technically, the execution times of these
   -- conversions depend on the length of the strings, but we ignore that for
@@ -103,19 +107,19 @@ lang FloatStringConversionDep = FloatStringConversionAst
   | CFloat2string _ -> [_constDepData]
 end
 
-lang SymbDep = SymbAst
+lang SymbDep = ConstDep + SymbAst
   sem constDep =
   | CSymb _ -> []
   | CGensym _ -> [_constDepNone]
   | CSym2hash _ -> [_constDepData]
 end
 
-lang CmpSymbDep = CmpSymbAst
+lang CmpSymbDep = ConstDep + CmpSymbAst
   sem constDep =
   | CEqsym _ -> [_constDepData, _constDepData]
 end
 
-lang SeqOpDep = SeqOpAst
+lang SeqOpDep = ConstDep + SeqOpAst
   -- TODO(Linnea,2021-11-22): Does not handle different behaviors for Rope and
   -- List. E.g., concat is linear for list but not for Rope. Moreover,
   -- operations that are O(1) for both might have different constants. E.g.,
@@ -148,7 +152,7 @@ lang SeqOpDep = SeqOpAst
   | CSubsequence _ -> [_constDepBoth, _constDepBoth, _constDepBoth]
 end
 
-lang FileOpDep = FileOpAst
+lang FileOpDep = ConstDep + FileOpAst
   sem constDep =
   | CFileRead _ -> [_constDepBoth]
   | CFileWrite _ -> [_constDepNone, _constDepExe]
@@ -156,7 +160,7 @@ lang FileOpDep = FileOpAst
   | CFileDelete _ -> [_constDepNone]
 end
 
-lang IODep = IOAst
+lang IODep = ConstDep + IOAst
   sem constDep =
   | CPrint _ -> [_constDepNone]
   | CPrintError _ -> [_constDepNone]
@@ -167,13 +171,13 @@ lang IODep = IOAst
   | CReadBytesAsString _ -> [_constDepData]
 end
 
-lang RandomNumberGeneratorDep = RandomNumberGeneratorAst
+lang RandomNumberGeneratorDep = ConstDep + RandomNumberGeneratorAst
   sem constDep =
   | CRandIntU _ -> [_constDepData,_constDepData]
   | CRandSetSeed _ -> [_constDepNone]
 end
 
-lang SysDep = SysAst
+lang SysDep = ConstDep + SysAst
   sem constDep =
   | CExit _ -> [_constDepNone]
   | CError _ -> [_constDepNone]
@@ -181,13 +185,13 @@ lang SysDep = SysAst
   | CCommand _ -> [_constDepBoth]
 end
 
-lang TimeDep = TimeAst
+lang TimeDep = ConstDep + TimeAst
   sem constDep =
   | CWallTimeMs _ -> [_constDepNone]
   | CSleepMs _ -> [_constDepExe]
 end
 
-lang ConTagDep = ConTagAst
+lang ConTagDep = ConstDep + ConTagAst
   sem constDep =
   | CConstructorTag _ -> [_constDepData]
 end
@@ -198,14 +202,14 @@ end
 --   let r2 = r in
 --   modref r2 <data2> in
 --   let x = deref r in  <-- {data1} ⊆ x, {data2} ⊈ x
-lang RefOpDep = RefOpAst
+lang RefOpDep = ConstDep + RefOpAst
   sem constDep =
   | CRef _ -> [_constDepData]
   | CModRef _ -> [_constDepNone,_constDepNone]
   | CDeRef _ -> [_constDepData]
 end
 
-lang TensorOpDep = TensorOpAst
+lang TensorOpDep = ConstDep + TensorOpAst
   sem constDep =
   | CTensorCreateInt _ -> error "TensorOpDep not implemented yet"
   | CTensorCreateFloat _ -> error "TensorOpDep not implemented yet"
@@ -226,7 +230,7 @@ lang TensorOpDep = TensorOpAst
   | CTensorToString _ -> error "TensorOpDep not implemented yet"
 end
 
-lang BootParserDep = BootParserAst
+lang BootParserDep = ConstDep + BootParserAst
   sem constDep =
   | CBootParserParseMExprString _ -> []
   | CBootParserParseMCoreFile _ -> []

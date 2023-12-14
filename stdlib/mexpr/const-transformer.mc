@@ -12,7 +12,8 @@ include "ast.mc"
 include "option.mc"
 
 -- Add info for both term and type in const tms
-let _constWithInfos: Info -> Expr -> Expr = use MExprAst in
+let _constWithInfos: Info -> use Ast in Expr -> use Ast in Expr =
+  use MExprAst in
   lam i: Info. lam tm: Expr.
     match tm with
       TmConst ({ info = NoInfo _, ty = TyUnknown ({ info = NoInfo _ } & ty)} & t)

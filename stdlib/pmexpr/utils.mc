@@ -7,7 +7,7 @@ include "mexpr/type-check.mc"
 include "pmexpr/ast.mc"
 
 -- Gets the return type of the body of a function.
-recursive let functionBodyReturnType : Expr -> Type =
+recursive let functionBodyReturnType : use Ast in Expr -> Type =
   use PMExprAst in
   lam expr.
   match expr with TmLam {body = body} then
@@ -17,7 +17,7 @@ end
 
 -- Replaces the body of a functiion body, excluding its top-level parameters,
 -- with a new expression.
-recursive let replaceFunctionBody : Expr -> Expr -> Expr =
+recursive let replaceFunctionBody : use Ast in Expr -> Expr -> Expr =
   use PMExprAst in
   lam funcExpr. lam newExpr.
   match funcExpr with TmLam t then
@@ -41,7 +41,7 @@ end
 
 -- Takes a function expression and produces a tuple containing a list of the
 -- arguments and the function body without the lambdas.
-let functionParametersAndBody : Expr -> ([(Name, Type, Info)], Expr) =
+let functionParametersAndBody : use Ast in Expr -> ([(Name, Type, Info)], Expr) =
   use MExprAst in
   lam functionExpr.
   recursive let work = lam acc. lam e.
@@ -52,7 +52,7 @@ let functionParametersAndBody : Expr -> ([(Name, Type, Info)], Expr) =
 
 -- Collects the parameters of an application and returns them in a tuple
 -- together with the target expression (the function being called).
-let collectAppArguments : Expr -> (Expr, [Expr]) =
+let collectAppArguments : use Ast in Expr -> (Expr, [Expr]) =
   use MExprAst in
   lam e.
   recursive let work = lam acc. lam e.

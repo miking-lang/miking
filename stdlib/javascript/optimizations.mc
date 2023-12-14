@@ -79,7 +79,7 @@ lang JSOptimizeBlocks = JSExprAst
 
 end
 
-type JSTCOContext = {
+type JSTCOContext = use JSExprAst in {
   expr: JSExpr,
   foundTailCall: Bool
 }
