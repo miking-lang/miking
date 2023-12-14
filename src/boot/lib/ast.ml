@@ -383,6 +383,12 @@ and ty =
       info
       * ustring
       * (ustring * ustring list * ustring list option) list option
+      (* This component represents an optional data kind annotation,
+         carrying a list of tuples [(t, lower, upper)], where [t] is a
+         type name, [lower] is the lower bound constructor set and
+         [upper] is the upper bound constructor set.
+         TODO(aathn, 2023-12-14): Maybe introduce a separate ast node
+         type for kinds *)
       * ty
   (* Sequence type *)
   | TySeq of info * ty
