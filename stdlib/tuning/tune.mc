@@ -615,6 +615,9 @@ let test : Bool -> Bool -> TuneOptions -> Expr -> (LookupTable, Option SearchSta
     -- Run pattern lowering
     let ast = lowerAll ast in
 
+    -- Strip annotations before compiling
+    let ast = stripTuneAnnotations ast in
+
     -- Compile the program
     let compileOCaml = lam libs. lam clibs. lam ocamlProg.
       let opt = {optimize = true, libraries = libs, cLibraries = clibs} in
@@ -912,6 +915,19 @@ if h then sleepMs 100 else ()
 utest test debug true opt t with {
   finalTable = [false_],
   nbrRuns = 2
+} using eqTest in
+
+-- Independence annotation
+let t = parse
+"
+let h = hole (Boolean {default = true}) in
+let hh = independent h h in
+if hh then sleepMs 100 else ()
+" in
+
+utest test debug false opt t with {
+  finalTable = [],
+  nbrRuns = 0
 } using eqTest in
 
 ()
