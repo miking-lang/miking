@@ -413,8 +413,6 @@ let _forwardCall
                           with body = f bind.body}
     in (localFun, {bind with body = _lamWithBody newBody bind.body})
 
-let _table = nameSym "table"
-
 -- Graph coloring proper --
 
 lang GraphColoring = HoleAst + HoleCallGraph

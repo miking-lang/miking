@@ -21,6 +21,8 @@ type ContextExpanded =
 , cleanup : () -> ()     -- Removes all temporary files from the disk
 }
 
+let contextExpansionTableName = nameSym "table"
+
 -- Generate code for looking up a value of a hole depending on its call history
 let contextExpansionLookupCallCtx =
   use Ast in
@@ -71,7 +73,7 @@ lang ContextExpand = HoleAst
   sem contextExpand (env : CallCtxEnv) =
   | t ->
     let lookup = _lookupFromInt env (lam i.
-      tensorGetExn_ tyint_ (nvar_ _table) (seq_ [int_ i]))
+      tensorGetExn_ tyint_ (nvar_ contextExpansionTableName) (seq_ [int_ i]))
     in
     let ast = _contextExpandWithLookup env lookup t in
     let tempDir = sysTempDirMake () in
@@ -251,9 +253,9 @@ lang ContextExpand = HoleAst
         (get_ (appf2_ (nvar_ strSplitName) (str_ ": ") (nvar_ x)) (int_ 1)))
         (nvar_ strVals))
     -- Convert strings into values
-    , nulet_ _table (map_ (nvar_ string2intName) (nvar_ strVals))
+    , nulet_ contextExpansionTableName (map_ (nvar_ string2intName) (nvar_ strVals))
     -- Convert table into a tensor (for constant-time lookups)
-    , nulet_ _table (app_ (nvar_ seq2TensorName) (nvar_ _table))
+    , nulet_ contextExpansionTableName (app_ (nvar_ seq2TensorName) (nvar_ contextExpansionTableName))
     , tm
     ]
 end
