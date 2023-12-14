@@ -119,6 +119,29 @@ let optionMapOr: all a. all b. b -> (a -> b) -> Option a -> b =
 utest optionMapOr 3 (addi 1) (Some 1) with 2
 utest optionMapOr 3 (addi 1) (None ()) with 3
 
+-- 'optionZipWithOrElse d f o1 o2' applies the function f on the values
+-- contained in o1 and o2. If either o1 or o2 is None, then d is evaluated to
+-- produce a default value.
+let optionZipWithOrElse: all a. all b. all c.
+  (() -> c) -> (a -> b -> c) -> Option a -> Option b -> c =
+  lam d. lam f. lam o1. lam o2.
+    optionGetOrElse d (optionZipWith f o1 o2)
+
+utest optionZipWithOrElse (lam. "ERROR") (lam a. lam b. [a,b]) (Some 'm') (Some 'i') with "mi"
+utest optionZipWithOrElse (lam. "ERROR") (lam a. lam b. [a,b]) (Some 'm') (None ()) with "ERROR"
+utest optionZipWithOrElse (lam. "ERROR") (lam a. lam b. [a,b]) (None ()) (None ()) with "ERROR"
+
+-- 'optionZipWithOr v f o1 o2' applies the function f on the values contained
+-- in o1 and o2. If either o1 or o2 is None, then v is returned.
+let optionZipWithOr: all a. all b. all c.
+  c -> (a -> b -> c) -> Option a -> Option b -> c =
+  lam v. optionZipWithOrElse (lam. v)
+
+utest optionZipWithOr false eqi (Some 10) (Some 11) with false
+utest optionZipWithOr false eqi (Some 10) (Some 10) with true
+utest optionZipWithOr false eqi (Some 10) (None ()) with false
+utest optionZipWithOr false eqi (None ()) (None ()) with false
+
 -- 'optionMapM f l' maps each element of 'l' to an option using 'f'.
 -- Then it collects the results to a new list option, which is 'Some'
 -- only if all elements of 'l' were mapped to 'Some' by 'f'.
