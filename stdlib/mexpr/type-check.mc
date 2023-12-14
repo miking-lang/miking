@@ -727,26 +727,21 @@ lang IsEmpty =
   syn Open a =
   | LOpen a
   | ROpen a
-  | Neither a
+  | Neither ()
 
   -- Compare two assignments of meta variables to upper bound
-  -- constructor sets, according to:
-  -- 1. Is one more open than the other?
-  -- 2. Does one carry a higher level than the other?
-  -- 3. Is either one more open on the set of overlapping keys?
-  -- If either assignment is preferred according to 1. or 2., then
-  -- that one is indicated with a payload of None ().  Otherwise, a
-  -- payload of Some m is returned, where m is an appropriate merging
-  -- of the two input maps.
-  sem compareBounds : ((Level, Bounds), (Level, Bounds)) -> Open (Option Bounds)
-  sem compareBounds =
-  | ((lvl1, m1), (lvl2, m2)) ->
+  -- constructor sets.  If either assignment is strictly more open
+  -- than the other, this is indicated with a payload of true.
+  -- If either one is more open on the set of overlapping keys,
+  -- this is indicated with a payload of false.
+  sem compareBounds : Bounds -> Bounds -> Open Bool
+  sem compareBounds m1 =
+  | m2 ->
     let dataMoreOpen = lam d1. lam d2.
       mapAllWithKey
         (lam t. lam ks1.
-          match mapLookup t d2 with Some ks2 then
-            setSubset ks2 ks1
-          else false)
+          mapFindApplyOrElse
+            (lam ks2. setSubset ks2 ks1) (lam. false) t d2)
         d1
     in
 
@@ -758,11 +753,8 @@ lang IsEmpty =
       end
     in
 
-    let strictLhs = LOpen (None ()) in
-    let strictRhs = ROpen (None ()) in
-
-    if mapIsEmpty m1 then strictLhs else
-      if mapIsEmpty m2 then strictRhs else
+    if mapIsEmpty m1 then LOpen true else
+      if mapIsEmpty m2 then ROpen true else
 
         let middle =
           mapFoldlOption
@@ -777,25 +769,15 @@ lang IsEmpty =
             m1
         in
 
-        match (gti lvl1 lvl2, gti lvl2 lvl1) with (lhsHigher, rhsHigher) in
-
         switch middle
         case Some (LOpen ()) then
-          if mapAllWithKey (lam ty. lam. mapMem ty m2) m1 then strictLhs else
-            if rhsHigher then strictRhs else
-              LOpen (Some (mapUnionWith (lam x. lam. x) m1 m2))
+          LOpen (mapAllWithKey (lam ty. lam. mapMem ty m2) m1)
         case Some (ROpen ()) then
-          if mapAllWithKey (lam ty. lam. mapMem ty m1) m2 then strictRhs else
-            if lhsHigher then strictLhs else
-              ROpen (Some (mapUnionWith (lam x. lam. x) m2 m1))
+          ROpen (mapAllWithKey (lam ty. lam. mapMem ty m1) m2)
         case Some (Neither ()) then
-          if rhsHigher then strictRhs else
-            if lhsHigher then strictLhs else
-              LOpen (Some (mapUnion m1 m2))
+          LOpen false
         case None () then
-          if rhsHigher then strictRhs else
-            if lhsHigher then strictLhs else
-              Neither (Some (mapUnionWith (mapUnionWith setUnion) m1 m2))
+          Neither ()
         end
 
   sem boundsCompatible : Bounds -> Bounds -> Bool
@@ -898,11 +880,11 @@ lang IsEmpty =
         joinMap (lam x.
           (joinMap (lam y.
             if boundsCompatible x.1 y.1 then
-              [(maxi x.0 y.0, mapUnionWith mapUnion x.1 y.1)]
+              [(mini x.0 y.0, mapUnionWith mapUnion x.1 y.1)]
             else [])
              acc))
           bs)
-      [(0, mapEmpty cmpType)]
+      [(1000000000, mapEmpty cmpType)]
       env.matches
 
   -- Take a (non-empty) sequence of closing assignments and attempt to
@@ -910,28 +892,27 @@ lang IsEmpty =
   sem mergeBounds : [(Level, Bounds)] -> Option Bounds
   sem mergeBounds =
   | ms ->
-    let getBounds = lam l. lam r. lam res.
-      optionMapOr l (lam x. (maxi l.0 r.0, x)) res
+    let getBounds = lam l. lam r. lam strict.
+      if strict then l else mapUnionWith (lam x. lam. x) l r
     in
     let merge = lam acc. lam m.
-      switch acc
-      case Left a then
-        switch compareBounds (m, (mini m.0 a.0, a.1))
-        case LOpen res then Right (getBounds m a res)
-        case ROpen res | Neither res then Left (getBounds a m res)
-        end
-      case Right a then
-        switch compareBounds (m, a)
-        case LOpen res then Right (getBounds m a res)
-        case ROpen res then Right (getBounds a m res)
-        case Neither res then Left (getBounds m a res)
-        end
-      end
+      if gti m.0 acc.0 then (m.0, [m.1]) else
+        if gti acc.0 m.0 then acc else
+          (m.0,
+           foldlK
+             (lam acc2. lam a. lam recur.
+               match acc2 with (len, bs, x) in
+               let newlen = addi 1 len in
+               switch compareBounds x a
+               case LOpen strict then recur (newlen, bs, getBounds x a strict)
+               case ROpen strict then
+                 join [bs, [getBounds a x strict], (splitAt acc.1 newlen).1]
+               case Neither _ then recur (newlen, snoc bs a, x)
+               end)
+             (0, [], m.1) acc.1 (lam x. snoc x.1 x.2))
     in
-    match foldl merge (Right (head ms)) (tail ms) with Right (_, m) then
-      Some m
-    else
-      None ()
+    match foldl merge (0, []) ms with (_, [m]) then Some m
+    else None ()
 end
 
 lang VarTypeCheck = TypeCheck + VarAst
@@ -1466,7 +1447,7 @@ lang NeverTypeCheck = TypeCheck + NeverAst + IsEmpty
         TmNever {t with ty = newpolyvar env.currentLvl t.info}
       else
         let altstr =
-          strJoin "* ----\n"
+          strJoin "* or\n"
             (foldl
                (lam acc. lam m.
                  match
