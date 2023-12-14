@@ -20,7 +20,7 @@ lang COPAst
 
   sem isOptimizationModel: COPModel -> Bool
   sem isOptimizationModel =
-  | m -> isOptimization m.solveItem
+  | m -> isOptimization m.objective
 
   sem isOptimization: COPObjective -> Bool
   sem isOptimization =
