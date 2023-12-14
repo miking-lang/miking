@@ -147,6 +147,8 @@ lang NestedMeasuringPoints = MExprHoleCFA
       in concat res acc
     else errorSingle [infoTm t.lhs] "Not a TmVar in application"
 
+  | TmExt t -> acc
+
   | t ->
     sfold_Expr_Expr (_callGraphEdges im data avLams cur) acc t
 
