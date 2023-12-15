@@ -7,14 +7,17 @@ include "mexpr/pprint.mc"
 lang COPPrettyPrintBase = COPAst + IdentifierPrettyPrint
   sem pprintCOPModel: COPModel -> (PprintEnv, String)
   sem pprintCOPModel =
-  | decls ->
+  | {decls = decls, objective = objective} ->
     match mapAccumL (lam env. lam d. pprintCOPDecl env d) pprintEnvEmpty decls
     with (env, decls) in
-    (env, strJoin "\n" decls)
+    match pprintCOPObjective env objective
+    with (env, objective) in
+    (env, strJoin "\n" (snoc decls objective))
 
   sem pprintCOPDecl: PprintEnv -> COPDecl -> (PprintEnv, String)
   sem pprintCOPDomain: PprintEnv -> COPDomain -> (PprintEnv, String)
   sem pprintCOPExpr: PprintEnv -> COPExpr -> (PprintEnv, String)
+  sem pprintCOPObjective: PprintEnv -> COPObjective -> (PprintEnv, String)
 
   -- NOTE(Linnea, 2023-02-08): Assumes that the base string of the name is a
   -- valid MiniZinc identifier (not a MiniZinc keyword, etc.).
@@ -113,24 +116,34 @@ end
 -- OBJECTIVES --
 ----------------
 
-lang COPObjectivePrettyPrint
-  sem pprintCOPObjective: PprintEnv -> COPObjective -> (PprintEnv, String)
-end
-
-lang COPObjectiveDeclPrettyPrint =
-  COPPrettyPrintBase + COPObjectivePrettyPrint + COPObjectiveDeclAst
-  sem pprintCOPDecl env =
-  | COPObjectiveDecl { objective = objective } ->
-    match pprintCOPObjective env objective with (env, obj) in
+lang COPObjectivePrettyPrint = COPPrettyPrintBase
+  sem pprintCOPObjectiveH: PprintEnv -> COPObjective -> (PprintEnv, String)
+  sem pprintCOPObjective env =
+  | obj ->
+    match pprintCOPObjectiveH env obj with (env, obj) in
     (env, join ["solve ", obj, ";"])
 end
 
-lang COPObjectiveMinimizePrettyPrint =
-  COPPrettyPrintBase + COPObjectivePrettyPrint + COPObjectiveMinimizeAst
-  sem pprintCOPObjective env =
-  | COPObjectiveMinimize { expr = expr } ->
+lang COPObjectiveMinimizePrettyPrint = COPObjectivePrettyPrint
+                                     + COPObjectiveMinimizeAst
+  sem pprintCOPObjectiveH env =
+  | COPMinimize { expr = expr } ->
     match pprintCOPExpr env expr with (env, expr) in
     (env, concat "minimize " expr)
+end
+
+lang COPObjectiveMaximizePrettyPrint = COPObjectivePrettyPrint
+                                     + COPObjectiveMaximizeAst
+  sem pprintCOPObjectiveH env =
+  | COPMaximize { expr = expr } ->
+    match pprintCOPExpr env expr with (env, expr) in
+    (env, concat "maximize " expr)
+end
+
+lang COPObjectiveSatisfyPrettyPrint = COPObjectivePrettyPrint
+                                    + COPObjectiveSatisfyAst
+  sem pprintCOPObjectiveH env =
+  | COPSatisfy {} -> (env, "satisfy")
 end
 
 -----------------
@@ -197,7 +210,8 @@ lang COPPrettyPrint =
   COPConstraintTableReifPrettyPrint + COPConstraintLEPrettyPrint +
   COPConstraintLTPrettyPrint +
   -- Objectives --
-  COPObjectiveDeclPrettyPrint + COPObjectiveMinimizePrettyPrint +
+  COPObjectiveMinimizePrettyPrint + COPObjectiveMaximizePrettyPrint +
+  COPObjectiveSatisfyPrettyPrint +
   -- Expressions --
   COPExprSumPrettyPrint + COPExprVarPrettyPrint + COPExprVarAccessPrettyPrint +
   COPExprIntPrettyPrint + COPExprArrayPrettyPrint + COPExprArray2dPrettyPrint
@@ -229,23 +243,24 @@ in
 utest
   let x = nameSym "x" in
   let y = nameSym "y" in
-  [COPVarArrayDecl {
-      id = x,
-      domain = COPDomainIntRange {min = cpInt_ 1, max = cpInt_ 10},
-      length = cpInt_ 5
-   },
-   COPVarDecl {id = y, domain = COPDomainBoolean {}},
-   COPConstraintDecl {constraint = COPConstraintLE {
-     lhs = COPExprVarAccess {id = x, index = cpInt_ 1},
-     rhs = COPExprVarAccess {id = x, index = cpInt_ 2}}},
-   COPObjectiveDecl {
-     objective = COPObjectiveMinimize {
-       expr = COPExprSum {expr = COPExprArray {
-         array = [COPExprVarAccess {id = x, index = cpInt_ 1},
-                  COPExprVarAccess {id = x, index = cpInt_ 2},
-                  COPExprVar {id = y}]}}}
-   }
-  ]
+  {
+    decls = [
+      COPVarArrayDecl {
+         id = x,
+         domain = COPDomainIntRange {min = cpInt_ 1, max = cpInt_ 10},
+         length = cpInt_ 5
+       },
+       COPVarDecl {id = y, domain = COPDomainBoolean {}},
+       COPConstraintDecl {constraint = COPConstraintLE {
+         lhs = COPExprVarAccess {id = x, index = cpInt_ 1},
+         rhs = COPExprVarAccess {id = x, index = cpInt_ 2}}}],
+
+    objective = COPMinimize {
+      expr = COPExprSum {expr = COPExprArray {
+      array = [COPExprVarAccess {id = x, index = cpInt_ 1},
+               COPExprVarAccess {id = x, index = cpInt_ 2},
+               COPExprVar {id = y}]}}}
+  }
 with
 "
 array [1..5] of var 1..10: x;
@@ -260,26 +275,24 @@ utest
   let y = nameSym "y" in
   let zero = cpInt_ 0 in
   let one = cpInt_ 1 in
-  [COPVarArrayDecl {
-     id = x,
-     domain = COPDomainIntRange {min = cpInt_ 0, max = cpInt_ 1},
-     length = cpInt_ 3},
-   COPVarDecl {id = y, domain = COPDomainBoolean {}},
-   COPConstraintDecl {constraint = COPConstraintTable {
-     vars = COPExprVar {id = x},
-     tuples = COPExprArray2d {array = [[zero,zero,one],[one,zero,one],[zero,zero,zero]]}
-   }},
-   COPConstraintDecl {constraint = COPConstraintTableReif {
-     vars = COPExprVar {id = x},
-     tuples = COPExprArray2d {array = [[zero,zero,one],[one,zero,one]]},
-     b = COPExprVar {id = y}
-   }},
-   COPObjectiveDecl {
-     objective = COPObjectiveMinimize {
-       expr = COPExprSum {expr = COPExprVar {id = x}}
-     }
-   }
-]
+  {
+    decls = [
+      COPVarArrayDecl {
+        id = x,
+        domain = COPDomainIntRange {min = cpInt_ 0, max = cpInt_ 1},
+        length = cpInt_ 3},
+      COPVarDecl {id = y, domain = COPDomainBoolean {}},
+      COPConstraintDecl {constraint = COPConstraintTable {
+        vars = COPExprVar {id = x},
+        tuples = COPExprArray2d {array = [[zero,zero,one],[one,zero,one],[zero,zero,zero]]}
+      }},
+      COPConstraintDecl {constraint = COPConstraintTableReif {
+        vars = COPExprVar {id = x},
+        tuples = COPExprArray2d {array = [[zero,zero,one],[one,zero,one]]},
+        b = COPExprVar {id = y}
+      }}],
+    objective = COPMinimize {expr = COPExprSum {expr = COPExprVar {id = x}}}
+  }
 with
 "
 array [1..3] of var 0..1: x;
@@ -289,6 +302,19 @@ constraint table(x,[|0,0,1|1,0,1|0,0,0|]);
 include \"table.mzn\";
 constraint table(x,[|0,0,1|1,0,1|]) <-> y;
 solve minimize sum(x);
+"
+using eqTest in
+
+utest
+  let x = nameSym "x" in
+  {
+    decls = [COPVarDecl {id = x, domain = COPDomainBoolean {}}],
+    objective = COPSatisfy {}
+  }
+with
+"
+var bool: x;
+solve satisfy;
 "
 using eqTest in
 

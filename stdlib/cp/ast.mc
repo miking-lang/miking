@@ -8,11 +8,23 @@ include "name.mc"
 ----------------------------
 
 lang COPAst
-  type COPModel = [COPDecl]
+  type COPModel = {
+    decls: [COPDecl],
+    objective: COPObjective
+  }
 
   syn COPDecl =
   syn COPDomain =
   syn COPExpr =
+  syn COPObjective =
+
+  sem isOptimizationModel: COPModel -> Bool
+  sem isOptimizationModel =
+  | m -> isOptimization m.objective
+
+  sem isOptimization: COPObjective -> Bool
+  sem isOptimization =
+  | _ -> false
 end
 
 -------------
@@ -84,15 +96,25 @@ end
 -- OBJECTIVES --
 ----------------
 
-lang COPObjectiveDeclAst = COPAst
+lang COPObjectiveMinimizeAst = COPAst
   syn COPObjective =
-  syn COPDecl =
-  | COPObjectiveDecl { objective: COPObjective }
+  | COPMinimize { expr: COPExpr }
+
+  sem isOptimization =
+  | COPMinimize _ -> true
 end
 
-lang COPObjectiveMinimizeAst = COPObjectiveDeclAst
+lang COPObjectiveMaximizeAst = COPAst
   syn COPObjective =
-  | COPObjectiveMinimize { expr: COPExpr }
+  | COPMaximize { expr: COPExpr }
+
+  sem isOptimization =
+  | COPMaximize _ -> true
+end
+
+lang COPObjectiveSatisfyAst = COPAst
+  syn COPObjective =
+  | COPSatisfy {}
 end
 
 -----------------
@@ -142,7 +164,7 @@ lang COP =
   COPConstraintDeclAst + COPConstraintTableAst + COPConstraintTableReifAst +
   COPConstraintLEAst + COPConstraintLTAst +
   -- Objectives --
-  COPObjectiveDeclAst + COPObjectiveMinimizeAst +
+  COPObjectiveMinimizeAst + COPObjectiveMaximizeAst + COPObjectiveSatisfyAst +
   -- Expressions --
   COPExprSumAst + COPExprVarAst + COPExprVarAccessAst + COPExprIntAst +
   COPExprArrayAst + COPExprArray2dAst

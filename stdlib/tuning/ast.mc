@@ -282,6 +282,7 @@ end
 
 -- Independency annotation
 lang IndependentAst = HoleAnnotation + KeywordMaker + ANF + PrettyPrint
+                    + TypeCheck
   syn Expr =
   | TmIndependent {lhs : Expr,
                    rhs : Expr,
@@ -333,6 +334,15 @@ lang IndependentAst = HoleAnnotation + KeywordMaker + ANF + PrettyPrint
     let aindent = pprintIncr indent in
     match printParen aindent env t.rhs with (env, rhs) in
     (env, join ["independent ", lhs, pprintNewline aindent, rhs])
+
+  sem typeCheckExpr (env: TCEnv) =
+  | TmIndependent t ->
+    let lhs = typeCheckExpr env t.lhs in
+    let rhs = typeCheckExpr env t.rhs in
+    TmIndependent {{{t with lhs = lhs}
+                       with rhs = rhs}
+                       with ty = tyTm lhs}
+
 end
 
 let holeBool_ : use Ast in Bool -> Int -> Expr =
