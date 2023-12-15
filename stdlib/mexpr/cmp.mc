@@ -2,6 +2,7 @@
 
 include "ast.mc"
 include "ast-builder.mc"
+include "repr-ast.mc"
 
 -------------------
 -- BASE FRAGMENT --
@@ -17,8 +18,8 @@ lang Cmp = Ast
   | (lhs, rhs) /- (Expr, Expr) -/ ->
     let res = subi (constructorTag lhs) (constructorTag rhs) in
     if eqi res 0 then
-      errorSingle [infoTm lhs, infoTm rhs]
-                    "Missing case in cmpExprH for expressions with equal indices."
+      errorMulti [(infoTm lhs, ""), (infoTm rhs, "")]
+        "Missing case in cmpExprH for expressions with equal indices."
     else res
 
   sem cmpConst (lhs: Const) =
@@ -37,8 +38,8 @@ lang Cmp = Ast
   | (lhs, rhs) /- (Pat, Pat) -/ ->
     let res = subi (constructorTag lhs) (constructorTag rhs) in
     if eqi res 0 then
-      errorSingle [infoPat lhs, infoPat rhs]
-                    "Missing case in cmpPatH for patterns with equal indices."
+      errorMulti [(infoPat lhs, ""), (infoPat rhs, "")]
+        "Missing case in cmpPatH for patterns with equal indices."
     else res
 
   sem cmpType (lhs: Type) =
@@ -49,8 +50,8 @@ lang Cmp = Ast
   | (lhs, rhs) /- (Type, Type) -/ ->
     let res = subi (constructorTag lhs) (constructorTag rhs) in
     if eqi res 0 then
-      errorSingle [infoTy lhs, infoTy rhs]
-                    "Missing case in cmpTypeH for types with equal indices."
+      errorMulti [(infoTy lhs, ""), (infoTy rhs, "")]
+        "Missing case in cmpTypeH for types with equal indices."
     else res
 end
 
@@ -447,6 +448,34 @@ lang AliasTypeCmp = Cmp + AliasTypeAst
   | (ty1 & !TyAlias _, TyAlias t2) -> cmpTypeH (ty1, t2.content)
 end
 
+lang TyWildCmp = Cmp + TyWildAst
+  sem cmpTypeH =
+  | (TyWild _, TyWild _) -> 0
+end
+
+lang ReprTypeCmp = Cmp + ReprTypeAst
+  sem cmpTypeH =
+  | (TyRepr l, TyRepr r) ->
+    let lRep = deref (botRepr l.repr) in
+    let rRep = deref (botRepr r.repr) in
+    let res = subi (constructorTag lRep) (constructorTag rRep) in
+    if neqi res 0 then res else
+    let res = switch (lRep, rRep)
+      case (UninitRepr _, UninitRepr _) then 0
+      case (BotRepr l, BotRepr r) then subi (sym2hash l.sym) (sym2hash r.sym)
+      end in
+    if neqi res 0 then res else
+    cmpType l.arg r.arg
+end
+
+lang ReprSubstCmp = Cmp + ReprSubstAst
+  sem cmpTypeH =
+  | (TySubst l, TySubst r) ->
+    let res = nameCmp l.subst r.subst in
+    if neqi 0 res then res else
+    cmpType l.arg r.arg
+end
+
 --------------------
 -- MEXPR FRAGMENT --
 --------------------
@@ -468,6 +497,9 @@ lang MExprCmp =
   UnknownTypeCmp + BoolTypeCmp + IntTypeCmp + FloatTypeCmp + CharTypeCmp +
   FunTypeCmp + SeqTypeCmp + TensorTypeCmp + RecordTypeCmp + VariantTypeCmp +
   ConTypeCmp + VarTypeCmp + AppTypeCmp + AllTypeCmp + AliasTypeCmp
+end
+
+lang RepTypesCmp = ReprSubstCmp + ReprTypeCmp + TyWildCmp
 end
 
 -----------

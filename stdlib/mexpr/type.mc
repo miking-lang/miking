@@ -122,12 +122,16 @@ lang MetaVarTypeEq = KindEq + MetaVarTypeAst
     end
 end
 
-let newmetavar =
-  lam kind. lam level. lam info. use MetaVarTypeAst in
-  TyMetaVar {info = info,
-             contents = ref (Unbound {ident = nameSym "a",
-                                      level = level,
-                                      kind  = kind})}
+let newnmetavar =
+  lam str. lam kind. lam level. lam info. use MetaVarTypeAst in TyMetaVar
+   { info = info
+   , contents = ref (Unbound
+     { ident = nameSym str
+     , level = level
+     , kind = kind
+     })
+   }
+let newmetavar = newnmetavar "a"
 
 let newmonovar = use KindAst in
   newmetavar (Mono ())
@@ -140,12 +144,13 @@ let newvar = newpolyvar
 
 -- Substitutes type variables
 lang VarTypeSubstitute = VarTypeAst + MetaVarTypeAst
-  sem substituteVars (subst : Map Name Type) =
+  sem substituteVars : Info -> Map Name Type -> Type -> Type
+  sem substituteVars info subst =
   | TyVar t & ty ->
     match mapLookup t.ident subst with Some tyvar then tyvar
     else ty
   | ty ->
-    smap_Type_Type (substituteVars subst) ty
+    smap_Type_Type (substituteVars info subst) ty
 
   sem substituteMetaVars (subst : Map Name Type) =
   | TyMetaVar t & ty ->

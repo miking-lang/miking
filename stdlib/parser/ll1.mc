@@ -87,7 +87,7 @@ lang ParserSpec = ParserBase
   | nt -> NtSpec nt
   sem litSym =
   | str ->
-    let res: NextTokenResult = nextToken {str = str, pos = posVal "" 1 1} in
+    let res: NextTokenResult = nextToken {str = str, pos = posVal (concat "lit: " str) 1 1} in
     match (res.stream.str, res.lit) with ("", !"") then LitSpec {lit = str}
     else error (join ["A literal token does not lex as a single token: \"", res.stream.str, "\""])
   sem tokSym =

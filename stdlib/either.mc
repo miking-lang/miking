@@ -6,10 +6,7 @@
 include "option.mc"
 include "seq.mc"
 include "string.mc"
-
-type Either a b
-con Left: all a. all b. a -> Either a b
-con Right: all a. all b. b -> Either a b
+include "basic-types.mc"
 
 --  *-
 --  * .brief Checks equality between two Either values.

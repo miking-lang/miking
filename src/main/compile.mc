@@ -30,15 +30,17 @@ lang MCoreCompile =
   BootParser +
   PMExprDemote +
   MExprHoles +
+  MExprCmp +
   MExprSym + MExprRemoveTypeAscription + MExprTypeCheck +
   MExprUtestGenerate + MExprRuntimeCheck + MExprProfileInstrument +
   MExprPrettyPrint +
   MExprLowerNestedPatterns +
   OCamlTryWithWrap + MCoreCompileLang + PhaseStats +
-  SpecializeCompile
+  SpecializeCompile +
+  PprintTyAnnot + HtmlAnnotator
 end
 
-lang TyAnnotFull = MExprPrettyPrint + TyAnnot + HtmlAnnotator
+lang TyAnnotFull = MExprPrettyPrint + TyAnnot + HtmlAnnotator + MetaVarTypePrettyPrint
 end
 
 let insertTunedOrDefaults = lam options : Options. lam ast. lam file.
@@ -71,11 +73,14 @@ let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
     endPhaseStats log "symbolize" ast;
 
     let ast = typeCheck ast in
+    endPhaseStats log "type-check" ast;
     (if options.debugTypeCheck then
-       printLn (use TyAnnotFull in annotateMExpr ast) else ());
-    endPhaseStats log "typecheck" ast;
+       printLn (use TyAnnotFull in annotateMExpr ast);
+       endPhaseStats log "debug-type-check" ast
+     else ());
 
     let ast = compileSpecialize ast in
+
     -- If --runtime-checks is set, runtime safety checks are instrumented in
     -- the AST. This includes for example bounds checking on sequence
     -- operations.
@@ -85,6 +90,7 @@ let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
     -- If option --test, then generate utest runner calls. Otherwise strip away
     -- all utest nodes from the AST.
     let ast = generateUtest options.runTests ast in
+    endPhaseStats log "generate-utest" ast;
 
     let ast = lowerAll ast in
     endPhaseStats log "pattern-lowering" ast;
