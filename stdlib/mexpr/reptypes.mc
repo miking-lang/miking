@@ -857,6 +857,12 @@ type SolInterface constraint childInfo env =
     -> Option ([[x]], [constraint])
   , pprintConstraint : String -> env -> constraint -> (env, String)
   , pprintChildInfo : String -> env -> childInfo -> (env, String)
+  -- NOTE(vipa, 2023-12-19): Merge the given list of constraints, if
+  -- they are compatible. If they are not, compute which constraints
+  -- conflict. The latter should be represented as a mapping from
+  -- constraint-index (in the input list) to the indices with
+  -- conflicting constraints.
+  , mergeAndFindIncompat : [constraint] -> Either (Map Int (Set Int)) constraint
   }
 
 type SolTree constraint childInfo a
@@ -1115,6 +1121,142 @@ let andMetaCombine
     , max = addf acc.max (mulf item.scale res.max)
     , size = muli acc.size res.size
     }
+
+let exploreCombosMinFirst
+  : all a. all res. all c. all b.
+  (a -> Float)
+  -> (a -> c)
+  -> ([a] -> c -> Option b)
+  -> ([c] -> Either (Map Int (Set Int)) c)
+  -> [LStream a]
+  -> LStream b
+  = lam cost. lam constraint. lam construct. lam mergeConstraints. lam axes.
+    type Combo =
+      { cost : Float
+      , combo : [Int]
+      , here : [a]
+      , tails : [LStream a]
+      } in
+    let cmpId = seqCmp subi in
+    let cmpByCost = lam a. lam b.
+      if ltf a.cost b.cost then negi 1 else
+      if gtf a.cost b.cost then 1 else
+      0 in
+    type State =
+      { queue : Heap Combo
+      , consideredCombos : Set [Int]
+      } in
+    let individualSets : [Set Int] =
+      create (length axes) (lam i. setInsert i (setEmpty subi)) in
+
+    let optionMapAccumM3 : all a1. all b1. all c1. all a2. all b2. all c2. all acc.
+      (acc -> a1 -> b1 -> c1 -> Option (acc, a2, b2, c2)) -> acc -> [a1] -> [b1] -> [c1] -> Option (acc, [a2], [b2], [c2])
+      = lam f. lam acc. lam as. lam bs. lam cs.
+        recursive let work = lam acc. lam a2s. lam b2s. lam c2s. lam as. lam bs. lam cs.
+          match (as, bs, cs) with ([a] ++ as, [b] ++ bs, [c] ++ cs) then
+            match f acc a b c with Some (acc, a, b, c) then
+              work acc (snoc a2s a) (snoc b2s b) (snoc c2s c) as bs cs
+            else None ()
+          else Some (acc, a2s, b2s, c2s)
+        in work acc [] [] [] as bs cs
+    in
+
+    let init = lam.
+      match optionMapM lazyStreamUncons axes with Some axes then
+        match unzip axes with (here, tails) in
+        let initCombo =
+          { cost = foldl (lam acc. lam item. addf acc (cost item)) 0.0 here
+          , combo = map (lam. 0) axes
+          , here = here
+          , tails = tails
+          } in
+        { queue = heapSingleton initCombo
+        , consideredCombos = setEmpty cmpId
+        }
+      else {queue = heapEmpty, consideredCombos = setEmpty cmpId}
+    in
+
+    let addSuccessors : Combo -> Map Int (Set Int) -> State -> State
+      = lam combo. lam conflicts. lam state.
+        let trySteps : Set Int -> Option Combo = lam idxesToStep.
+          let tryStep = lam c. lam idx. lam here. lam tail.
+            if setMem idx idxesToStep then
+              match lazyStreamUncons tail with Some (new, tail) then
+                Some (addf (subf c (cost here)) (cost new), addi idx 1, new, tail)
+              else None ()
+            else Some (c, idx, here, tail)
+          in
+          let reCombo = lam quad.
+            match quad with (cost, combo, here, tails) in
+            {combo = combo, cost = cost, here = here, tails = tails} in
+          let res = optionMapAccumM3 tryStep combo.cost combo.combo combo.here combo.tails in
+          let res = optionMap reCombo res in
+          optionFilter (lam combo. not (setMem combo.combo state.consideredCombos)) res in
+        let alts = if mapIsEmpty conflicts
+          then individualSets
+          else setToSeq (setOfSeq setCmp (mapValues conflicts)) in
+        let newCombos = mapOption trySteps alts in
+        { queue = heapAddMany cmpByCost newCombos state.queue
+        , consideredCombos = foldl (lam acc. lam combo. setInsert combo.combo acc) state.consideredCombos newCombos
+        }
+    in
+
+    recursive let step : State -> Option (() -> State, b) = lam state.
+      match heapPop cmpByCost state.queue with Some (combo, queue) then
+        let state = {state with queue = queue} in
+        switch mergeConstraints (map constraint combo.here)
+        case Left conflicts then
+          step (addSuccessors combo conflicts state)
+        case Right constraint then
+          match construct combo.here constraint with Some b then
+            Some (lam. addSuccessors combo (mapEmpty subi) state, b)
+          else step (addSuccessors combo (mapEmpty subi) state)
+        end
+      else None ()
+    in
+
+    lazyStreamLaziest step init
+
+let solTreeLazyMaterialize : all constraint. all childInfo. all env. all a.
+  SolInterface constraint childInfo env -> env -> SolTree constraint childInfo a -> LStream a
+  = lam fs. lam env. lam tree.
+    type Item a = {cost : Float, constraint : constraint, res : a} in
+    let cmpItem : all a. Item a -> Item a -> Int = lam a. lam b.
+      if ltf a.cost b.cost then negi 1 else
+      if gtf a.cost b.cost then 1 else
+      0 in
+    recursive let work
+      : all a. SolTree constraint childInfo a -> LStream (Item a)
+      = lam tree. switch tree
+        case STAnd x then
+          let children = switch x.components
+            case AndDep components then
+              let f = lam comp.
+                lazyStreamMap (lam res. {res with cost = mulf comp.scale res.cost}) (work comp.child) in
+              map f components
+            case AndIndep components then
+              map work components
+            end in
+          let getCost = lam item. item.cost in
+          let getConstraint = lam item. item.constraint in
+          let construct = lam children. lam constraint.
+            let f = lam res.
+              { cost = foldl (lam acc. lam item. addf acc item.cost) x.selfCost children
+              , constraint = res.res
+              , res = x.construct (map (lam x. x.res) children)
+              } in
+            optionMap f (fs.constrainFromBelow {here = x.constraint, child = constraint, path = []}) in
+          exploreCombosMinFirst getCost getConstraint construct fs.mergeAndFindIncompat children
+        case STConstraintTransform x then
+          let transform = lam trip.
+            optionMap (lam new. {trip with constraint = new}) (x.fromBelow trip.constraint) in
+          lazyStreamMapOption transform (work x.child)
+        case STOr x then
+          lazyStreamMergeMin cmpItem (map work x.alternatives)
+        case STSingle x then
+          lazyStreamSingleton {cost = x.cost, constraint = x.constraint, res = x.res}
+        end in
+    lazyStreamMap (lam x. x.res) (work tree)
 
 let solTreeMaterializeCheapest
   : all constraint. all a. all env. all childInfo. SolInterface constraint childInfo env -> SolTree constraint childInfo a -> Option a
@@ -1542,6 +1684,15 @@ lang SolTreeSolver
     Bool -> SolInterface constraint childInfo env -> env -> SolTreeInput constraint childInfo a -> Option a
 end
 
+lang SolTreeLazySolver = SolTreeSolver
+  sem solTreeMinimumSolution debug fs env = | tree ->
+    let tree = solTreeConvert tree in
+    let propagate = lam tree. solTreePropagate fs env true tree in
+    let lazyMaterialize = lam tree. solTreeLazyMaterialize fs env tree in
+    let extractSolution = lam stream. optionMap (lam x. x.0) (lazyStreamUncons stream) in
+    optionBind (optionMap lazyMaterialize (propagate tree)) extractSolution
+end
+
 lang SolTreeSoloSolver = SolTreeSolver
   sem solTreeMinimumSolution debug fs env = | tree ->
     let tree = solTreeConvert tree in
@@ -1824,6 +1975,41 @@ lang SATishSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpers
       match optionMapAccum (unificationToDebug indent) env constraint.fixedUni with (env, uni) in
       let uni = optionGetOr "" uni in
       (env, join (snoc (map pprintUnfixed unfixed) uni)) in
+    let mergeAndFindIncompat : [Constraint a] -> Either (Map Int (Set Int)) (Constraint a) = lam constraints.
+      let res = optionFoldlM
+        (lam uni. lam c. optionBind c.fixedUni (mergeUnifications uni))
+        (emptyUnification ())
+        constraints in
+      match res with Some res
+      then Right {unfixedReprs = mapEmpty _symCmp, fixedUni = Some res}
+      else
+        let singleton = lam k. lam v. mapInsert k v (mapEmpty nameCmp) in
+        let collectIdxes = lam acc. lam idx. lam constraint.
+          match constraint.fixedUni with Some uni then
+            pufFold
+              (lam a. lam. lam. a)
+              (lam acc. lam pair. lam repr. mapInsertWith (mapUnionWith concat) pair.0 (singleton repr [idx]) acc)
+              acc
+              uni.reprs
+          else acc in
+        let potentialConflicts = foldli collectIdxes
+          (mapEmpty _symCmp)
+          constraints in
+        let collectConflicts = lam acc. lam entry.
+          let mapWithOthers : all a. all b. ([a] -> a -> [a] -> b) -> [a] -> [b] = lam f. lam xs.
+            mapi (lam i. lam x. f (splitAt xs i).0 x (splitAt xs (addi i 1)).1) xs in
+          if gti (mapSize entry) 1 then
+            let partitions = map (setOfSeq subi) (mapValues entry) in
+            let fillNeededSteps = lam pre. lam here. lam post.
+              let val = foldl setUnion (foldl setUnion (setEmpty subi) pre) post in
+              mapMap (lam. val) here in
+            foldl (mapUnionWith setUnion) acc (mapWithOthers fillNeededSteps partitions)
+          else acc in
+        let conflicts = mapFoldWithKey
+          (lam acc. lam. lam entry. collectConflicts acc entry)
+          (mapEmpty subi)
+          potentialConflicts in
+        Left conflicts in
     let interface : SolInterface (Constraint a) (ChildInfo a) PprintEnv =
       { approxOr = constraintOr
       , eq = constraintEq
@@ -1858,6 +2044,7 @@ lang SATishSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpers
       , split = #frozen"split"
       , pprintConstraint = pprintConstraint
       , pprintChildInfo = pprintChildInfo
+      , mergeAndFindIncompat = mergeAndFindIncompat
       } in
     let top = STIAndDep
       { components = topTrees
