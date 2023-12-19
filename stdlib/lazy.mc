@@ -31,6 +31,9 @@ type LStream a = Lazy (StreamNode a)
 let lazyStreamEmpty : all a. () -> LStream a
   = lam. ref (LazyVal (SNil ()))
 
+let lazyStreamSingleton : all a. a -> LStream a
+  = lam a. ref (LazyVal (SCons (a, lazyStreamEmpty ())))
+
 let lazyStream : all acc. all a. (acc -> Option (acc, a)) -> acc -> LStream a
   = lam f. lam acc.
     recursive let goNext = lam acc.
