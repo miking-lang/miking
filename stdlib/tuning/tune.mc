@@ -22,21 +22,6 @@ include "ocaml/pprint.mc"
 -- Start time of search.
 let tuneSearchStart = ref 0.
 
--- Return code for timeout
-let _returnCodeTimeout = 124
-
--- Default command line options if program takes no input
-let _inputEmpty = [""]
-
--- Convert from ms to s
-let _ms2s = lam ms. divf ms 1000.
-
--- Filter out duplicates
-let _distinct = lam cmp. lam seq.
-  setToSeq (setOfSeq cmp seq)
-
-utest _distinct subi [1,2,1] with [1,2]
-
 ------------------------------
 -- Base fragment for tuning --
 ------------------------------
@@ -49,9 +34,33 @@ con Error : {msg : String, returncode : Int} -> TimingResult
 con Timeout : {ms : Float} -> TimingResult
 
 lang TuneBase = HoleAst
-  sem tune : TuneOptions -> Runner -> CallCtxEnv -> DependencyGraph
-           -> InstrumentedResult -> String -> (() -> ()) -> LookupTable -> Expr
-           -> LookupTable
+  sem tune : String -> TuneOptions -> CallCtxEnv -> DependencyGraph
+           -> InstrumentedResult -> ContextExpanded -> Expr -> LookupTable
+  sem tune binary options env dep inst exp =
+  | ast ->
+    -- Set the random seed?
+    (match options.seed with Some seed then randSetSeed seed else ());
+
+    let holes : [Expr] = env.idx2hole in
+    let hole2idx : Map NameInfo (Map [NameInfo] Int) = env.hole2idx in
+
+    let ms2s = lam ms. divf ms 1000. in
+
+    -- Runs the program with a given command-line input and optional timeout
+    let runner = lam input : String. lam timeoutMs : Option Float.
+      sysRunCommandWithTimingTimeout (optionMap ms2s timeoutMs) [binary, input] "" "."
+    in
+
+    let cleanup = lam.
+      exp.cleanup ();
+      inst.cleanup ()
+    in
+
+    _tune options runner env dep inst exp.tempFile cleanup exp.table ast
+
+  sem _tune : TuneOptions -> Runner -> CallCtxEnv -> DependencyGraph
+            -> InstrumentedResult -> String -> (() -> ()) -> LookupTable -> Expr
+            -> LookupTable
 
   sem measure (env: CallCtxEnv) (table: LookupTable) (runner: Runner)
               (file: String) (options: TuneOptions) (timeout: Option Float)
@@ -64,7 +73,7 @@ lang TuneBase = HoleAst
       let rcode = res.returncode in
       match rcode with 0 then
         Success {ms = ms}
-      else if eqi rcode _returnCodeTimeout then
+      else if eqi rcode 124 then
         Timeout {ms = ms}
       else
         let msg = strJoin " "
@@ -85,7 +94,7 @@ lang TuneBase = HoleAst
   | options ->
     let options : TuneOptions = options in
     let input =
-      match options.args with [] then _inputEmpty else options.args
+      match options.args with [] then [""] else options.args
     in
     input
 end
@@ -97,7 +106,7 @@ end
 lang TuneLocalSearch = TuneBase + LocalSearchBase
   syn LSData =
 
-  sem initMeta : LSData -> MetaState
+  sem initMeta : LSData -> SearchMethod -> MetaState
 
   sem debugSearch : SearchState -> ()
 
@@ -158,18 +167,18 @@ lang TuneLocalSearch = TuneBase + LocalSearchBase
   | _ -> false
 
   -- Entry point for tuning
-  sem tune (options : TuneOptions) (run : Runner) (env : CallCtxEnv)
+  sem _tune (options : TuneOptions) (run : Runner) (env : CallCtxEnv)
            (dep : DependencyGraph) (inst : InstrumentedResult)
            (tuneFile : String) (onFailure : () -> ()) (defaultTable: LookupTable) =
   | t ->
-    match tuneDebug options run env dep inst tuneFile onFailure defaultTable t
+    match _tuneDebug options run env dep inst tuneFile onFailure defaultTable t
     with (table, _) in table
 
   -- Like 'tune', but also returns the final search state (for testing)
-  sem tuneDebug (options : TuneOptions) (run : Runner) (env : CallCtxEnv)
-                (dep : DependencyGraph) (inst : InstrumentedResult)
-                (tuneFile : String) (onFailure : () -> ())
-                (defaultTable : LookupTable) =
+  sem _tuneDebug (options : TuneOptions) (run : Runner) (env : CallCtxEnv)
+                 (dep : DependencyGraph) (inst : InstrumentedResult)
+                 (tuneFile : String) (onFailure : () -> ())
+                 (defaultTable : LookupTable) =
   | t ->
     -- Nothing to tune?
     if null defaultTable then ([], None ()) else
@@ -187,7 +196,7 @@ lang TuneLocalSearch = TuneBase + LocalSearchBase
        else ());
        (defaultTable, None ())
     else
-      let meta = initMeta data in
+      let meta = initMeta data options.method in
       let initTable = initialTable defaultTable meta in
 
       -- Warmup runs
@@ -253,7 +262,7 @@ end
 -- Dependency-aware tuning --
 -----------------------------
 
-lang TuneDep = TuneLocalSearch + Database
+lang TuneDep = TuneLocalSearch + Database + TuneStats
   syn LSData =
   | TuneData { options : TuneOptions, run : Runner, env : CallCtxEnv,
                dep : DependencyGraph, inst : InstrumentedResult,
@@ -277,7 +286,6 @@ lang TuneDep = TuneLocalSearch + Database
          , data = Some (TuneData { searchSpace = space, database = db })
          }
     then
-      use MExprPrettyPrint in
       let elapsed = subf (wallTimeMs ()) (deref tuneSearchStart) in
       -- OPT(Linnea, 2022-02-08): Increase % incrementally
       let entries = databaseCount db in
@@ -314,7 +322,6 @@ lang TuneDep = TuneLocalSearch + Database
     let database = databaseEmpty dep.offset dep.nbrMeas in
 
     (if options.printStats then
-       use TuneStats in
        printLn (tuneStats options dep searchSpace env t)
      else ());
 
@@ -354,7 +361,6 @@ lang TuneDep = TuneLocalSearch + Database
 
         -- Print the result
         (if d.options.printStats then
-          use TuneStats in
           printLn (tuneStatsTime sorted)
          else ());
 
@@ -391,7 +397,6 @@ lang TuneDep = TuneLocalSearch + Database
 
   sem getProfile =
   | profiles ->
-    use Instrumentation in
     let mergeProfiles = lam p1: InstrumentationProfile. lam p2: InstrumentationProfile.
       match (p1, p2) with
         ( {ids= ids1, nbrRuns= nbrRuns1, totalMs= totalMs1}
@@ -475,10 +480,11 @@ end
 
 lang TuneDepExhaustive = TuneDep + SearchSpace
   syn MetaState =
-  | Exhaustive { tables : DataFrame (Option Expr) }
+  | MetaExhaustive { tables : DataFrame (Option Expr) }
 
-  sem initMeta =
-  | TuneData d ->
+  sem initMeta data =
+  | Exhaustive {} ->
+    match data with TuneData d in
     let df: DataFrame (Option Expr) = searchSpaceExhaustive d.options.stepSize d.env d.dep in
     -- If the first row contains a None (), it means that hole is not connected
     -- to a measuring point. Set those to the default value.
@@ -488,10 +494,10 @@ lang TuneDepExhaustive = TuneDep + SearchSpace
       ) (head df.data)
     in
     let df = dataFrameSetRow 0 row0 df in
-    Exhaustive {tables = df}
+    MetaExhaustive {tables = df}
 
   sem initialTable (defaultTable : LookupTable) =
-  | Exhaustive {tables = tables} ->
+  | MetaExhaustive {tables = tables} ->
     let res =
     mapi (lam i. lam v.
       match v with Some v then v
@@ -503,7 +509,7 @@ lang TuneDepExhaustive = TuneDep + SearchSpace
     res
 
   sem step (searchState : SearchState) =
-  | Exhaustive { tables = tables } ->
+  | MetaExhaustive { tables = tables } ->
     match searchState with { iter = iter, cost = cost, data = data } in
     match data with Some (TuneData {env = env, options = options}) then
       let row = iter in
@@ -520,47 +526,15 @@ lang TuneDepExhaustive = TuneDep + SearchSpace
         in
         let a = Table {table = t} in
         ( Some {assignment = a, cost = cost (None ()) a}
-        , Exhaustive {tables = tables} )
-      else ( None(), Exhaustive {tables = tables} )
+        , MetaExhaustive {tables = tables} )
+      else ( None(), MetaExhaustive {tables = tables} )
     else error "Expected tune data"
 end
 
-let _tuneMethod = lam options : TuneOptions.
-  switch options.method
-  case Exhaustive {} then use TuneDepExhaustive in tune
-  end
+lang MExprTune = MExpr + TuneDepExhaustive end
 
--- Entry point for tuning
-let tuneEntry =
-  lam binary : String.
-  lam options : TuneOptions.
-  lam env : CallCtxEnv.
-  lam dep : DependencyGraph.
-  lam inst : InstrumentedResult.
-  lam exp : ContextExpanded.
-
-    -- Set the random seed?
-    (match options.seed with Some seed then randSetSeed seed else ());
-
-    let holes : use Ast in [Expr] = env.idx2hole in
-    let hole2idx : Map NameInfo (Map [NameInfo] Int) = env.hole2idx in
-
-    -- Runs the program with a given command-line input and optional timeout
-    let runner = lam input : String. lam timeoutMs : Option Float.
-      sysRunCommandWithTimingTimeout (optionMap _ms2s timeoutMs) [binary, input] "" "."
-    in
-
-    let cleanup = lam.
-      exp.cleanup ();
-      inst.cleanup ()
-    in
-
-    (_tuneMethod options) options runner env dep inst exp.tempFile cleanup
-      exp.table
-
-lang MExprTune = MExpr + TuneBase end
 lang TestLang =
-  TuneDep + GraphColoring + MExprHoleCFA + DependencyAnalysis +
+  MExprTune + GraphColoring + MExprHoleCFA + DependencyAnalysis +
   NestedMeasuringPoints + ContextExpand + Instrumentation +
   BootParser + MExprSym + MExprPrettyPrint + MExprEval + MExprTypeCheck +
   MExprLowerNestedPatterns + MCoreCompileLang
@@ -639,13 +613,7 @@ let test : Bool -> Bool -> TuneOptions -> Expr -> (LookupTable, Option SearchSta
       instrumented.cleanup ();
       cunit.cleanup ()
     in
-    use TuneDep in
-    let tune =
-      switch options.method
-      case Exhaustive () then use TuneDepExhaustive in tuneDebug
-      end
-    in
-    let res = tune options runner env dep instrumented exp.tempFile cleanup exp.table ast in
+    let res = _tuneDebug options runner env dep instrumented exp.tempFile cleanup exp.table ast in
     cleanup ();
     res
 in
