@@ -102,12 +102,6 @@ let tuneOptionsConfig : ParseConfig Options = concat optionsConfig [
       let o: Options = p.options in
       let to : TuneOptions = o.tuneOptions in
       {o with tuneOptions = {to with debugExpansion = true}}),
-  ([("--seq-transform", "", "")],
-    "Transform sequence literals into create function choosing between rope and list",
-    lam p: ArgPart Options.
-      let o: Options = p.options in
-      let to : TuneOptions = o.tuneOptions in
-      {o with tuneOptions = {to with seqTransform = true}}),
   ([("--reduce-dependencies", " ", "<t>")],
     join ["Reduce the dependency graph by filtering out measuring points with runtimes below this threshold value (default ",
           float2string tuneOptionsDefault.reduceDependencies, ")"],

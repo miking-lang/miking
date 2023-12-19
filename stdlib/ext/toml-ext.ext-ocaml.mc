@@ -58,6 +58,14 @@ let tomlExtMap =
       ",
       ty = tyarrows_ [tyTomlValue_, tyfloat_] }
     ]),
+    ("externalTomlValueToBoolExn", [
+      impl { expr =
+      "fun v -> match v with
+         | Toml.Types.TBool v -> v
+         | _ -> raise (Invalid_argument (\"tomlValueToBoolExn: \" ^ (Toml.Printer.string_of_value v)))
+      ",
+      ty = tyarrows_ [tyTomlValue_, tybool_] }
+    ]),
     ("externalTomlValueToTableExn", [
       impl { expr =
       "fun v -> match v with
