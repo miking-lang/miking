@@ -1718,7 +1718,7 @@ lang SolTreeSoloSolver = SolTreeSolver
     in propagate 0 tree
 end
 
-lang SATishSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpers + PrettyPrint + Cmp + Generalize + VarAccessHelpers + LocallyNamelessStuff + SolTreeSolver
+lang SATishSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpers + PrettyPrint + Cmp + Generalize + VarAccessHelpers + LocallyNamelessStuff + SolTreeSolver + WildToMeta
   type ProcOpImpl a  =
     { implId : ImplId
     , op : Name
@@ -2197,6 +2197,7 @@ lang SATishSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpers
 
     let perImpl : SBContent a -> ProcOpImpl a -> (SBContent a, Option (Map Symbol Int, SolTreeInput (Constraint a) (ChildInfo a) (SolContent a)))
       = lam branch. lam impl.
+        let ty = wildToMeta impl.metaLevel ty in
         match instAndSubst (infoTy impl.specType) impl.metaLevel impl.specType
           with (specType, subst) in
         match unifyPure impl.uni (removeReprSubsts specType) ty with Some uni then
@@ -2267,7 +2268,7 @@ lang SATishSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpers
     (branch, {reprLevels = reprLevels, tree = STIOr {alternatives = impls}})
 end
 
-lang LazyTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpers + PrettyPrint + Cmp + Generalize + VarAccessHelpers + LocallyNamelessStuff
+lang LazyTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpers + PrettyPrint + Cmp + Generalize + VarAccessHelpers + LocallyNamelessStuff + WildToMeta
   type ProcOpImpl a  =
     { implId : ImplId
     , op : Name
@@ -2472,6 +2473,7 @@ lang LazyTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHe
 
     let perImpl : SBContent a -> ProcOpImpl a -> (SBContent a, LStream (SolContentRec a))
       = lam branch. lam impl.
+        let ty = wildToMeta impl.metaLevel ty in
         match instAndSubst (infoTy impl.specType) impl.metaLevel impl.specType
           with (specType, subst) in
         match unifyPure impl.uni (removeReprSubsts specType) ty with Some uni then
@@ -2636,7 +2638,7 @@ lang LazyTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHe
     else lazyStreamEmpty ()
 end
 
-lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpers + PrettyPrint + Cmp + Generalize + VarAccessHelpers + LocallyNamelessStuff
+lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpers + PrettyPrint + Cmp + Generalize + VarAccessHelpers + LocallyNamelessStuff + WildToMeta
   -- NOTE(vipa, 2023-11-28): We pre-process impls to merge repr vars,
   -- meta vars, and opUses, split the problem into disjoint
   -- sub-problems, and re-order opUses such that we can drop internal
@@ -2942,6 +2944,7 @@ lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypes
       end in
 
     let perImpl = lam acc : {branch : SBContent a, sols : [SolContentRec a]}. lam impl.
+      let ty = wildToMeta impl.metaLevel ty in
       let debugIndent = optionMap (concat " ") debugIndent in
       (match debugIndent with Some indent then
         print (join [indent, "trying impl with ", int2string (length impl.problem), " commands"])
