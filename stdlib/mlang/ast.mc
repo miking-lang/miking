@@ -35,6 +35,32 @@ lang UseAst = Ast
     (acc, TmUse {t with inexpr = inexpr})
 end
 
+--- TmInclude --
+lang IncludeAst = Ast
+  syn Expr =
+  | TmInclude {path : String,
+               inexpr : Expr,
+               ty : Type,
+               info : Info}
+
+  sem infoTm =
+  | TmInclude t -> t.info
+
+  sem tyTm =
+  | TmInclude t -> t.ty
+
+  sem withInfo (info : Info) =
+  | TmInclude t -> TmInclude {t with info = info}
+
+  sem withType (ty : Type) =
+  | TmInclude t -> TmInclude {t with ty = ty}
+
+  sem smapAccumL_Expr_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
+  | TmInclude t ->
+    match f acc t.inexpr with (acc, inexpr) in
+    (acc, TmInclude {t with inexpr = inexpr})
+end
+
 -- Base fragment for MLang declarations --
 lang DeclAst = Ast
   syn Decl = -- intentionally left blank
@@ -143,7 +169,7 @@ lang MLangAst =
   MLangTopLevel
 
   -- Additional expressions
-  + UseAst
+  + UseAst + IncludeAst
 
   -- Declarations
   + LangDeclAst + SynDeclAst + SemDeclAst + LetDeclAst + TypeDeclAst
