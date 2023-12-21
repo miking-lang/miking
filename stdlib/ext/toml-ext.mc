@@ -89,7 +89,7 @@ utest tomlValueToFloatExn (tomlFindExn "key" (tomlFromStringExn "key=3.14")) wit
 external externalTomlValueToBoolExn ! : TomlValue -> Bool
 let tomlValueToBoolExn = lam v. externalTomlValueToBoolExn v
 
-utest tomlValueToFloatExn (tomlFindExn "key" (tomlFromStringExn "key=true")) with true
+utest tomlValueToBoolExn (tomlFindExn "key" (tomlFromStringExn "key=true")) with true
 
 -- 'tomlValueToTableExn v' converts a toml value to a toml table.
 external externalTomlValueToTableExn ! : TomlValue -> TomlTable
