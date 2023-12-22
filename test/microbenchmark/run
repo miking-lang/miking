@@ -1,2 +1,2 @@
 #!/bin/sh
-ocaml -I +unix unix.cma run.ml $1 $2 $3 $4 $5
+ocaml -I +unix unix.cma run.ml "$@"
