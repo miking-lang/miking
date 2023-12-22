@@ -1,3 +1,4 @@
+include "common.mc"
 include "digraph.mc"
 include "string.mc"
 include "eqset.mc"
