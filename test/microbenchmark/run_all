@@ -1,0 +1,8 @@
+#!/bin/sh
+for f in *.mc
+do
+    b=$(basename -s .mc "$f")
+    echo "./run $b $@"
+    ./run "$b" "$@"
+    echo ""
+done
