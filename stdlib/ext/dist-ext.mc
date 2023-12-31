@@ -135,6 +135,22 @@ let exponentialLogPdf : Float -> Float -> Float = lam lambda. lam x.
 let exponentialPdf : Float -> Float -> Float = lam lambda. lam x.
   exp (exponentialLogPdf lambda x)
 
+-- Negative Binomial
+let negativeBinomialSample : Int -> Float -> Int = lam n. lam p.
+  poissonSample (externalGammaSample (int2float n) (divf (subf 1. p) p))
+let negativeBinomialLogPmf : Int -> Float -> Int -> Float = lam n. lam p. lam x.
+  subf (addf (log (int2float n)) (externalBinomialLogPmf x (subf 1. p) (addi x n))) (log (int2float (addi n x)))
+let negativeBinomialPmf: Int -> Float -> Int -> Float = lam n. lam p. lam x.
+  exp (negativeBinomialLogPmf n p x)
+
+-- Geometric
+let geometricSample : Float -> Int = lam p.
+  negativeBinomialSample 1 p
+let geometricLogPmf : Float -> Int -> Float = lam p. lam x.
+  addf (mulf (int2float x) (log (subf 1. p))) (log p)
+let geometricPmf : Float -> Int -> Float = lam p. lam x.
+  exp (geometricLogPmf p x)
+
 -- Seed
 external externalSetSeed ! : Int -> ()
 let setSeed : Int -> () = lam seed.
@@ -224,6 +240,20 @@ utest poissonSample 2.0 with 3 using intRange 0 100000 in
 utest exponentialSample 1.0 with 0. using floatRange 0. inf in
 utest exp (exponentialLogPdf 1.0 2.0) with 0.135335283237 using _eqf in
 utest exponentialPdf 2.0 2.0 with 0.0366312777775 using _eqf in
+
+-- Testing Negative Binomial
+utest exp (negativeBinomialLogPmf 6 0.3 1) with 0.0030618 using _eqf in
+utest negativeBinomialPmf 6 0.3 3 with 0.014002632 using _eqf in
+utest exp (negativeBinomialLogPmf 6 0.3 5) with 0.03087580356 using _eqf in
+utest negativeBinomialPmf 6 0.3 7 with 0.0475487374824 using _eqf in
+utest negativeBinomialSample 6 0.3 with 0 using geqi in
+
+-- Testing Geometric
+utest geometricPmf 0.3 0 with 0.3 using _eqf in
+utest exp (geometricLogPmf 0.3 1) with 0.21 using _eqf in
+utest geometricPmf 0.3 2 with 0.147 using _eqf in
+utest exp (geometricLogPmf 0.3 3) with 0.1029 using _eqf in
+utest geometricSample 0.3 with 0 using geqi in
 
 -- Testing seed
 utest setSeed 0; uniformSample (); uniformSample ()
