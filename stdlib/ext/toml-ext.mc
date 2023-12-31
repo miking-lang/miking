@@ -8,11 +8,12 @@ include "map.mc"
   and each value is one of:
   - integer
   - float
+  - bool
   - string
   - TOML table
   - a sequence of values
 
-  Boolean and date data types are currently not supported.
+  Date data types are currently not supported.
 -/
 
 type TomlTable
@@ -83,6 +84,12 @@ external externalTomlValueToFloatExn ! : TomlValue -> Float
 let tomlValueToFloatExn = lam v. externalTomlValueToFloatExn v
 
 utest tomlValueToFloatExn (tomlFindExn "key" (tomlFromStringExn "key=3.14")) with 3.14
+
+-- 'tomlValueToBoolExn v' converts a toml value to a bool.
+external externalTomlValueToBoolExn ! : TomlValue -> Bool
+let tomlValueToBoolExn = lam v. externalTomlValueToBoolExn v
+
+utest tomlValueToBoolExn (tomlFindExn "key" (tomlFromStringExn "key=true")) with true
 
 -- 'tomlValueToTableExn v' converts a toml value to a toml table.
 external externalTomlValueToTableExn ! : TomlValue -> TomlTable
