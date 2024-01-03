@@ -15,6 +15,7 @@ include "mexpr/shallow-patterns.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-check.mc"
 include "mexpr/utest-generate.mc"
+include "mexpr/constant-fold.mc"
 include "ocaml/ast.mc"
 include "ocaml/external-includes.mc"
 include "ocaml/mcore.mc"
@@ -35,6 +36,7 @@ lang MCoreCompile =
   MExprUtestGenerate + MExprRuntimeCheck + MExprProfileInstrument +
   MExprPrettyPrint +
   MExprLowerNestedPatterns +
+  MExprConstantFold +
   OCamlTryWithWrap + MCoreCompileLang + PhaseStats +
   SpecializeCompile +
   PprintTyAnnot + HtmlAnnotator
@@ -91,6 +93,14 @@ let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
     -- all utest nodes from the AST.
     let ast = generateUtest options.runTests ast in
     endPhaseStats log "generate-utest" ast;
+
+    let ast =
+      if and (options.enableConstantFold) (not options.disableOptimizations)
+      then constantFold ast else ast
+    in
+    endPhaseStats log "constant folding" ast;
+    (if options.debugConstantFold then
+      printLn (expr2str ast) else ());
 
     let ast = lowerAll ast in
     endPhaseStats log "pattern-lowering" ast;

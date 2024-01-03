@@ -1,720 +1,679 @@
-/-
+include "utest.mc"
 
-  This file contains a naive implementation of constant folding.
-
-  OPT(oerikss, 2023-05-16): The time complexity if this implementation is bad.
-
-  NOTE(oerikss, 2023-05-16): The implementation relies on side-effect.mc to
-                             handle side-effects. That implementatio is not well
-                             tested so be aware if folding code with
-                             side-effects.
-
- -/
-
-include "log.mc"
-
-include "ast.mc"
-include "eval.mc"
-include "pprint.mc"
-include "boot-parser.mc"
 include "side-effect.mc"
+include "eval.mc"
+include "boot-parser.mc"
+include "eq.mc"
+include "pprint.mc"
+include "symbolize.mc"
+include "type-check.mc"
+include "ast-builder.mc"
 
-lang ConstantFoldCtx = Ast + SideEffect
-  type VarCount = Map Name Int
-  type ConstantFoldCtx = {
-    _vars : VarCount,
-    _env : Map Name Expr,
-    sideEffectEnv : SideEffectEnv
-  }
+/-
+  This file implements constant folding and constant propagation
+-/
 
-  sem constantfoldCtxEmpty : () -> ConstantFoldCtx
-  sem constantfoldCtxEmpty =| _ ->
-    {
-      _vars = mapEmpty nameCmp,
-      _env = mapEmpty nameCmp,
-      sideEffectEnv = sideEffectEnvEmpty ()
-    }
+-- Size limit on constant nodes that we want to propagate
+let constantFoldCountMax = 100
 
-  sem constantfoldCtxReset : ConstantFoldCtx -> ConstantFoldCtx
-  sem constantfoldCtxReset =| ctx ->
-    { ctx with _vars = mapEmpty nameCmp, _env = mapEmpty nameCmp }
+lang ConstantFold = Eval + Ast
+  -- Entry point for constant folding and constant propagation over a program
+  sem constantFold : Expr -> Expr
+  sem constantFold =| t ->
+    readback (constantFoldExpr (evalCtxEmpty ()) t)
 
-  sem constantfoldVarCount : Name -> ConstantFoldCtx -> Int
-  sem constantfoldVarCount id =| ctx ->
-    match mapLookup id ctx._vars with Some n then n else 0
+  -- Language framents should extend this semantic function. Note that the
+  -- evaluation environment should, at all time, only contain values that are
+  -- constants. See `isConstant` for the definition of a constant.
+  sem constantFoldExpr : EvalCtx -> Expr -> Expr
+  sem constantFoldExpr ctx =| t -> smap_Expr_Expr (constantFoldExpr ctx) t
 
-  sem constantfoldVarCountIncr : Name -> ConstantFoldCtx -> ConstantFoldCtx
-  sem constantfoldVarCountIncr id =| ctx ->
-    let _vars =
-      if mapMem id ctx._vars then
-        mapInsert id (addi (mapFindExn id ctx._vars) 1) ctx._vars
-      else mapInsert id 1 ctx._vars
-    in
-    { ctx with _vars = _vars }
+  -- This semantic function restricts what is considered constants.
+  sem isConstant : Expr -> Bool
+  sem isConstant =| _ -> false
 
-  sem constantfoldVarCountDecr : Name -> ConstantFoldCtx -> ConstantFoldCtx
-  sem constantfoldVarCountDecr id =| ctx ->
-    let _vars =
-      switch mapLookup id ctx._vars
-      case Some 1 then mapRemove id ctx._vars
-      case Some n then mapInsert id (subi n 1) ctx._vars
-      case None _ then ctx._vars
-      end
-    in
-    { ctx with _vars = _vars }
+  -- This semantic function restricts what we propagate.
+  sem doPropagate : Expr -> Bool
+  sem doPropagate =| t ->
+    and (isConstant t) (lti (countNodes t) constantFoldCountMax)
 
-  sem constantfoldEnvInsert : Name -> Expr -> ConstantFoldCtx -> ConstantFoldCtx
-  sem constantfoldEnvInsert id t =| ctx ->
-    { ctx with _env = mapInsert id t ctx._env }
+  -- Constant folding may produce additional evaluation terms such as partial
+  -- applications of constants. This semantic function reads those back to
+  -- standard terms.
+  sem readback : Expr -> Expr
+  sem readback =| t -> smap_Expr_Expr readback t
 
-  sem constantfoldEnvLookup : Name -> ConstantFoldCtx -> Option Expr
-  sem constantfoldEnvLookup id =| ctx -> mapLookup id ctx._env
+  -- Counts the number of expression nodes.
+  sem countNodes : Expr -> Int
+  sem countNodes =| t -> countNodesH 0 t
 
-  sem constantfoldEnvIsEmpty : ConstantFoldCtx -> Bool
-  sem constantfoldEnvIsEmpty =| ctx -> mapIsEmpty ctx._env
-end
-
-lang ConstantFold = ConstantFoldCtx + MExprSideEffect + MExprPrettyPrint
-  sem _constantfoldExpr : ConstantFoldCtx -> Expr -> Expr
-  sem _constantfoldExpr ctx =| t ->
-    let t = innermost (optimizeOnce ctx) t in
-    -- logMsg logLevel.debug (lam. join ["innermost:\n", expr2str t]);
-    let ctx = updateCtx (constantfoldCtxReset ctx) t in
-    if constantfoldEnvIsEmpty ctx then t
-    else _constantfoldExpr ctx t
-
-  sem constantfoldExpr : ConstantFoldCtx -> Expr -> Expr
-  sem constantfoldExpr ctx =| t ->
-    let ctx = { ctx with sideEffectEnv = constructSideEffectEnv t } in
-    let ctx = updateCtx (constantfoldCtxReset ctx) t in
-    _constantfoldExpr ctx t
-
-  sem constantfold : Expr -> Expr
-  sem constantfold =| t -> constantfoldExpr (constantfoldCtxEmpty ()) t
-
-  sem constantfoldLets : Expr -> Expr
-  sem constantfoldLets =| t ->
-    let ctx = updateCtx (constantfoldCtxEmpty ()) t in
-    recursive let inner = lam t.
-      switch t
-      case TmVar r then
-        optionMapOr t inner (constantfoldEnvLookup r.ident ctx)
-      case TmLet r then
-        if optionIsSome (constantfoldEnvLookup r.ident ctx) then
-          inner r.inexpr
-        else smap_Expr_Expr inner t
-      case t then
-        smap_Expr_Expr inner t
-      end
-    in
-    inner t
-
-  sem updateCtx : ConstantFoldCtx -> Expr -> ConstantFoldCtx
-  sem updateCtx ctx =
-  | t -> sfold_Expr_Expr updateCtx ctx t
-
-  sem innermost : (Expr -> Option Expr) -> Expr -> Expr
-  sem innermost f =| t1 ->
-    let t2 = smap_Expr_Expr (innermost f) t1 in
-    switch f t2
-    case Some t3 then innermost f t3
-    case None _ then t2
-    end
-
-  sem optimizeOnce : ConstantFoldCtx -> Expr -> Option Expr
-  sem optimizeOnce ctx =| _ -> None ()
+  sem countNodesH : Int -> Expr -> Int
+  sem countNodesH n =| t ->
+    let n = addi n 1 in sfold_Expr_Expr countNodesH n t
 end
 
 lang VarConstantFold = ConstantFold + VarAst
-  sem optimizeOnce ctx =
-  | TmVar r -> optionMap (lam x. x) (constantfoldEnvLookup r.ident ctx)
-
-  sem updateCtx ctx =
-  | TmVar r -> constantfoldVarCountIncr r.ident ctx
+  sem constantFoldExpr ctx =
+  | TmVar r ->
+    match evalEnvLookup r.ident ctx.env with Some t then t
+    else TmVar r
 end
 
-lang LamAppConstantFold = ConstantFold + LamAst + AppAst + VarAst + LetAst
-  sem optimizeOnce ctx =
-  -- | TmLam (lamr & ({body = TmApp {lhs = lhs, rhs = TmVar varr}})) ->
-  --   if and
-  --        (nameEqSymUnsafe lamr.ident varr.ident)
-  --        (eqi (constantfoldVarCount lamr.ident ctx) 1)
-  --   then Some lhs
-  --   else None ()
+lang AppConstantFold = ConstantFold + AppEval + ConstSideEffect + ConstArity
+
+  syn Expr =
+  -- Partial constant application where all arguments are constant
+  | PartialConstAppConsts { expr : Expr,  arity : Int }
+  -- Partial constant application where some argument is NOT constant
+  | PartialConstApp { expr : Expr,  arity : Int }
+
+  -- This semantic function is only be called with an expression representing a
+  -- constant function without side-effects applied on constant arguments.
+  sem constantFoldConstAppConsts : Expr -> Expr
+  sem constantFoldConstAppConsts =
+  | t -> constantFoldConstApp t
+
+  -- This semantic function is only called with an expression representing a
+  -- constant function without side-effects applied to arguments that may not be
+  -- constants.
+  sem constantFoldConstApp : Expr -> Expr
+  sem constantFoldConstApp =
+  | t -> t
+
+  sem constantFoldExpr ctx =
+  | TmApp appr ->
+    let lhs = constantFoldExpr ctx appr.lhs in
+    let rhs = constantFoldExpr ctx appr.rhs in
+    let t = TmApp { appr with lhs = lhs, rhs = rhs } in
+    switch (lhs, isConstant rhs)
+      -- Constant application on constant arguments
+    case (TmConst constr, true) then
+      if eqi (constArity constr.val) 1 then
+        constantFoldConstAppConsts t
+      else
+        PartialConstAppConsts { expr = t, arity = pred (constArity constr.val) }
+    case (PartialConstAppConsts pappr, true) then
+      let expr = TmApp { appr with lhs = pappr.expr, rhs = rhs } in
+      if neqi pappr.arity 1 then
+        PartialConstAppConsts { expr = expr, arity = pred pappr.arity }
+      else constantFoldConstAppConsts expr
+      -- Constant application with some non-constant arguments
+    case (TmConst constr, false) then
+      if eqi (constArity constr.val) 1 then
+        constantFoldConstApp t
+      else
+        PartialConstApp { expr = t, arity = pred (constArity constr.val) }
+    case
+      (PartialConstAppConsts pappr | PartialConstApp pappr, false)
+    | (PartialConstAppConsts pappr, true)
+    | (PartialConstApp pappr, true)
+    then
+      let expr = TmApp { appr with lhs = pappr.expr, rhs = rhs } in
+      if neqi pappr.arity 1 then
+        PartialConstApp { expr = expr, arity = pred pappr.arity }
+      else constantFoldConstApp expr
+    case _ then t
+    end
+
+  sem isConstant =
+  | PartialConstAppConsts _ -> true
+  | PartialConstApp _ -> false
+
+  sem readback =
+  | PartialConstAppConsts r | PartialConstApp r -> readback r.expr
+end
+
+lang LamAppConstantFold = ConstantFold + AppAst + LamAst
+  sem constantFoldExpr ctx =
   | TmApp (appr & {lhs = TmLam lamr}) ->
-    let tyBody = tyTm appr.rhs in
-    Some (TmLet {
-      ident = lamr.ident,
-      tyAnnot = tyBody,
-      tyBody = tyBody,
-      body = appr.rhs,
-      inexpr = lamr.body,
+    let rhs = constantFoldExpr ctx appr.rhs in
+    if doPropagate rhs then
+      let ctx = { ctx with env = evalEnvInsert lamr.ident rhs ctx.env } in
+      constantFoldExpr ctx lamr.body
+    else
+      TmApp {
+        appr with
+        lhs = smap_Expr_Expr (constantFoldExpr ctx) (TmLam lamr),
+        rhs = rhs
+      }
+end
+
+lang LetConstantFold = ConstantFold + LetAst
+  sem constantFoldExpr ctx =
+  | TmLet r ->
+    let body = constantFoldExpr ctx r.body in
+    if doPropagate body then
+      let ctx = { ctx with env = evalEnvInsert r.ident body ctx.env } in
+      constantFoldExpr ctx r.inexpr
+    else
+      TmLet {
+        r with
+        body = body,
+        inexpr = constantFoldExpr ctx r.inexpr
+      }
+end
+
+lang RecordConstantFold = ConstantFold + RecordAst
+  sem isConstant =
+  | TmRecord r -> mapAll isConstant r.bindings
+end
+
+lang ConstConstantFold = ConstantFold + ConstAst
+  sem isConstant =
+  | TmConst _ -> true
+end
+
+lang DataConstantFold = ConstantFold + DataAst
+  sem isConstant =
+  | TmConApp r -> isConstant r.body
+end
+
+lang MatchConstantFold = ConstantFold + MatchEval
+  sem constantFoldExpr ctx =
+  | TmMatch r ->
+    let target = constantFoldExpr ctx r.target in
+    if isConstant target then
+      match tryMatch ctx.env target r.pat with Some newEnv then
+        constantFoldExpr { ctx with env = newEnv } r.thn
+      else
+        constantFoldExpr ctx r.els
+    else
+      let newEnv =
+        match tryMatch (evalEnvEmpty ()) target r.pat with Some newEnv then
+          evalEnvConcat (evalEnvFilter (lam x. isConstant x.1) newEnv) ctx.env
+        else ctx.env
+      in
+      TmMatch {
+        r with
+        target = target,
+        thn = constantFoldExpr { ctx with env = newEnv } r.thn,
+        els = constantFoldExpr ctx r.els
+      }
+end
+
+lang SeqConstantFold = ConstantFold + SeqAst
+  sem isConstant =
+  | TmSeq r -> forAll isConstant r.tms
+end
+
+lang ArithIntConstantFold = AppConstantFold + ArithIntAst + ArithIntArity
+  sem constantFoldConstAppConsts =
+  | TmApp (r & {
+    lhs = TmConst {val = const & (CNegi _)},
+    rhs = TmConst {val = CInt {val = n}}
+  }) ->
+    TmConst { val = CInt { val = negi n }, info = r.info, ty = r.ty }
+  | TmApp (r & {
+    lhs = TmApp {
+      lhs = TmConst {
+        val = const & (CAddi _ | CSubi _ | CMuli _ | CDivi _ | CModi _)},
+      rhs = TmConst {val = CInt {val = n1}}},
+    rhs = TmConst {val = CInt {val = n2}}
+  }) ->
+    TmConst {
+      val = CInt { val = constantFoldConstAppInt2 const n1 n2 },
+      info = r.info,
+      ty = r.ty
+    }
+
+  sem constantFoldConstAppInt2 : Const -> (Int -> Int -> Int)
+  sem constantFoldConstAppInt2 =
+  | CAddi _ -> addi
+  | CSubi _ -> subi
+  | CMuli _ -> muli
+  | CDivi _ -> divi
+  | CModi _ -> modi
+end
+
+lang ArithFloatConstantFold = AppConstantFold + ArithFloatAst + ArithFloatArity
+  sem constantFoldConstAppConsts =
+  | TmApp (r & {
+    lhs = TmConst {val = const & (CNegf _)},
+    rhs = TmConst {val = CFloat {val = f}}
+  }) ->
+    TmConst { val = CFloat { val = negf f }, info = r.info, ty = r.ty }
+  | TmApp (r & {
+    lhs = TmApp {
+      lhs = TmConst {
+        val = const & (CAddf _ | CSubf _ | CMulf _ | CDivf _)},
+      rhs = TmConst {val = CFloat {val = f1}}},
+    rhs = TmConst {val = CFloat {val = f2}}
+  }) ->
+    TmConst {
+      val = CFloat { val = constantFoldConstAppFloat2 const f1 f2 },
+      info = r.info,
+      ty = r.ty
+    }
+
+  sem constantFoldConstAppFloat2 : Const -> (Float -> Float -> Float)
+  sem constantFoldConstAppFloat2 =
+  | CAddf _ -> addf
+  | CSubf _ -> subf
+  | CMulf _ -> mulf
+  | CDivf _ -> divf
+end
+
+lang SeqOpConstantFoldFirstOrder =
+  AppConstantFold + SeqOpAst + IntAst + BoolAst + SeqOpArity
+
+  sem constantFoldConstAppConsts =
+  | TmApp {lhs = TmConst {val = CHead _}, rhs = TmSeq r} -> head r.tms
+  | TmApp {lhs = TmConst {val = CTail _}, rhs = TmSeq r} ->
+    TmSeq { r with tms = tail r.tms }
+  | TmApp {
+    lhs = TmApp {lhs = TmConst {val = CGet _}, rhs = TmSeq r},
+    rhs = TmConst {val = CInt {val = i}}
+  } ->
+    get r.tms i
+  | TmApp {
+    lhs = TmApp {
+      lhs = TmApp {lhs = TmConst {val = CSet _}, rhs = TmSeq r},
+      rhs = TmConst {val = CInt {val = i}}},
+    rhs = val
+  } ->
+    TmSeq { r with tms = set r.tms i val }
+  | TmApp {lhs = TmConst {val = CReverse _}, rhs = TmSeq r} ->
+    TmSeq { r with tms = reverse r.tms }
+  | TmApp {
+    lhs = TmApp {
+      lhs = TmApp {lhs = TmConst {val = CSubsequence _}, rhs = TmSeq r},
+      rhs = TmConst {val = CInt {val = ofs}}},
+    rhs = TmConst {val = CInt {val = len}}
+  } ->
+    TmSeq { r with tms = subsequence r.tms ofs len }
+
+  sem constantFoldConstApp =
+  | TmApp {
+    lhs = TmApp {lhs = TmConst {val = CCons _}, rhs = val},
+    rhs = TmSeq r
+  } ->
+    TmSeq { r with tms = cons val r.tms }
+  | TmApp {
+    lhs = TmApp {lhs = TmConst {val = CSnoc _}, rhs = TmSeq r},
+    rhs = val
+  } ->
+    TmSeq { r with tms = snoc r.tms val }
+  | TmApp {
+    lhs = TmApp {lhs = TmConst {val = CConcat _}, rhs = TmSeq r1},
+    rhs = TmSeq r2
+  } ->
+    TmSeq { r1 with tms = concat r1.tms r2.tms }
+  | TmApp (appr & {lhs = TmConst {val = CLength _}, rhs = TmSeq seqr}) ->
+    TmConst {
+      val = CInt { val = length seqr.tms },
       ty = appr.ty,
       info = appr.info
-    })
-end
-
-lang LetConstantFold = ConstantFold + LetAst + ConstAst + LamAst
-  sem optimizeOnce ctx =
-  | TmLet r ->
-    if optionIsSome (constantfoldEnvLookup r.ident ctx) then Some r.inexpr
-    else None ()
-
-  sem updateCtx ctx =
-  | TmLet r ->
-    let ctx = updateCtx (updateCtx ctx r.body) r.inexpr in
-    switch r.body
-    case TmVar _ then constantfoldEnvInsert r.ident r.body ctx
-    case TmConst c | TmLam {body = TmConst c} then
-      if exprHasSideEffect ctx.sideEffectEnv r.body then ctx
-      else constantfoldEnvInsert r.ident r.body ctx
-    case body then
-      if and
-           (not (exprHasSideEffect ctx.sideEffectEnv body))
-           (lti (constantfoldVarCount r.ident ctx) 2)
-      then constantfoldEnvInsert r.ident body ctx
-      else ctx
-    end
-end
-
-lang ArithFloatConstantFold = ConstantFold + ArithFloatEval + AppAst
-  sem optimizeOnce ctx =
-  | TmApp {
-    lhs = TmApp {
-      lhs = TmConst {val = c & CAddf _},
-      rhs = a},
-    rhs = b,
-    info = info
-  } ->
-    switch (a, b)
-    case (TmConst {val = CFloat f1}, TmConst {val = CFloat f2}) then
-      Some (delta info (c, [a, b]))
-    case (TmConst {val = CFloat f}, b) | (b, TmConst {val = CFloat f}) then
-      if eqf f.val 0. then Some b else None ()
-    case (_, _) then None ()
-    end
-  | TmApp (appr1 & {
-    lhs = TmApp (appr2 & {
-      lhs = TmConst {val = c & CMulf _},
-      rhs = a}),
-    rhs = b,
-    info = info
+    }
+  | TmApp (appr & {
+    lhs = TmApp {lhs = TmConst {val = CSplitAt _}, rhs = TmSeq seqr},
+    rhs = TmConst {val = CInt {val = i}}
   }) ->
-    switch (a, b)
-    case (TmConst {val = CFloat f1}, TmConst {val = CFloat f2}) then
-      Some (delta info (c, [a, b]))
-    case (TmApp {lhs = TmConst {val = CNegf _}, rhs = a},
-          TmApp {lhs = TmConst {val = CNegf _}, rhs = b})
-    then
-      Some (TmApp { appr1 with lhs = TmApp { appr2 with rhs = a }, rhs = b })
-    case
-      (TmApp (appr1 & {
-        lhs = TmApp (appr2 & {
-          lhs = TmConst {val = CMulf _},
-          rhs = TmConst (constr & {val = CFloat f1})
-        })
-      }),
-       TmConst {val = CFloat f2})
-    | (TmConst {val = CFloat f1},
-       TmApp (appr1 & {
-         lhs = TmApp (appr2 & {
-           lhs = TmConst {val = CMulf _},
-           rhs = TmConst (constr & {val = CFloat f2})
-         })
-       }))
-    then
-      Some
-        (TmApp {
-          appr1 with
-          lhs = TmApp {
-            appr2 with
-            rhs = TmConst {
-              constr with val = CFloat { val = mulf f1.val f2.val }
-            }
-          }})
-    case
-      (TmApp (appr & {
-        lhs = TmApp {
-          lhs = TmConst {val = CMulf _}
-        },
-        rhs = TmConst (constr & {val = CFloat f1})
-      }),
-       TmConst {val = CFloat f2})
-    | (TmConst {val = CFloat f1},
-       TmApp (appr & {
-         lhs = TmApp {
-           lhs = TmConst {val = CMulf _}
-         },
-         rhs = TmConst (constr & {val = CFloat f2})
-       }))
-    then
-      Some
-        (TmApp {
-          appr with
-          rhs = TmConst {
-            constr with val = CFloat { val = mulf f1.val f2.val }
-          }})
-    case
-      (a & TmConst {val = CFloat f}, b) | (b, a & TmConst {val = CFloat f})
-    then
-      if eqf f.val 1. then Some b
-      else
-        if and (eqf f.val 0.) (not (hasSideEffect b)) then Some a
-        else None ()
-    case (_, _) then None ()
-    end
-  | TmApp {
-    lhs = TmApp (appr & {
-      lhs = TmConst (constr & {val = c & CSubf _}),
-      rhs = a}),
-    rhs = b,
-    info = info
-  } ->
-    switch (a, b)
-    case (TmConst {val = CFloat f1}, TmConst {val = CFloat f2}) then
-      Some (delta info (c, [a, b]))
-    case (TmConst {val = CFloat f}, b) then
-      if eqf f.val 0. then
-        Some (TmApp {
-          appr with lhs = TmConst { constr with val = CNegf () },
-          rhs = b
-        })
-      else None ()
-    case (a, TmConst {val = CFloat f}) then
-      if eqf f.val 0. then Some a
-      else None ()
-    case (_, _) then None ()
-    end
-  | TmApp {
-    lhs = TmApp {
-      lhs = TmConst {val = c & CDivf _},
-      rhs = a},
-    rhs = b,
-    info = info
-  } ->
-    switch (a, b)
-    case (TmConst {val = CFloat f1}, TmConst {val = CFloat f2}) then
-      Some (delta info (c, [a, b]))
-    case (TmConst {val = CFloat f}, b) then
-      if and (eqf f.val 0.) (not (hasSideEffect b)) then Some a
-      else None ()
-    case (a, TmConst {val = CFloat f}) then
-      if eqf f.val 0. then
-        errorSingle [info] "Division by zero"
-      else if eqf f.val 1. then Some a
-      else None ()
-    case (_, _) then None ()
-    end
-  | TmApp {
-    lhs = TmConst {val = CNegf _},
-    rhs = TmApp {
-      lhs = TmConst {val = CNegf _},
-      rhs = a},
-    info = info
-  } -> Some a
-  | TmApp {
-    lhs = TmConst {val = c & CNegf _},
-    rhs = (a & TmConst {val = CFloat _}),
-    info = info} ->
-    Some (delta info (c, [a]))
+    let t = splitAt seqr.tms i in
+    tmTuple appr.info appr.ty
+      [TmSeq { seqr with tms = t.0 }, TmSeq { seqr with tms = t.1 }]
 end
 
-lang MExprConstantFold =
+lang MExprConstantFold = MExprAst +
+
   -- Terms
-  VarConstantFold + LamAppConstantFold + LetConstantFold +
+  VarConstantFold + AppConstantFold + LamAppConstantFold + LetConstantFold +
+  RecordConstantFold + ConstConstantFold + MatchConstantFold + SeqConstantFold +
 
-  -- Constants
-  ArithFloatConstantFold
+  -- Constant operations
+  ArithIntConstantFold + ArithFloatConstantFold + SeqOpConstantFoldFirstOrder +
+
+  -- Patterns
+  NamedPatEval + SeqTotPatEval + SeqEdgePatEval + RecordPatEval + DataPatEval +
+  IntPatEval + CharPatEval + BoolPatEval + AndPatEval + OrPatEval + NotPatEval
 end
 
-lang TestLang = MExprConstantFold + MExprPrettyPrint + MExprEq + BootParser end
+lang TestLang = MExprConstantFold +
+  MExprPrettyPrint + MExprEq + BootParser + MExprSym + MExprTypeCheck
+end
 
 mexpr
 
 use TestLang in
 
-let _test = lam expr.
-  logMsg logLevel.debug (lam.
-    strJoin "\n" [
-      "Before constantfold",
-      expr2str expr
-    ]);
-  let expr = symbolizeAllowFree expr in
-  match constantfold expr with expr in
-  logMsg logLevel.debug (lam.
-    strJoin "\n" [
-      "After constantfold",
-      expr2str expr
-    ]);
-  expr
+let _parse = lam prog.
+  typeCheck
+    (symbolize
+       (parseMExprString
+          { _defaultBootParserParseMExprStringArg () with allowFree = false }
+          prog))
 in
 
-let _testFoldLets = lam expr.
-  logMsg logLevel.debug (lam.
-    strJoin "\n" [
-      "Before constantfold",
-      expr2str expr
-    ]);
-  let expr = symbolizeAllowFree expr in
-  match constantfoldLets expr with expr in
-  logMsg logLevel.debug (lam.
-    strJoin "\n" [
-      "After constantfold",
-      expr2str expr
-    ]);
-  expr
+let _toString = utestDefaultToString expr2str expr2str in
+
+-------------------------------------------------
+-- Test constant folding of integer arithmetic --
+-------------------------------------------------
+
+let prog = _parse "muli 3 2" in
+let expected = _parse "6" in
+let actual = constantFold prog in
+utest actual with expected using eqExpr else _toString in
+
+let prog = _parse "divi 3 (negi (subi 4 (addi (muli 3 2) 1)))" in
+let expected = _parse "1" in
+let actual = constantFold prog in
+utest actual with expected using eqExpr else _toString in
+
+-----------------------------------------------
+-- Test constant folding of float arithmetic --
+-----------------------------------------------
+
+let prog = _parse "mulf 3. 2." in
+let expected = _parse "6." in
+let actual = constantFold prog in
+utest actual with expected using eqExpr else _toString in
+
+let prog = _parse "divf 3. (negf (subf 4. (addf (mulf 3. 2.) 1.)))" in
+let expected = _parse "1." in
+let actual = constantFold prog in
+utest actual with expected using eqExpr else _toString in
+
+------------------------------------------
+-- Test constant propagation of integer --
+------------------------------------------
+
+let prog = _parse "let x = 3 in let y = 2 in muli x y" in
+let expected = _parse "6" in
+let actual = constantFold prog in
+utest actual with expected using eqExpr else _toString in
+
+---------------------------------------------------------------
+-- Test constant propagation of partially applied intrinsics --
+---------------------------------------------------------------
+
+let prog =
+  _parse "let f = addi 3 in let g = subi 2 in lam x. muli (f 1) (g 1)"
 in
+let expected = _parse "lam x. 4" in
+let actual = constantFold prog in
+utest actual with expected using eqExpr else _toString in
 
-let _parse =
-  parseMExprString
-    { _defaultBootParserParseMExprStringArg () with allowFree = true }
+--------------------------------------
+-- Test constant folding of matches --
+--------------------------------------
+
+let prog =
+  _parse "
+    if true then true else false
+    "
 in
+let expected = _parse "true" in
+let actual = constantFold prog in
+utest actual with expected using eqExpr else _toString in
 
------------------------
--- Test Let-bindings --
------------------------
-
-let prog = _parse "let x = y in x" in
-utest _test prog with _parse "y" using eqExpr in
-
-let prog = _parse "let x = y y in x x" in
-utest _test prog with _parse "let x = y y in x x" using eqExpr in
-
-let prog = _parse "let x = let z = y in z in x" in
-utest _test prog with _parse "y" using eqExpr in
-
-let prog = _parse "let x = let z = y in z in x" in
-utest _test prog with _parse "y" using eqExpr in
-
-let prog = _parse "let x = y in x x" in
-utest _test prog with _parse "y y" using eqExpr in
-
-let prog = _parse "let x = let y = z in y in x x" in
-utest _test prog with _parse "z z" using eqExpr in
-
-let prog = _parse "let x = 1 in x x" in
-utest _test prog with _parse "1 1" using eqExpr in
-
-let prog = _parse "let f = lam. 1 in (f x) (f x)" in
-utest _test prog with _parse "1 1" using eqExpr in
-
-let prog = _parse "let f = print \"hello world\" in f" in
-utest _test prog with _parse "
-let f =
-  print
-    \"hello world\"
+let prog =
+  _parse "
+    if false then true else false
+    "
 in
-f
-  "
-  using eqExpr
+let expected = _parse "false" in
+let actual = constantFold prog in
+utest actual with expected using eqExpr else _toString in
+
+let prog =
+  _parse "
+    let x = 1 in let y = 2 in
+    match x with y then y else y
+    "
 in
+let expected = _parse "1" in
+let actual = constantFold prog in
+utest actual with expected using eqExpr else _toString in
 
-let prog = _parse "let f = print \"hello world\" in let g = f in g" in
-utest _test prog with _parse "
-let f =
-  print
-    \"hello world\"
+let prog =
+  _parse "
+    let t = (0, 1) in t.1
+    "
 in
-f
-  "
-  using eqExpr
+let expected = _parse "1" in
+let actual = constantFold prog in
+utest actual with expected using eqExpr else _toString in
+
+let prog =
+  _parse "
+    lam x. let t = (x, 1) in t.1
+    "
 in
+let expected = _parse "lam x. let t = (x, 1) in t.1" in
+let actual = constantFold prog in
+utest actual with expected using eqExpr else _toString in
 
-------------------
--- Test Lam App --
-------------------
-
-let prog = _parse "(lam x. x x z) y" in
-utest _test prog with _parse "
-y
-  y
-  z
-  "
-  using eqExpr
+let prog =
+  _parse "
+    lam x. match [x, 1] with [_, x] in x
+    "
 in
+let expected = _parse "lam x. match [x, 1] with [_, x] in 1" in
+let actual = constantFold prog in
+utest actual with expected using eqExpr else _toString in
 
-let prog = _parse "(lam. x x z) y" in
-utest _test prog with _parse "
-x
-  x
-  z
-  "
-  using eqExpr
+-----------------------------------------
+-- Test constant folding for sequences --
+-----------------------------------------
+
+let prog =
+  _parse "
+    lam x.
+      head [1, 2, 3]
+    "
 in
+let expected = _parse "lam x. 1" in
+let actual = constantFold prog in
+utest actual with expected using eqExpr else _toString in
 
-let prog = _parse "(lam x. x x z) (lam x. x z)" in
-utest _test prog with _parse "
-let x =
-  lam x1.
-    x1
-      z
+let prog =
+  _parse "
+    lam x.
+      head [1, 2, x]
+    "
 in
-x
-  x
-  z
-  "
-  using eqExpr
+let expected = prog in
+let actual = constantFold prog in
+utest actual with expected using eqExpr else _toString in
+
+let prog =
+  _parse "
+    lam x.
+      tail [1, 2, 3]
+    "
 in
+let expected = _parse "lam x. [2, 3]" in
+let actual = constantFold prog in
+utest actual with expected using eqExpr else _toString in
 
---------------
--- Test Lam --
---------------
-
-let prog = _parse "lam x. x" in
-utest _test prog with _parse "lam x. x" using eqExpr in
-
-let prog = _parse "lam x. let y = x in y" in
-utest _test prog with _parse "lam x. x" using eqExpr in
-
-let prog = _parse "(lam x. x) y" in
-utest _test prog with _parse "y" using eqExpr in
-
--------------------------------
--- Test Remove Eta-Expansion --
--------------------------------
-
--- let prog = _parse "lam x. y x" in
--- utest _test prog with _parse "y" using eqExpr in
-
-let prog = _parse "let g = lam x. addf (subf x 1.) x in g" in
-utest _test prog with _parse "lam x. addf (subf x 1.) x" using eqExpr in
-
--- logSetLogLevel logLevel.debug;
-
--- let prog = _parse "
---   let h = lam x. addf x x in
---   let g = lam x. mulf x (subf x 1.) in
---   lam x. addf (h x) (g x)
---   "
--- in
--- utest _test prog with _parse "lam x. addf (subf x 1.) x" using eqExpr in
-
----------------------------
--- Test Float Arithmetic --
----------------------------
-
-let prog = _parse "
-let x = negf (subf (divf (mulf (addf 1. 2.) 2.) 2.) 4.) in
-x
-  " in
-utest _test prog with _parse "1." using eqExpr in
-
-let prog = _parse "addf x 0." in
-utest _test prog with _parse "x" using eqExpr in
-
-let prog = _parse "addf 0. x" in
-utest _test prog with _parse "x" using eqExpr in
-
-let prog = _parse "subf x 0." in
-utest _test prog with _parse "x" using eqExpr in
-
-let prog = _parse "subf 0. x" in
-utest _test prog with _parse "negf x" using eqExpr in
-
-let prog = _parse "mulf x 0." in
-utest _test prog with _parse "0." using eqExpr in
-
-let prog = _parse "mulf 0. x" in
-utest _test prog with _parse "0." using eqExpr in
-
-let prog = _parse "mulf (print \"hello\"; y) 0." in
-utest _test prog with _parse "
-mulf
-  (print \"hello\"; y)
-  0.
-  "
-  using eqExpr
+let prog =
+  _parse "
+    lam x.
+      tail [1, 2, x]
+    "
 in
+let expected = prog in
+let actual = constantFold prog in
+utest actual with expected using eqExpr else _toString in
 
-let prog = _parse "mulf 0. (print \"hello\"; y)" in
-utest _test prog with _parse "
-mulf
-  0.
-  (print \"hello\"; y)
-  "
-  using eqExpr
+let prog =
+  _parse "
+    lam x.
+      get [1, 2, 3] 0
+    "
 in
+let expected = _parse "lam x. 1" in
+let actual = constantFold prog in
+utest actual with expected using eqExpr else _toString in
 
-
-let prog = _parse "mulf x 1." in
-utest _test prog with _parse "x" using eqExpr in
-
-let prog = _parse "mulf 1. x" in
-utest _test prog with _parse "x" using eqExpr in
-
-let prog = _parse "mulf (mulf 3. x) 2." in
-utest _test prog with _parse "mulf 6. x" using eqExpr in
-
-let prog = _parse "mulf 2. (mulf 3. x)" in
-utest _test prog with _parse "mulf 6. x" using eqExpr in
-
-let prog = _parse "mulf (mulf x 3.) 2." in
-utest _test prog with _parse "mulf x 6." using eqExpr in
-
-let prog = _parse "mulf 2. (mulf x 3.)" in
-utest _test prog with _parse "mulf x 6." using eqExpr in
-
-let prog = _parse "mulf (negf x) (negf y)" in
-utest _test prog with _parse "mulf x y" using eqExpr in
-
-let prog = _parse "divf x 1." in
-utest _test prog with _parse "x" using eqExpr in
-
-let prog = _parse "divf 0. x" in
-utest _test prog with _parse "0." using eqExpr in
-
-let prog = _parse "divf 0. (print \"hello\"; x)" in
-utest _test prog with _parse "
-divf
-  0.
-  (print \"hello\"; x)
-  "
-  using eqExpr
+let prog =
+  _parse "
+    lam x.
+      get [1, 2, x] 0
+    "
 in
+let expected = prog in
+let actual = constantFold prog in
+utest actual with expected using eqExpr else _toString in
 
-let prog = _parse "negf (negf x)" in
-utest _test prog with _parse "x" using eqExpr in
+let prog =
+  _parse "
+    lam x.
+      set [1, 2, 3] 0 2
+    "
+in
+let expected = _parse "lam x. [2, 2, 3]" in
+let actual = constantFold prog in
+utest actual with expected using eqExpr else _toString in
 
-let prog = _parse "
-let h =
-  lam x6.
-    subf
-      x6
-      2.
+let prog =
+  _parse "
+    lam x.
+      set [1, 2, x] 0 2
+    "
 in
-let dh =
-  lam x5.
-    1.
-in
-let g =
-  lam x4.
-    mulf
-      x4
-      (subf
-         x4
-         1.)
-in
-let dg =
-  lam x3.
-    addf
-      (subf
-         x3
-         1.)
-      x3
-in
-let f =
-  lam x2.
-    addf
-      (addf
-         (g
-            x2)
-         (h
-            x2))
-      (h
-         (mulf
-            2.
-            x2))
-in
-let df =
-  lam x1.
-    addf
-      (addf
-         (dg
-            x1)
-         (dh
-            x1))
-      (mulf
-         2.
-         (dh
-            (mulf
-               2.
-               x1)))
-in
-let df =
-  lam x.
-    df
-      x
-in
-df
-  1.
-  " in
+let expected = prog in
+let actual = constantFold prog in
+utest actual with expected using eqExpr else _toString in
 
-utest _test prog with _parse "
-4.
-  "
-  using eqExpr
+let prog =
+  _parse "
+    lam x.
+      cons 0 [1, 2, 3]
+    "
 in
+let expected = _parse "lam x. [0, 1, 2, 3]" in
+let actual = constantFold prog in
+utest actual with expected using eqExpr else _toString in
 
--- logSetLogLevel logLevel.debug;
+let prog =
+  _parse "
+    lam x.
+      cons 0 [1, 2, x]
+    "
+in
+let expected = _parse "lam x. [0, 1, 2, x]" in
+let actual = constantFold prog in
+utest actual with expected using eqExpr else _toString in
 
-let prog = _parse "
-let h =
-  lam x4.
-    addf
-      x4
-      x4
+let prog =
+  _parse "
+    lam x.
+      snoc [1, 2, 3] 4
+    "
 in
-let dh =
-  lam x3.
-    2.
-in
-let g =
-  lam x2.
-    mulf
-      x2
-      (subf
-         x2
-         1.)
-in
-let dh =
-  lam x1.
-    let t3 =
-      subf
-        x1
-        1.
-    in
-    let t4 =
-      addf
-        t3
-        x1
-    in
-    t4
-in
-lam x.
-  let t =
-    dh
-      x
-  in
-  let t1 =
-    dh
-      x
-  in
-  let t2 =
-    addf
-      t
-      t1
-  in
-  t2
-  "
-in
+let expected = _parse "lam x. [1, 2, 3, 4]" in
+let actual = constantFold prog in
+utest actual with expected using eqExpr else _toString in
 
-utest _testFoldLets prog with _parse "
-let dh =
-  lam x1.
-    addf
-      (subf
-         x1
-         1.)
-      x1
+let prog =
+  _parse "
+    lam x.
+      snoc [1, 2, x] 4
+    "
 in
-lam x.
-  addf
-    (dh
-       x)
-    (dh
-       x)
-  "
-  using eqExpr
+let expected = _parse "lam x. [1, 2, x, 4]" in
+let actual = constantFold prog in
+utest actual with expected using eqExpr else _toString in
+
+let prog =
+  _parse "
+    lam x.
+      concat [1, 2, 3] [4]
+    "
 in
+let expected = _parse "lam x. [1, 2, 3, 4]" in
+let actual = constantFold prog in
+utest actual with expected using eqExpr else _toString in
+
+let prog =
+  _parse "
+    lam x.
+      concat [1, 2, x] [4]
+    "
+in
+let expected = _parse "lam x. [1, 2, x, 4]" in
+let actual = constantFold prog in
+utest actual with expected using eqExpr else _toString in
+
+let prog =
+  _parse "
+    lam x.
+      length [1, 2, 3]
+    "
+in
+let expected = _parse "lam x. 3" in
+let actual = constantFold prog in
+utest actual with expected using eqExpr else _toString in
+
+let prog =
+  _parse "
+    lam x.
+      length [1, 2, x]
+    "
+in
+let expected = _parse "lam x. 3" in
+let actual = constantFold prog in
+utest actual with expected using eqExpr else _toString in
+
+let prog =
+  _parse "
+    lam x.
+      reverse [1, 2, 3]
+    "
+in
+let expected = _parse "lam x. [3, 2, 1]" in
+let actual = constantFold prog in
+utest actual with expected using eqExpr else _toString in
+
+let prog =
+  _parse "
+    lam x.
+      reverse [1, 2, x]
+    "
+in
+let expected = prog in
+let actual = constantFold prog in
+utest actual with expected using eqExpr else _toString in
+
+let prog =
+  _parse "
+    lam x.
+      subsequence [1, 2, 3] 1 2
+    "
+in
+let expected = _parse "lam x. [2, 3]" in
+let actual = constantFold prog in
+utest actual with expected using eqExpr else _toString in
+
+let prog =
+  _parse "
+    lam x.
+      subsequence [1, 2, x] 1 2
+    "
+in
+let expected = prog in
+let actual = constantFold prog in
+utest actual with expected using eqExpr else _toString in
+
+let prog =
+  _parse "
+    lam x.
+      splitAt [1, 2, 3] 1
+    "
+in
+let expected = _parse "lam x. ([1], [2, 3])" in
+let actual = constantFold prog in
+utest actual with expected using eqExpr else _toString in
+
+let prog =
+  _parse "
+    lam x.
+      splitAt [1, 2, x] 1
+    "
+in
+let expected = _parse "lam x. ([1], [2, x])" in
+let actual = constantFold prog in
+utest actual with expected using eqExpr else _toString in
 
 ()
