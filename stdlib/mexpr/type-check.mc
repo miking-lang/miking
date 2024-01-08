@@ -46,6 +46,7 @@ type TCEnv = {
   matchLvl : Level, -- The current nesting level of match terms
   currentLvl : Level, -- The current nesting level of binder bodies
   disableRecordPolymorphism : Bool,
+  disableConstructorTypes : Bool,
 
   -- Reptypes relevant fields
   reptypes : {
@@ -75,6 +76,7 @@ let typcheckEnvEmpty = {
   matchLvl = 0,
   currentLvl = 0,
   disableRecordPolymorphism = true,
+  disableConstructorTypes = true,
   reptypes = {
     delayedReprUnifications = ref [],
     opNamesInScope = mapEmpty nameCmp,
@@ -617,22 +619,24 @@ lang ResolveType = ConTypeAst + AppTypeAst + AliasTypeAst + VariantTypeAst +
               "* When checking the annotation"
             ])
         else
-          switch t.data
-          case TyData d then
-            let universe = _computeUniverse env t.ident in
-            mkTypeApp (TyCon {t with data = TyData {d with universe = universe}}) args
-          case TyUnknown _ then
-            if closeDatas then
+          if env.disableConstructorTypes then mkTypeApp conTy args
+          else
+            switch t.data
+            case TyData d then
               let universe = _computeUniverse env t.ident in
-              let data = TyData { info = t.info
-                                , universe = universe
-                                , positive = false
-                                , cons = setEmpty nameCmp } in
-              mkTypeApp (TyCon {t with data = data}) args
-            else mkTypeApp conTy args
-          case _ then
-            mkTypeApp conTy args
-          end
+              mkTypeApp (TyCon {t with data = TyData {d with universe = universe}}) args
+            case TyUnknown _ then
+              if closeDatas then
+                let universe = _computeUniverse env t.ident in
+                let data = TyData { info = t.info
+                                  , universe = universe
+                                  , positive = false
+                                  , cons = setEmpty nameCmp } in
+                mkTypeApp (TyCon {t with data = data}) args
+              else mkTypeApp conTy args
+            case _ then
+              mkTypeApp conTy args
+            end
       else
         errorSingle [t.info] (join [
           "* Encountered an unknown type constructor: ", nameGetStr t.ident, "\n",
@@ -649,14 +653,17 @@ lang ResolveType = ConTypeAst + AppTypeAst + AliasTypeAst + VariantTypeAst +
     smap_Type_Type (resolveType info env closeDatas) ty
 end
 
-lang SubstituteUnknown = UnknownTypeAst + AliasTypeAst
-  sem substituteUnknown (kind : Kind) (lvl : Level) (info : Info) =
+lang SubstituteUnknown = UnknownTypeAst + ConTypeAst + AliasTypeAst
+  sem substituteUnknown (info : Info) (env : TCEnv) (kind : Kind) =
   | TyUnknown _ ->
-    newmetavar kind lvl info
+    newmetavar kind env.currentLvl info
   | TyAlias t ->
-    TyAlias {t with content = substituteUnknown kind lvl info t.content}
+    TyAlias {t with content = substituteUnknown info env kind t.content}
+  | TyCon _ & ty ->
+    if env.disableConstructorTypes then ty
+    else smap_Type_Type (substituteUnknown info env kind) ty
   | ty ->
-    smap_Type_Type (substituteUnknown kind lvl info) ty
+    smap_Type_Type (substituteUnknown info env kind) ty
 end
 
 lang SubstituteNewReprs = ReprTypeAst + RepTypesHelpers
@@ -1009,7 +1016,7 @@ lang LamTypeCheck = TypeCheck + LamAst + ResolveType + SubstituteUnknown + Subst
   | TmLam t ->
     let tyAnnot = resolveType t.info env false t.tyAnnot in
     let tyAnnot = substituteNewReprs env tyAnnot in
-    let tyParam = substituteUnknown (Mono ()) env.currentLvl t.info tyAnnot in
+    let tyParam = substituteUnknown t.info env (Mono ()) tyAnnot in
     let body = typeCheckExpr (_insertVar t.ident tyParam env) t.body in
     let tyLam = ityarrow_ t.info tyParam (tyTm body) in
     TmLam {t with body = body, tyAnnot = tyAnnot, tyParam = tyParam, ty = tyLam}
@@ -1065,7 +1072,7 @@ lang LetTypeCheck =
   | TmLet t ->
     let newLvl = addi 1 env.currentLvl in
     let tyAnnot = resolveType t.info env false t.tyAnnot in
-    let tyBody = substituteUnknown (Poly ()) newLvl t.info tyAnnot in
+    let tyBody = substituteUnknown t.info {env with currentLvl = newLvl} (Poly ()) tyAnnot in
     match
       if nonExpansive true t.body then
         match stripTyAll tyBody with (vars, stripped) in
@@ -1204,7 +1211,7 @@ lang RecLetsTypeCheck = TypeCheck + RecLetsAst + LetTypeCheck + MetaVarDisableGe
     -- First: Generate a new environment containing the recursive bindings
     let recLetEnvIteratee = lam acc. lam b: RecLetBinding.
       let tyAnnot = resolveType t.info env false b.tyAnnot in
-      let tyBody = substituteUnknown (Poly ()) newLvl t.info tyAnnot in
+      let tyBody = substituteUnknown t.info {env with currentLvl = newLvl} (Poly ()) tyAnnot in
       let vars = if nonExpansive true b.body then (stripTyAll tyBody).0 else [] in
       let newEnv = _insertVar b.ident tyBody acc.0 in
       let newTyVars = foldr (uncurry mapInsert) acc.1 vars in
@@ -1298,8 +1305,9 @@ end
 lang ConstTypeCheck = TypeCheck + MExprConstType + ResolveType
   sem typeCheckExpr env =
   | TmConst t ->
+    let constTy = tyConstBase env.disableConstructorTypes t.val in
     recursive let f = lam ty. smap_Type_Type f (tyWithInfo t.info ty) in
-    TmConst {t with ty = inst t.info env.currentLvl (f (tyConst t.val))}
+    TmConst {t with ty = inst t.info env.currentLvl (f constTy)}
 end
 
 lang SeqTypeCheck = TypeCheck + SeqAst
@@ -1343,8 +1351,8 @@ lang TypeTypeCheck = TypeCheck + TypeAst + VariantTypeAst + ResolveType
 end
 
 lang DataTypeCheck = TypeCheck + DataAst + FunTypeAst + ResolveType + SubstituteNewReprs
-  sem _makeConstructorType : Info -> Name -> Type -> (Name, Set Name, Type)
-  sem _makeConstructorType info ident =
+  sem _makeConstructorType : Info -> Bool -> Name -> Type -> (Name, Set Name, Type)
+  sem _makeConstructorType info disableConstructorTypes ident =
   | ty ->
     let msg = lam. join [
       "* Invalid type of constructor: ", nameGetStr ident, "\n",
@@ -1354,30 +1362,32 @@ lang DataTypeCheck = TypeCheck + DataAst + FunTypeAst + ResolveType + Substitute
     ] in
     match inspectType ty with TyArrow {to = to} then
       match getTypeArgs to with (TyCon target, _) then
-        recursive let substituteData = lam v. lam acc. lam x.
-          switch x
-          case TyCon (t & {data = TyUnknown _}) then
-            (setInsert t.ident acc, TyCon { t with data = v })
-          case TyAlias t then
-            match substituteData v acc t.content with (acc, content) in
-            (acc, TyAlias { t with content = content })
-          case _ then
-            smapAccumL_Type_Type (substituteData v) acc x
-          end
-        in
-        let x = nameSym "x" in
-        match substituteData (TyVar {info = info, ident = x}) (setEmpty nameCmp) ty
-        with (tydeps, newTy) in
-        let data =
-          Data { types = mapFromSeq nameCmp [ ( target.ident
-                                              , { lower = setOfSeq nameCmp []
-                                                , upper = None () }) ] } in
-        (target.ident,
-         tydeps,
-         TyAll { info = info
-               , ident = x
-               , kind = data
-               , ty = newTy })
+        if disableConstructorTypes then (target.ident, setOfSeq nameCmp [target.ident], ty)
+        else
+          recursive let substituteData = lam v. lam acc. lam x.
+            switch x
+            case TyCon (t & {data = TyUnknown _}) then
+              (setInsert t.ident acc, TyCon { t with data = v })
+            case TyAlias t then
+              match substituteData v acc t.content with (acc, content) in
+              (acc, TyAlias { t with content = content })
+            case _ then
+              smapAccumL_Type_Type (substituteData v) acc x
+            end
+          in
+          let x = nameSym "x" in
+          match substituteData (TyVar {info = info, ident = x}) (setEmpty nameCmp) ty
+          with (tydeps, newTy) in
+          let data =
+            Data { types = mapFromSeq nameCmp [ ( target.ident
+                                                , { lower = setEmpty nameCmp
+                                                  , upper = None () }) ] } in
+          (target.ident,
+           tydeps,
+           TyAll { info = info
+                 , ident = x
+                 , kind = data
+                 , ty = newTy })
       else errorSingle [info] (msg ())
     else errorSingle [info] (msg ())
 
@@ -1385,7 +1395,8 @@ lang DataTypeCheck = TypeCheck + DataAst + FunTypeAst + ResolveType + Substitute
   | TmConDef t ->
     let tyIdent = resolveType t.info env false t.tyIdent in
     let tyIdent = substituteNewReprs env tyIdent in
-    match _makeConstructorType t.info t.ident tyIdent with (target, tydeps, tyIdent) in
+    match _makeConstructorType t.info env.disableConstructorTypes t.ident tyIdent
+    with (target, tydeps, tyIdent) in
     let tydeps =
       mapInsert target tydeps
         (setFold (lam m. lam t. mapInsert t (setOfSeq nameCmp [target]) m)
@@ -1405,13 +1416,17 @@ lang DataTypeCheck = TypeCheck + DataAst + FunTypeAst + ResolveType + Substitute
   | TmConApp t ->
     let body = typeCheckExpr env t.body in
     match mapLookup t.ident env.conEnv with Some (_, lty) then
-      match lty with TyAll (r & {kind = Data d}) then
-        let types = mapMap (lam ks. {ks with lower = setInsert t.ident ks.lower}) d.types in
-        let lty = TyAll {r with kind = Data {d with types = types}} in
-        match inst t.info env.currentLvl lty with TyArrow {from = from, to = to} then
-          unify env [infoTm body] from (tyTm body);
-          TmConApp {t with body = body, ty = to}
-        else error "Invalid constructor type in typeCheckExpr!"
+      let lty =
+        if env.disableConstructorTypes then lty
+        else
+          match lty with TyAll (r & {kind = Data d}) then
+            let types = mapMap (lam ks. {ks with lower = setInsert t.ident ks.lower}) d.types in
+            TyAll {r with kind = Data {d with types = types}}
+          else error "Invalid constructor type in typeCheckExpr!"
+      in
+      match inst t.info env.currentLvl lty with TyArrow {from = from, to = to} then
+        unify env [infoTm body] from (tyTm body);
+        TmConApp {t with body = body, ty = to}
       else error "Invalid constructor type in typeCheckExpr!"
     else
       let msg = join [
@@ -1456,75 +1471,78 @@ end
 lang NeverTypeCheck = TypeCheck + NeverAst + IsEmpty
   sem typeCheckExpr env =
   | TmNever t ->
-    switch matchesPossible env
-    case Left ms then
-      match mergeBounds ms with Some m then
-        iter
-          (lam x.
-            let data =
-              Data { types =
-                       mapMap (lam ks. { lower = setEmpty nameCmp
-                                       , upper = Some ks }) x.1 } in
-            unify env [t.info]
-              (newmetavar data env.currentLvl (infoTy x.0)) x.0)
-          (mapBindings m);
-        TmNever {t with ty = newpolyvar env.currentLvl t.info}
-      else
-        let altstr =
-          strJoin "* or\n"
-            (foldl
-               (lam acc. lam m.
-                 match
-                   mapFoldWithKey
-                     (lam acc. lam ty. lam m.
-                       match getTypeStringCode 0 acc.0 ty with (env, tystr) in
-                       match
-                         mapFoldWithKey
-                           (lam acc. lam t. lam ks.
-                             match pprintTypeName acc.0 t with (env, tstr) in
-                             match mapAccumL pprintConName env (setToSeq ks) with (env, ks) in
-                             (env, snoc acc.1 (join [tstr, "[< ", strJoin " " ks, "]"])))
-                           (env, []) m
-                       with (env, consstr) in
-                       (env, join [ acc.1, "*   ", tystr, " :: {", strJoin ", " consstr, "}\n" ]))
-                     (acc.0, "") m.1
-                 with (env, mstr) in
-                 (env, snoc acc.1 mstr))
-               (pprintEnvEmpty, [])
-               ms).1
+    if env.disableConstructorTypes then
+      TmNever {t with ty = newpolyvar env.currentLvl t.info}
+    else
+      switch matchesPossible env
+      case Left ms then
+        match mergeBounds ms with Some m then
+          iter
+            (lam x.
+              let data =
+                Data { types =
+                         mapMap (lam ks. { lower = setEmpty nameCmp
+                                         , upper = Some ks }) x.1 } in
+              unify env [t.info]
+                (newmetavar data env.currentLvl (infoTy x.0)) x.0)
+            (mapBindings m);
+          TmNever {t with ty = newpolyvar env.currentLvl t.info}
+        else
+          let altstr =
+            strJoin "* or\n"
+              (foldl
+                 (lam acc. lam m.
+                   match
+                     mapFoldWithKey
+                       (lam acc. lam ty. lam m.
+                         match getTypeStringCode 0 acc.0 ty with (env, tystr) in
+                         match
+                           mapFoldWithKey
+                             (lam acc. lam t. lam ks.
+                               match pprintTypeName acc.0 t with (env, tstr) in
+                               match mapAccumL pprintConName env (setToSeq ks) with (env, ks) in
+                               (env, snoc acc.1 (join [tstr, "[< ", strJoin " " ks, "]"])))
+                             (env, []) m
+                         with (env, consstr) in
+                         (env, join [ acc.1, "*   ", tystr, " :: {", strJoin ", " consstr, "}\n" ]))
+                       (acc.0, "") m.1
+                   with (env, mstr) in
+                   (env, snoc acc.1 mstr))
+                 (pprintEnvEmpty, [])
+                 ms).1
+          in
+          let msg = join [
+            "* Encountered a live never term.\n",
+            "* Could not determine how to make this term unreachable.\n",
+            "* The following assignments of constructor sets were inferred as alternatives:\n",
+            altstr,
+            "* When type checking the expression\n"
+          ] in
+          errorSingle [t.info] msg
+      case Right m then
+        let matchstr =
+          if mapIsEmpty m then ""
+          else
+            join [
+              "* Variables ", strJoin ", " (map nameGetStr (mapKeys m)),
+              " appear in enclosing matches.\n",
+              "* An assignment leading to this never term is:\n",
+              mapFoldWithKey
+                (lam str. lam n. lam p.
+                  join [ str
+                       , "*   ", nameGetStr n
+                       , " = "
+                       , (getPatStringCode 0 pprintEnvEmpty (normpatToPat p)).1
+                       , "\n" ]) "" m ]
         in
         let msg = join [
           "* Encountered a live never term.\n",
-          "* Could not determine how to make this term unreachable.\n",
-          "* The following assignments of constructor sets were inferred as alternatives:\n",
-          altstr,
+          "* Could not find an expression being exhaustively matched.\n",
+          matchstr,
           "* When type checking the expression\n"
         ] in
         errorSingle [t.info] msg
-    case Right m then
-      let matchstr =
-        if mapIsEmpty m then ""
-        else
-          join [
-            "* Variables ", strJoin ", " (map nameGetStr (mapKeys m)),
-            " appear in enclosing matches.\n",
-            "* An assignment leading to this never term is:\n",
-            mapFoldWithKey
-              (lam str. lam n. lam p.
-                join [ str
-                     , "*   ", nameGetStr n
-                     , " = "
-                     , (getPatStringCode 0 pprintEnvEmpty (normpatToPat p)).1
-                     , "\n" ]) "" m ]
-      in
-      let msg = join [
-        "* Encountered a live never term.\n",
-        "* Could not find an expression being exhaustively matched.\n",
-        matchstr,
-        "* When type checking the expression\n"
-      ] in
-      errorSingle [t.info] msg
-    end
+      end
 end
 
 lang ExtTypeCheck = TypeCheck + ExtAst + ResolveType

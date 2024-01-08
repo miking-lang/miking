@@ -161,6 +161,11 @@ lang DataTypeUnify = Unify + DataTypeAst
       u.err (Types (ty1, ty2))
 end
 
+lang UnknownTypeUnify = Unify + UnknownTypeAst
+  sem unifyBase u env =
+  | (TyUnknown _, TyUnknown _) -> u.empty
+end
+
 lang BoolTypeUnify = Unify + BoolTypeAst
   sem unifyBase u env =
   | (TyBool _, TyBool _) -> u.empty
@@ -787,8 +792,8 @@ end
 
 lang MExprUnify =
   VarTypeUnify + MetaVarTypeUnify + FunTypeUnify + AppTypeUnify + AllTypeUnify +
-  ConTypeUnify + DataTypeUnify + BoolTypeUnify + IntTypeUnify + FloatTypeUnify +
-  CharTypeUnify + SeqTypeUnify + TensorTypeUnify + RecordTypeUnify +
+  ConTypeUnify + DataTypeUnify + UnknownTypeUnify + BoolTypeUnify + IntTypeUnify +
+  FloatTypeUnify + CharTypeUnify + SeqTypeUnify + TensorTypeUnify + RecordTypeUnify +
 
   BaseKindUnify + RecordKindUnify + DataKindUnify
 end
