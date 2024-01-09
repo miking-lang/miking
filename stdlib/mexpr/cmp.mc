@@ -485,6 +485,13 @@ lang ReprSubstCmp = Cmp + ReprSubstAst
     if neqi 0 res then res else
     cmpType l.arg r.arg
 end
+
+lang BaseKindCmp = Cmp + MonoKindAst + PolyKindAst
+  sem cmpKind =
+  | (Mono (), Mono ()) -> 0
+  | (Poly (), Poly ()) -> 0
+end
+
 lang RecordKindCmp = Cmp + RecordKindAst
   sem cmpKind =
   | (Record l, Record r) ->
@@ -532,7 +539,7 @@ lang MExprCmp =
   ConTypeCmp + DataTypeCmp + VarTypeCmp + AppTypeCmp + AllTypeCmp + AliasTypeCmp +
 
   -- Kinds
-  RecordKindCmp + DataKindCmp
+  BaseKindCmp + RecordKindCmp + DataKindCmp
 end
 
 lang RepTypesCmp = ReprSubstCmp + ReprTypeCmp + TyWildCmp
