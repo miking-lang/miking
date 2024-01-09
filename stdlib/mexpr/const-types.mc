@@ -11,8 +11,15 @@ let tybootparsetree_ = tycon_ "BootParseTree"
 
 let tyvarseq_ = lam id. tyseq_ (tyvar_ id)
 
-lang TyConst
+lang TyConst = ConstAst
   sem tyConst =
+
+  sem mkConst : Info -> Const -> Expr
+  sem mkConst info = | c -> TmConst
+  { info = info
+  , val = c
+  , ty = tyConst c
+  }
 end
 
 lang UnsafeCoerceTypeAst = TyConst + UnsafeCoerceAst
