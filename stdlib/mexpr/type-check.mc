@@ -1269,16 +1269,23 @@ lang MatchTypeCheck = TypeCheck + PatTypeCheck + MatchAst + NormPatMatch
     unify env [infoTm target, infoPat pat] (tyPat pat) (tyTm target);
 
     let matchLvl = addi 1 env.matchLvl in
-    let np = patToNormpat pat in
-    let posMatches = matchNormpat (t.target, np) in
-    let negMatches = matchNormpat (t.target, normpatComplement np) in
-    let mkMatches = lam matches.
-      joinMap (lam a.
-        (joinMap (lam b.
-          let m = mapUnionWith normpatIntersect a b in
-          if mapAll (lam np. not (null np)) m then [m] else [])
-           env.matches))
-        matches
+    match
+      if env.disableConstructorTypes then ([], [])
+      else
+        let np = patToNormpat pat in
+        (matchNormpat (t.target, np), matchNormpat (t.target, normpatComplement np))
+    with
+      (posMatches, negMatches)
+    in
+
+    let mkMatches =
+      lam matches.
+        joinMap (lam a.
+          (joinMap (lam b.
+            let m = mapUnionWith normpatIntersect a b in
+            if mapAll (lam np. not (null np)) m then [m] else [])
+             env.matches))
+          matches
     in
     let mkMatchVars = lam matches.
       foldl
@@ -1288,10 +1295,12 @@ lang MatchTypeCheck = TypeCheck + PatTypeCheck + MatchAst + NormPatMatch
 
     let baseEnv = {env with varEnv = mapUnion env.varEnv patEnv,
                             matchLvl = matchLvl} in
-    let thnEnv = {baseEnv with matches = mkMatches posMatches,
-                               matchVars = mkMatchVars posMatches} in
-    let elsEnv = {baseEnv with matches = mkMatches negMatches,
-                               matchVars = mkMatchVars negMatches} in
+    let thnEnv = if env.disableConstructorTypes then baseEnv
+                 else {baseEnv with matches = mkMatches posMatches,
+                                    matchVars = mkMatchVars posMatches} in
+    let elsEnv = if env.disableConstructorTypes then baseEnv
+                 else {baseEnv with matches = mkMatches negMatches,
+                                    matchVars = mkMatchVars negMatches} in
     let thn = typeCheckExpr thnEnv t.thn in
     let els = typeCheckExpr elsEnv t.els in
     unify env [infoTm thn, infoTm els] (tyTm thn) (tyTm els);
