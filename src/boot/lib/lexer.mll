@@ -144,7 +144,6 @@ let string_buf = Buffer.create 80
 let parse_error_message() =
   (PARSE_ERROR,ERROR,!last_info,[])
 
-
 }
 
 let utf8_1byte = ['\x00'-'\x7F']
@@ -173,10 +172,10 @@ let symtok =  "="  | "+" |  "-" | "*"  | "/" | "%"  | "<"  | "<=" | ">" | ">=" |
 
 let line_comment = "--" [^ '\013' '\010']*
 let unsigned_integer = digit+
-let signed_integer = unsigned_integer  | '-' unsigned_integer
+let signed_integer = '-' unsigned_integer | unsigned_integer
 let unsigned_number = unsigned_integer ('.' (unsigned_integer)?)?
                       (('e'|'E') ("+"|"-")? unsigned_integer)?
-
+let signed_number = unsigned_number | '-' unsigned_number
 
 (* Main lexing *)
 rule main = parse
@@ -195,10 +194,10 @@ rule main = parse
       { add_colno !tabsize; main lexbuf }
   | newline
       { newrow(); main lexbuf }
-  | (unsigned_integer as str)
-      { Parser.UINT{i=mkinfo_fast str; v=int_of_string str} }
-  | unsigned_number as str
-      { Parser.UFLOAT{i=mkinfo_fast str; v=float_of_string str} }
+  | (signed_integer as str)
+      { Parser.INT{i=mkinfo_fast str; v=int_of_string str} }
+  | signed_number as str
+      { Parser.FLOAT{i=mkinfo_fast str; v=float_of_string str} }
   | ident | symtok as s
       { mklcid s }
   | uident as s

@@ -12,6 +12,20 @@ mexpr
 utest () with () in
 utest () with {} in
 
+-- Matching integers
+utest
+  match 1 with 1 then true else false
+  with true
+in
+utest
+  match -1 with -1 then true else false
+  with true
+in
+utest
+  match negi 1 with -1 then true else false
+  with true
+in
+
 -- Constructor with arguments
 type T a in
 con K1 : all a. a -> T a in
@@ -116,8 +130,6 @@ utest count tree3 with 23 in
 utest
   match {foo=7,bar={more="hello"}} with {foo=_,bar={more=str}} then str else ""
 with "hello" in
-
-
 
 -- Wildcard
 utest match (1,2,3) with (_,2,_) then true else false with true in

@@ -43,8 +43,8 @@
 %token <Ustring.ustring Ast.tokendata> LC_IDENT  /* An identifier that starts with "_" or a lower-case letter */
 %token <Ustring.ustring Ast.tokendata> STRING
 %token <Ustring.ustring Ast.tokendata> CHAR
-%token <int Ast.tokendata> UINT
-%token <float Ast.tokendata> UFLOAT
+%token <int Ast.tokendata> INT
+%token <float Ast.tokendata> FLOAT
 
 
 /* Keywords */
@@ -432,8 +432,8 @@ atom:
   | var_ident            { TmVar($1.i,$1.v,Symb.Helpers.nosym, false, false) }
   | frozen_ident         { TmVar($1.i,$1.v,Symb.Helpers.nosym, false, true) }
   | CHAR                 { TmConst($1.i, CChar(List.hd (ustring2list $1.v))) }
-  | UINT                 { TmConst($1.i,CInt($1.v)) }
-  | UFLOAT               { TmConst($1.i,CFloat($1.v)) }
+  | INT                  { TmConst($1.i,CInt($1.v)) }
+  | FLOAT                { TmConst($1.i,CFloat($1.v)) }
   | TRUE                 { TmConst($1.i,CBool(true)) }
   | FALSE                { TmConst($1.i,CBool(false)) }
   | NEVER                { TmNever($1.i) }
@@ -451,7 +451,7 @@ atom:
         ) $2 $4}
 
 proj_label:
-  | UINT
+  | INT
     { ($1.i, ustring_of_int $1.v) }
   | label_ident
     { ($1.i,$1.v) }
@@ -541,7 +541,7 @@ pat_atom:
   | LBRACKET pat_labels RBRACKET
       { PatRecord(mkinfo $1.i $3.i, $2 |> List.fold_left
                   (fun acc (k,v) -> Record.add k v acc) Record.empty) }
-  | UINT /* TODO(?,?): enable matching against negative ints */
+  | INT
       { PatInt($1.i, $1.v) }
   | CHAR
       { PatChar($1.i, List.hd (ustring2list $1.v)) }
