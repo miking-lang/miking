@@ -171,7 +171,6 @@ lang RecLetsRepTypesAnalysis = TypeCheck + RecLetsAst + MetaVarDisableGeneralize
       then any (lam b. containsRepr b.tyBody) t.bindings
       else false in
     if not shouldBeOp then TmRecLets (typeCheckRecLets env t) else
-    let env = {env with reptypes = {env.reptypes with inImpl = true}} in
     let bindingToBindingPair = lam b.
       ( stringToSid (nameGetStr b.ident)
       , TmVar
@@ -186,7 +185,8 @@ lang RecLetsRepTypesAnalysis = TypeCheck + RecLetsAst + MetaVarDisableGeneralize
       , ty = tyunknown_
       , info = t.info
       } in
-    match withNewReprScope env (lam env. typeCheckRecLets env {t with inexpr = opRecord})
+    let implEnv = {env with reptypes = {env.reptypes with inImpl = true}} in
+    match withNewReprScope implEnv (lam env. typeCheckRecLets env {t with inexpr = opRecord})
       with (newT, reprScope, delayedReprUnifications) in
     let recordName =
       let ident = (head newT.bindings).ident in
@@ -2841,7 +2841,7 @@ lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypes
 
   sem addOpUse debug global branch query = | opUse ->
     (if debug then
-      printLn "\n# Solving process:"
+      printLn (join ["\n# Solving process", info2str opUse.info, ":"])
      else ());
     match branch with SBContent branch in
     match query with STQContent query in
