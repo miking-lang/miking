@@ -583,14 +583,8 @@ lang RecordProjectionSyntaxSugarPrettyPrint = MExprIdentifierPrettyPrint +
     })
     ->
     match matchIsProj bindings exprName with Some fieldLabel then
-      -- NOTE(oerikss, 2023-05-29): nested tuple projections are parsed as
-      -- floats if we do not group them.
-      if and (isTupleLabel fieldLabel) (isTupleProj expr) then
-        match pprintCode indent env expr with (env, expr) in
-        (env, join ["(", expr, ").", pprintProjString fieldLabel])
-      else
-        match printParen indent env expr with (env, expr) in
-        (env, join [expr, ".", pprintProjString fieldLabel])
+      match printParen indent env expr with (env, expr) in
+      (env, join [expr, ".", pprintProjString fieldLabel])
     else pprintTmMatchIn indent env t
 end
 
@@ -1600,7 +1594,7 @@ let e = tupleproj_ 0 (var_ "x") in
 utest (expr2str e) with "x.0" in
 
 let e = tupleproj_ 1 (tupleproj_ 0 (var_ "x")) in
-utest (expr2str e) with "(x.0).1" in
+utest (expr2str e) with "x.0.1" in
 
 let e = recordproj_ "y" (tupleproj_ 0 (var_ "x")) in
 utest (expr2str e) with "x.0.y" in

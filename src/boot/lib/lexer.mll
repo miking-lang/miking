@@ -203,12 +203,14 @@ rule main = parse
       { mklcid s }
   | uident as s
       { mkucid s }
+  | '.' (unsigned_integer as s)
+      { mkid (fun t -> Parser.TUP_PROJ_LABEL t) s }
   | '\'' ((s_escape | utf8) as c) '\''
       { let s = Ustring.from_utf8 c in
         let esc_s = Ustring.convert_escaped_chars s in
         Parser.CHAR{i=mkinfo_ustring (us"'" ^. s ^. us"'"); v=esc_s}}
   | '#' (("con" | "type" | "var" | "label" | "frozen") as ident) '"'
-       { Buffer.reset string_buf ;  parsestring lexbuf;
+       { Buffer.reset string_buf; parsestring lexbuf;
 	 let s = Ustring.from_utf8 (Buffer.contents string_buf) in
          let id = Ustring.convert_escaped_chars s  in
          let fi = mkinfo_ustring (s ^. us"  #" ^. us(ident)) in
@@ -220,9 +222,9 @@ rule main = parse
             | "frozen" -> Parser.FROZEN_IDENT{i=fi; v=id}
             | _ -> failwith "Cannot happen")
          in
-	 add_colno 3; colcount_fast ident; rval}
+	 add_colno 3; colcount_fast ident; rval }
   | '"'
-      { Buffer.reset string_buf ;  parsestring lexbuf;
+      { Buffer.reset string_buf; parsestring lexbuf;
 	 let s = Ustring.from_utf8 (Buffer.contents string_buf) in
          let esc_s = Ustring.convert_escaped_chars s in
 	 let rval = Parser.STRING{i=mkinfo_ustring (s ^. us"  "); v=esc_s} in
