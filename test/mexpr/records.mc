@@ -27,6 +27,12 @@ let nested = {a = {b = 1}} in
 let arec = {nested.a with b = addi nested.a.b 1} in
 utest arec.b with 2 in
 
+let nested = (1,(2,3)) in
+utest nested.1.0 with 2 in
+utest nested .1 .0 with 2 in
+utest nested.#label"1".#label"0" with 2 in
+utest nested .#label"1" .#label"0" with 2 in
+
 -- test order of evaluation for record expressions by observing side effects
 let v = ref 0 in
 let r5 = {x = 10, y = 11, z = 12, a = 13} in
@@ -38,5 +44,10 @@ let r5mod = {r5 with
 } in
 
 utest r5mod with {x = 12, y = 14, z = 13, a = 17} in
+
+-- NOTE(oerikss, 2024-01-10): Checks so that the parser does not confuse .x with
+-- a record projection. However, lam x.1 will not parse as .1 is tokenized as a
+-- tuple projection label.
+utest (lam x.x) 1 with 1 in
 
 ()

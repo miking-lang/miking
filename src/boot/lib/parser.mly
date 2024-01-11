@@ -27,6 +27,11 @@
   let set_con_params params = function
     | CDecl (fi, _, name, ty) -> CDecl (fi, params, name, ty)
 
+  let record_proj fi tm label =
+    let id = unique_ident in
+    let pat_named = (PatNamed(fi,NameStr(id,Symb.Helpers.nosym))) in
+    let pat = PatRecord(fi,Record.singleton label pat_named) in
+    TmMatch(fi,tm,pat,TmVar(fi,id,Symb.Helpers.nosym,false,false), TmNever(fi))
 
 %}
 
@@ -41,6 +46,7 @@
 %token <Ustring.ustring Ast.tokendata> LABEL_IDENT
 %token <Ustring.ustring Ast.tokendata> UC_IDENT  /* An identifier that starts with an upper-case letter */
 %token <Ustring.ustring Ast.tokendata> LC_IDENT  /* An identifier that starts with "_" or a lower-case letter */
+%token <Ustring.ustring Ast.tokendata> TUP_PROJ_LABEL
 %token <Ustring.ustring Ast.tokendata> STRING
 %token <Ustring.ustring Ast.tokendata> CHAR
 %token <int Ast.tokendata> UINT
@@ -418,11 +424,10 @@ swcases:
       { TmNever($1.i) }
 
 atom:
-  | atom DOT proj_label
-      { let fi = mkinfo (tm_info $1) (fst $3) in
-        let id = unique_ident in
-        TmMatch(fi,$1,PatRecord(fi,Record.singleton (snd $3) (PatNamed(fi,NameStr(id,Symb.Helpers.nosym)))),
-                                TmVar(fi,id,Symb.Helpers.nosym,false,false), TmNever(fi)) }
+  | atom DOT label_ident
+      { let fi = mkinfo (tm_info $1) $3.i in record_proj fi $1 $3.v }
+  | atom TUP_PROJ_LABEL
+      { let fi = mkinfo (tm_info $1) $2.i in record_proj fi $1 $2.v }
   | LPAREN seq RPAREN
       { if List.length $2 = 1 then List.hd $2
         else tuple2record (mkinfo $1.i $3.i) $2 }
@@ -449,14 +454,6 @@ atom:
       { List.fold_left (fun acc (k,v) ->
           TmRecordUpdate (mkinfo $1.i $5.i, acc, k, v)
         ) $2 $4}
-
-proj_label:
-  | UINT
-    { ($1.i, ustring_of_int $1.v) }
-  | label_ident
-    { ($1.i,$1.v) }
-
-
 
 seq:
   | mexpr

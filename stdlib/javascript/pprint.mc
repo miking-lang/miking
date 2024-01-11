@@ -28,7 +28,7 @@ let joinAsStatements = lam indent. lam seq.
   else join [pprintNewline indent, (strJoin (concat ";" (pprintNewline indent)) seq), ";"]
 
 
-let getNameStrDefault =  lam default: String.lam env. lam id: Name.
+let getNameStrDefault =  lam default: String. lam env. lam id: Name.
   if null (nameGetStr id) then (env, default)
   else if stringIsInt (nameGetStr id) then
     match pprintEnvGetStr env id with (env, str) in
