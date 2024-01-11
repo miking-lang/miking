@@ -9,6 +9,7 @@ include "lazy.mc"
 include "heap.mc"
 include "mexpr/annotate.mc"
 include "json.mc"
+include "these.mc"
 
 lang AnnotateSimple = HtmlAnnotator + AnnotateSources
 end
@@ -360,12 +361,9 @@ lang RepTypesShallowSolverInterface = OpVarAst + OpImplAst + UnifyPure
     -- to carry data required to reconstruct a solved AST.
     , token : a
     }
-
-  type SolProps a =
-    { sol : SolverSolution a
-    , cost : OpCost
-    , uni : Unification
-    }
+  sem cmpOpImpl : all a. OpImpl a -> OpImpl a -> Int
+  sem cmpOpImpl a = | b ->
+    subi a.implId b.implId
 
   -- NOTE(vipa, 2023-10-25): There's a new `OpImpl` in scope
   sem addImpl : all a. SolverGlobal a -> SolverBranch a -> OpImpl a -> SolverBranch a
@@ -439,6 +437,12 @@ let varMapDifference
   = lam a. lam b.
     { metas = mapDifference a.metas b.metas
     , reprs = mapDifference a.reprs b.reprs
+    }
+let varMapUnion
+  : all a. all b. VarMap a -> VarMap a -> VarMap a
+  = lam a. lam b.
+    { metas = mapUnion a.metas b.metas
+    , reprs = mapUnion a.reprs b.reprs
     }
 let varMapIsEmpty
   : all a. VarMap a -> Bool
@@ -1718,6 +1722,710 @@ lang SolTreeSoloSolver = SolTreeSolver
     in propagate 0 tree
 end
 
+type Dep
+con InDep : () -> Dep
+con Dep : () -> Dep
+
+-- relevant: a set of variables relevant to *the parent* of each
+--   node. Can be used to filter `constraint` and `approx`, but also
+--   to partition independent nodes of an "and"
+-- constraint: the precisely known constraints that are true if this
+--   node is in the final solution. Can always be applied to children,
+--   but can only be applied to a parent from an `RTSingle`.
+-- approx: which vars are known to be equal if this node is in the
+--   final solution, and the set of possible values if
+--   known. Equalities and sets of values can always be applied to
+--   children, sets of values can always be applied to parents, and
+--   equalities can only be applied to parents from an `RTSingle`.
+-- var: the type of a variable tracked in `approx`. There may be more
+--   kinds of variables not tracked by `approx`, `constraint` is
+--   always the true state of things.
+-- val: the type a values that can be assigned to `var`
+--   variables. Should be a simple value type, in particular, it
+--   mustn't contain further `var`s that might need to be tracked.
+type RepTree relevant constraint var val a
+con RTAnd : all a. all b. all constraint. all var. all val. all relevant.
+  { children : [{scale : Float, val : RepTree relevant constraint var val a}]
+  , selfCost : Float
+  , dep : Dep
+  , construct : [a] -> b
+  , constraint : constraint
+  , relevant : relevant
+  , approx : PureUnionFind var (Set val)
+  } -> RepTree relevant constraint var val b
+con RTOr : all a. all b. all constraint. all var. all val. all relevant.
+  { others : [RepTree relevant constraint var val a]
+  , singles : [RepTree relevant constraint var val a]
+  , selfCost : Float
+  , construct : a -> b
+  , constraint : constraint
+  , relevant : relevant
+  , approx : PureUnionFind var (Set val)
+  } -> RepTree relevant constraint var val b
+con RTSingle : all a. all constraint. all var. all val. all relevant.
+  { value : a
+  , cost : Float
+  , relevant : relevant
+  , constraint : constraint
+  , approx : PureUnionFind var (Set val)
+  } -> RepTree relevant constraint var val a
+
+let rtGetRelevant : all a. all constraint. all var. all val. all relevant.
+  RepTree relevant constraint var val a
+  -> relevant
+  = lam tree. switch tree
+    case RTAnd x then x.relevant
+    case RTOr x then x.relevant
+    case RTSingle x then x.relevant
+    end
+let rtGetApprox : all a. all constraint. all var. all val. all relevant.
+  RepTree relevant constraint var val a
+  -> PureUnionFind var (Set val)
+  = lam tree. switch tree
+    case RTAnd x then x.approx
+    case RTOr x then x.approx
+    case RTSingle x then x.approx
+    end
+let rtMap : all a. all constraint. all var. all val. all relevant. all b.
+  (a -> b)
+  -> RepTree relevant constraint var val a
+  -> RepTree relevant constraint var val b
+  = lam f. lam tree. switch tree
+    case RTAnd x then RTAnd
+      { construct = lam a. f (x.construct a)
+      , children = x.children
+      , selfCost = x.selfCost
+      , dep = x.dep
+      , constraint = x.constraint
+      , relevant = x.relevant
+      , approx = x.approx
+      }
+    case RTOr x then RTOr
+      { construct = lam a. f (x.construct a)
+      , others = x.others
+      , singles = x.singles
+      , selfCost = x.selfCost
+      , constraint = x.constraint
+      , relevant = x.relevant
+      , approx = x.approx
+      }
+    case RTSingle x then RTSingle
+      { value = f x.value
+      , cost = x.cost
+      , relevant = x.relevant
+      , constraint = x.constraint
+      , approx = x.approx
+      }
+    end
+let rtAsSingle : all a. all constraint. all var. all val. all relevant.
+  RepTree relevant constraint var val a
+  -> Option a
+  = lam tree. match tree with RTSingle x then Some x.value else None ()
+recursive let rtGetMinCost : all a. all constraint. all var. all val. all relevant.
+  RepTree relevant constraint var val a
+  -> Float
+  = lam tree. switch tree
+    case RTSingle x then x.cost
+    case RTAnd x then
+      foldl (lam acc. lam child. addf acc (mulf child.scale (rtGetMinCost child.val)))
+        x.selfCost x.children
+    case RTOr {singles = [], others = []} then 9999999.9999
+    case RTOr ({others = [alt] ++ alts1, singles = alts2} | {others = alts1, singles = [alt] ++ alts2}) then
+      foldl (lam acc. lam alt. minf acc (rtGetMinCost alt)) (rtGetMinCost alt) (concat alts1 alts2)
+    end
+end
+
+type RTDebugInterface env relevant constraint var val =
+  { constraintJson : env -> constraint -> (env, JsonValue)
+  , relevantJson : env -> relevant -> (env, JsonValue)
+  , varJson : env -> var -> (env, JsonValue)
+  , valJson : env -> val -> (env, JsonValue)
+  }
+let rtDebugJson : all a. all constraint. all var. all val. all relevant. all env.
+  RTDebugInterface env relevant constraint var val
+  -> env
+  -> RepTree relevant constraint var val a
+  -> (env, JsonValue)
+  = lam fs.
+    let common = lam env. lam cost. lam constraint. lam approx. lam relevant.
+      let approx =
+        pufFold
+          (lam acc. lam lIn. lam rIn.
+            match fs.varJson acc.env lIn.0 with (env, l) in
+            match fs.varJson env rIn.0 with (env, r) in
+            {env = env, parts = snoc acc.parts (JsonArray [JsonString "eq", JsonArray [l, JsonInt lIn.1], JsonArray [r, JsonInt rIn.1]])})
+          (lam acc. lam lIn. lam out.
+            match fs.varJson acc.env lIn.0 with (env, l) in
+            match mapAccumL fs.valJson env (setToSeq out) with (env, outs) in
+            {env = env, parts = snoc acc.parts (JsonArray [JsonString "out", JsonArray [l, JsonInt lIn.1], JsonArray outs])})
+          {env = env, parts = []}
+          approx in
+      match fs.constraintJson approx.env constraint with (env, constraint) in
+      match fs.relevantJson env relevant with (env, relevant) in
+      let res =
+        [ ("constraint", constraint)
+        , ("relevant", relevant)
+        , ("approx", JsonArray approx.parts)
+        , ("cost", JsonFloat cost)
+        ] in
+      (env, res)
+    in
+    recursive let work = lam env. lam tree. switch tree
+      case RTSingle x then
+        match common env x.cost x.constraint x.approx x.relevant with (env, common) in
+        let res = JsonObject (mapFromSeq cmpString (concat common
+          [ ("type", JsonString "single")
+          ])) in
+        (env, res)
+      case RTAnd x then
+        match common env x.selfCost x.constraint x.approx x.relevant with (env, common) in
+        match mapAccumL work env (map (lam x. x.val) x.children) with (env, children) in
+        let res = JsonObject (mapFromSeq cmpString (concat common
+          [ ("type", JsonString "and")
+          , ("dep", JsonString (match x.dep with Dep _ then "dep" else "indep"))
+          , ("children", JsonArray children)
+          ])) in
+        (env, res)
+      case RTOr x then
+        match common env x.selfCost x.constraint x.approx x.relevant with (env, common) in
+        match mapAccumL work env x.others with (env, others) in
+        match mapAccumL work env x.singles with (env, singles) in
+        let res = JsonObject (mapFromSeq cmpString (concat common
+          [ ("type", JsonString "or")
+          , ("others", JsonArray others)
+          , ("singles", JsonArray singles)
+          ])) in
+        (env, res)
+      end
+    in work
+
+let _intersectApproxFromBelow : all relevant. all constraint. all a.
+  PureUnionFind Symbol (Set Name)
+  -> RepTree relevant constraint Symbol Name a
+  -> PureUnionFind Symbol (Set Name)
+  = lam puf. lam tree. pufFold
+    (lam a. lam. lam. a)
+    (lam a. lam k. lam out. (pufSetOut (lam a. lam b. ((), setIntersect a b)) k out a).puf)
+    puf
+    (rtGetApprox tree)
+
+let _approxHasEmptyDomain : all k. all v. PureUnionFind k (Set v) -> Bool
+  = lam puf. pufFold
+    (lam a. lam. lam. a)
+    (lam a. lam k. lam out. if a then true else setIsEmpty out)
+    false
+    puf
+
+let _approxAnd : all k. all v.
+  PureUnionFind k (Set v)
+  -> PureUnionFind k (Set v)
+  -> Option {lChanged : Bool, rChanged : Bool, res : PureUnionFind k (Set v)}
+  = lam l. lam r.
+    let isEmpty = ref false in
+    let lChanged = ref false in
+    let rChanged = ref false in
+    let merge = lam a. lam b.
+      let res = setIntersect a b in
+      (if setIsEmpty res then modref isEmpty true else ());
+      (if neqi (setSize res) (setSize a) then modref lChanged true else ());
+      (if neqi (setSize res) (setSize b) then modref rChanged true else ());
+      ((), res) in
+    let puf = (pufMerge (lam a. lam b. ((), setIntersect a b)) l r).puf in
+    if deref isEmpty then None () else Some
+    { res = puf
+    , lChanged = deref lChanged
+    , rChanged = deref rChanged
+    }
+
+let _computeAltApprox : all relevant. all constraint. all var. all val. all a.
+  PureUnionFind var (Set val)
+  -> [RepTree relevant constraint var val a]
+  -> Option (PureUnionFind var (Set val))
+  = lam restr. lam below.
+    let count = length below in
+    let puf =
+      let findOccurs = lam acc. lam tree. pufFold
+        (lam a. lam. lam. a)
+        (lam a. lam k. lam out. mapInsertWith (lam a. lam b. (a.0, addi a.1 b.1, setUnion a.2 b.2)) k.0 (k.1, 1, out) a)
+        acc
+        (rtGetApprox tree) in
+      let x = foldl findOccurs (mapEmpty (mapGetCmpFun restr)) below in
+      let addIfConstrained = lam acc. lam k. lam v.
+        if eqi v.1 count
+        then (pufSetOut (lam. error "Compiler error in _computeAltApprox") (k, v.0) v.2 acc).puf
+        else acc in
+      let puf = pufEmpty (mapGetCmpFun restr) in
+      mapFoldWithKey addIfConstrained puf x in
+    optionMap (lam x. x.res) (_approxAnd restr puf)
+
+type RTPropagateInterface relevant constraint var val =
+  { constraintAnd : constraint -> constraint -> Option {lChanged : Bool, rChanged : Bool, res : constraint}
+  , filterApprox : relevant -> var -> Bool
+  , pruneRedundant : (constraint, Float) -> (constraint, Float) -> {lUseful : Bool, rUseful : Bool}
+  }
+let rtPropagate : all relevant. all constraint. all var. all val. all a.
+  RTPropagateInterface relevant constraint var val
+  -> RepTree relevant constraint var val a
+  -> Option (RepTree relevant constraint var val a)
+  = lam fs. lam tree.
+    type Approx = PureUnionFind var (Set val) in
+    type Status in
+    con Unchanged : () -> Status in
+    con ChangedUnresolved : Approx -> Status in
+    con ChangedResolved : (constraint, Approx) -> Status in
+    let filterApprox = lam relevant. lam puf.
+      pufFilterFunction (lam pair. fs.filterApprox relevant pair.0) puf in
+    let constrainFromAbove
+      : Option (constraint, Approx) -> constraint -> Approx -> Option {lChanged : Bool, rChanged : Bool, approx : Approx, constraint : constraint}
+      = lam fromAbove. lam hConstraint. lam hApprox.
+      match fromAbove with Some (constraint, approx) then
+        match fs.constraintAnd constraint hConstraint with Some res1 then
+          match _approxAnd approx hApprox with Some res2 then Some
+            { lChanged = or res1.lChanged res2.lChanged
+            , rChanged = or res2.rChanged res2.rChanged
+            , constraint = res1.res
+            , approx = res2.res
+            }
+          else None ()
+        else None ()
+      else Some {lChanged = false, rChanged = false, constraint = hConstraint, approx = hApprox} in
+    let pruneRedundant : all a.
+      [[RepTree relevant constraint var val a]]
+      -> [RepTree relevant constraint var val a]
+      = lam nonRedundantPartitions.
+        let juggle = lam tree : RepTree relevant constraint var val a.
+          match tree with RTSingle x then (tree, (x.constraint, x.cost))
+          else error "Compiler error: non-single to pruneRedundant" in
+        let filterAccumL : all a. all x. all y. (a -> x -> (a, Bool)) -> a -> [x] -> (a, [x])
+          = lam f.
+            recursive let work = lam kept. lam acc. lam l.
+              match l with [x] ++ l then
+                match f acc x with (acc, keep) in
+                work (if keep then snoc kept x else kept) acc l
+              else (acc, kept)
+            in work [] in
+        let optionFilterM : all a. all x. all y. (x -> Option Bool) -> [x] -> Option [x]
+          = lam f.
+            recursive let work = lam kept. lam l.
+              match l with [x] ++ l then
+                match f x with Some keep then
+                  work (if keep then snoc kept x else kept) l
+                else None ()
+              else Some kept
+            in work []
+        in
+        let elementElement : all x. (x, (constraint, Float)) -> (x, (constraint, Float)) -> Option Bool
+          = lam old. lam new.
+            let res = fs.pruneRedundant old.1 new.1 in
+            if not res.rUseful then None () else
+            Some res.lUseful in
+        let listElement : all x. [(x, (constraint, Float))] -> (x, (constraint, Float)) -> ([(x, (constraint, Float))], Bool)
+          = lam pruned. lam new.
+            match optionFilterM (lam old. elementElement old new) pruned with Some pruned
+            then (pruned, true)
+            else (pruned, false) in
+        recursive let work = lam pruned. lam rest.
+          match rest with [new] ++ rest then
+            match filterAccumL listElement pruned new with (pruned, new) in
+            work (concat pruned new) rest
+          else map (lam x. x.0) pruned
+        in match map (map juggle) nonRedundantPartitions with [pruned] ++ rest
+          then work pruned rest
+          else error "Compiler error: empty list to pruneRedundant in rtPropagate" in
+    recursive let work : all a.
+      Bool
+      -> Option (constraint, Approx)
+      -> RepTree relevant constraint var val a
+      -> Option (Status, RepTree relevant constraint var val a)
+      = lam forceDepth. lam fromAbove. lam tree. switch tree
+        case RTSingle x then
+          match constrainFromAbove fromAbove x.constraint x.approx with Some res then
+            let status = if res.lChanged
+              then ChangedResolved (res.constraint, filterApprox x.relevant res.approx)
+              else Unchanged () in
+            let res = RTSingle {x with constraint = res.constraint, approx = res.approx} in
+            Some (status, res)
+          else None ()
+        case RTAnd x then
+          match constrainFromAbove fromAbove x.constraint x.approx with Some res then
+            let propagateDown = if forceDepth then true else res.rChanged in
+            recursive let inner
+              : Bool -> {changed : Bool, constraint : constraint, approx : Approx} -> [Unknown] -> Unknown
+              = lam forceDepth. lam acc. lam children.
+                let f = lam acc. lam child.
+                  match work forceDepth (Some (acc.constraint, acc.approx)) child.val with Some (status, val) then
+                    let acc = switch status
+                      case Unchanged _ then Some acc
+                      case ChangedUnresolved a then
+                        match _approxAnd acc.approx a with Some res then Some
+                          {acc with approx = res.res, changed = if acc.changed then true else res.lChanged}
+                        else None ()
+                      case ChangedResolved x then
+                        match constrainFromAbove (Some x) acc.constraint acc.approx with Some res then
+                          Some
+                          { acc with changed = if acc.changed then true else res.rChanged
+                          , constraint = res.constraint
+                          , approx = res.approx
+                          }
+                        else None ()
+                      end in
+                    optionMap (lam acc. (acc, {child with val = val})) acc
+                  else None () in
+                match optionMapAccumLM f {acc with changed = false} children with Some (newAcc, children) then
+                  if newAcc.changed
+                  then inner false acc children
+                  else Some ({newAcc with changed = acc.changed}, children)
+                else None ()
+            in
+            match
+              if propagateDown then
+                inner forceDepth {changed = res.lChanged, constraint = res.constraint, approx = res.approx} x.children
+              else Some ({changed = false, constraint = res.constraint, approx = res.approx}, x.children)
+            with Some (acc, children) then
+              match optionMapM (lam child. rtAsSingle child.val) children with Some values then
+                let status = ChangedResolved (acc.constraint, filterApprox x.relevant acc.approx) in
+                let cost = foldl (lam acc. lam child. addf acc (mulf child.scale (rtGetMinCost child.val)))
+                  x.selfCost children in
+                let res = RTSingle
+                  { value = x.construct values
+                  , cost = cost
+                  , relevant = x.relevant
+                  , constraint = acc.constraint
+                  , approx = acc.approx
+                  } in
+                Some (status, res)
+              else
+                let status = if acc.changed
+                  then ChangedResolved (acc.constraint, filterApprox x.relevant acc.approx)
+                  else Unchanged () in
+                let res = RTAnd {x with constraint = acc.constraint, approx = acc.approx, children = children} in
+                Some (status, res)
+            else None ()
+          else None ()
+        case RTOr {singles = [], others = []} then
+          None ()
+        case RTOr (({singles = [], others = [alt]} | {singles = [alt], others = []}) & {construct = construct}) then
+          work forceDepth fromAbove (rtMap construct alt)
+        case RTOr x then
+          match constrainFromAbove fromAbove x.constraint x.approx with Some res then
+            let propagateDown = if forceDepth then true else res.rChanged in
+            if propagateDown then
+              switch
+                ( mapOption (work forceDepth (Some (res.constraint, res.approx))) x.singles
+                , mapOption (work forceDepth (Some (res.constraint, res.approx))) x.others
+                )
+              case ([], []) then None ()
+              case ([res], []) | ([], [res]) then Some res
+              case (singlePairs, otherPairs) then
+                let changed =
+                  if res.lChanged then true else
+                  if neqi (addi (length x.others) (length x.singles)) (addi (length otherPairs) (length singlePairs)) then true else
+                  if not (forAll (lam pair. match pair.0 with Unchanged _ then true else false) singlePairs) then true else
+                  not (forAll (lam pair. match pair.0 with Unchanged _ then true else false) otherPairs) in
+                let fixChild = lam pair. switch pair.1
+                  case x & RTSingle _ then This [x]
+                  case RTOr x then These (x.singles, x.others)
+                  case x then That [x]
+                  end in
+                match thesePartitionHereThere (map fixChild otherPairs) with (newSingles, others) in
+                let others = join others in
+                let singles = pruneRedundant (cons (map (lam x. x.1) singlePairs) newSingles) in
+                match _computeAltApprox res.approx (concat singles others) with Some approx then
+                  match (singles, others) with ([tree & RTSingle sing], []) then
+                    Some (ChangedResolved (sing.constraint, sing.approx), tree)
+                  else
+                    let status = if changed
+                      then ChangedUnresolved (filterApprox x.relevant approx)
+                      else Unchanged () in
+                    let res = RTOr {x with constraint = res.constraint, approx = approx, singles = singles, others = others} in
+                    Some (status, res)
+                else None ()
+              end
+            else Some (Unchanged (), RTOr {x with constraint = res.constraint, approx = res.approx})
+          else None ()
+        end
+    in optionMap (lam x. x.1) (work true (None ()) tree)
+
+lang NonMemoTreeBuilder = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpers + PrettyPrint + Cmp + Generalize + VarAccessHelpers + LocallyNamelessStuff + WildToMeta
+  -- Global
+  syn SolverGlobal a = | SGContent ()
+  sem initSolverGlobal = | _ -> SGContent ()
+
+  -- Branch
+  type SBContent a =
+    { implsPerOp : Map Name (Set (OpImpl a))
+    , nameless : NamelessState
+    }
+  syn SolverBranch a = | SBContent (SBContent a)
+  sem initSolverBranch = | global -> SBContent
+    { implsPerOp = mapEmpty nameCmp
+    , nameless =
+      { metas = []
+      , vars = []
+      , reprs = []
+      }
+    }
+
+  type SolContentRec a =
+    { scaledTotalCost : OpCost
+    , uni : Unification
+    , impl : OpImpl a
+    , highestImpl : ImplId
+    , ty : Type
+    , subSols : [SolContent a]
+    }
+  syn SolContent a = | SolContent (SolContentRec a)
+
+  -- Top Query
+  type RTree a = RepTree (VarMap ()) Unification Symbol Name (SolContent a)
+  type STQContent a = [{scale : OpCost, val : RTree a}]
+  syn SolverTopQuery a = | STQContent (STQContent a)
+  sem initSolverTopQuery = | global ->
+    STQContent []
+
+  sem addImpl global branch = | impl ->
+    match branch with SBContent branch in
+    let branch =
+      let set = setInsert impl (setEmpty cmpOpImpl) in
+      {branch with implsPerOp = mapInsertWith setUnion impl.op set branch.implsPerOp} in
+    SBContent branch
+
+  sem addOpUse debug global branch query = | opUse ->
+    match branch with SBContent branch in
+    match query with STQContent query in
+    match solFor (setEmpty cmpOpPair) branch opUse with (branch, Some res)
+    then (SBContent branch, STQContent (snoc query {scale = opUse.scaling, val = res}))
+    else errorSingle [opUse.info]
+      "This operation has no implementation, even when ignoring constraints from other operation uses."
+
+  sem solFor : all a. Set (Name, Type) -> SBContent a -> TmOpVarRec -> (SBContent a, Option (RTree a))
+  sem solFor seen branch = | opUse ->
+    -- NOTE(vipa, 2024-01-13): Check that we're not recursing to a
+    -- previously seen type
+    let nl = mkLocallyNameless branch.nameless opUse.ty in
+    let branch = {branch with nameless = nl.state} in
+    let opPair = (opUse.ident, nl.res) in
+    if setMem opPair seen then (branch, None ()) else  -- Early exit
+    let seen = setInsert opPair seen in
+
+    -- NOTE(vipa, 2024-01-13): Construct sub-trees for each impl in
+    -- scope for the op
+    let impls = optionMapOr [] setToSeq (mapLookup opUse.ident branch.implsPerOp) in
+    match mapAccumL (perImpl seen opUse.ty) branch impls with (branch, trees) in
+    let trees = filterOption trees in
+    if null trees then (branch, None ()) else  -- Early exit
+
+    -- NOTE(vipa, 2024-01-13): Build the "or" node of those
+    -- alternatives
+    match _computeAltApprox (pufEmpty _symCmp) trees with Some approx then
+      let res = RTOr
+        { others = trees
+        , singles = []
+        , selfCost = 0.0
+        , construct = lam x. x
+        , constraint = emptyUnification ()
+        , relevant = foldl1 varMapUnion (map rtGetRelevant trees)
+        , approx = approx
+        } in
+      (branch, Some res)
+    else (branch, None ())
+
+  sem perImpl : all a. Set (Name, Type) -> Type -> SBContent a -> OpImpl a -> (SBContent a, Option (RTree a))
+  sem perImpl seen ty branch = | impl ->
+    match wildToMeta impl.metaLevel (setEmpty nameCmp) ty with (newMetas, ty) in
+    match instAndSubst (infoTy impl.specType) impl.metaLevel impl.specType
+      with (specType, subst) in
+    match unifyPure impl.uni (removeReprSubsts specType) ty with Some uni then
+      -- NOTE(vipa, 2024-01-13): Make types consistent with the
+      -- instantiation
+      let opUses = map (lam opUse. {opUse with ty = substituteVars opUse.info subst opUse.ty}) impl.opUses in
+      -- NOTE(vipa, 2024-01-13): Collect previously present meta- and
+      -- repr-vars and create a substitution that replaces them all
+      -- with new ones. Note that the use of `impl.specType` instead
+      -- of `specType` (`impl.opUses` instead of `opUses`) is
+      -- intentional
+      let implFilter = {metaLevel = impl.metaLevel, scope = impl.reprScope} in
+      let locals =
+        let res = varMapEmpty in
+        let res = getVarsInType implFilter res impl.specType in
+        foldl (lam acc. lam opUse. getVarsInType implFilter acc opUse.ty) res impl.opUses in
+      let subst =
+        { metas = mapMapWithKey (lam k. lam. nameSetNewSym k) locals.metas
+        , reprs = mapMap gensym locals.reprs
+        } in
+      -- NOTE(vipa, 2024-01-13): The new, isolated, and consistent
+      -- specType, opUses, uni, and locals
+      let specType = substUniVars subst specType in
+      let opUses = map (lam opUse. {opUse with ty = substUniVars subst opUse.ty}) opUses in
+      let uni = substUniVarsInUni subst uni in
+      let locals =
+        { metas = mapFoldWithKey (lam acc. lam. lam v. mapInsert v () acc) (mapEmpty nameCmp) subst.metas
+        , reprs = mapFoldWithKey (lam acc. lam. lam v. mapInsert v () acc) (mapEmpty _symCmp) subst.reprs
+        } in
+      let locals = getVarsInType implFilter locals specType in
+      let locals = {locals with metas = mapUnion locals.metas newMetas} in
+
+      match mapAccumL (perUseInImpl seen uni) branch opUses with (branch, subTrees) in
+      match optionMapM (lam x. x) subTrees with Some subTrees then
+        let approx = pufFold
+          (lam acc. lam l. lam r.
+            (pufUnify (lam. error "Compiler error when computing approx (unify)") l r acc).puf)
+          (lam acc. lam l. lam out.
+            let out = setInsert out (setEmpty nameCmp) in
+            (pufSetOut (lam. error "Compiler error when computing approx (setout)") l out acc).puf)
+          (pufEmpty _symCmp)
+          uni.reprs in
+        let approx = foldl _intersectApproxFromBelow approx subTrees in
+        if _approxHasEmptyDomain approx then (branch, None ()) else -- Early exit
+        let res = RTAnd
+          { children =
+            zipWith (lam opUse. lam tree. {scale = opUse.scaling , val = tree}) opUses subTrees
+          , dep = Dep ()
+          , selfCost = impl.selfCost
+          , construct = lam subs.
+            let applyScale = lam opUse. lam sol.
+              match sol with SolContent sol in
+              SolContent {sol with scaledTotalCost = mulf opUse.scaling sol.scaledTotalCost} in
+            let subs = zipWith applyScale opUses subs in
+            let totalCost = foldl (lam a. lam x. match x with SolContent x in addf a x.scaledTotalCost)
+              impl.selfCost subs in
+            let highestImpl = foldl (lam a. lam x. match x with SolContent x in maxi a x.highestImpl)
+              impl.implId subs in
+            let res = SolContent
+              { scaledTotalCost = totalCost
+              , uni = impl.uni
+              , impl = impl
+              , highestImpl = highestImpl
+              , ty = specType
+              , subSols = subs
+              } in
+            res
+          , constraint = uni
+          , relevant =
+            let below = foldl varMapUnion varMapEmpty (map rtGetRelevant subTrees) in
+            let here = getVarsInType {metaLevel = negi 1, scope = negi 1} below ty in
+            varMapDifference here locals
+          , approx = approx
+          } in
+        (branch, Some res)
+      else (branch, None ())
+    else (branch, None ())
+
+  sem perUseInImpl : all a. Set (Name, Type) -> Unification -> SBContent a -> TmOpVarRec -> (SBContent a, Option (RTree a))
+  sem perUseInImpl seen uni branch = | opUse ->
+    let opUse = {opUse with ty = pureApplyUniToType uni opUse.ty} in
+    solFor seen branch opUse
+
+  type UniVarSubst = {metas : Map Name Name, reprs : Map Symbol Symbol}
+  sem substUniVars : UniVarSubst -> Type -> Type
+  sem substUniVars subst =
+  | ty & TyRepr x ->
+    match deref (botRepr x.repr) with BotRepr b then
+      let repr = optionMapOr (BotRepr b) (lam sym. BotRepr {b with sym = sym})
+        (mapLookup b.sym subst.reprs) in
+      TyRepr {x with repr = ref repr}
+    else ty
+  | ty & TyMetaVar x ->
+    match deref x.contents with Unbound b then
+      let ident = optionGetOr b.ident (mapLookup b.ident subst.metas) in
+      TyMetaVar {x with contents = ref (Unbound {b with ident = ident})}
+    else ty
+  | ty -> smap_Type_Type (substUniVars subst) ty
+
+  sem substUniVarsInUni : UniVarSubst -> Unification -> Unification
+  sem substUniVarsInUni subst = | uni ->
+    let new = substituteInUnification
+      (lam pair. (optionGetOr pair.0 (mapLookup pair.0 subst.metas), pair.1))
+      (lam pair. (optionGetOr pair.0 (mapLookup pair.0 subst.reprs), pair.1))
+      (substUniVars subst)
+      uni in
+    match new with Some uni then uni else
+    error "Compiler error, substUniVarsInUni failed"
+
+  -- NOTE(vipa, 2023-11-07): This typically assumes that the types
+  -- have a representation that is equal if the two types are
+  -- alpha-equivalent.
+  sem cmpOpPair : (Name, Type) -> (Name, Type) -> Int
+  sem cmpOpPair l = | r ->
+    let res = nameCmp l.0 r.0 in
+    if neqi 0 res then res else
+    let res = cmpType l.1 r.1 in
+    res
+end
+
+lang PaperSolver = NonMemoTreeBuilder
+  sem topSolve debug global = | STQContent query ->
+    type Relevant = VarMap () in
+    type Constraint = Unification in
+    type Var = Symbol in
+    type Val = Name in
+    let propagateInterface : RTPropagateInterface Relevant Constraint Var Val =
+      { constraintAnd = lam l. lam r.
+        match mergeUnifications l r with Some res then Some
+          -- NOTE(vipa, 2023-12-12): We know (by construction) that
+          -- res implies both l and r (because `mergeUnifications` is
+          -- a logical 'and') so we don't need to check that here
+          { lChanged = not (uniImplies l res)
+          , rChanged = not (uniImplies r res)
+          , res = res
+          }
+        else None ()
+      , filterApprox = lam varmap. lam sym. varMapHasRepr sym varmap
+      , pruneRedundant = lam l. lam r.
+        let lFitsWhereRCouldBe = lazy (lam. uniImplies r.0 l.0) in
+        let rFitsWhereLCouldBe = lazy (lam. uniImplies l.0 r.0) in
+        let lUsefulHelper = lam l. lam r. lam lFits. lam rFits.
+          -- NOTE(vipa, 2024-01-14): Strictly cheaper is always useful
+          if ltf l.1 r.1 then true else
+          if gtf l.1 r.1 then
+            -- NOTE(vipa, 2024-01-14): Strictly more expensive is only
+            -- useful if it can be used where the other cannot
+            not (lazyForce rFits)
+          else
+            -- NOTE(vipa, 2024-01-14): Equal cost is useful if more
+            -- flexible
+            lazyForce lFits in
+        let rUseful = lUsefulHelper r l rFitsWhereLCouldBe lFitsWhereRCouldBe in
+        -- NOTE(vipa, 2024-01-14): At least one must be useful, thus
+        -- we default to `l` if `r` fails to be useful on its own
+        if not rUseful then { lUseful = true, rUseful = false } else
+        let lUseful = lUsefulHelper l r lFitsWhereRCouldBe rFitsWhereLCouldBe in
+        { lUseful = lUseful, rUseful = rUseful }
+      } in
+    let debugInterface : RTDebugInterface PprintEnv Relevant Constraint Var Val =
+      { constraintJson = lam env. lam uni.
+        match unificationToDebug "" env uni with (env, uni) in
+        (env, JsonString uni)
+      , varJson = lam env. lam sym. (env, JsonString (int2string (sym2hash sym)))
+      , valJson = lam env. lam ident.
+        match pprintVarName env ident with (env, ident) in
+        (env, JsonString ident)
+      , relevantJson = lam env. lam varmap.
+        match mapAccumL pprintVarName env (mapKeys varmap.metas) with (env, metas) in
+        let reprs = map (lam x. int2string (sym2hash x)) (mapKeys varmap.reprs) in
+        let res = JsonObject (mapFromSeq cmpString
+          [ ("metas", JsonArray (map (lam x. JsonString x) metas))
+          , ("reprs", JsonArray (map (lam x. JsonString x) reprs))
+          ]) in
+        (env, res)
+      } in
+    let top = RTAnd
+      { children = query
+      , selfCost = 0.0
+      , dep = Dep ()
+      , construct = lam x. x
+      , constraint = emptyUnification ()
+      , relevant = varMapEmpty
+      , approx = pufEmpty _symCmp
+      } in
+    match rtDebugJson debugInterface pprintEnvEmpty top with (env, debug) in
+    printLn (json2string debug);
+    match rtPropagate propagateInterface top with Some top then
+      printLn (json2string (rtDebugJson debugInterface env top).1);
+      error "TODOtopSolve"
+    else error "Failed after first propagation"
+end
+
 lang SATishSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpers + PrettyPrint + Cmp + Generalize + VarAccessHelpers + LocallyNamelessStuff + SolTreeSolver + WildToMeta
   type ProcOpImpl a  =
     { implId : ImplId
@@ -2197,7 +2905,7 @@ lang SATishSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpers
 
     let perImpl : SBContent a -> ProcOpImpl a -> (SBContent a, Option (Map Symbol Int, SolTreeInput (Constraint a) (ChildInfo a) (SolContent a)))
       = lam branch. lam impl.
-        let ty = wildToMeta impl.metaLevel ty in
+        let ty = (wildToMeta impl.metaLevel (setEmpty nameCmp) ty).1 in
         match instAndSubst (infoTy impl.specType) impl.metaLevel impl.specType
           with (specType, subst) in
         match unifyPure impl.uni (removeReprSubsts specType) ty with Some uni then
@@ -2473,7 +3181,7 @@ lang LazyTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHe
 
     let perImpl : SBContent a -> ProcOpImpl a -> (SBContent a, LStream (SolContentRec a))
       = lam branch. lam impl.
-        let ty = wildToMeta impl.metaLevel ty in
+        let ty = (wildToMeta impl.metaLevel (setEmpty nameCmp) ty).1 in
         match instAndSubst (infoTy impl.specType) impl.metaLevel impl.specType
           with (specType, subst) in
         match unifyPure impl.uni (removeReprSubsts specType) ty with Some uni then
@@ -2944,7 +3652,7 @@ lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypes
       end in
 
     let perImpl = lam acc : {branch : SBContent a, sols : [SolContentRec a]}. lam impl.
-      let ty = wildToMeta impl.metaLevel ty in
+      let ty = (wildToMeta impl.metaLevel (setEmpty nameCmp) ty).1 in
       let debugIndent = optionMap (concat " ") debugIndent in
       (match debugIndent with Some indent then
         print (join [indent, "trying impl with ", int2string (length impl.problem), " commands"])

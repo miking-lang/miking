@@ -160,6 +160,20 @@ let optionMapM: all a. all b. (a -> Option b) -> [a] -> Option [b] = lam f. lam 
 utest optionMapM (lam x. if gti x 2 then Some x else None ()) [3, 4, 5] with Some [3, 4, 5]
 utest optionMapM (lam x. if gti x 2 then Some x else None ()) [2, 3, 4] with None ()
 
+let optionMapAccumLM : all a. all b. all acc.
+  (acc -> a -> Option (acc, b))
+  -> acc
+  -> [a]
+  -> Option (acc, [b])
+  = lam f.
+    recursive let work = lam prefix. lam acc. lam l.
+      match l with [x] ++ l then
+        match f acc x with Some (acc, x) then
+          work (snoc prefix x) acc l
+        else None ()
+      else Some (acc, prefix)
+    in work []
+
 -- 'optionFoldlM f acc list' folds over 'list' using 'f', starting with the value 'acc'.
 -- This is foldlM in the Option monad, i.e., if 'f' returns 'None' at any point the entire
 -- result is 'None'.

@@ -544,6 +544,25 @@ let pufMapAll
       (pufEmptyResults (mapEmpty cmp))
       puf
 
+let pufFilterFunction
+  : all k. all out
+  . ((k, Int) -> Bool)
+  -> PureUnionFind k out
+  -> PureUnionFind k out
+  = lam shouldKeep. lam puf.
+    -- NOTE(vipa, 2023-10-14): Here we know, by construction, that the
+    -- extra outputs in PUFResult are empty, so we just access `puf`
+    -- and call it a day.
+    pufFold
+      (lam acc. lam from. lam to. if shouldKeep from
+       then (pufUnify (lam. lam. error "compiler error in pufFilter unify") from to acc).puf
+       else acc)
+      (lam acc. lam from. lam out. if shouldKeep from
+       then (pufSetOut (lam. lam. error "compiler error in pufFilter setOut") from out acc).puf
+       else acc)
+      (pufEmpty (mapGetCmpFun puf))
+      puf
+
 let pufFilter
   : all k. all out
   . Int

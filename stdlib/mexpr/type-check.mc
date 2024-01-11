@@ -544,11 +544,20 @@ lang AllTypeGeneralize = Generalize + AllTypeAst
   | TyAll t -> genBase lvl vs (setInsert t.ident bound) t.ty
 end
 
-lang WildToMeta = AliasTypeAst + TyWildAst
-  sem wildToMeta lvl =
-  | TyWild x -> newvar lvl x.info
-  | TyAlias x -> TyAlias {x with content = wildToMeta lvl x.content}
-  | ty -> smap_Type_Type (wildToMeta lvl) ty
+lang WildToMeta = AliasTypeAst + TyWildAst + MetaVarTypeAst
+  sem wildToMeta : Level -> Set Name -> Type -> (Set Name, Type)
+  sem wildToMeta lvl newMetas =
+  | TyWild x ->
+    let ty = newvar lvl x.info in
+    match ty with TyMetaVar x then
+      match deref x.contents with Unbound x then
+        (setInsert x.ident newMetas, ty)
+      else error "Compiler error"
+    else error "Compiler error"
+  | TyAlias x ->
+    match wildToMeta lvl newMetas x.content with (newMetas, content) in
+    (newMetas, TyAlias {x with content = content})
+  | ty -> smapAccumL_Type_Type (wildToMeta lvl) newMetas ty
 end
 
 -- The default cases handle all other constructors!
@@ -1106,8 +1115,8 @@ lang ApplyReprSubsts = TypeCheck + WildToMeta + ReprSubstAst
   | TySubst s ->
     match unwrapType (applyReprSubsts env s.arg) with TyRepr r then
       match mapLookup s.subst env.reptypes.reprEnv with Some subst then
-        let pat = wildToMeta env.currentLvl subst.pat in
-        let repr = wildToMeta env.currentLvl subst.repr in
+        let pat = (wildToMeta env.currentLvl (setEmpty nameCmp) subst.pat).1 in
+        let repr = (wildToMeta env.currentLvl (setEmpty nameCmp) subst.repr).1 in
         let combinedFromSubst = foldr ntyall_ (tytuple_ [pat, repr]) subst.vars in
         let combinedFromSubst = inst s.info env.currentLvl combinedFromSubst in
         let replacement = newvar env.currentLvl s.info in
@@ -1153,7 +1162,7 @@ lang OpImplTypeCheck = OpImplAst + TypeCheck + ResolveType + PropagateTypeAnnot 
           let specType = substituteUnknown (Poly ()) newLvl x.info specType in
           let specType = inst x.info newLvl specType in
           let specType = substituteNewReprs env specType in
-          let specType = wildToMeta newLvl specType in
+          let specType = (wildToMeta newLvl (setEmpty nameCmp) specType).1 in
           -- NOTE(vipa, 2023-07-03): This may do some unifications from
           -- substitutions, as a side-effect, so we do it here rather
           -- than later.
