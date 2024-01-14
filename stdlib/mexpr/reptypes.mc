@@ -2002,6 +2002,162 @@ let _computeAltApprox : all relevant. all constraint. all var. all val. all a.
       mapFoldWithKey addIfConstrained puf x in
     optionMap (lam x. x.res) (_approxAnd restr puf)
 
+let _pruneListElement : all l. all r. (l -> r -> {lUseful : Bool, rUseful : Bool}) -> [l] -> r -> ([l], Bool)
+  = lam check. lam previous. lam new.
+    let optionFilterM : all a. all x. all y. (x -> Option Bool) -> [x] -> Option [x]
+      = lam f.
+        recursive let work = lam kept. lam l.
+          match l with [x] ++ l then
+            match f x with Some keep then
+              work (if keep then snoc kept x else kept) l
+            else None ()
+          else Some kept
+        in work [] in
+    let f = lam old.
+      let res = check old new in
+      if not res.rUseful then None () else
+      Some res.lUseful in
+    match optionFilterM f previous with Some pruned
+    then (pruned, true)
+    else (previous, false)
+
+let lazyExploreSorted : all a. all b. ([a] -> Either Int b) -> (a -> Float) -> [LStream a] -> LStream b
+  = lam constructOrStep. lam computeCost. lam streams.
+    type Potential =
+      { cost : Float
+      , combo : [Int]
+      , parts : [(a, LStream a)]
+      } in
+    type State =
+      { queue : Heap Potential
+      , consideredCombos : Set [Int]
+      } in
+
+    let cmpByCost = lam a. lam b.
+      if ltf a.cost b.cost then negi 1 else
+      if gtf a.cost b.cost then 1 else
+      0 in
+    let cmpComboId = seqCmp subi in
+
+    let addSuccessors : Potential -> Option Int -> State -> State
+      = lam pot. lam failIdx. lam st.
+        let stepAtIdx : Potential -> Int -> Option Potential = lam pot. lam idx.
+          let part = get pot.parts idx in
+          match lazyStreamUncons part.1 with Some newPart then Some
+            { cost = addf (subf pot.cost (computeCost part.0)) (computeCost newPart.0)
+            , parts = set pot.parts idx newPart
+            , combo = set pot.combo idx (addi 1 (get pot.combo idx))
+            }
+          else None () in
+        let succ = match failIdx with Some failIdx
+          then create failIdx (stepAtIdx pot)
+          else create (length pot.parts) (stepAtIdx pot) in
+        let succ = filterOption succ in
+        let checkSeen = lam seen. lam pot.
+          if setMem pot.combo seen
+          then (seen, None ())
+          else (setInsert pot.combo seen, Some pot) in
+        match mapAccumL checkSeen st.consideredCombos succ with (consideredCombos, succ) in
+        let succ = filterOption succ in
+        { queue = heapAddMany cmpByCost succ st.queue
+        , consideredCombos = consideredCombos
+        }
+    in
+
+    recursive let step : State -> Option (() -> State, b) = lam st.
+      match heapPop cmpByCost st.queue with Some (pot, queue) then
+        let st = {st with queue = queue} in
+        switch constructOrStep (map (lam x. x.0) pot.parts)
+        case Right b then
+          Some (lam. addSuccessors pot (None ()) st, b)
+        case Left idx then
+          step (addSuccessors pot (Some idx) st)
+        end
+      else None ()
+    in
+
+    match optionMapM lazyStreamUncons streams with Some parts then
+      let mkState = lam.
+        let cost = foldl (lam acc. lam x. addf acc (computeCost x.0)) 0.0 parts in
+        { queue = heapSingleton {cost = cost, combo = make (length parts) 0, parts = parts}
+        , consideredCombos = setEmpty cmpComboId
+        } in
+      lazyStreamLaziest step mkState
+    else lazyStreamEmpty ()
+
+type RTMaterializeLazyInterface relevant constraint var val =
+  { constraintAnd : constraint -> constraint -> Option constraint
+  , filterConstraint : relevant -> constraint -> constraint
+  , pruneRedundant : constraint -> constraint -> {lUseful : Bool, rUseful : Bool}
+  }
+let rtMaterializeLazyRecursive : all relevant. all constraint. all var. all val. all a.
+  RTMaterializeLazyInterface relevant constraint var val
+  -> RepTree relevant constraint var val a
+  -> LStream a
+  = lam fs. lam tree.
+    type Never in
+    type Ret a = {value : a, constraint : constraint, cost : Float} in
+    type Tree a = RepTree relevant constraint var val a in
+    let cmpRet = lam a. lam b.
+      if ltf a.cost b.cost then negi 1 else
+      if gtf a.cost b.cost then 1 else 0 in
+    let retMap = lam f. lam ret.
+      { constraint = ret.constraint
+      , cost = ret.cost
+      , value = f ret.value
+      } in
+    let foldlFailIdx : all acc. all a. (acc -> a -> Option acc) -> acc -> [a] -> Either Int acc
+      = lam f. lam acc. lam l.
+        recursive let work = lam acc. lam idx. lam l.
+          match l with [x] ++ l then
+            match f acc x with Some acc
+            then work acc (addi idx 1) l
+            else Left (addi idx 1)
+          else Right acc
+        in work acc 0 l
+    in
+    recursive let work : all a. Tree a -> LStream (Ret a)
+      = lam tree. switch tree
+        case RTSingle x then
+          let item =
+            { value = x.value
+            , constraint = fs.filterConstraint x.relevantAbove x.constraint
+            , cost = x.cost
+            } in
+          lazyStreamSingleton item
+        case RTOr x then
+          let fixedConstruct : Never -> a = x.construct in
+          let alts = map work (concat x.singles x.others) in
+          let f = lam constraints. lam new.
+            let new =
+              { new with constraint = fs.filterConstraint x.relevantAbove new.constraint
+              } in
+            match _pruneListElement (lam l. lam r. fs.pruneRedundant l r.constraint) constraints new
+              with (constraints, keep) in
+            if keep
+            then (snoc constraints new.constraint, true)
+            else (constraints, false) in
+          let stream = lazyStreamMergeMin cmpRet alts in
+          let stream = lazyStreamStatefulFilter f [] stream in
+          lazyStreamMap (retMap fixedConstruct) stream
+        case RTAnd x then
+          let fixedConstruct : [Never] -> a = x.construct in
+          let f = lam child.
+            let stream = work child.val in
+            lazyStreamMap (lam x. {x with cost = mulf x.cost child.scale}) stream in
+          let children = map f x.children in
+          let tryMk = lam rets.
+            let res = foldlFailIdx fs.constraintAnd x.constraint (map (lam x. x.constraint) rets) in
+            let construct = lam constraint.
+              { constraint = constraint
+              , cost = foldl addf 0.0 (map (lam x. x.cost) rets)
+              , value = fixedConstruct (map (lam x. x.value) rets)
+              } in
+            eitherMapRight construct res in
+          lazyExploreSorted tryMk (lam x. x.cost) children
+        end
+    in lazyStreamMap (lam x. x.value) (work tree)
+
 type RTCollapseLeavesInterface relevant constraint var val =
   { constraintAnd : constraint -> constraint -> Option constraint
   }
@@ -2140,29 +2296,10 @@ let rtPropagate : all relevant. all constraint. all var. all val. all a.
                 work (if keep then snoc kept x else kept) acc l
               else (acc, kept)
             in work [] in
-        let optionFilterM : all a. all x. all y. (x -> Option Bool) -> [x] -> Option [x]
-          = lam f.
-            recursive let work = lam kept. lam l.
-              match l with [x] ++ l then
-                match f x with Some keep then
-                  work (if keep then snoc kept x else kept) l
-                else None ()
-              else Some kept
-            in work []
-        in
-        let elementElement : all x. (x, (constraint, Float)) -> (x, (constraint, Float)) -> Option Bool
-          = lam old. lam new.
-            let res = fs.pruneRedundant old.1 new.1 in
-            if not res.rUseful then None () else
-            Some res.lUseful in
-        let listElement : all x. [(x, (constraint, Float))] -> (x, (constraint, Float)) -> ([(x, (constraint, Float))], Bool)
-          = lam pruned. lam new.
-            match optionFilterM (lam old. elementElement old new) pruned with Some pruned
-            then (pruned, true)
-            else (pruned, false) in
         recursive let work = lam pruned. lam rest.
           match rest with [new] ++ rest then
-            match filterAccumL listElement pruned new with (pruned, new) in
+            let f = lam old. lam new. fs.pruneRedundant old.1 new.1 in
+            match filterAccumL (_pruneListElement f) pruned new with (pruned, new) in
             work (concat pruned new) rest
           else map (lam x. x.0) pruned
         in match map (map juggle) nonRedundantPartitions with [pruned] ++ rest
@@ -2554,74 +2691,108 @@ lang NonMemoTreeBuilder = RepTypesShallowSolverInterface + UnifyPure + RepTypesH
     res
 end
 
-lang PaperSolver = NonMemoTreeBuilder
+lang TreeSolverBase = NonMemoTreeBuilder
+  type Relevant = VarMap ()
+  type Constraint = Unification
+  type Var = Symbol
+  type Val = Name
+
+  sem solveWork : all a. Bool -> RepTree (VarMap ()) Unification Symbol Name [SolverSolution a] -> [SolverSolution a]
+
   sem topSolve debug global = | STQContent query ->
-    type Relevant = VarMap () in
-    type Constraint = Unification in
-    type Var = Symbol in
-    type Val = Name in
-    let propagateInterface : RTPropagateInterface Relevant Constraint Var Val =
-      { constraintAnd = lam l. lam r.
-        match mergeUnifications l r with Some res then Some
-          -- NOTE(vipa, 2023-12-12): We know (by construction) that
-          -- res implies both l and r (because `mergeUnifications` is
-          -- a logical 'and') so we don't need to check that here
-          { lChanged = not (uniImplies l res)
-          , rChanged = not (uniImplies r res)
-          , res = res
-          }
-        else None ()
-      , unionRelevant = varMapUnion
-      , filterApprox = lam varmap. lam sym. varMapHasRepr sym varmap
-      , filterConstraint = lam varmap. lam uni. filterUnificationFunction
-        (lam pair. varMapHasRepr pair.0 varmap)
-        (lam pair. varMapHasMeta pair.0 varmap)
-        uni
-      , pruneRedundant = lam l. lam r.
-        let lFitsWhereRCouldBe = lazy (lam. uniImplies r.0 l.0) in
-        let rFitsWhereLCouldBe = lazy (lam. uniImplies l.0 r.0) in
-        let lUsefulHelper = lam l. lam r. lam lFits. lam rFits.
-          -- NOTE(vipa, 2024-01-14): Strictly cheaper is always useful
-          if ltf l.1 r.1 then true else
-          -- NOTE(vipa, 2024-01-14): Otherwise it's only useful if it's provably more flexible
-          not (lazyForce rFits) in
-        let rUseful = lUsefulHelper r l rFitsWhereLCouldBe lFitsWhereRCouldBe in
-        -- NOTE(vipa, 2024-01-14): At least one must be useful, thus
-        -- we default to `l` if `r` fails to be useful on its own
-        if not rUseful then { lUseful = true, rUseful = false } else
-        let lUseful = lUsefulHelper l r lFitsWhereRCouldBe rFitsWhereLCouldBe in
-        { lUseful = lUseful, rUseful = rUseful }
-      } in
-    let debugInterface : RTDebugInterface PprintEnv Relevant Constraint Var Val =
-      { constraintJson = lam env. lam uni.
-        match unificationToDebug "" env uni with (env, uni) in
-        (env, JsonString uni)
-      , varJson = lam env. lam sym. (env, JsonString (int2string (sym2hash sym)))
-      , valJson = lam env. lam ident.
-        match pprintVarName env ident with (env, ident) in
-        (env, JsonString ident)
-      , relevantJson = lam env. lam varmap.
-        match mapAccumL pprintVarName env (mapKeys varmap.metas) with (env, metas) in
-        let reprs = map (lam x. int2string (sym2hash x)) (mapKeys varmap.reprs) in
-        let res = JsonObject (mapFromSeq cmpString
-          [ ("metas", JsonArray (map (lam x. JsonString x) metas))
-          , ("reprs", JsonArray (map (lam x. JsonString x) reprs))
-          ]) in
-        (env, res)
-      } in
-    let collapseLeavesInterface : RTCollapseLeavesInterface Relevant Constraint Var Val =
-      { constraintAnd = mergeUnifications
-      } in
     let top = RTAnd
       { children = query
       , selfCost = 0.0
       , dep = Dep ()
-      , construct = lam x. x
+      , construct = lam x. map (lam x. SSContent x) x
       , constraint = emptyUnification ()
       , relevantHere = foldl varMapUnion varMapEmpty (map (lam x. rtGetRelevantAbove x.val) query)
       , relevantAbove = varMapEmpty
       , approx = foldl _intersectApproxFromBelow (pufEmpty _symCmp) (map (lam x. x.val) query)
       } in
+    solveWork debug top
+
+  sem mkPropagateInterface : () -> RTPropagateInterface Relevant Constraint Var Val
+  sem mkPropagateInterface = | _ ->
+    { constraintAnd = lam l. lam r.
+      match mergeUnifications l r with Some res then Some
+        -- NOTE(vipa, 2023-12-12): We know (by construction) that
+        -- res implies both l and r (because `mergeUnifications` is
+        -- a logical 'and') so we don't need to check that here
+        { lChanged = not (uniImplies l res)
+        , rChanged = not (uniImplies r res)
+        , res = res
+        }
+      else None ()
+    , unionRelevant = varMapUnion
+    , filterApprox = lam varmap. lam sym. varMapHasRepr sym varmap
+    , filterConstraint = lam varmap. lam uni. filterUnificationFunction
+      (lam pair. varMapHasRepr pair.0 varmap)
+      (lam pair. varMapHasMeta pair.0 varmap)
+      uni
+    , pruneRedundant = lam l. lam r.
+      let lFitsWhereRCouldBe = lazy (lam. uniImplies r.0 l.0) in
+      let rFitsWhereLCouldBe = lazy (lam. uniImplies l.0 r.0) in
+      let lUsefulHelper = lam l. lam r. lam lFits. lam rFits.
+        -- NOTE(vipa, 2024-01-14): Strictly cheaper is always useful
+        if ltf l.1 r.1 then true else
+        -- NOTE(vipa, 2024-01-14): Otherwise it's only useful if it's provably more flexible
+        not (lazyForce rFits) in
+      let rUseful = lUsefulHelper r l rFitsWhereLCouldBe lFitsWhereRCouldBe in
+      -- NOTE(vipa, 2024-01-14): At least one must be useful, thus
+      -- we default to `l` if `r` fails to be useful on its own
+      if not rUseful then { lUseful = true, rUseful = false } else
+      let lUseful = lUsefulHelper l r lFitsWhereRCouldBe rFitsWhereLCouldBe in
+      { lUseful = lUseful, rUseful = rUseful }
+    }
+
+  sem mkDebugInterface : () -> RTDebugInterface PprintEnv Relevant Constraint Var Val
+  sem mkDebugInterface = | _ ->
+    { constraintJson = lam env. lam uni.
+      match unificationToDebug "" env uni with (env, uni) in
+      (env, JsonString uni)
+    , varJson = lam env. lam sym. (env, JsonString (int2string (sym2hash sym)))
+    , valJson = lam env. lam ident.
+      match pprintVarName env ident with (env, ident) in
+      (env, JsonString ident)
+    , relevantJson = lam env. lam varmap.
+      match mapAccumL pprintVarName env (mapKeys varmap.metas) with (env, metas) in
+      let reprs = map (lam x. int2string (sym2hash x)) (mapKeys varmap.reprs) in
+      let res = JsonObject (mapFromSeq cmpString
+        [ ("metas", JsonArray (map (lam x. JsonString x) metas))
+        , ("reprs", JsonArray (map (lam x. JsonString x) reprs))
+        ]) in
+      (env, res)
+    }
+
+  sem mkCollapseLeavesInterface : () -> RTCollapseLeavesInterface Relevant Constraint Var Val
+  sem mkCollapseLeavesInterface = | _ ->
+    { constraintAnd = mergeUnifications
+    }
+
+  sem mkMaterializeLazyInterface : () -> RTMaterializeLazyInterface Relevant Constraint Var Val
+  sem mkMaterializeLazyInterface = | _ ->
+    { constraintAnd = mergeUnifications
+    , filterConstraint = lam varmap. lam uni. filterUnificationFunction
+      (lam pair. varMapHasRepr pair.0 varmap)
+      (lam pair. varMapHasMeta pair.0 varmap)
+      uni
+    , pruneRedundant = lam l. lam r.
+      let lFits = uniImplies r l in
+      let rUseful = not lFits in
+      if not rUseful then { lUseful = true, rUseful = false } else
+      let rFits = uniImplies l r in
+      { lUseful = not rFits
+      , rUseful = rUseful
+      }
+    }
+end
+
+lang TreeSolverBottomUp = TreeSolverBase
+  sem solveWork debug = | top ->
+    let propagateInterface = mkPropagateInterface () in
+    let debugInterface = mkDebugInterface () in
+    let collapseLeavesInterface = mkCollapseLeavesInterface () in
     recursive
       let propagate = lam top.
         match rtPropagate propagateInterface top with Some top then
@@ -2635,8 +2806,20 @@ lang PaperSolver = NonMemoTreeBuilder
         collapseLeaves top
       let collapseLeaves = lam top.
         propagate (rtCollapseLeaves collapseLeavesInterface top)
-    in match propagate top with Some res then map (lam x. SSContent x) res else
+    in match propagate top with Some res then res else
       errorSingle [] "Could not find a consistent assignment of impls across the program"
+end
+
+lang TreeSolverGreedy = TreeSolverBase
+  sem solveWork debug = | top ->
+    let propagateInterface = mkPropagateInterface () in
+    let debugInterface = mkDebugInterface () in
+    let materializeLazyInterface = mkMaterializeLazyInterface () in
+    match rtPropagate propagateInterface top with Some top then
+      let stream = rtMaterializeLazyRecursive materializeLazyInterface top in
+      match lazyStreamUncons stream with Some (res, _) then res else
+      errorSingle [] "Could not find a consistent assignment of impls across the program"
+    else errorSingle [] "Could not find a consistent assignment of impls across the program"
 end
 
 lang SATishSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpers + PrettyPrint + Cmp + Generalize + VarAccessHelpers + LocallyNamelessStuff + SolTreeSolver + WildToMeta
