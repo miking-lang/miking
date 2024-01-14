@@ -496,6 +496,28 @@ let pufSetOut
       }
     end
 
+let pufFoldRaw
+  : all k. all out. all acc
+  .  (acc -> (k, Int) -> (k, Int) -> acc)
+  -> (acc -> (k, Int) -> out -> acc)
+  -> acc
+  -> PureUnionFind k out
+  -> acc
+  = lam feq. lam fout. lam acc. lam puf.
+    mapFoldWithKey
+      (lam acc. lam k. lam kX.
+        let k = (k, kX.level) in
+        switch kX.content
+        case PUFLink toK then
+          let level = (mapFindExn toK puf).level in
+          feq acc k (toK, level)
+        case PUFEmpty _ then acc
+        case PUFOut out then
+          fout acc k out
+        end)
+      acc
+      puf
+
 let pufFold
   : all k. all out. all acc
   .  (acc -> (k, Int) -> (k, Int) -> acc)
@@ -523,7 +545,7 @@ let pufMerge
   -> PureUnionFind k out
   -> PUFResults k out side
   = lam combine. lam a. lam b.
-    pufFold
+    pufFoldRaw
       (lam acc. lam l. lam r. pufBind acc (pufUnify combine l r))
       (lam acc. lam l. lam out. pufBind acc (pufSetOut combine l out))
       (pufEmptyResults a)
@@ -538,7 +560,7 @@ let pufMapAll
   -> PureUnionFind k1 out1
   -> PUFResults k2 out2 side
   = lam cmp. lam fk. lam fout. lam combine. lam puf.
-    pufFold
+    pufFoldRaw
       (lam acc. lam l. lam r. pufBind acc (pufUnify combine (fk l) (fk r)))
       (lam acc. lam l. lam out. pufBind acc (pufSetOut combine (fk l) (fout out)))
       (pufEmptyResults (mapEmpty cmp))
@@ -553,15 +575,27 @@ let pufFilterFunction
     -- NOTE(vipa, 2023-10-14): Here we know, by construction, that the
     -- extra outputs in PUFResult are empty, so we just access `puf`
     -- and call it a day.
-    pufFold
-      (lam acc. lam from. lam to. if shouldKeep from
-       then (pufUnify (lam. lam. error "compiler error in pufFilter unify") from to acc).puf
-       else acc)
-      (lam acc. lam from. lam out. if shouldKeep from
-       then (pufSetOut (lam. lam. error "compiler error in pufFilter setOut") from out acc).puf
-       else acc)
-      (pufEmpty (mapGetCmpFun puf))
-      puf
+    let cmp = mapGetCmpFun puf in
+    let partition = mapEmpty cmp in
+    let f = lam acc. lam k. lam kX.
+      let x = _pufUnwrap (k, kX.level) puf in
+      { partition = mapInsertWith concat x.k [(k, kX.level)] acc.partition
+      , outs = match kX.content with PUFOut out
+        then mapInsert k out acc.outs
+        else acc.outs
+      } in
+    let data = mapFoldWithKey f {partition = mapEmpty cmp, outs = mapEmpty cmp} puf in
+    let f = lam acc. lam k. lam equals.
+      match filter shouldKeep equals with [center] ++ ks then
+        let acc = foldl
+          (lam acc. lam k2. (pufUnify (lam. lam. error "compiler error in pufFilter unify") center k2 acc).puf)
+          acc
+          ks in
+        match mapLookup k data.outs with Some out then
+          (pufSetOut (lam. lam. error "compiler error in pufFilter setOut") center out acc).puf
+        else acc
+      else acc in
+    mapFoldWithKey f (pufEmpty cmp) data.partition
 
 let pufFilter
   : all k. all out
@@ -570,28 +604,10 @@ let pufFilter
   -> PureUnionFind k out
   -> PureUnionFind k out
   = lam level. lam ks. lam puf.
-    let shouldKeep = lam pair. lam ks.
+    let shouldKeep = lam pair.
       if lti pair.1 level then true
       else setMem pair.0 ks in
-    let ks = pufFold
-      (lam acc. lam from. lam to. if shouldKeep from ks
-       then setInsert to.0 acc
-       else acc)
-      (lam acc. lam. lam. acc)
-      ks
-      puf in
-    -- NOTE(vipa, 2023-10-14): Here we know, by construction, that the
-    -- extra outputs in PUFResult are empty, so we just access `puf`
-    -- and call it a day.
-    pufFold
-      (lam acc. lam from. lam to. if shouldKeep from ks
-       then (pufUnify (lam. lam. error "compiler error in pufFilter unify") from to acc).puf
-       else acc)
-      (lam acc. lam from. lam out. if shouldKeep from ks
-       then (pufSetOut (lam. lam. error "compiler error in pufFilter setOut") from out acc).puf
-       else acc)
-      (pufEmpty (mapGetCmpFun puf))
-      puf
+    pufFilterFunction shouldKeep puf
 
 type Unification = use Ast in
   { reprs : PureUnionFind Symbol Name
@@ -764,6 +780,16 @@ lang UnifyPure = Unify + MetaVarTypeAst + VarTypeSubstitute + ReprTypeAst + Cmp 
       let typeRes = pufMapAll nameCmp fn fty (lam a. lam b. ((a, b), a)) uni.types in
       _handlePufTypes uni typeRes
     else None ()
+
+  sem filterUnificationFunction
+    : ((Symbol, Int) -> Bool)
+    -> ((Name, Int) -> Bool)
+    -> Unification
+    -> Unification
+  sem filterUnificationFunction frepr fmeta = | uni ->
+    { reprs = pufFilterFunction frepr uni.reprs
+    , types = pufFilterFunction fmeta uni.types
+    }
 
   sem filterUnification
     : {reprs : {scope : Int, syms : Set Symbol}, types : {level : Int, names : Set Name}}
