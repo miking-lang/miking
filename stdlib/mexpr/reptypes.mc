@@ -2098,6 +2098,173 @@ let lazyExploreSorted : all a. all b. ([a] -> Either Int b) -> (a -> Float) -> [
       lazyStreamLaziest step mkState
     else lazyStreamEmpty ()
 
+let directedStepper : all a. all acc.
+  (a -> acc)
+  -> (all x. [(x, acc)] -> [([x], acc)])
+  -> (acc -> acc -> Option acc)
+  -> [(a, acc -> Option a)]
+  -> Option (acc, [a])
+  = lam getAcc. lam partitionAccs. lam mergeAccs. lam parts.
+    type Point x = {acc : acc, good : [(x, a)], nextSteps : [(x, acc -> Option a)]} in
+    let computePoints : all x. [(x, a, acc -> Option a)] -> Either [Point x] (acc, [(x, a)])
+      = lam trips.
+        let trips = map (lam trip. (trip, getAcc trip.1)) trips in
+        let partitions = partitionAccs trips in
+        let mkPoint = lam idx.
+          match splitAt partitions idx with (pre, [here] ++ post) then
+            let others = join (map (lam x. x.0) (concat pre post)) in
+            let toStep = map (lam trip. (trip.0, trip.2)) others in
+            let good = map (lam trip. (trip.0, trip.1)) here.0 in
+            { acc = here.1
+            , good = good
+            , nextSteps = toStep
+            }
+          else error "Compiler error in mkPoint" in
+        let points = create (length partitions) mkPoint in
+        match points with [point]
+        then Right (point.acc, point.good)
+        else Left points in
+    let stepPoint : all x. Point x -> Either [Point x] (acc, [(x, a)])
+      = lam point.
+        let stepOne = lam pair.
+          optionMap (lam a. (pair.0, a, pair.1)) (pair.1 point.acc) in
+        match optionMapM stepOne point.nextSteps with Some trips then
+          let mergePoint = lam point2.
+            match mergeAccs point.acc point2.acc with Some acc then Some
+              { acc = acc
+              , good = concat point.good point2.good
+              , nextSteps = point2.nextSteps
+              }
+            else None () in
+          let mergeSuccess = lam res.
+            match mergeAccs point.acc res.0 with Some acc
+            then (acc, concat point.good res.1)
+            else error "Compiler error: mergeAccs fail in mergeSuccess" in
+          let res = computePoints trips in
+          eitherBiMap (mapOption mergePoint) mergeSuccess res
+        else Left []
+    in
+    recursive let stepPoints : all x. [Point x] -> [Point x] -> Either [Point x] (acc, [(x, a)])
+      = lam prev. lam next.
+        match next with [point] ++ next then
+          switch stepPoint point
+          case Left more then stepPoints (concat prev more) next
+          case Right res then Right res
+          end
+        else Left prev in
+    recursive let work : all x. [Point x] -> Option (acc, [(x, a)])
+      = lam points.
+        switch stepPoints [] points
+        case Left [] then None ()
+        case Left points then work points
+        case Right res then Some res
+        end in
+    let start = mapi (lam idx. lam pair. (idx, pair.0, pair.1)) parts in
+    let fixup = lam pair.
+      (pair.0, map (lam x. x.1) (sort (lam a. lam b. subi a.0 b.0) pair.1)) in
+    switch computePoints start
+    case Left points then optionMap fixup (work points)
+    case Right res then Some (fixup res)
+    end
+
+
+type RTMaterializeConsistentInterface relevant constraint var val =
+  { partitionConsistentConstraints : all x. [(x, constraint)] -> [([x], constraint)]
+  , filterConstraint : relevant -> constraint -> constraint
+  , constraintAnd : constraint -> constraint -> Option constraint
+  }
+let rtMaterializeConsistent : all relevant. all constraint. all var. all val. all a.
+  RTMaterializeConsistentInterface relevant constraint var val
+  -> RepTree relevant constraint var val a
+  -> Option {value : a, cost : Float}
+  = lam fs. lam tree.
+    type Never in
+    type Tree a = RepTree relevant constraint var val a in
+    type Ret a = {value : a, cost : Float, constraint : constraint} in
+    type QueryF a = constraint -> Option (Ret a) in
+    let cmpRet = lam a. lam b.
+      if ltf a.cost b.cost then negi 1 else
+      if gtf a.cost b.cost then 1 else 0 in
+    let retMap = lam f. lam ret.
+      { value = f ret.value
+      , cost = ret.cost
+      , constraint = ret.constraint
+      } in
+    let wrapQuery : all a. constraint -> {here : relevant, above : relevant} -> QueryF a -> QueryF a
+      = lam constraintHere. lam relevant. lam realQuery. lam constraint.
+        let constraint = fs.filterConstraint relevant.here constraint in
+        match fs.constraintAnd constraint constraintHere with Some constraint then
+          let res = realQuery constraint in
+          optionMap (lam x. {x with constraint = fs.filterConstraint relevant.above x.constraint}) res
+        else None () in
+    recursive let work : all a. Tree a -> Option (Ret a, QueryF a)
+      = lam tree. switch tree
+        case RTSingle x then
+          let ret =
+            { value = x.value
+            , cost = x.cost
+            , constraint = fs.filterConstraint x.relevantAbove x.constraint
+            } in
+          let query = lam. Some ret in
+          Some (ret, wrapQuery x.constraint {here = x.relevantHere, above = x.relevantAbove} query)
+        case RTOr x then
+          let fixedConstruct : Never -> a = x.construct in
+          let alternatives = concat x.singles x.others in
+          let alternatives = mapOption work alternatives in
+          match unzip alternatives with (rets, queries) in
+          let ret = min cmpRet rets in
+          let query = lam constraint.
+            printLn "\"or-query\"";
+            let rets = mapOption (lam query. query constraint) queries in
+            min cmpRet rets in
+          let fixRet = lam ret.
+            let query = wrapQuery x.constraint {here = x.relevantHere, above = x.relevantAbove} query in
+            let query = lam c. optionMap (retMap fixedConstruct) (query c) in
+            (retMap fixedConstruct ret, query) in
+          optionMap fixRet ret
+        case RTAnd x then
+          let fixedConstruct : [Never] -> a = x.construct in
+          let prepChild = lam child.
+            let mul = lam ret. {ret with cost = mulf child.scale ret.cost} in
+            let f = lam pair. (mul pair.0 , lam c. optionMap mul (pair.1 c)) in
+            optionMap f (work child.val) in
+          match optionMapM prepChild x.children with Some children then
+            match unzip children with (children, queries) in
+            let constrainChild = lam constraintAbove. lam child.
+              match fs.constraintAnd constraintAbove child.constraint with Some constraint
+              then {child with constraint = constraint}
+              else error "Compiler error: inconsistent constraint from below" in
+            let workWithChildren = lam constraintAbove. lam children.
+              let partition = fs.partitionConsistentConstraints in
+              let pairInputs = lam child. lam query.
+                let query = lam constraint. optionMap (constrainChild constraintAbove) (query constraint)  in
+                (constrainChild constraintAbove child, query) in
+              let res = directedStepper
+                (lam child. child.constraint)
+                #frozen"partition"
+                fs.constraintAnd
+                (zipWith pairInputs children queries) in
+              match res with Some (constraint, children) then Some
+                { value = fixedConstruct (map (lam x. x.value) children)
+                , cost = foldl addf x.selfCost (map (lam x. x.cost) children)
+                , constraint = constraint
+                }
+              else None () in
+            let ret = workWithChildren x.constraint children in
+            let query = lam constraint.
+              printLn "\"and-query\"";
+              match optionMapM (lam query. query constraint) queries with Some children
+              then workWithChildren constraint children
+              else None () in
+            let fixRet = lam ret.
+              let query = wrapQuery x.constraint {here = x.relevantHere, above = x.relevantAbove} query in
+              (ret, query) in
+            optionMap fixRet ret
+          else None ()
+        end
+    in optionMap (lam pair. {value = pair.0 .value, cost = pair.0 .cost}) (work tree)
+
+
 type RTMaterializeLazyInterface relevant constraint var val =
   { constraintAnd : constraint -> constraint -> Option constraint
   , filterConstraint : relevant -> constraint -> constraint
@@ -2894,6 +3061,26 @@ lang TreeSolverBase = NonMemoTreeBuilder
       }
     }
 
+  sem mkMaterializeConsistentInterface : () -> RTMaterializeConsistentInterface Relevant Constraint Var Val
+  sem mkMaterializeConsistentInterface = | _ ->
+    { partitionConsistentConstraints =
+      let f : all x. [(x, Constraint)] -> [([x], Constraint)] = lam pairs.
+        recursive let addToFirst : [([x], Constraint)] -> (x, Constraint) -> [([x], Constraint)]
+          = lam partitions. lam pair.
+            match partitions with [part] ++ partitions then
+              match mergeUnifications part.1 pair.1 with Some uni
+              then cons (snoc part.0 pair.0, uni) partitions
+              else cons part (addToFirst partitions pair)
+            else [([pair.0], pair.1)] in
+        foldl addToFirst [] pairs
+      in #frozen"f"
+    , filterConstraint = lam varmap. lam uni. filterUnificationFunction
+      (lam pair. varMapHasRepr pair.0 varmap)
+      (lam pair. varMapHasMeta pair.0 varmap)
+      uni
+    , constraintAnd = mergeUnifications
+    }
+
   sem mkPartitionInternalInterface : () -> RTPartitionInternalInterface Relevant Constraint Var Val
   sem mkPartitionInternalInterface = | _ ->
     { varsToRelevant = lam vars.
@@ -3007,6 +3194,21 @@ lang TreeSolverGreedy = TreeSolverBase
       let stream = rtMaterializeLazyRecursive materializeLazyInterface top in
       match lazyStreamUncons stream with Some (res, _) then res else
       errorSingle [] "Could not find a consistent assignment of impls across the program"
+    else errorSingle [] "Could not find a consistent assignment of impls across the program"
+end
+
+lang TreeSolverGuided = TreeSolverBase
+  sem solveWork debug = | top ->
+    let propagateInterface = mkPropagateInterface () in
+    let partitionInternalInterface = mkPartitionInternalInterface () in
+    let materializeConsistentInterface = mkMaterializeConsistentInterface () in
+    match rtPropagate propagateInterface top with Some top then
+      let top = rtPartitionInternalComponents partitionInternalInterface top in
+      match rtPropagate propagateInterface top with Some top then
+        match rtMaterializeConsistent materializeConsistentInterface top with Some res then
+          res.value
+        else errorSingle [] "Could not find a consistent assignment of impls across the program (though it may have been missed)"
+      else errorSingle [] "Could not find a consistent assignment of impls across the program"
     else errorSingle [] "Could not find a consistent assignment of impls across the program"
 end
 
