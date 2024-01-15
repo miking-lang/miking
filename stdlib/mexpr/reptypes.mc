@@ -2103,7 +2103,7 @@ let directedStepper : all a. all acc.
   -> (all x. [(x, acc)] -> [([x], acc)])
   -> (acc -> acc -> Option acc)
   -> [(a, acc -> Option a)]
-  -> Option (acc, [a])
+  -> [(acc, [a])]
   = lam getAcc. lam partitionAccs. lam mergeAccs. lam parts.
     type Point x = {acc : acc, good : [(x, a)], nextSteps : [(x, acc -> Option a)]} in
     let computePoints : all x. [(x, a, acc -> Option a)] -> Either [Point x] (acc, [(x, a)])
@@ -2144,27 +2144,19 @@ let directedStepper : all a. all acc.
           eitherBiMap (mapOption mergePoint) mergeSuccess res
         else Left []
     in
-    recursive let stepPoints : all x. [Point x] -> [Point x] -> Either [Point x] (acc, [(x, a)])
-      = lam prev. lam next.
-        match next with [point] ++ next then
-          switch stepPoint point
-          case Left more then stepPoints (concat prev more) next
-          case Right res then Right res
-          end
-        else Left prev in
-    recursive let work : all x. [Point x] -> Option (acc, [(x, a)])
+    recursive let work : all x. [Point x] -> [(acc, [(x, a)])]
       = lam points.
-        switch stepPoints [] points
-        case Left [] then None ()
-        case Left points then work points
-        case Right res then Some res
+        switch eitherPartition (map stepPoint points)
+        case ([], []) then []
+        case (points, []) then work (join points)
+        case (_, sols) then sols
         end in
     let start = mapi (lam idx. lam pair. (idx, pair.0, pair.1)) parts in
     let fixup = lam pair.
       (pair.0, map (lam x. x.1) (sort (lam a. lam b. subi a.0 b.0) pair.1)) in
     switch computePoints start
-    case Left points then optionMap fixup (work points)
-    case Right res then Some (fixup res)
+    case Left points then map fixup (work points)
+    case Right res then [fixup res]
     end
 
 
@@ -2182,10 +2174,10 @@ let rtMaterializeConsistent : all relevant. all constraint. all var. all val. al
     type Tree a = RepTree relevant constraint var val a in
     type Ret a = {value : a, cost : Float, constraint : constraint} in
     type QueryF a = constraint -> Option (Ret a) in
-    let cmpRet = lam a. lam b.
+    let cmpRet : all x. Ret x -> Ret x -> Int = lam a. lam b.
       if ltf a.cost b.cost then negi 1 else
       if gtf a.cost b.cost then 1 else 0 in
-    let retMap = lam f. lam ret.
+    let retMap : all a. all b. (a -> b) -> Ret a -> Ret b = lam f. lam ret.
       { value = f ret.value
       , cost = ret.cost
       , constraint = ret.constraint
@@ -2214,7 +2206,6 @@ let rtMaterializeConsistent : all relevant. all constraint. all var. all val. al
           match unzip alternatives with (rets, queries) in
           let ret = min cmpRet rets in
           let query = lam constraint.
-            printLn "\"or-query\"";
             let rets = mapOption (lam query. query constraint) queries in
             min cmpRet rets in
           let fixRet = lam ret.
@@ -2239,20 +2230,21 @@ let rtMaterializeConsistent : all relevant. all constraint. all var. all val. al
               let pairInputs = lam child. lam query.
                 let query = lam constraint. optionMap (constrainChild constraintAbove) (query constraint)  in
                 (constrainChild constraintAbove child, query) in
-              let res = directedStepper
+              let res : [(constraint, [Ret Never])] = directedStepper
                 (lam child. child.constraint)
                 #frozen"partition"
                 fs.constraintAnd
                 (zipWith pairInputs children queries) in
-              match res with Some (constraint, children) then Some
-                { value = fixedConstruct (map (lam x. x.value) children)
-                , cost = foldl addf x.selfCost (map (lam x. x.cost) children)
-                , constraint = constraint
-                }
-              else None () in
+              let withCost : (constraint, [Ret Never]) -> Ret [Ret Never] = lam pair.
+                { constraint = pair.0
+                , cost = foldl addf x.selfCost (map (lam x. x.cost) pair.1)
+                , value = pair.1
+                } in
+              let res = map withCost res in
+              let res = min cmpRet res in
+              optionMap (retMap (lam cs. fixedConstruct (map (lam x. x.value) cs))) res in
             let ret = workWithChildren x.constraint children in
             let query = lam constraint.
-              printLn "\"and-query\"";
               match optionMapM (lam query. query constraint) queries with Some children
               then workWithChildren constraint children
               else None () in
