@@ -8,6 +8,7 @@ include "eval.mc"
 include "lazy.mc"
 include "heap.mc"
 include "mexpr/annotate.mc"
+include "sys.mc"
 include "json.mc"
 include "these.mc"
 
@@ -1754,7 +1755,7 @@ con RTAnd : all a. all b. all constraint. all var. all val. all relevant.
   { children : [{scale : Float, val : RepTree relevant constraint var val a}]
   , selfCost : Float
   , dep : Dep
-  , construct : [a] -> b
+  , construct : constraint -> [a] -> b
   , constraint : constraint
   , relevantHere : relevant
   , relevantAbove : relevant
@@ -1765,7 +1766,7 @@ con RTOr : all a. all b. all constraint. all var. all val. all relevant.
   { others : [RepTree relevant constraint var val a]
   , singles : [RepTree relevant constraint var val a]
   , selfCost : Float
-  , construct : a -> b
+  , construct : constraint -> a -> b
   , constraint : constraint
   , relevantHere : relevant
   , relevantAbove : relevant
@@ -1799,12 +1800,12 @@ let rtGetApprox : all a. all constraint. all var. all val. all relevant.
     case RTSingle x then x.approx
     end
 let rtMap : all a. all constraint. all var. all val. all relevant. all b.
-  (a -> b)
+  (constraint -> a -> b)
   -> RepTree relevant constraint var val a
   -> RepTree relevant constraint var val b
   = lam f. lam tree. switch tree
     case RTAnd x then RTAnd
-      { construct = lam a. f (x.construct a)
+      { construct = lam c. lam a. f c (x.construct c a)
       , children = x.children
       , selfCost = x.selfCost
       , dep = x.dep
@@ -1815,7 +1816,7 @@ let rtMap : all a. all constraint. all var. all val. all relevant. all b.
       , history = x.history
       }
     case RTOr x then RTOr
-      { construct = lam a. f (x.construct a)
+      { construct = lam c. lam a. f c (x.construct c a)
       , others = x.others
       , singles = x.singles
       , selfCost = x.selfCost
@@ -1826,7 +1827,7 @@ let rtMap : all a. all constraint. all var. all val. all relevant. all b.
       , history = x.history
       }
     case RTSingle x then RTSingle
-      { value = f x.value
+      { value = f x.constraint x.value
       , cost = x.cost
       , relevantHere = x.relevantHere
       , relevantAbove = x.relevantAbove
@@ -2200,7 +2201,7 @@ let rtMaterializeConsistent : all relevant. all constraint. all var. all val. al
           let query = lam. Some ret in
           Some (ret, wrapQuery x.constraint {here = x.relevantHere, above = x.relevantAbove} query)
         case RTOr x then
-          let fixedConstruct : Never -> a = x.construct in
+          let fixedConstruct : constraint -> Never -> a = x.construct in
           let alternatives = concat x.singles x.others in
           let alternatives = mapOption work alternatives in
           match unzip alternatives with (rets, queries) in
@@ -2210,11 +2211,11 @@ let rtMaterializeConsistent : all relevant. all constraint. all var. all val. al
             min cmpRet rets in
           let fixRet = lam ret.
             let query = wrapQuery x.constraint {here = x.relevantHere, above = x.relevantAbove} query in
-            let query = lam c. optionMap (retMap fixedConstruct) (query c) in
-            (retMap fixedConstruct ret, query) in
+            let query = lam c. optionMap (lam ret. retMap (fixedConstruct ret.constraint) ret) (query c) in
+            (retMap (fixedConstruct ret.constraint) ret, query) in
           optionMap fixRet ret
         case RTAnd x then
-          let fixedConstruct : [Never] -> a = x.construct in
+          let fixedConstruct : constraint -> [Never] -> a = x.construct in
           let prepChild = lam child.
             let mul = lam ret. {ret with cost = mulf child.scale ret.cost} in
             let f = lam pair. (mul pair.0 , lam c. optionMap mul (pair.1 c)) in
@@ -2242,7 +2243,7 @@ let rtMaterializeConsistent : all relevant. all constraint. all var. all val. al
                 } in
               let res = map withCost res in
               let res = min cmpRet res in
-              optionMap (retMap (lam cs. fixedConstruct (map (lam x. x.value) cs))) res in
+              optionMap (lam ret. retMap (lam cs. fixedConstruct ret.constraint (map (lam x. x.value) cs)) ret) res in
             let ret = workWithChildren x.constraint children in
             let query = lam constraint.
               match optionMapM (lam query. query constraint) queries with Some children
@@ -2298,7 +2299,7 @@ let rtMaterializeLazyRecursive : all relevant. all constraint. all var. all val.
             } in
           lazyStreamSingleton item
         case RTOr x then
-          let fixedConstruct : Never -> a = x.construct in
+          let fixedConstruct : constraint -> Never -> a = x.construct in
           let alts = map work (concat x.singles x.others) in
           let f = lam constraints. lam new.
             let new =
@@ -2311,9 +2312,9 @@ let rtMaterializeLazyRecursive : all relevant. all constraint. all var. all val.
             else (constraints, false) in
           let stream = lazyStreamMergeMin cmpRet alts in
           let stream = lazyStreamStatefulFilter f [] stream in
-          lazyStreamMap (retMap fixedConstruct) stream
+          lazyStreamMap (lam ret. retMap (fixedConstruct ret.constraint) ret) stream
         case RTAnd x then
-          let fixedConstruct : [Never] -> a = x.construct in
+          let fixedConstruct : constraint -> [Never] -> a = x.construct in
           let f = lam child.
             let stream = work child.val in
             lazyStreamMap (lam x. {x with cost = mulf x.cost child.scale}) stream in
@@ -2323,7 +2324,7 @@ let rtMaterializeLazyRecursive : all relevant. all constraint. all var. all val.
             let construct = lam constraint.
               { constraint = constraint
               , cost = foldl addf 0.0 (map (lam x. x.cost) rets)
-              , value = fixedConstruct (map (lam x. x.value) rets)
+              , value = fixedConstruct constraint (map (lam x. x.value) rets)
               } in
             eitherMapRight construct res in
           lazyExploreSorted tryMk (lam x. x.cost) children
@@ -2357,7 +2358,7 @@ let rtPartitionInternalComponents : all relevant. all constraint. all var. all v
           let others = map work x.others in
           RTOr {x with others = others}
         case RTAnd x then
-          let fixedConstruct : [Never] -> a = x.construct in
+          let fixedConstruct : constraint -> [Never] -> a = x.construct in
           let children = map (lam child. {child with val = work child.val}) x.children in
           match (children, x.dep) with ([] | [_], _) | (_, InDep _) then
             RTAnd {x with children = children}
@@ -2378,6 +2379,14 @@ let rtPartitionInternalComponents : all relevant. all constraint. all var. all v
           let juggle = lam i. lam child.
             ((i, child), fs.subtractRelevant (rtGetRelevantAbove child.val) ignorable) in
           let partitions = fs.partitionRelevant (mapi juggle children) in
+          -- NOTE(vipa, 2024-01-16): Splitting out partitions
+          -- containing a single child doesn't actually provide any
+          -- benefit over just leaving them together, thus we put all
+          -- singleton partitions and make a new partition out of
+          -- them.
+          match eitherPartition (map (lam part. match part with [p] then Left p else Right part) partitions)
+            with (singlePart, multiParts) in
+          let partitions = if null singlePart then multiParts else cons singlePart multiParts in
           switch partitions
           case [_] then RTAnd {x with children = children}
           case [_] ++ _ then
@@ -2390,7 +2399,7 @@ let rtPartitionInternalComponents : all relevant. all constraint. all var. all v
                 { children = children
                 , selfCost = 0.0
                 , dep = x.dep
-                , construct = zipWith (lam idx. lam a. (idx, a)) idxes
+                , construct = lam. zipWith (lam idx. lam a. (idx, a)) idxes
                 , constraint = fs.filterConstraint relevantHere x.constraint
                 , approx = filterApprox relevantHere x.approx
                 , relevantHere = relevantHere
@@ -2400,10 +2409,10 @@ let rtPartitionInternalComponents : all relevant. all constraint. all var. all v
               {scale = 1.0, val = subtree} in
             RTAnd
             { children = map mkPartition partitions
-            , construct = lam pairs.
+            , construct = lam constraint. lam pairs.
               let pairs = join pairs in
               let pairs = sort (lam a. lam b. subi a.0 b.0) pairs in
-              fixedConstruct (map (lam x. x.1) pairs)
+              fixedConstruct constraint (map (lam x. x.1) pairs)
             , selfCost = x.selfCost
             , dep = x.dep
             , constraint = x.constraint
@@ -2460,16 +2469,16 @@ let rtCollapseLeaves : all relevant. all constraint. all var. all val. all a.
           let mkAlts = lam. [{constraint = x.constraint, approx = x.approx, value = x.value, cost = x.cost}]
           in (Some (lazy mkAlts), tree)
         case RTOr (x & {others = []}) then
-          let fixedConstruct : Never -> a = x.construct in
+          let fixedConstruct : constraint -> Never -> a = x.construct in
           let mkAlts = lam.
             let res = mapOption (lam x. (work x).0) x.singles in
-            map (mapPartial fixedConstruct) (join (map lazyForce res)) in
+            map (lam part. mapPartial (fixedConstruct part.constraint) part) (join (map lazyForce res)) in
           (Some (lazy mkAlts), tree)
         case RTOr x then
           let others = map (lam alt. (work alt).1) x.others in
           (None (), RTOr {x with others = others})
         case RTAnd x then
-          let fixedConstruct : [Never] -> a = x.construct in
+          let fixedConstruct : constraint -> [Never] -> a = x.construct in
           let children = map (lam child. work child.val) x.children in
           match optionMapM (lam x. x.0) children with Some children then
             let start =
@@ -2505,6 +2514,67 @@ let rtCollapseLeaves : all relevant. all constraint. all var. all val. all a.
             (None (), RTAnd {x with children = children})
         end
     in (work tree).1
+
+type RTExtSol
+con RTExtAnd : [RTExtSol] -> RTExtSol
+con RTExtOr : {idx : Int, sub : RTExtSol} -> RTExtSol
+con RTExtSingle : () -> RTExtSol
+type RTSolveExternallyBaseInterface relevant constraint var val =
+  { constraintAnd : constraint -> constraint -> Option constraint
+  , filterConstraint : relevant -> constraint -> constraint
+  }
+type RTSolveExternallyWorkInterface constraint acc query =
+  { and : acc -> constraint -> Float -> [{scale : Float, val : query}] -> (acc, query)
+  , or : acc -> constraint -> Float -> [query] -> (acc, query)
+  , single : acc -> constraint -> Float -> (acc, query)
+  , emptyAcc : acc
+  }
+let rtSolveExternally : all relevant. all constraint. all var. all val. all a. all acc. all query.
+  RTSolveExternallyBaseInterface relevant constraint var val
+  -> RTSolveExternallyWorkInterface constraint acc query
+  -> RepTree relevant constraint var val a
+  -> (acc, query, RTExtSol -> a)
+  = lam base. lam fs. lam tree.
+    type Never in
+    type Tree a = RepTree relevant constraint var val a in
+    recursive let work
+      : all a. acc -> Tree a -> (acc, (query, RTExtSol -> (constraint, a)))
+      = lam acc. lam tree. switch tree
+        case RTSingle x then
+          match fs.single acc x.constraint x.cost with (acc, query) in
+          (acc, (query, lam. (base.filterConstraint x.relevantHere x.constraint, x.value)))
+        case RTOr x then
+          let fixedConstruct : constraint -> Never -> a = x.construct in
+          match mapAccumL work acc (concat x.singles x.others) with (acc, pairs) in
+          match unzip pairs with (queries, mkFns) in
+          match fs.or acc x.constraint x.selfCost queries with (acc, query) in
+          let mk = lam sol.
+            match sol with RTExtOr sol then
+              match (get mkFns sol.idx) sol.sub with (constraint, sub) in
+              match base.constraintAnd x.constraint constraint with Some constraint
+              then let c = base.filterConstraint x.relevantHere constraint in (c, fixedConstruct c sub)
+              else error "Compiler error: failed a constraintAnd for RTOr"
+            else error "Compiler error: got a non-RTExtOr for an RTOr" in
+          (acc, (query, mk))
+        case RTAnd x then
+          let fixedConstruct : constraint -> [Never] -> a = x.construct in
+          let f = lam acc. lam child.
+            match work acc child.val with (acc, (query, mk)) in
+            (acc, ({scale = child.scale, val = query}, mk)) in
+          match mapAccumL f acc x.children with (acc, pairs) in
+          match unzip pairs with (queries, mks) in
+          match fs.and acc x.constraint x.selfCost queries with (acc, query) in
+          let mk = lam sol.
+            match sol with RTExtAnd children then
+              match unzip (zipWith (lam mk. lam child. mk child) mks children) with (constraints, children) in
+              match optionFoldlM base.constraintAnd x.constraint constraints with Some constraint
+              then let c = base.filterConstraint x.relevantHere constraint in (c, fixedConstruct c children)
+              else error "Compiler error: failed a constraintAnd for RTAnd"
+            else error "Compiler error: got a nonRTExtAnd for an RTAnd" in
+          (acc, (query, mk))
+        end in
+    match work fs.emptyAcc tree with (acc, (query, mk)) in
+    (acc, query, lam sol. (mk sol).1)
 
 type RTPropagateInterface relevant constraint var val =
   { constraintAnd : constraint -> constraint -> Option {lChanged : Bool, rChanged : Bool, res : constraint}
@@ -2594,7 +2664,7 @@ let rtPropagate : all relevant. all constraint. all var. all val. all a.
         --     work forceDepth (Some (res.constraint, res.approx)) newTree
         --   else None ()
         case RTAnd x then
-          let fixedConstruct : [Never] -> a = x.construct in
+          let fixedConstruct : constraint -> [Never] -> a = x.construct in
           match constrainFromAbove fromAbove (Some x.relevantHere) x.constraint x.approx with Some res then
             let propagateDown = if forceDepth then true else res.rChanged in
             recursive let inner
@@ -2635,7 +2705,7 @@ let rtPropagate : all relevant. all constraint. all var. all val. all a.
                 let cost = foldl (lam acc. lam child. addf acc (mulf child.scale (rtGetMinCost child.val)))
                   x.selfCost children in
                 let res = RTSingle
-                  { value = fixedConstruct values
+                  { value = fixedConstruct acc.constraint values
                   , cost = cost
                   , relevantHere = x.relevantHere
                   , relevantAbove = x.relevantAbove
@@ -2655,10 +2725,10 @@ let rtPropagate : all relevant. all constraint. all var. all val. all a.
         case RTOr {singles = [], others = []} then
           None ()
         case RTOr (({singles = [], others = [alt]} | {singles = [alt], others = []}) & {construct = construct}) then
-          let fixedConstruct : Never -> a = construct in
+          let fixedConstruct : constraint -> Never -> a = construct in
           work forceDepth fromAbove (rtMap fixedConstruct alt)
         case RTOr x then
-          let fixedConstruct : Never -> a = x.construct in
+          let fixedConstruct : constraint -> Never -> a = x.construct in
           match constrainFromAbove fromAbove (Some x.relevantHere) x.constraint x.approx with Some res then
             let propagateDown = if forceDepth then true else res.rChanged in
             if propagateDown then
@@ -2683,7 +2753,7 @@ let rtPropagate : all relevant. all constraint. all var. all val. all a.
                       }
                     ]
                   case tree & RTOr or then
-                    let innerConstruct : Never2 -> Unknown = or.construct in
+                    let innerConstruct : constraint -> Never2 -> Unknown = or.construct in
                     let f = lam tree.
                       match tree with tree & RTSingle sing
                       then [ RTSingle
@@ -2779,7 +2849,12 @@ lang NonMemoTreeBuilder = RepTypesShallowSolverInterface + UnifyPure + RepTypesH
     printLn "\n# Solution cost tree:";
     recursive let work = lam indent. lam sol.
       match sol with SolContent sol in
-      printLn (join [indent, nameGetStr sol.impl.op, " (cost: ", float2string sol.scaledTotalCost, ", info: ", info2str sol.impl.info, ")"]);
+      let op = nameGetStr sol.impl.op in
+      let scaledCost = float2string sol.scaledTotalCost in
+      let info = info2str sol.impl.info in
+      match unificationToDebug (concat indent "| ") pprintEnvEmpty sol.uni with (env, uni) in
+      printLn (join [indent, op, "(scaled cost: ", scaledCost, ", info: ", info, ")"]);
+      printLn uni;
       for_ sol.subSols (lam x. work (concat indent "  ") x)
     in iter (lam s. match s with SSContent x in work "" x) sols
 
@@ -2820,7 +2895,7 @@ lang NonMemoTreeBuilder = RepTypesShallowSolverInterface + UnifyPure + RepTypesH
         { others = trees
         , singles = []
         , selfCost = 0.0
-        , construct = lam x. x
+        , construct = lam. lam x. x
         , constraint = emptyUnification ()
         , relevantAbove = relevant
         , relevantHere = relevant
@@ -2834,11 +2909,11 @@ lang NonMemoTreeBuilder = RepTypesShallowSolverInterface + UnifyPure + RepTypesH
   sem perImpl seen ty branch = | impl ->
     match wildToMeta impl.metaLevel (setEmpty nameCmp) ty with (newMetas, ty) in
     match instAndSubst (infoTy impl.specType) impl.metaLevel impl.specType
-      with (specType, subst) in
+      with (specType, instSubst) in
     match unifyPure impl.uni (removeReprSubsts specType) ty with Some uni then
       -- NOTE(vipa, 2024-01-13): Make types consistent with the
       -- instantiation
-      let opUses = map (lam opUse. {opUse with ty = substituteVars opUse.info subst opUse.ty}) impl.opUses in
+      let opUses = map (lam opUse. {opUse with ty = substituteVars opUse.info instSubst opUse.ty}) impl.opUses in
       -- NOTE(vipa, 2024-01-13): Collect previously present meta- and
       -- repr-vars and create a substitution that replaces them all
       -- with new ones. Note that the use of `impl.specType` instead
@@ -2862,7 +2937,11 @@ lang NonMemoTreeBuilder = RepTypesShallowSolverInterface + UnifyPure + RepTypesH
         { metas = mapFoldWithKey (lam acc. lam. lam v. mapInsert v () acc) (mapEmpty nameCmp) subst.metas
         , reprs = mapFoldWithKey (lam acc. lam. lam v. mapInsert v () acc) (mapEmpty _symCmp) subst.reprs
         } in
-      let locals = getVarsInType implFilter locals specType in
+      -- NOTE(vipa, 2024-01-17): We take great care to only pull local
+      -- tyvars from types that *cannot* contain a type from the
+      -- outside unification, since the outside unification could
+      -- potentially come from a later reprScope or higher metaLevel
+      let locals = mapFoldWithKey (lam acc. lam. lam ty. getVarsInType implFilter acc ty) locals instSubst in
       let locals = {locals with metas = mapUnion locals.metas newMetas} in
 
       match mapAccumL (perUseInImpl seen uni) branch opUses with (branch, subTrees) in
@@ -2880,13 +2959,14 @@ lang NonMemoTreeBuilder = RepTypesShallowSolverInterface + UnifyPure + RepTypesH
 
         let relevantHere =
           let below = foldl varMapUnion varMapEmpty (map rtGetRelevantAbove subTrees) in
-          getVarsInType {metaLevel = negi 1, scope = negi 1} below ty in
+          let above = getVarsInType {metaLevel = negi 1, scope = negi 1} below ty in
+          varMapUnion locals above in
         let res = RTAnd
           { children =
             zipWith (lam opUse. lam tree. {scale = opUse.scaling , val = tree}) opUses subTrees
           , dep = Dep ()
           , selfCost = impl.selfCost
-          , construct = lam subs.
+          , construct = lam uni. lam subs.
             let applyScale = lam opUse. lam sol.
               match sol with SolContent sol in
               SolContent {sol with scaledTotalCost = mulf opUse.scaling sol.scaledTotalCost} in
@@ -2897,7 +2977,7 @@ lang NonMemoTreeBuilder = RepTypesShallowSolverInterface + UnifyPure + RepTypesH
               impl.implId subs in
             let res = SolContent
               { scaledTotalCost = totalCost
-              , uni = impl.uni
+              , uni = uni
               , impl = impl
               , highestImpl = highestImpl
               , ty = specType
@@ -2931,7 +3011,8 @@ lang NonMemoTreeBuilder = RepTypesShallowSolverInterface + UnifyPure + RepTypesH
   | ty & TyMetaVar x ->
     match deref x.contents with Unbound b then
       let ident = optionGetOr b.ident (mapLookup b.ident subst.metas) in
-      TyMetaVar {x with contents = ref (Unbound {b with ident = ident})}
+      let kind = smap_Kind_Type (substUniVars subst) b.kind in
+      TyMetaVar {x with contents = ref (Unbound {b with ident = ident, kind = kind})}
     else ty
   | ty -> smap_Type_Type (substUniVars subst) ty
 
@@ -2969,7 +3050,7 @@ lang TreeSolverBase = NonMemoTreeBuilder
       { children = query
       , selfCost = 0.0
       , dep = Dep ()
-      , construct = lam x. map (lam x. SSContent x) x
+      , construct = lam. lam x. map (lam x. SSContent x) x
       , constraint = emptyUnification ()
       , relevantHere = foldl varMapUnion varMapEmpty (map (lam x. rtGetRelevantAbove x.val) query)
       , relevantAbove = varMapEmpty
@@ -3073,6 +3154,15 @@ lang TreeSolverBase = NonMemoTreeBuilder
     , constraintAnd = mergeUnifications
     }
 
+  sem mkSolveExternallyBaseInterface : () -> RTSolveExternallyBaseInterface Relevant Constraint Var Val
+  sem mkSolveExternallyBaseInterface = | _ ->
+    { constraintAnd = mergeUnifications
+    , filterConstraint = lam varmap. lam uni. filterUnificationFunction
+      (lam pair. varMapHasRepr pair.0 varmap)
+      (lam pair. varMapHasMeta pair.0 varmap)
+      uni
+    }
+
   sem mkPartitionInternalInterface : () -> RTPartitionInternalInterface Relevant Constraint Var Val
   sem mkPartitionInternalInterface = | _ ->
     { varsToRelevant = lam vars.
@@ -3157,7 +3247,8 @@ lang TreeSolverBottomUp = TreeSolverBase
           (if debug then
             printLn (json2string (rtDebugJson debugInterface pprintEnvEmpty top).1)
            else ());
-          checkDone (rtPartitionInternalComponents partitionInternalInterface top)
+          -- checkDone (rtPartitionInternalComponents partitionInternalInterface top)
+          checkDone top
         else None ()
       let propagate = lam top.
         match rtPropagate propagateInterface top with Some top then
@@ -3182,7 +3273,7 @@ lang TreeSolverGreedy = TreeSolverBase
     let materializeLazyInterface = mkMaterializeLazyInterface () in
     let partitionInternalInterface = mkPartitionInternalInterface () in
     match rtPropagate propagateInterface top with Some top then
-      let top = rtPartitionInternalComponents partitionInternalInterface top in
+      -- let top = rtPartitionInternalComponents partitionInternalInterface top in
       let stream = rtMaterializeLazyRecursive materializeLazyInterface top in
       match lazyStreamUncons stream with Some (res, _) then res else
       errorSingle [] "Could not find a consistent assignment of impls across the program"
@@ -3201,6 +3292,336 @@ lang TreeSolverGuided = TreeSolverBase
           res.value
         else errorSingle [] "Could not find a consistent assignment of impls across the program (though it may have been missed)"
       else errorSingle [] "Could not find a consistent assignment of impls across the program"
+    else errorSingle [] "Could not find a consistent assignment of impls across the program"
+end
+
+lang TreeSolverZ3 = TreeSolverBase + MExprAst
+  type Z3State =
+    { vars : VarMap ()
+    , env : PprintEnv
+    , reprs : Set Name
+    , tyCons : Set Name
+    , labels : Set SID
+    }
+  syn Ast =
+  | AAnd [Ast]
+  | AOr [Ast]
+  | AEq (Ast, Ast)
+  | AAdd [Ast]
+  | AMul [Ast]
+  | ALit String
+  | ALet (String, Ast, Ast)
+  | AMatch (String, [(String, Ast)], Option Ast)
+  | AMatchI (String, [(Int, Ast)], Ast)
+
+  sem getReprVar : Z3State -> Symbol -> (Z3State, String)
+  sem getReprVar state = | sym ->
+    let vars = {state.vars with reprs = setInsert sym state.vars.reprs} in
+    match pprintEnvGetStr state.env ("rv_", sym) with (env, str) in
+    ({state with vars = vars, env = env}, str)
+
+  sem getMetaVar : Z3State -> Name -> (Z3State, String)
+  sem getMetaVar state = | name ->
+    let vars = {state.vars with metas = setInsert name state.vars.metas} in
+    match pprintEnvGetStr state.env name with (env, str) in
+    ({state with vars = vars, env = env}, concat "m_" str)
+
+  sem getRepr : Z3State -> Name -> (Z3State, String)
+  sem getRepr state = | name ->
+    let reprs = setInsert name state.reprs in
+    match pprintEnvGetStr state.env name with (env, str) in
+    ({state with reprs = reprs, env = env}, concat "r_" str)
+
+  sem getTyCon : Z3State -> Name -> (Z3State, String)
+  sem getTyCon state = | name ->
+    let tyCons = setInsert name state.tyCons in
+    match pprintEnvGetStr state.env name with (env, str) in
+    ({state with tyCons = tyCons, env = env}, concat "c_" str)
+
+  sem getLabel : Z3State -> SID -> (Z3State, String)
+  sem getLabel state = | sid ->
+    let labels = setInsert sid state.labels in
+    ({state with labels = labels}, concat "l_" (sidToString sid))
+
+  sem tyToZ3 : [Name] -> Z3State -> Type -> (Z3State, String)
+  sem tyToZ3 boundTyVars state =
+  | ty -> errorSingle [infoTy ty] "Missing case in tyToZ3"
+  | TyBool _ -> (state, "boolTy")
+  | TyInt _ -> (state, "intTy")
+  | TyFloat _ -> (state, "floatTy")
+  | TyChar _ -> (state, "charTy")
+  | TyArrow x ->
+    match tyToZ3 boundTyVars state x.from with (state, from) in
+    match tyToZ3 boundTyVars state x.to with (state, to) in
+    (state, join ["(funTy ", from, " ", to, ")"])
+  | TySeq x ->
+    match tyToZ3 boundTyVars state x.ty with (state, ty) in
+    (state, join ["(seqTy ", ty, ")"])
+  | TyRecord x ->
+    match mapMapAccum (lam a. lam. lam v. tyToZ3 boundTyVars a v) state x.fields with (state, fields) in
+    match unzip (mapBindings fields) with (labels, types) in
+    match mapAccumL getLabel state labels with (state, labels) in
+    let inUnit = lam x. join ["(seq.unit ", x, ")"] in
+    let asSeq = lam ty. lam xs. match xs with []
+      then join ["(as seq.empty (Seq ", ty, "))"]
+      else join ["(seq.++ ", strJoin " " (map inUnit xs), ")"] in
+    (state, join ["(recordTy ", asSeq "Label" labels, " ", asSeq "Ty" types, ")"])
+  | TyCon x ->
+    match getTyCon state x.ident with (state, tycon) in
+    (state, join ["(conTy ", tycon, ")"])
+  | TyVar x ->
+    match index (nameEq x.ident) boundTyVars with Some idx then
+      (state, join ["(boundTyVar ", int2string idx, ")"])
+    else
+      -- NOTE(vipa, 2024-01-18): Tyvars that are rigid (i.e., not
+      -- bound with an `all` inside the current type) are
+      -- indistinguishable from type constructors for the current
+      -- purposes, thus they are encoded the same
+      match getTyCon state x.ident with (state, tycon) in
+      (state, join ["(conTy ", tycon, ")"])
+  | TyAll x ->
+    let boundTyVars = cons x.ident boundTyVars in
+    match tyToZ3 boundTyVars state x.ty with (state, ty) in
+    (state, join ["(forallTy ", ty, ")"])
+  | TyApp x ->
+    match tyToZ3 boundTyVars state x.lhs with (state, lhs) in
+    match tyToZ3 boundTyVars state x.rhs with (state, rhs) in
+    (state, join ["(appTy ", lhs, " ", rhs, ")"])
+  | TyAlias x -> tyToZ3 boundTyVars state x.content
+  | ty & TyMetaVar _ -> switch unwrapType ty
+    case TyMetaVar x then
+      match deref x.contents with Unbound u then
+        getMetaVar state u.ident
+      else error "Compiler error: unwrapType didn't unwrap a TyMetaVar"
+    case ty then
+      tyToZ3 boundTyVars state ty
+    end
+  | TyRepr x ->
+    match deref (botRepr x.repr) with BotRepr u then
+      match tyToZ3 boundTyVars state x.arg with (state, arg) in
+      match getReprVar state u.sym with (state, sym) in
+      (state, join ["(reprTy ", sym, " ", arg, ")"])
+    else error "Compiler error: found a repr without an initialized repr var"
+  | TyWild _ ->
+    printError "Warning: tyToZ3 found a TyWild, should not be possible";
+    (state, "wildTy")
+
+  sem uniToZ3 : Z3State -> Unification -> (Z3State, [Ast])
+  sem uniToZ3 state = | uni ->
+    let f = lam getVar. lam getOut. lam state. lam equalities. lam puf. pufFoldRaw
+      (lam acc. lam l. lam r.
+        let st = acc.0 in
+        match getVar st l.0 with (st, l) in
+        match getVar st r.0 with (st, r) in
+        (st, snoc acc.1 (AEq (ALit l, ALit r))))
+      (lam acc. lam l. lam out.
+        let st = acc.0 in
+        match getVar st l.0 with (st, l) in
+        match getOut st out with (st, out) in
+        (st, snoc acc.1 (AEq (ALit l, ALit out))))
+      (state, equalities)
+      puf in
+    match f getReprVar getRepr state [] uni.reprs with (state, equalities) in
+    match f getMetaVar (tyToZ3 []) state [] uni.types with (state, equalities) in
+    (state, equalities)
+
+  sem pprintZ3Helper : String -> String -> [Ast] -> String
+  sem pprintZ3Helper indent label = | children ->
+    let f = lam x. match x with ALit str then Some str else None () in
+    match optionMapM f children with Some simples then
+      join ["(", label, " ", strJoin " " simples, ")"]
+    else
+      let indent = concat indent " " in
+      join ["(", label, join (map (lam c. join ["\n", indent, pprintZ3Ast indent c]) children), ")"]
+
+  sem pprintZ3Ast : String -> Ast -> String
+  sem pprintZ3Ast indent =
+  | AAnd xs -> pprintZ3Helper indent "and" xs
+  | AOr xs -> pprintZ3Helper indent "or" xs
+  | AEq (l, r) -> pprintZ3Helper indent "=" [l, r]
+  | AAdd xs -> pprintZ3Helper indent "+" xs
+  | AMul xs -> pprintZ3Helper indent "*" xs
+  | ALit str -> str
+  | ALet (label, body, inexpr) ->
+    let indent = concat indent " " in
+    join
+    [ "(let ((", label, " ", pprintZ3Ast indent body, "))\n"
+    , indent, pprintZ3Ast indent inexpr, ")"
+    ]
+  | AMatch (scrut, arms, default) ->
+    let indent = concat indent " " in
+    let iindent = concat indent " " in
+    let iindent = concat iindent " " in
+    let arms = match default with Some default
+      then snoc arms ("_", default)
+      else arms in
+    let f = lam arm. switch arm
+      case (pat, ALit str) then join ["(", pat, " ", str, ")"]
+      case (pat, body) then join ["(", pat, "\n", iindent, pprintZ3Ast iindent body, ")"]
+      end in
+    join [ "(match ", scrut, "\n", indent, "(", strJoin (concat "\n" iindent) (map f arms), "))"]
+  | AMatchI (scrut, arms, default) ->
+    let iindent = concat indent " " in
+    let f = lam arm. lam acc.
+      match arm with (idx, body) in
+      join ["(ite (= ", scrut, " ", int2string idx, ")\n", iindent, pprintZ3Ast iindent body, "\n", indent, acc, ")"] in
+    foldr f (pprintZ3Ast iindent default) arms
+
+  sem solveWork debug = | top ->
+    let propagateInterface = mkPropagateInterface () in
+    let solveExternallyBaseInterface = mkSolveExternallyBaseInterface () in
+    let prelude = strJoin "\n"
+      [ "(declare-datatypes ((Sol 0))"
+      , "  (((solAnd (solChildren (Seq Sol)))"
+      , "    (solOr (solIndex Int) (solChild Sol))"
+      , "    solSingle)))"
+      , ""
+      , "(define-funs-rec"
+      , "  ((pp-sol ((sol Sol)) String)"
+      , "   (recur-child ((sol Sol)) String)"
+      , "   (concat ((a String) (b String)) String))"
+      , "  ((match sol"
+      , "    (((solAnd children)"
+      , "      (let ((subs (seq.map recur-child children)))"
+      , "        (str.++ \"(and\" (seq.foldl concat \"\" subs) \")\")))"
+      , "     ((solOr idx child)"
+      , "      (str.++ \"(or \" (int.to.str idx) \" \" (pp-sol child) \")\"))"
+      , "     (solSingle"
+      , "      \"single\")))"
+      , "   (str.++ \" \" (pp-sol sol))"
+      , "   (str.++ a b)))"
+      ] in
+    let midlude = strJoin "\n"
+      [ "(declare-datatypes ((Ty 0))"
+      , "  (((appTy (fTy Ty) (argTy Ty))"
+      , "    boolTy intTy floatTy charTy wildTy ostringTy olistTy"
+      , "    (opaqueTy (opaque String))"
+      , "    (seqTy (elemTy Ty))"
+      , "    (conTy (const ConstTy))"
+      , "    (reprTy (rep RepTy) (repArgTy Ty))"
+      , "    (forallTy (quantTy Ty))"
+      , "    (boundTyVar (debruijn Int))"
+      , "    (recordTy (fieldLabels (Seq Label)) (fieldTypes (Seq Ty)))"
+      , "    (funTy (fromTy Ty) (toTy Ty)))))"
+      ] in
+    type Query = {costExpr : Ast, boolExpr : Ast} in
+    let interface =
+      -- NOTE(vipa, 2024-01-18): All expressions assume that the
+      -- solution to examine is bound to `sol`
+      { and =
+        let f : Z3State -> Unification -> OpCost -> [{scale : OpCost, val : Query}] -> (Z3State, Query)
+          = lam st. lam uni. lam cost. lam children.
+            let childToCost = lam idx. lam child. ALet
+              ( "sol"
+              , ALit (join ["(seq.nth ss ", int2string idx, ")"])
+              , AMul [ALit (float2string child.scale), child.val.costExpr]
+              ) in
+            let costExpr = AMatch
+              ( "sol"
+              , [("(solAnd ss)" , AAdd (cons (ALit (float2string cost)) (mapi childToCost children)))]
+              , Some (ALit "999999999999.9")
+              ) in
+            let childToBool = lam idx. lam child. ALet
+              ( "sol"
+              , ALit (join ["(seq.nth ss ", int2string idx, ")"])
+              , child.val.boolExpr
+              ) in
+            match uniToZ3 st uni with (st, predicates) in
+            let boolExpr = AMatch
+              ( "sol"
+              , [("(solAnd ss)", AAnd (concat predicates (mapi childToBool children)))]
+              , Some (ALit "false")
+              ) in
+            (st, {costExpr = costExpr, boolExpr = boolExpr})
+        in f
+      , or =
+        let f : Z3State -> Unification -> OpCost -> [Query] -> (Z3State, Query)
+          = lam st. lam uni. lam cost. lam alts.
+            let altToCost = lam idx. lam alt.
+              (idx, alt.costExpr) in
+            let costExpr =
+              let matchIdx = AMatchI ("idx", mapi altToCost alts, ALit "999999999999.9") in
+              let matchShape = AMatch ("sol", [("(solOr idx sol)", matchIdx)], Some (ALit "999999999999.9")) in
+              AAdd [ALit (float2string cost), matchShape] in
+            let altToBool = lam idx. lam alt. (idx, alt.boolExpr) in
+            let boolExpr =
+              AMatch ("sol", [("(solOr idx sol)", AMatchI ("idx", mapi altToBool alts, ALit "false"))], Some (ALit "false")) in
+            match uniToZ3 st uni with (st, predicates) in
+            let boolExpr = AAnd (snoc predicates boolExpr) in
+            (st, {costExpr = costExpr, boolExpr = boolExpr})
+        in f
+      , single =
+        let f : Z3State -> Unification -> OpCost -> (Z3State, Query)
+          = lam st. lam uni. lam cost.
+            let costExpr = ALit (float2string cost) in
+            match uniToZ3 st uni with (st, predicates) in
+            let boolExpr = AAnd (cons (ALit "(= sol solSingle)") predicates) in
+            (st, {costExpr = costExpr, boolExpr = boolExpr})
+        in f
+      , emptyAcc =
+        { vars = varMapEmpty
+        , env = pprintEnvEmpty
+        , reprs = setEmpty nameCmp
+        , tyCons = setEmpty nameCmp
+        , labels = setEmpty cmpSID
+        }
+      } in
+    match rtPropagate propagateInterface top with Some top then
+      match rtSolveExternally solveExternallyBaseInterface interface top with (state, query, mk) in
+
+      match mapAccumL getTyCon state (setToSeq state.tyCons) with (state, tyCons) in
+      let tyCons = join
+        [ "(declare-datatypes ()"
+        , "  ((ConstTy ", strJoin " " tyCons, ")))"
+        ] in
+
+      match mapAccumL getRepr state (setToSeq state.reprs) with (state, reprs) in
+      let reprs = join
+        [ "(declare-datatypes ()"
+        , "  ((RepTy ", strJoin " " reprs, ")))"
+        ] in
+
+      match mapAccumL getLabel state (setToSeq state.labels) with (state, labels) in
+      let labels = join
+        [ "(declare-datatypes ()"
+        , "  ((Label ", strJoin " " labels, ")))"
+        ] in
+
+      match mapAccumL getMetaVar state (setToSeq state.vars.metas) with (state, metaVars) in
+      let mkMetaVarDecl = lam var. join ["(declare-const ", var, " Ty)"] in
+      let metaVars = strJoin "\n" (map mkMetaVarDecl metaVars) in
+
+      match mapAccumL getReprVar state (setToSeq state.vars.reprs) with (state, reprVars) in
+      let mkReprVarDecl = lam var. join ["(declare-const ", var, " RepTy)"] in
+      let reprVars = strJoin "\n" (map mkReprVarDecl reprVars) in
+
+      let boolExpr = pprintZ3Ast "" query.boolExpr in
+      let assertion = join ["(assert ", boolExpr, ")"] in
+
+      let costExpr = pprintZ3Ast "" query.costExpr in
+      let objective = join ["(minimize ", costExpr, ")"] in
+
+      let program = strJoin "\n\n"
+        [ prelude
+        , tyCons, reprs, labels
+        , midlude
+        , metaVars, reprVars
+        , "(declare-const sol Sol)"
+        , assertion, objective
+        , "(check-sat)"
+        , "(eval (pp-sol sol))"
+        ] in
+
+      printLn "# Input model:";
+      printLn program;
+      let res = sysRunCommand ["z3", "-smt2", "-in"] program "." in
+      printLn "# Output:";
+      printLn res.stdout;
+      printLn "# Error:";
+      printLn res.stderr;
+      printLn (join ["# Exit code: ", int2string res.returncode]);
+
+      error "TODOsolve"
     else errorSingle [] "Could not find a consistent assignment of impls across the program"
 end
 
