@@ -421,6 +421,12 @@ let varMapSingleton
     case Right name then
       {varMapEmpty with metas = mapInsert name v varMapEmpty.metas}
     end
+let varMapEq
+  : all v. (v -> v -> Bool) -> VarMap v -> VarMap v -> Bool
+  = lam eq. lam a. lam b.
+    if not (mapEq eq a.reprs b.reprs) then false else
+    if not (mapEq eq a.metas b.metas) then false else
+    true
 let varMapMap
   : all a. all b. (a -> b) -> VarMap a -> VarMap b
   = lam f. lam a.
@@ -2576,6 +2582,82 @@ let rtSolveExternally : all relevant. all constraint. all var. all val. all a. a
     match work fs.emptyAcc tree with (acc, (query, mk)) in
     (acc, query, lam sol. (mk sol).1)
 
+let rtStateSpace : all relevant. all constraint. all var. all val. all a.
+  RepTree relevant constraint var val a
+  -> Int
+  = lam tree.
+    recursive let work = lam tree. switch tree
+      case RTSingle _ then 1
+      case RTAnd x then
+        foldl muli 1 (map (lam c. work c.val) x.children)
+      case RTOr x then
+        let res = foldl addi 0 (map work x.others) in
+        foldl addi res (map work x.singles)
+      end
+    in work tree
+
+type RTEqInterface relevant constraint var val =
+  { constraintEq : constraint -> constraint -> Bool
+  , relevantEq : relevant -> relevant -> Bool
+  }
+let rtEq : all relevant. all constraint. all var. all val. all a.
+  RTEqInterface relevant constraint var val
+  -> RepTree relevant constraint var val a
+  -> RepTree relevant constraint var val a
+  -> Bool
+  = lam fs. lam a. lam b.
+    type Approx = PureUnionFind var (Set val) in
+    let approxEq : Approx -> Approx -> Bool = lam a. lam b.
+      let cmp = mapGetCmpFun a in
+      let pairEq = lam a. lam b.
+        if not (eqi 0 (cmp a.0 b.0)) then false else
+        if not (eqi a.1 b.1) then false else
+        true in
+      let f = lam a. lam b. pufFoldRaw
+        (lam acc. lam l. lam r. if acc
+         then eitherEq setEq pairEq (pufUnwrap a l) (pufUnwrap a r)
+         else false)
+        (lam acc. lam l. lam out. if acc
+         then eitherEq setEq pairEq (pufUnwrap a l) (Left out)
+         else false)
+        true
+        b in
+      if f a b then f b a else false in
+    recursive let work = lam a. lam b. switch (a, b)
+      case (RTSingle a, RTSingle b) then
+        if not (eqf a.cost b.cost) then false else
+        if not (fs.relevantEq a.relevantHere b.relevantHere) then false else
+        if not (fs.relevantEq a.relevantAbove b.relevantAbove) then false else
+        if not (eqSeq eqString a.history b.history) then false else
+        if not (approxEq a.approx b.approx) then false else
+        if not (fs.constraintEq a.constraint b.constraint) then false else
+        true
+      case (RTOr a, RTOr b) then
+        if not (eqf a.selfCost b.selfCost) then false else
+        if not (fs.relevantEq a.relevantHere b.relevantHere) then false else
+        if not (fs.relevantEq a.relevantAbove b.relevantAbove) then false else
+        if not (eqSeq eqString a.history b.history) then false else
+        if not (approxEq a.approx b.approx) then false else
+        if not (fs.constraintEq a.constraint b.constraint) then false else
+        if not (eqSeq work a.others b.others) then false else
+        if not (eqSeq work a.singles b.singles) then false else
+        true
+      case (RTAnd a, RTAnd b) then
+        let f = lam a. lam b.
+          if not (eqf a.scale b.scale) then false else
+          work a.val b.val in
+        if not (eqi (constructorTag a.dep) (constructorTag b.dep)) then false else
+        if not (eqf a.selfCost b.selfCost) then false else
+        if not (fs.relevantEq a.relevantHere b.relevantHere) then false else
+        if not (fs.relevantEq a.relevantAbove b.relevantAbove) then false else
+        if not (eqSeq eqString a.history b.history) then false else
+        if not (approxEq a.approx b.approx) then false else
+        if not (fs.constraintEq a.constraint b.constraint) then false else
+        if not (eqSeq f a.children b.children) then false else
+        true
+      end
+    in work a b
+
 type RTPropagateInterface relevant constraint var val =
   { constraintAnd : constraint -> constraint -> Option {lChanged : Bool, rChanged : Bool, res : constraint}
   , filterApprox : relevant -> var -> Bool
@@ -3059,6 +3141,12 @@ lang TreeSolverBase = NonMemoTreeBuilder
       } in
     solveWork debug top
 
+  sem mkEqInterface : () -> RTEqInterface Relevant Constraint Var Val
+  sem mkEqInterface = | _ ->
+    { constraintEq = lam a. lam b. if uniImplies a b then uniImplies b a else false
+    , relevantEq = varMapEq (lam. lam. true)
+    }
+
   sem mkPropagateInterface : () -> RTPropagateInterface Relevant Constraint Var Val
   sem mkPropagateInterface = | _ ->
     { constraintAnd = lam l. lam r.
@@ -3293,6 +3381,99 @@ lang TreeSolverGuided = TreeSolverBase
         else errorSingle [] "Could not find a consistent assignment of impls across the program (though it may have been missed)"
       else errorSingle [] "Could not find a consistent assignment of impls across the program"
     else errorSingle [] "Could not find a consistent assignment of impls across the program"
+end
+
+lang TreeSolverExplore = TreeSolverBase
+  sem solveWork debug = | top ->
+    let propagateInterface = mkPropagateInterface () in
+    let partitionInternalInterface = mkPartitionInternalInterface () in
+    let eqInterface = mkEqInterface () in
+    let collapseLeavesInterface = mkCollapseLeavesInterface () in
+    let debugInterface = mkDebugInterface () in
+
+    let propagate = rtPropagate propagateInterface in
+    let partitionInternal = rtPartitionInternalComponents partitionInternalInterface in
+    let eq = rtEq eqInterface in
+    let collapse = rtCollapseLeaves collapseLeavesInterface in
+    let debug = lam top. printLn (json2string (rtDebugJson debugInterface pprintEnvEmpty top).1) in
+
+    debug top;
+
+    let dumpIfFail = lam propLabel. lam stateLabel. lam cond. lam pairs.
+      (if not cond then
+        printLn (join ["\"FAIL ", propLabel, " ", stateLabel, "\""]);
+        let f = lam pair.
+          printLn (join ["\"", pair.0, "\""]);
+          optionMapOr () debug pair.1 in
+        for_ pairs f
+       else ());
+       cond in
+    let propagateIdempotent = lam label. lam tree.
+      let one = propagate tree in
+      let two = optionBind one propagate in
+      dumpIfFail "propagateIdempotent" label
+        (optionEq eq one two)
+        [("tree", Some tree), ("one", one), ("two", two)] in
+    let partitionInternalIdempotent = lam label. lam tree.
+      let one = partitionInternal tree in
+      let two = partitionInternal one in
+      dumpIfFail "partitionInternalIdempotent" label
+        (eq one two)
+        [("tree", Some tree), ("one", Some one), ("two", Some two)] in
+    let partitionMaintainsStateSpace = lam label. lam tree.
+      let next = partitionInternal tree in
+      dumpIfFail "partitionMaintainsStateSpace" label
+        (eqi (rtStateSpace tree) (rtStateSpace next))
+        [("tree", Some tree), ("one", Some tree), ("two", Some next)] in
+    let collapseNoPropagateSameStateSpace = lam label. lam tree.
+      let next = collapse tree in
+      dumpIfFail "collapseNoPropagateSameStateSpace" label
+        (eqi (rtStateSpace tree) (rtStateSpace next))
+        [("tree", Some tree), ("one", Some tree), ("two", Some next)] in
+    let collapsePropagateSmallerStateSpace = lam label. lam tree.
+      let next = propagate (collapse tree) in
+      let nextSize = optionMapOr 0 rtStateSpace next in
+      dumpIfFail "collapsePropagateSmallerStateSpace" label
+        (lti nextSize (rtStateSpace tree))
+        [("tree", Some tree), ("tree", Some tree), ("next", next)] in
+
+    -- let propagate = ("propagate", lam top. rtPropagate propagateInterface top) in
+    -- let partition = ("partition", lam top. Some (rtPartitionInternalComponents partitionInternalInterface top)) in
+    -- let applySeq = lam top. lam fs.
+    --   let f = lam top. lam f.
+    --     match f.1 top with Some top
+    --     then printLn (join ["  post-", f.0, ": ", int2string (rtStateSpace top)]); Some top
+    --     else printLn (join ["  post-", f.0, ": 0"]); None () in
+    --   printLn (join ["Sequence start: ", int2string (rtStateSpace top)]);
+    --   optionFoldlM f top fs in
+    -- applySeq top [propagate, propagate, propagate];
+    -- applySeq top [propagate, partition, propagate, partition];
+    -- applySeq top [partition, partition];
+    -- applySeq top [partition, propagate, propagate];
+
+    let properties =
+      [ ("propagateIdempotent", propagateIdempotent)
+      , ("partitionInternalIdempotent", partitionInternalIdempotent)
+      , ("partitionMaintainsStateSpace", partitionMaintainsStateSpace)
+      , ("collapseNoPropagateSameStateSpace", collapseNoPropagateSameStateSpace)
+      , ("collapsePropagateSmallerStateSpace", collapsePropagateSmallerStateSpace)
+      ] in
+    let actions =
+      [ ("propagate", propagate)
+      , ("partitionInternal", lam x. Some (partitionInternal x))
+      , ("collapse", lam x. Some (collapse x))
+      ] in
+    recursive let applyActions = lam inputs. lam actions. lam maxSteps.
+      if leqi maxSteps 0 then inputs else
+      let f = lam input. lam action. optionMap (lam tree. (join [input.0, "-", action.0], tree)) (action.1 input.1) in
+      let next = seqLiftA2 f inputs actions in
+      let next = filterOption next in
+      concat inputs (applyActions next actions (subi maxSteps 1)) in
+
+    let states = applyActions [("start", top)] actions 3 in
+    for_ properties (lam prop. for_ states (lam st. prop.1 st.0 st.1; ()));
+
+    error "TODOexploreEnd"
 end
 
 lang TreeSolverZ3 = TreeSolverBase + MExprAst
