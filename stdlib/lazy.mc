@@ -122,3 +122,11 @@ let lazyStreamStatefulFilterMap : all a. all b. all acc. (acc -> a -> (acc, Opti
 let lazyStreamStatefulFilter : all a. all acc. (acc -> a -> (acc, Bool)) -> acc -> LStream a -> LStream a
   = lam f. lam acc. lam s.
     lazyStreamStatefulFilterMap (lam acc. lam a. match f acc a with (acc, keep) in (acc, if keep then Some a else None ())) acc s
+
+let lazyStreamForceAll : all a. LStream a -> [a]
+  = lam s.
+    recursive let work = lam acc. lam s.
+      match lazyStreamUncons s with Some (x, s)
+      then work (snoc acc x) s
+      else acc
+    in work [] s

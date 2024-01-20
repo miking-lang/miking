@@ -457,6 +457,10 @@ let varMapIntersect
     { metas = mapIntersectWith (lam a. lam. a) a.metas b.metas
     , reprs = mapIntersectWith (lam a. lam. a) a.reprs b.reprs
     }
+let varMapSubset
+  : all a. all b. VarMap () -> VarMap () -> Bool
+  = lam a. lam b.
+    if setSubset a.reprs b.reprs then setSubset a.metas b.metas else false
 let varMapIsEmpty
   : all a. VarMap a -> Bool
   = lam a. if mapIsEmpty a.metas then mapIsEmpty a.reprs else false
@@ -1932,6 +1936,93 @@ let _approxAnd : all k. all v.
     , rChanged = deref rChanged
     }
 
+type RTDebugInterface env relevant constraint var val =
+  { constraintJson : env -> constraint -> (env, JsonValue)
+  , relevantJson : env -> relevant -> (env, JsonValue)
+  , varJson : env -> var -> (env, JsonValue)
+  , valJson : env -> val -> (env, JsonValue)
+  }
+let rtDebugJson : all a. all constraint. all var. all val. all relevant. all env.
+  RTDebugInterface env relevant constraint var val
+  -> env
+  -> RepTree relevant constraint var val a
+  -> (env, JsonValue)
+  = lam fs.
+    let mkHistory : RTHistory -> JsonValue = lam hist.
+      recursive let work = lam acc. lam hist. switch hist
+        case HStart x then JsonArray (cons (JsonString x) acc)
+        case HAndConstruct x then
+          let item = JsonObject (mapFromSeq cmpString
+            [ ("and-construct", JsonString x.label)
+            , ("children", JsonArray (map (work []) x.children))
+            ]) in
+          work (cons item acc) x.prev
+        case HOrConstruct x then
+          let item = JsonObject (mapFromSeq cmpString
+            [ ("or-construct", JsonString x.label)
+            , ("parent", work [] x.parent)
+            ]) in
+          work (cons item acc) x.prev
+        case HStep x then
+          let item = JsonString x.label in
+          work (cons item acc) x.prev
+        end
+      in work [] hist in
+    let common = lam env. lam cost. lam constraint. lam approx. lam relevantAbove. lam relevantHere. lam history.
+      let approx =
+        pufFoldRaw
+          (lam acc. lam lIn. lam rIn.
+            match fs.varJson acc.env lIn.0 with (env, l) in
+            match fs.varJson env rIn.0 with (env, r) in
+            {env = env, parts = snoc acc.parts (JsonArray [JsonString "eq", JsonArray [l, JsonInt lIn.1], JsonArray [r, JsonInt rIn.1]])})
+          (lam acc. lam lIn. lam out.
+            match fs.varJson acc.env lIn.0 with (env, l) in
+            match mapAccumL fs.valJson env (setToSeq out) with (env, outs) in
+            {env = env, parts = snoc acc.parts (JsonArray [JsonString "out", JsonArray [l, JsonInt lIn.1], JsonArray outs])})
+          {env = env, parts = []}
+          approx in
+      match fs.constraintJson approx.env constraint with (env, constraint) in
+      match fs.relevantJson env relevantHere with (env, relevantHere) in
+      match fs.relevantJson env relevantAbove with (env, relevantAbove) in
+      let res =
+        [ ("constraint", constraint)
+        , ("relevantHere", relevantHere)
+        , ("relevantAbove", relevantAbove)
+        , ("approx", JsonArray approx.parts)
+        , ("cost", JsonFloat cost)
+        , ("history", mkHistory history)
+        ] in
+      (env, res)
+    in
+    recursive let work = lam env. lam tree. switch tree
+      case RTSingle x then
+        match common env x.cost x.constraint x.approx x.relevantAbove x.relevantHere x.history with (env, common) in
+        let res = JsonObject (mapFromSeq cmpString (concat common
+          [ ("type", JsonString "single")
+          ])) in
+        (env, res)
+      case RTAnd x then
+        match common env x.selfCost x.constraint x.approx x.relevantAbove x.relevantHere x.history with (env, common) in
+        match mapAccumL work env (map (lam x. x.val) x.children) with (env, children) in
+        let res = JsonObject (mapFromSeq cmpString (concat common
+          [ ("type", JsonString "and")
+          , ("dep", JsonString (match x.dep with Dep _ then "dep" else "indep"))
+          , ("children", JsonArray children)
+          ])) in
+        (env, res)
+      case RTOr x then
+        match common env x.selfCost x.constraint x.approx x.relevantAbove x.relevantHere x.history with (env, common) in
+        match mapAccumL work env x.others with (env, others) in
+        match mapAccumL (lam acc. lam sing. work acc (RTSingle sing)) env x.singles with (env, singles) in
+        let res = JsonObject (mapFromSeq cmpString (concat common
+          [ ("type", JsonString "or")
+          , ("others", JsonArray others)
+          , ("singles", JsonArray singles)
+          ])) in
+        (env, res)
+      end
+    in work
+
 let rtConstrainShallow : all a. all constraint. all var. all val. all relevant.
   { constraintAnd : constraint -> constraint -> Option {lChanged : Bool, rChanged : Bool, res : constraint}
   , filterConstraint : relevant -> constraint -> constraint
@@ -1962,13 +2053,16 @@ let rtAndCost : all a. all b. all constraint. all var. all val. all relevant.
     let cost = foldl addf and.selfCost below in
     cost
 
-let rtConstructAnd : all a. all b. all constraint. all var. all val. all relevant.
+let rtConstructAnd : all env. all a. all b. all constraint. all var. all val. all relevant.
   { constraintAnd : constraint -> constraint -> Option constraint
+  , constraintEq : constraint -> constraint -> Bool
   , filterConstraint : relevant -> constraint -> constraint
   , filterApprox : relevant -> var -> Bool
   , preComputedConstraint : Option constraint
   , preComputedApprox : Option (PureUnionFind var (Set val))
   , historyLabel : String
+  , debugInterface : RTDebugInterface env relevant constraint var val
+  , debugEnv : env
   }
   -> RTAndRec a b constraint var val relevant
   -> [RTSingleRec a constraint var val relevant]
@@ -1980,7 +2074,20 @@ let rtConstructAnd : all a. all b. all constraint. all var. all val. all relevan
     let constraint =
       let below = map (lam c. fs.filterConstraint and.relevantHere c.constraint) children in
       let computed = optionFoldlM fs.constraintAnd and.constraint below in
-      -- TODO(vipa, 2024-01-19): Check that the pre-computed is correct, if supplied
+      (match fs.preComputedConstraint with Some precomputed then
+        match computed with Some computed then
+          if fs.constraintEq precomputed computed then () else
+          match fs.debugInterface.constraintJson fs.debugEnv precomputed with (env, precomputed) in
+          match fs.debugInterface.constraintJson fs.debugEnv computed with (env, computed) in
+          let msg = JsonObject (mapFromSeq cmpString
+            [ ("msg", JsonString "rtConstructAnd got a different constraint from the pre-computed")
+            , ("precomputed", precomputed)
+            , ("computed", computed)
+            ]) in
+          printLn (json2string msg);
+          error "Sanity check failed"
+        else error "Inconsistency in rtConstructAnd despite getting a pre-computed constraint"
+       else ());
       computed in
     match constraint with Some constraint then
       let approx =
@@ -2112,93 +2219,6 @@ let rtConstructOr : all a. all b. all constraint. all var. all val. all relevant
       match tree with RTSingle sing then sing else
       error "Compiler error: rtConstructOrTree gave a non-RTSingle when input was RTSingle" in
     optionMap unwrap (rtConstructOrTree fs or (RTSingle alt))
-
-type RTDebugInterface env relevant constraint var val =
-  { constraintJson : env -> constraint -> (env, JsonValue)
-  , relevantJson : env -> relevant -> (env, JsonValue)
-  , varJson : env -> var -> (env, JsonValue)
-  , valJson : env -> val -> (env, JsonValue)
-  }
-let rtDebugJson : all a. all constraint. all var. all val. all relevant. all env.
-  RTDebugInterface env relevant constraint var val
-  -> env
-  -> RepTree relevant constraint var val a
-  -> (env, JsonValue)
-  = lam fs.
-    let mkHistory : RTHistory -> JsonValue = lam hist.
-      recursive let work = lam acc. lam hist. switch hist
-        case HStart x then JsonArray (cons (JsonString x) acc)
-        case HAndConstruct x then
-          let item = JsonObject (mapFromSeq cmpString
-            [ ("and-construct", JsonString x.label)
-            , ("children", JsonArray (map (work []) x.children))
-            ]) in
-          work (cons item acc) x.prev
-        case HOrConstruct x then
-          let item = JsonObject (mapFromSeq cmpString
-            [ ("or-construct", JsonString x.label)
-            , ("parent", work [] x.parent)
-            ]) in
-          work (cons item acc) x.prev
-        case HStep x then
-          let item = JsonString x.label in
-          work (cons item acc) x.prev
-        end
-      in work [] hist in
-    let common = lam env. lam cost. lam constraint. lam approx. lam relevantAbove. lam relevantHere. lam history.
-      let approx =
-        pufFoldRaw
-          (lam acc. lam lIn. lam rIn.
-            match fs.varJson acc.env lIn.0 with (env, l) in
-            match fs.varJson env rIn.0 with (env, r) in
-            {env = env, parts = snoc acc.parts (JsonArray [JsonString "eq", JsonArray [l, JsonInt lIn.1], JsonArray [r, JsonInt rIn.1]])})
-          (lam acc. lam lIn. lam out.
-            match fs.varJson acc.env lIn.0 with (env, l) in
-            match mapAccumL fs.valJson env (setToSeq out) with (env, outs) in
-            {env = env, parts = snoc acc.parts (JsonArray [JsonString "out", JsonArray [l, JsonInt lIn.1], JsonArray outs])})
-          {env = env, parts = []}
-          approx in
-      match fs.constraintJson approx.env constraint with (env, constraint) in
-      match fs.relevantJson env relevantHere with (env, relevantHere) in
-      match fs.relevantJson env relevantAbove with (env, relevantAbove) in
-      let res =
-        [ ("constraint", constraint)
-        , ("relevantHere", relevantHere)
-        , ("relevantAbove", relevantAbove)
-        , ("approx", JsonArray approx.parts)
-        , ("cost", JsonFloat cost)
-        , ("history", mkHistory history)
-        ] in
-      (env, res)
-    in
-    recursive let work = lam env. lam tree. switch tree
-      case RTSingle x then
-        match common env x.cost x.constraint x.approx x.relevantAbove x.relevantHere x.history with (env, common) in
-        let res = JsonObject (mapFromSeq cmpString (concat common
-          [ ("type", JsonString "single")
-          ])) in
-        (env, res)
-      case RTAnd x then
-        match common env x.selfCost x.constraint x.approx x.relevantAbove x.relevantHere x.history with (env, common) in
-        match mapAccumL work env (map (lam x. x.val) x.children) with (env, children) in
-        let res = JsonObject (mapFromSeq cmpString (concat common
-          [ ("type", JsonString "and")
-          , ("dep", JsonString (match x.dep with Dep _ then "dep" else "indep"))
-          , ("children", JsonArray children)
-          ])) in
-        (env, res)
-      case RTOr x then
-        match common env x.selfCost x.constraint x.approx x.relevantAbove x.relevantHere x.history with (env, common) in
-        match mapAccumL work env x.others with (env, others) in
-        match mapAccumL (lam acc. lam sing. work acc (RTSingle sing)) env x.singles with (env, singles) in
-        let res = JsonObject (mapFromSeq cmpString (concat common
-          [ ("type", JsonString "or")
-          , ("others", JsonArray others)
-          , ("singles", JsonArray singles)
-          ])) in
-        (env, res)
-      end
-    in work
 
 let _intersectApproxFromBelow : all relevant. all constraint. all a.
   PureUnionFind Symbol (Set Name)
@@ -2398,6 +2418,7 @@ type RTMaterializeConsistentInterface env relevant constraint var val =
   , unionRelevant : relevant -> relevant -> relevant
   , constraintAnd : constraint -> constraint -> Option constraint
   , constraintImplies : constraint -> constraint -> Bool
+  , constraintEq : constraint -> constraint -> Bool
   , debugInterface : RTDebugInterface env relevant constraint var val
   , debugEnv : env
   }
@@ -2461,6 +2482,9 @@ let rtMaterializeConsistent : all env. all relevant. all constraint. all var. al
             { constraintAnd = fs.constraintAnd
             , filterConstraint = fs.filterConstraint
             , filterApprox = fs.filterApprox
+            , debugInterface = fs.debugInterface
+            , debugEnv = fs.debugEnv
+            , constraintEq = fs.constraintEq
             , preComputedConstraint = None ()
             , preComputedApprox = None ()
             , historyLabel = "mat-consistent-and"
@@ -2549,15 +2573,18 @@ let rtMaterializeConsistent : all env. all relevant. all constraint. all var. al
     in optionMap (lam pair. {value = pair.0 .value, cost = pair.0 .cost}) (work tree)
 
 
-type RTMaterializeLazyInterface relevant constraint var val =
+type RTMaterializeLazyInterface env relevant constraint var val =
   { constraintAnd : constraint -> constraint -> Option constraint
   , filterConstraint : relevant -> constraint -> constraint
   , filterApprox : relevant -> var -> Bool
   , unionRelevant : relevant -> relevant -> relevant
   , pruneRedundant : constraint -> constraint -> {lUseful : Bool, rUseful : Bool}
+  , constraintEq : constraint -> constraint -> Bool
+  , debugInterface : RTDebugInterface env relevant constraint var val
+  , debugEnv : env
   }
-let rtMaterializeLazyRecursive : all relevant. all constraint. all var. all val. all a.
-  RTMaterializeLazyInterface relevant constraint var val
+let rtMaterializeLazyRecursive : all env. all relevant. all constraint. all var. all val. all a.
+  RTMaterializeLazyInterface env relevant constraint var val
   -> RepTree relevant constraint var val a
   -> LStream a
   = lam fs. lam tree.
@@ -2613,6 +2640,7 @@ let rtMaterializeLazyRecursive : all relevant. all constraint. all var. all val.
           lazyStreamMapOption (rtConstructOr orFs x) stream
         case RTAnd x then
           let x : RTAndRec Never a constraint var val relevant = x in
+          let filterConstraint = fs.filterConstraint x.relevantHere in
           let andFs =
             { constraintAnd = fs.constraintAnd
             , filterConstraint = fs.filterConstraint
@@ -2620,13 +2648,16 @@ let rtMaterializeLazyRecursive : all relevant. all constraint. all var. all val.
             , preComputedConstraint = None ()
             , preComputedApprox = None ()
             , historyLabel = "lazy-and"
+            , constraintEq = fs.constraintEq
+            , debugInterface = fs.debugInterface
+            , debugEnv = fs.debugEnv
             } in
           let f = lam child.
             let stream = work child.val in
             lazyStreamMap (lam x. {cost = mulf x.cost child.scale, val = x}) stream in
           let children = map f x.children in
           let tryMk = lam rets.
-            let res = foldlFailIdx fs.constraintAnd x.constraint (map (lam x. x.val.constraint) rets) in
+            let res = foldlFailIdx fs.constraintAnd x.constraint (map (lam x. filterConstraint x.val.constraint) rets) in
             let construct = lam constraint.
               let andFs = {andFs with preComputedConstraint = Some constraint} in
               let res = rtConstructAnd andFs x (map (lam x. x.val) rets) in
@@ -2733,14 +2764,17 @@ let rtPartitionInternalComponents : all relevant. all constraint. all var. all v
         end
     in work tree
 
-type RTCollapseLeavesInterface relevant constraint var val =
+type RTCollapseLeavesInterface env relevant constraint var val =
   { constraintAnd : constraint -> constraint -> Option constraint
   , filterConstraint : relevant -> constraint -> constraint
   , filterApprox : relevant -> var -> Bool
   , unionRelevant : relevant -> relevant -> relevant
+  , constraintEq : constraint -> constraint -> Bool
+  , debugInterface : RTDebugInterface env relevant constraint var val
+  , debugEnv : env
   }
-let rtCollapseLeaves : all relevant. all constraint. all var. all val. all a.
-  RTCollapseLeavesInterface relevant constraint var val
+let rtCollapseLeaves : all env. all relevant. all constraint. all var. all val. all a.
+  RTCollapseLeavesInterface env relevant constraint var val
   -> RepTree relevant constraint var val a
   -> RepTree relevant constraint var val a
   = lam fs. lam tree.
@@ -2801,6 +2835,9 @@ let rtCollapseLeaves : all relevant. all constraint. all var. all val. all a.
             , preComputedConstraint = None ()
             , preComputedApprox = None ()
             , historyLabel = "collapse-child"
+            , constraintEq = fs.constraintEq
+            , debugInterface = fs.debugInterface
+            , debugEnv = fs.debugEnv
             } in
           let children = map (lam child. work child.val) x.children in
           match optionMapM (lam x. x.0) children with Some children then
@@ -2838,11 +2875,14 @@ type RTExtSol
 con RTExtAnd : [RTExtSol] -> RTExtSol
 con RTExtOr : {idx : Int, sub : RTExtSol} -> RTExtSol
 con RTExtSingle : () -> RTExtSol
-type RTSolveExternallyBaseInterface relevant constraint var val =
+type RTSolveExternallyBaseInterface env relevant constraint var val =
   { constraintAnd : constraint -> constraint -> Option constraint
   , filterConstraint : relevant -> constraint -> constraint
   , filterApprox : relevant -> var -> Bool
   , unionRelevant : relevant -> relevant -> relevant
+  , constraintEq : constraint -> constraint -> Bool
+  , debugInterface : RTDebugInterface env relevant constraint var val
+  , debugEnv : env
   }
 type RTSolveExternallyWorkInterface constraint acc query =
   { and : acc -> constraint -> Float -> [{scale : Float, val : query}] -> (acc, query)
@@ -2850,8 +2890,8 @@ type RTSolveExternallyWorkInterface constraint acc query =
   , single : acc -> constraint -> Float -> (acc, query)
   , emptyAcc : acc
   }
-let rtSolveExternally : all relevant. all constraint. all var. all val. all a. all acc. all query.
-  RTSolveExternallyBaseInterface relevant constraint var val
+let rtSolveExternally : all env. all relevant. all constraint. all var. all val. all a. all acc. all query.
+  RTSolveExternallyBaseInterface env relevant constraint var val
   -> RTSolveExternallyWorkInterface constraint acc query
   -> RepTree relevant constraint var val a
   -> (acc, query, RTExtSol -> a)
@@ -2896,6 +2936,9 @@ let rtSolveExternally : all relevant. all constraint. all var. all val. all a. a
             , preComputedConstraint = None ()
             , preComputedApprox = None ()
             , historyLabel = "external-and"
+            , constraintEq = base.constraintEq
+            , debugInterface = base.debugInterface
+            , debugEnv = base.debugEnv
             } in
           let f = lam acc. lam child.
             match work acc child.val with (acc, (query, mk)) in
@@ -3011,15 +3054,18 @@ let rtEq : all relevant. all constraint. all var. all val. all a.
         end
     in work a b
 
-type RTPropagateInterface relevant constraint var val =
+type RTPropagateInterface env relevant constraint var val =
   { constraintAnd : constraint -> constraint -> Option {lChanged : Bool, rChanged : Bool, res : constraint}
   , filterApprox : relevant -> var -> Bool
   , filterConstraint : relevant -> constraint -> constraint
   , unionRelevant : relevant -> relevant -> relevant
   , pruneRedundant : (constraint, Float) -> (constraint, Float) -> {lUseful : Bool, rUseful : Bool}
+  , constraintEq : constraint -> constraint -> Bool
+  , debugInterface : RTDebugInterface env relevant constraint var val
+  , debugEnv : env
   }
-let rtPropagate : all relevant. all constraint. all var. all val. all a.
-  RTPropagateInterface relevant constraint var val
+let rtPropagate : all env. all relevant. all constraint. all var. all val. all a.
+  RTPropagateInterface env relevant constraint var val
   -> RepTree relevant constraint var val a
   -> Option (RepTree relevant constraint var val a)
   = lam fs. lam tree.
@@ -3144,6 +3190,9 @@ let rtPropagate : all relevant. all constraint. all var. all val. all a.
                   , preComputedConstraint = Some acc.constraint
                   , preComputedApprox = Some acc.approx
                   , historyLabel = "propagate-trivial-and"
+                  , constraintEq = fs.constraintEq
+                  , debugInterface = fs.debugInterface
+                  , debugEnv = fs.debugEnv
                   } in
                 let f = lam r.
                   let status = ChangedResolved (r.constraint, r.approx) in
@@ -3500,7 +3549,7 @@ lang TreeSolverBase = NonMemoTreeBuilder
     , relevantEq = varMapEq (lam. lam. true)
     }
 
-  sem mkPropagateInterface : () -> RTPropagateInterface Relevant Constraint Var Val
+  sem mkPropagateInterface : () -> RTPropagateInterface PprintEnv Relevant Constraint Var Val
   sem mkPropagateInterface = | _ ->
     { constraintAnd = lam l. lam r.
       match mergeUnifications l r with Some res then Some
@@ -3518,6 +3567,9 @@ lang TreeSolverBase = NonMemoTreeBuilder
       (lam pair. varMapHasRepr pair.0 varmap)
       (lam pair. varMapHasMeta pair.0 varmap)
       uni
+    , constraintEq = lam a. lam b. if uniImplies a b then uniImplies b a else false
+    , debugEnv = pprintEnvEmpty
+    , debugInterface = mkDebugInterface ()
     , pruneRedundant = lam l. lam r.
       let lFitsWhereRCouldBe = lazy (lam. uniImplies r.0 l.0) in
       let rFitsWhereLCouldBe = lazy (lam. uniImplies l.0 r.0) in
@@ -3553,7 +3605,7 @@ lang TreeSolverBase = NonMemoTreeBuilder
       (env, res)
     }
 
-  sem mkCollapseLeavesInterface : () -> RTCollapseLeavesInterface Relevant Constraint Var Val
+  sem mkCollapseLeavesInterface : () -> RTCollapseLeavesInterface PprintEnv Relevant Constraint Var Val
   sem mkCollapseLeavesInterface = | _ ->
     { constraintAnd = mergeUnifications
     , unionRelevant = varMapUnion
@@ -3562,9 +3614,12 @@ lang TreeSolverBase = NonMemoTreeBuilder
       (lam pair. varMapHasRepr pair.0 varmap)
       (lam pair. varMapHasMeta pair.0 varmap)
       uni
+    , constraintEq = lam a. lam b. if uniImplies a b then uniImplies b a else false
+    , debugEnv = pprintEnvEmpty
+    , debugInterface = mkDebugInterface ()
     }
 
-  sem mkMaterializeLazyInterface : () -> RTMaterializeLazyInterface Relevant Constraint Var Val
+  sem mkMaterializeLazyInterface : () -> RTMaterializeLazyInterface PprintEnv Relevant Constraint Var Val
   sem mkMaterializeLazyInterface = | _ ->
     { constraintAnd = mergeUnifications
     , unionRelevant = varMapUnion
@@ -3581,6 +3636,9 @@ lang TreeSolverBase = NonMemoTreeBuilder
       { lUseful = not rFits
       , rUseful = rUseful
       }
+    , constraintEq = lam a. lam b. if uniImplies a b then uniImplies b a else false
+    , debugEnv = pprintEnvEmpty
+    , debugInterface = mkDebugInterface ()
     }
 
   sem mkMaterializeConsistentInterface : () -> RTMaterializeConsistentInterface PprintEnv Relevant Constraint Var Val
@@ -3604,11 +3662,12 @@ lang TreeSolverBase = NonMemoTreeBuilder
     , constraintAnd = mergeUnifications
     , constraintImplies = uniImplies
     , filterApprox = lam varmap. lam sym. varMapHasRepr sym varmap
+    , constraintEq = lam a. lam b. if uniImplies a b then uniImplies b a else false
     , debugInterface = mkDebugInterface ()
     , debugEnv = pprintEnvEmpty
     }
 
-  sem mkSolveExternallyBaseInterface : () -> RTSolveExternallyBaseInterface Relevant Constraint Var Val
+  sem mkSolveExternallyBaseInterface : () -> RTSolveExternallyBaseInterface PprintEnv Relevant Constraint Var Val
   sem mkSolveExternallyBaseInterface = | _ ->
     { constraintAnd = mergeUnifications
     , unionRelevant = varMapUnion
@@ -3617,6 +3676,9 @@ lang TreeSolverBase = NonMemoTreeBuilder
       (lam pair. varMapHasMeta pair.0 varmap)
       uni
     , filterApprox = lam varmap. lam sym. varMapHasRepr sym varmap
+    , constraintEq = lam a. lam b. if uniImplies a b then uniImplies b a else false
+    , debugEnv = pprintEnvEmpty
+    , debugInterface = mkDebugInterface ()
     }
 
   sem mkPartitionInternalInterface : () -> RTPartitionInternalInterface Relevant Constraint Var Val
@@ -3767,6 +3829,40 @@ lang TreeSolverExplore = TreeSolverBase
 
     debug top;
 
+    recursive let checkSubsetOfAbove = lam above. lam tree. switch tree
+      case RTSingle x then
+        match above with Some above then
+          varMapSubset x.relevantAbove above
+        else true
+      case RTAnd x then
+        let isSubset = match above with Some above
+          then varMapSubset x.relevantAbove above
+          else true in
+        if isSubset then
+          let badChildren = mapOption
+            (lam c. if checkSubsetOfAbove (Some x.relevantHere) c.val then None () else Some c.val)
+            x.children in
+          for_ badChildren (lam child.
+            debug tree;
+            debug child);
+          true
+        else false
+      case RTOr x then
+        let isSubset = match above with Some above
+          then varMapSubset x.relevantAbove above
+          else true in
+        if isSubset then
+          let badChildren = mapOption
+            (lam c. if checkSubsetOfAbove (Some x.relevantHere) c then None () else Some c)
+            (concat (map (lam x. RTSingle x) x.singles) x.others) in
+          for_ badChildren (lam child.
+            debug tree;
+            debug child;
+            error "There are bad children");
+          true
+        else false
+      end in
+
     let dumpIfFail = lam propLabel. lam stateLabel. lam cond. lam pairs.
       (if not cond then
         printLn (join ["\"FAIL ", propLabel, " ", stateLabel, "\""]);
@@ -3804,6 +3900,10 @@ lang TreeSolverExplore = TreeSolverBase
       dumpIfFail "collapsePropagateSmallerStateSpace" label
         (lti nextSize (rtStateSpace tree))
         [("tree", Some tree), ("tree", Some tree), ("next", next)] in
+    let relevantSetsConsistent = lam label. lam tree.
+      dumpIfFail "relevantSetsConsistent" label
+        (checkSubsetOfAbove (None ()) tree)
+        [("tree", Some tree)] in
 
     -- let propagate = ("propagate", lam top. rtPropagate propagateInterface top) in
     -- let partition = ("partition", lam top. Some (rtPartitionInternalComponents partitionInternalInterface top)) in
@@ -3825,6 +3925,7 @@ lang TreeSolverExplore = TreeSolverBase
       , ("partitionMaintainsStateSpace", partitionMaintainsStateSpace)
       , ("collapseNoPropagateSameStateSpace", collapseNoPropagateSameStateSpace)
       , ("collapsePropagateSmallerStateSpace", collapsePropagateSmallerStateSpace)
+      , ("relevantSetsConsistent", relevantSetsConsistent)
       ] in
     let actions =
       [ ("propagate", propagate)
