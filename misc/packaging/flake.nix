@@ -21,6 +21,7 @@
           ocaml
           findlib
           dune_3
+          ocamlformat_0_24_1
           pkgs.gdb
 
           lwt        # For async-ext.mc
