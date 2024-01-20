@@ -119,6 +119,20 @@ let distExtMap =
         cLibraries = []
       }
     ]),
+    ("externalLomaxSample", [
+      { expr = "Owl_stats.lomax_rvs",
+        ty = tyarrows_ [tyfloat_, tyfloat_, tyfloat_],
+        libraries = ["owl"],
+        cLibraries = []
+      }
+    ]),
+    ("externalLomaxLogPdf", [
+      { expr = "Owl_stats.lomax_logpdf",
+        ty = tyarrows_ [tyfloat_, otylabel_ "scale" tyfloat_, otylabel_ "shape" tyfloat_, tyfloat_],
+        libraries = ["owl"],
+        cLibraries = []
+      }
+    ]),
     ("externalSetSeed", [
       { expr = "
         fun seed -> (
