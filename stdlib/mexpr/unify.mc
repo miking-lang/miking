@@ -566,17 +566,29 @@ let pufMapAll
       (pufEmptyResults (mapEmpty cmp))
       puf
 
-let pufFilterFunction
+let pufMapOut
+  : all k. all out1. all out2
+  . (out1 -> out2)
+  -> PureUnionFind k out1
+  -> PureUnionFind k out2
+  = lam f. lam puf.
+    let f = lam acc. lam k. lam v. switch v.content
+      case PUFLink x then mapInsert k {level = v.level, content = PUFLink x} acc
+      case PUFEmpty _ then mapInsert k {level = v.level, content = PUFEmpty ()} acc
+      case PUFOut out then mapInsert k {level = v.level, content = PUFOut (f out)} acc
+      end in
+    mapFoldWithKey f (mapEmpty (mapGetCmpFun puf)) puf
+
+let pufFilterPartitions
   : all k. all out
-  . ((k, Int) -> Bool)
+  . ([(k, Int)] -> Option out -> [(k, Int)])
   -> PureUnionFind k out
-  -> PureUnionFind k out
+  -> {puf : PureUnionFind k out, substituted : Map k (k, Int)}
   = lam shouldKeep. lam puf.
     -- NOTE(vipa, 2023-10-14): Here we know, by construction, that the
     -- extra outputs in PUFResult are empty, so we just access `puf`
     -- and call it a day.
     let cmp = mapGetCmpFun puf in
-    let partition = mapEmpty cmp in
     let f = lam acc. lam k. lam kX.
       let x = _pufUnwrap (k, kX.level) puf in
       { partition = mapInsertWith concat x.k [(k, kX.level)] acc.partition
@@ -586,16 +598,39 @@ let pufFilterFunction
       } in
     let data = mapFoldWithKey f {partition = mapEmpty cmp, outs = mapEmpty cmp} puf in
     let f = lam acc. lam k. lam equals.
-      match filter shouldKeep equals with [center] ++ ks then
-        let acc = foldl
-          (lam acc. lam k2. (pufUnify (lam. lam. error "compiler error in pufFilter unify") center k2 acc).puf)
-          acc
-          ks in
-        match mapLookup k data.outs with Some out then
-          (pufSetOut (lam. lam. error "compiler error in pufFilter setOut") center out acc).puf
-        else acc
-      else acc in
-    mapFoldWithKey f (pufEmpty cmp) data.partition
+      let out = mapLookup k data.outs in
+      let toKeep = shouldKeep equals out in
+      let puf =
+        match toKeep with toKeep & ([center] ++ ks) then
+          let puf = foldl
+            (lam acc. lam k2. (pufUnify (lam. lam. error "compiler error in pufFilter unify") center k2 acc).puf)
+            acc.puf
+            ks in
+          match out with Some out
+          then (pufSetOut (lam. lam. error "compiler error in pufFilter setOut") center out puf).puf
+          else puf
+        else acc.puf in
+      let substituted =
+        let target = match toKeep with [target] ++ _
+          then target
+          else optionGetOrElse
+            (lam. error "Compiler error: empty partition in pufFilter")
+            (min (lam a. lam b. subi a.1 b.1) equals) in
+        let invariant = setInsert target.0 (setOfSeq cmp (map (lam x. x.0) toKeep)) in
+        let f = lam acc. lam x. if mapMem x.0 invariant
+          then acc
+          else mapInsert x.0 target acc in
+        foldl f acc.substituted equals in
+      {puf = puf, substituted = substituted} in
+    mapFoldWithKey f {puf = pufEmpty cmp, substituted = mapEmpty cmp} data.partition
+
+let pufFilterFunction
+  : all k. all out
+  . ((k, Int) -> Bool)
+  -> PureUnionFind k out
+  -> PureUnionFind k out
+  = lam shouldKeep. lam puf.
+    (pufFilterPartitions (lam ks. lam. filter shouldKeep ks) puf).puf
 
 let pufFilter
   : all k. all out
@@ -799,6 +834,55 @@ lang UnifyPure = Unify + MetaVarTypeAst + VarTypeSubstitute + ReprTypeAst + Cmp 
     { reprs = pufFilter filters.reprs.scope filters.reprs.syms uni.reprs
     , types = pufFilter filters.types.level filters.types.names uni.types
     }
+
+  type UniVarSubst = {metas : Map Name (Name, Int), reprs : Map Symbol (Symbol, Int)}
+  sem substUniVars : UniVarSubst -> Type -> Type
+  sem substUniVars subst =
+  | ty & TyRepr x ->
+    match deref (botRepr x.repr) with BotRepr b then
+      let repr = optionMapOr (BotRepr b) (lam pair. BotRepr {b with sym = pair.0, scope = pair.1})
+        (mapLookup b.sym subst.reprs) in
+      TyRepr {x with repr = ref repr}
+    else ty
+  | ty & TyMetaVar x ->
+    match deref x.contents with Unbound b then
+      let pair = optionGetOr (b.ident, b.level) (mapLookup b.ident subst.metas) in
+      let kind = smap_Kind_Type (substUniVars subst) b.kind in
+      TyMetaVar {x with contents = ref (Unbound {b with ident = pair.0, level = pair.1, kind = kind})}
+    else ty
+  | ty -> smap_Type_Type (substUniVars subst) ty
+
+  sem substUniVarsInUni : UniVarSubst -> Unification -> Unification
+  sem substUniVarsInUni subst = | uni ->
+    let new = substituteInUnification
+      (lam pair. optionGetOr pair (mapLookup pair.0 subst.metas))
+      (lam pair. optionGetOr pair (mapLookup pair.0 subst.reprs))
+      (substUniVars subst)
+      uni in
+    match new with Some uni then uni else
+    error "Compiler error, substUniVarsInUni failed"
+
+  sem simplifyUniWithKeep : ((Symbol, Int) -> Bool) -> ((Name, Int) -> Bool) -> Unification -> (Unification, UniVarSubst)
+  sem simplifyUniWithKeep keepRepr keepMeta = | uni ->
+    -- TODO(vipa, 2024-01-21): for each unified partition, keep a
+    -- subset of the variables. A partition is kept if it has an `out`
+    -- or at least two vars in `prio`. If a partition is to be kept,
+    -- retain all vars in `prio`, or the lowest level var if none are
+    -- in `prio`.
+    let keepPartition : all k. all out. ((k, Int) -> Bool) -> ([(k, Int)] -> Option out -> [(k, Int)])
+      = lam f. lam ks. lam out.
+        match filter f ks with kept & ([_] ++ _)
+        then kept
+        else optionMapOr [] (lam x. [x]) (min (lam a. lam b. subi a.1 b.1) ks) in
+    let types = pufFilterPartitions (keepPartition keepMeta) uni.types in
+    let reprs = pufFilterPartitions (keepPartition keepRepr) uni.reprs in
+    let subst = {metas = types.substituted, reprs = reprs.substituted} in
+    let types = pufMapOut (substUniVars subst) types.puf in
+    let reprs = reprs.puf in
+    -- TODO(vipa, 2024-01-21): This could actually substitute away
+    -- tyvars to concrete types as well if the vars aren't marked to
+    -- be kept
+    ({types = types, reprs = reprs}, subst)
 
   sem unificationToDebug : String -> PprintEnv -> Unification -> (PprintEnv, String)
   sem unificationToDebug indent env = | uni ->

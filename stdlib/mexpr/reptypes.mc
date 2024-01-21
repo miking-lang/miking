@@ -379,11 +379,16 @@ lang RepTypesShallowSolverInterface = OpVarAst + OpImplAst + UnifyPure
   sem debugBranchState : all a. SolverGlobal a -> SolverBranch a -> ()
   -- NOTE(vipa, 2023-11-11): Create some form of debug output for a
   -- particular (top-)solution
-  sem debugSolution : all a. SolverGlobal a -> [SolverSolution a] -> ()
+  sem debugSolution : all a. SolverGlobal a -> [SolverSolution a] -> String
 
   -- NOTE(vipa, 2023-10-25): Solve the top-level, i.e., find a
   -- `SolverSolution` per previous call to `addOpUse`.
   sem topSolve : all a. Bool -> SolverGlobal a -> SolverTopQuery a -> [SolverSolution a]
+
+  -- NOTE(vipa, 2023-10-25): Solve the top-level fully, i.e., find a
+  -- `SolverSolution` per previous call to `addOpUse`, and find all
+  -- possible such allocations.
+  sem topSolveAll : all a. Bool -> SolverGlobal a -> SolverTopQuery a -> [[SolverSolution a]]
 
   -- NOTE(vipa, 2023-07-05): The returned list should have one picked
   -- solution per element in `opUses`. The returned `ImplId` should be
@@ -394,18 +399,24 @@ lang RepTypesShallowSolverInterface = OpVarAst + OpImplAst + UnifyPure
   sem cmpSolution : all a. SolverSolution a -> SolverSolution a -> Int
 end
 
+type SolutionDebugTarget
+con SDTNone : () -> SolutionDebugTarget
+con SDTStdout : () -> SolutionDebugTarget
+con SDTFunc : (Int -> String -> ()) -> SolutionDebugTarget
 type ReprSolverOptions =
   { debugBranchState : Bool
-  , debugFinalSolution : Bool
+  , debugFinalSolution : SolutionDebugTarget
   , debugSolveProcess : Bool
   , debugSolveTiming : Bool
+  , solveAll : Bool
   }
 
 let defaultReprSolverOptions : ReprSolverOptions =
   { debugBranchState = false
-  , debugFinalSolution = false
+  , debugFinalSolution = SDTNone ()
   , debugSolveProcess = false
   , debugSolveTiming = false
+  , solveAll = false
   }
 
 type VarMap v = {reprs : Map Symbol v, metas : Map Name v}
@@ -458,9 +469,11 @@ let varMapIntersect
     , reprs = mapIntersectWith (lam a. lam. a) a.reprs b.reprs
     }
 let varMapSubset
-  : all a. all b. VarMap () -> VarMap () -> Bool
+  : all a. all b. VarMap a -> VarMap b -> Bool
   = lam a. lam b.
-    if setSubset a.reprs b.reprs then setSubset a.metas b.metas else false
+    if mapAllWithKey (lam k. lam. mapMem k b.reprs) a.reprs
+    then mapAllWithKey (lam k. lam. mapMem k b.metas) a.metas
+    else false
 let varMapIsEmpty
   : all a. VarMap a -> Bool
   = lam a. if mapIsEmpty a.metas then mapIsEmpty a.reprs else false
@@ -492,13 +505,13 @@ lang VarAccessHelpers = Ast + ReprTypeAst + MetaVarTypeAst
     else None ()
   | _ -> None ()
 
-  sem getVarsInType : {metaLevel : Int, scope : Int} -> VarMap () -> Type -> VarMap ()
+  sem getVarsInType : {metaLevel : Int, scope : Int} -> VarMap Int -> Type -> VarMap Int
   sem getVarsInType filter acc = | ty ->
     let addMeta = lam x. if geqi x.level filter.metaLevel
-      then setInsert x.ident acc.metas
+      then mapInsert x.ident x.level acc.metas
       else acc.metas in
     let addRepr = lam x. if geqi x.scope filter.scope
-      then setInsert x.sym acc.reprs
+      then mapInsert x.sym x.scope acc.reprs
       else acc.reprs in
     let metas = optionMapOr acc.metas addMeta (getMetaHere ty) in
     let reprs = optionMapOr acc.reprs addRepr (getReprHere ty) in
@@ -651,7 +664,7 @@ end
 
 lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + VarAst + LetAst + OpDeclAst + ReprDeclAst + ReprTypeAst + UnifyPure + AliasTypeAst + PrettyPrint + ReprSubstAst + RepTypesHelpers
   -- Top interface, meant to be used outside --
-  sem reprSolve : ReprSolverOptions -> Expr -> Expr
+  sem reprSolve : ReprSolverOptions -> Expr -> [Expr]
   sem reprSolve options = | tm ->
     let global = initSolverGlobal () in
     -- NOTE(vipa, 2023-10-25): Right now we do not handle nested impls
@@ -665,23 +678,35 @@ lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + 
     let preCollect = wallTimeMs () in
     match collectForReprSolve global initState tm with (state, tm) in
     let postCollect = wallTimeMs () in
-    let pickedSolutions = topSolve options.debugSolveProcess global state.topQuery in
+    let pickedSolutions = if options.solveAll
+      then topSolveAll options.debugSolveProcess global state.topQuery
+      else [topSolve options.debugSolveProcess global state.topQuery] in
     let postTopSolve = wallTimeMs () in
-    (if options.debugFinalSolution then debugSolution global pickedSolutions else ());
+    (switch options.debugFinalSolution
+     case SDTNone _ then ()
+     case SDTStdout _ then
+       for_ pickedSolutions (lam s. printLn (debugSolution global s))
+     case SDTFunc f then
+       iteri (lam i. lam s. f i (debugSolution global s)) pickedSolutions
+     end);
     -- NOTE(vipa, 2023-10-25): The concretization phase *does* handle
     -- nested impls, so it shouldn't have to be updated if the
     -- collection phase is improved later on
-    let initState =
-      { remainingSolutions = pickedSolutions
-      , requests = mapEmpty subi
-      , requestsByOpAndSol = mapEmpty (lam a. lam b.
-        let res = nameCmp a.0 b.0 in
-        if neqi res 0 then res else
-        cmpSolution a.1 b.1)
-      , global = global
-      } in
+    let concretizeOne = lam pickedSolutions.
+      let initState =
+        { remainingSolutions = pickedSolutions
+        , requests = mapEmpty subi
+        , requestsByOpAndSol = mapEmpty (lam a. lam b.
+          let res = nameCmp a.0 b.0 in
+          if neqi res 0 then res else
+          cmpSolution a.1 b.1)
+        , global = global
+        } in
+      match concretizeAlt initState tm with (state, tm) in
+      mapFoldWithKey (lam. lam id. lam deps. printLn (join ["(compiler error) Left-over dep, id: ", int2string id, ", num deps: ", int2string (length deps)])) () state.requests;
+      tm in
     let preConcretize = wallTimeMs () in
-    match concretizeAlt initState tm with (state, tm) in
+    let exprs = map concretizeOne pickedSolutions in
     let postConcretize = wallTimeMs () in
     (if options.debugSolveTiming then
       printLn (join
@@ -690,8 +715,7 @@ lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + 
         , "Concretize time: ", float2string (subf postConcretize preConcretize), "ms\n"
         ])
      else ());
-    mapFoldWithKey (lam. lam id. lam deps. printLn (join ["(compiler error) Left-over dep, id: ", int2string id, ", num deps: ", int2string (length deps)])) () state.requests;
-    removeReprExpr tm
+    map removeReprExpr exprs
 
   -- Collecting and solving sub-problems --
   type CollectState =
@@ -2074,20 +2098,21 @@ let rtConstructAnd : all env. all a. all b. all constraint. all var. all val. al
     let constraint =
       let below = map (lam c. fs.filterConstraint and.relevantHere c.constraint) children in
       let computed = optionFoldlM fs.constraintAnd and.constraint below in
-      (match fs.preComputedConstraint with Some precomputed then
-        match computed with Some computed then
-          if fs.constraintEq precomputed computed then () else
-          match fs.debugInterface.constraintJson fs.debugEnv precomputed with (env, precomputed) in
-          match fs.debugInterface.constraintJson fs.debugEnv computed with (env, computed) in
-          let msg = JsonObject (mapFromSeq cmpString
-            [ ("msg", JsonString "rtConstructAnd got a different constraint from the pre-computed")
-            , ("precomputed", precomputed)
-            , ("computed", computed)
-            ]) in
-          printLn (json2string msg);
-          error "Sanity check failed"
-        else error "Inconsistency in rtConstructAnd despite getting a pre-computed constraint"
-       else ());
+      -- TODO(vipa, 2024-01-21): Figure out why this fails, then re-enable
+      -- (match fs.preComputedConstraint with Some precomputed then
+      --   match computed with Some computed then
+      --     if fs.constraintEq precomputed computed then () else
+      --     match fs.debugInterface.constraintJson fs.debugEnv precomputed with (env, precomputed) in
+      --     match fs.debugInterface.constraintJson fs.debugEnv computed with (env, computed) in
+      --     let msg = JsonObject (mapFromSeq cmpString
+      --       [ ("msg", JsonString "rtConstructAnd got a different constraint from the pre-computed")
+      --       , ("precomputed", precomputed)
+      --       , ("computed", computed)
+      --       ]) in
+      --     printLn (json2string msg);
+      --     error "Sanity check failed"
+      --   else error "Inconsistency in rtConstructAnd despite getting a pre-computed constraint"
+      --  else ());
       computed in
     match constraint with Some constraint then
       let approx =
@@ -3059,7 +3084,7 @@ type RTPropagateInterface env relevant constraint var val =
   , filterApprox : relevant -> var -> Bool
   , filterConstraint : relevant -> constraint -> constraint
   , unionRelevant : relevant -> relevant -> relevant
-  , pruneRedundant : (constraint, Float) -> (constraint, Float) -> {lUseful : Bool, rUseful : Bool}
+  , pruneRedundant : Option ((constraint, Float) -> (constraint, Float) -> {lUseful : Bool, rUseful : Bool})
   , constraintEq : constraint -> constraint -> Bool
   , debugInterface : RTDebugInterface env relevant constraint var val
   , debugEnv : env
@@ -3096,25 +3121,27 @@ let rtPropagate : all env. all relevant. all constraint. all var. all val. all a
     let pruneRedundant : all a.
       [[Single a]]
       -> [Single a]
-      = lam nonRedundantPartitions.
-        let juggle = lam sing : Single a. (sing, (sing.constraint, sing.cost)) in
-        let filterAccumL : all a. all x. all y. (a -> x -> (a, Bool)) -> a -> [x] -> (a, [x])
-          = lam f.
-            recursive let work = lam kept. lam acc. lam l.
-              match l with [x] ++ l then
-                match f acc x with (acc, keep) in
-                work (if keep then snoc kept x else kept) acc l
-              else (acc, kept)
-            in work [] in
-        recursive let work = lam pruned. lam rest.
-          match rest with [new] ++ rest then
-            let f = lam old. lam new. fs.pruneRedundant old.1 new.1 in
-            match filterAccumL (_pruneListElement f) pruned new with (pruned, new) in
-            work (concat pruned new) rest
-          else map (lam x. x.0) pruned
-        in match map (map juggle) nonRedundantPartitions with [pruned] ++ rest
-          then work pruned rest
-          else error "Compiler error: empty list to pruneRedundant in rtPropagate" in
+      = match fs.pruneRedundant with Some pruneRedundant
+        then lam nonRedundantPartitions.
+          let juggle = lam sing : Single a. (sing, (sing.constraint, sing.cost)) in
+          let filterAccumL : all a. all x. all y. (a -> x -> (a, Bool)) -> a -> [x] -> (a, [x])
+            = lam f.
+              recursive let work = lam kept. lam acc. lam l.
+                match l with [x] ++ l then
+                  match f acc x with (acc, keep) in
+                  work (if keep then snoc kept x else kept) acc l
+                else (acc, kept)
+              in work [] in
+          recursive let work = lam pruned. lam rest.
+            match rest with [new] ++ rest then
+              let f = lam old. lam new. pruneRedundant old.1 new.1 in
+              match filterAccumL (_pruneListElement f) pruned new with (pruned, new) in
+              work (concat pruned new) rest
+            else map (lam x. x.0) pruned
+          in match map (map juggle) nonRedundantPartitions with [pruned] ++ rest
+            then work pruned rest
+            else error "Compiler error: empty list to pruneRedundant in rtPropagate"
+        else lam nonRedundantPartitions. join nonRedundantPartitions in
     let workSingle
       : all a. Option (constraint, Approx) -> Single a -> Option (Status, Single a)
       = lam fromAbove. lam x.
@@ -3307,8 +3334,13 @@ lang NonMemoTreeBuilder = RepTypesShallowSolverInterface + UnifyPure + RepTypesH
   syn SolContent a = | SolContent (SolContentRec a)
   syn SolverSolution a = | SSContent (SolContent a)
 
+  type Relevant = VarMap Int  -- NOTE(vipa, 2024-01-21): The meta-level/repr-scope of the var
+  type Constraint = Unification
+  type Var = Symbol
+  type Val = Name
+
   -- Top Query
-  type RTree a = RepTree (VarMap ()) Unification Symbol Name (SolContent a)
+  type RTree a = RepTree Relevant Constraint Var Val (SolContent a)
   type STQContent a = [{scale : OpCost, val : RTree a}]
   syn SolverTopQuery a = | STQContent (STQContent a)
   sem initSolverTopQuery = | global ->
@@ -3330,17 +3362,22 @@ lang NonMemoTreeBuilder = RepTypesShallowSolverInterface + UnifyPure + RepTypesH
       "This operation has no implementation, even when ignoring constraints from other operation uses."
 
   sem debugSolution global = | sols ->
-    printLn "\n# Solution cost tree:";
     recursive let work = lam indent. lam sol.
       match sol with SolContent sol in
       let op = nameGetStr sol.impl.op in
       let scaledCost = float2string sol.scaledTotalCost in
       let info = info2str sol.impl.info in
       match unificationToDebug (concat indent "| ") pprintEnvEmpty sol.uni with (env, uni) in
-      printLn (join [indent, op, "(scaled cost: ", scaledCost, ", info: ", info, ")"]);
-      printLn uni;
-      for_ sol.subSols (lam x. work (concat indent "  ") x)
-    in iter (lam s. match s with SSContent x in work "" x) sols
+      let msg = join
+        [ indent, op, "(scaled cost: ", scaledCost, ", info: ", info, ")\n"
+        , uni, "\n"
+        , join (map (lam x. work (concat indent "  ") x) sol.subSols)
+        ] in
+      msg
+    in join
+      [ "\n# Solution cost tree:"
+      , join (map (lam s. match s with SSContent x in work "" x) sols)
+      ]
 
   sem concretizeSolution global = | SSContent (SolContent x) ->
     (x.impl.token, x.highestImpl, map (lam x. SSContent x) x.subSols)
@@ -3391,44 +3428,57 @@ lang NonMemoTreeBuilder = RepTypesShallowSolverInterface + UnifyPure + RepTypesH
 
   sem perImpl : all a. Set (Name, Type) -> Type -> SBContent a -> OpImpl a -> (SBContent a, Option (RTree a))
   sem perImpl seen ty branch = | impl ->
-    match wildToMeta impl.metaLevel (setEmpty nameCmp) ty with (newMetas, ty) in
-    match instAndSubst (infoTy impl.specType) impl.metaLevel impl.specType
-      with (specType, instSubst) in
-    match unifyPure impl.uni (removeReprSubsts specType) ty with Some uni then
-      -- NOTE(vipa, 2024-01-13): Make types consistent with the
-      -- instantiation
-      let opUses = map (lam opUse. {opUse with ty = substituteVars opUse.info instSubst opUse.ty}) impl.opUses in
-      -- NOTE(vipa, 2024-01-13): Collect previously present meta- and
-      -- repr-vars and create a substitution that replaces them all
-      -- with new ones. Note that the use of `impl.specType` instead
-      -- of `specType` (`impl.opUses` instead of `opUses`) is
-      -- intentional
-      let implFilter = {metaLevel = impl.metaLevel, scope = impl.reprScope} in
-      let locals =
-        let res = varMapEmpty in
-        let res = getVarsInType implFilter res impl.specType in
-        foldl (lam acc. lam opUse. getVarsInType implFilter acc opUse.ty) res impl.opUses in
-      let subst =
-        { metas = mapMapWithKey (lam k. lam. nameSetNewSym k) locals.metas
-        , reprs = mapMap gensym locals.reprs
-        } in
-      -- NOTE(vipa, 2024-01-13): The new, isolated, and consistent
-      -- specType, opUses, uni, and locals
-      let specType = substUniVars subst specType in
-      let opUses = map (lam opUse. {opUse with ty = substUniVars subst opUse.ty}) opUses in
-      let uni = substUniVarsInUni subst uni in
-      let locals =
-        { metas = mapFoldWithKey (lam acc. lam. lam v. mapInsert v () acc) (mapEmpty nameCmp) subst.metas
-        , reprs = mapFoldWithKey (lam acc. lam. lam v. mapInsert v () acc) (mapEmpty _symCmp) subst.reprs
-        } in
-      -- NOTE(vipa, 2024-01-17): We take great care to only pull local
-      -- tyvars from types that *cannot* contain a type from the
-      -- outside unification, since the outside unification could
-      -- potentially come from a later reprScope or higher metaLevel
-      let locals = mapFoldWithKey (lam acc. lam. lam ty. getVarsInType implFilter acc ty) locals instSubst in
-      let locals = {locals with metas = mapUnion locals.metas newMetas} in
+    -- NOTE(vipa, 2024-01-21): Isolate this impl instance from all
+    -- others by creating new repr- and meta-vars for each such var
+    -- that is only local, i.e., has a level equal or higher to the
+    -- impls's level
+    let specType = impl.specType in
+    let opUses = impl.opUses in
+    let uni = impl.uni in
+    let implFilter = {metaLevel = impl.metaLevel, scope = impl.reprScope} in
+    let locals =
+      let res = varMapEmpty in
+      let res = getVarsInType implFilter res specType in
+      foldl (lam acc. lam opUse. getVarsInType implFilter acc opUse.ty) res opUses in
+    let subst =
+      { metas = mapMapWithKey (lam k. lam lvl. (nameSetNewSym k, lvl)) locals.metas
+      , reprs = mapMap (lam scope. (gensym (), scope)) locals.reprs
+      } in
+    let specType = substUniVars subst specType in
+    let opUses = map (lam opUse. {opUse with ty = substUniVars subst opUse.ty}) opUses in
+    let uni = substUniVarsInUni subst uni in
+    (if mapIsEmpty uni.types then () else
+     error "Sanity check failed: the uni in an impl should start without type unifications, it should only have repr unifications and substitutions.");
 
-      match mapAccumL (perUseInImpl seen uni) branch opUses with (branch, subTrees) in
+    let varsInTy = getVarsInType {metaLevel = negi 1, scope = negi 1} varMapEmpty ty in
+
+    -- NOTE(vipa, 2024-01-21): Instantiate, transform TyWild to
+    -- meta-vars in the requested type, unify.
+    match wildToMeta impl.metaLevel (setEmpty nameCmp) ty with (newMetas, ty) in
+    match instAndSubst (infoTy specType) impl.metaLevel specType
+      with (specType, instSubst) in
+    match unifyPure uni (removeReprSubsts specType) ty with Some uni then
+      -- NOTE(vipa, 2024-01-21): Figure out which vars can be made
+      -- equal simply via substitution (`simplSubst`) rather than
+      -- keeping an entry in the `uni`, under the assumption that only
+      -- the given set *must* remain as distinct vars.
+      let reprExternallyVisible = lam pair.
+        if lti pair.1 impl.reprScope then true else varMapHasRepr pair.0 varsInTy in
+      let metaExternallyVisible = lam pair.
+        if lti pair.1 impl.metaLevel then true else varMapHasMeta pair.0 varsInTy in
+      match simplifyUniWithKeep reprExternallyVisible metaExternallyVisible uni with (uni, simplSubst) in
+
+      -- NOTE(vipa, 2024-01-13): Make types consistent with the
+      -- instantiation, then the uni simplification, then with the
+      -- unification
+      let updateOpUseType = lam opUse.
+        let ty = substituteVars opUse.info instSubst opUse.ty in
+        let ty = substUniVars simplSubst ty in
+        let ty = pureApplyUniToType uni ty in
+        {opUse with ty = ty} in
+      let opUses = map updateOpUseType opUses in
+
+      match mapAccumL (solFor seen) branch opUses with (branch, subTrees) in
       match optionMapM (lam x. x) subTrees with Some subTrees then
         let approx = pufFoldRaw
           (lam acc. lam l. lam r.
@@ -3441,10 +3491,28 @@ lang NonMemoTreeBuilder = RepTypesShallowSolverInterface + UnifyPure + RepTypesH
         let approx = foldl _intersectApproxFromBelow approx subTrees in
         if _approxHasEmptyDomain approx then (branch, None ()) else -- Early exit
 
+        -- NOTE(vipa, 2024-01-21): A var is relevant here if it's
+        -- relevant below (i.e., in `relevantAbove` of a child) or
+        -- changed in this impl, i.e., is assigned in the `uni`
         let relevantHere =
           let below = foldl varMapUnion varMapEmpty (map rtGetRelevantAbove subTrees) in
-          let above = getVarsInType {metaLevel = negi 1, scope = negi 1} below ty in
-          varMapUnion locals above in
+          let reprsHere = pufFoldRaw
+            (lam a. lam l. lam r. mapInsert l.0 l.1 (mapInsert r.0 r.1 a))
+            (lam a. lam l. lam. mapInsert l.0 l.1 a)
+            (mapEmpty _symCmp)
+            uni.reprs in
+          let metasHere = pufFoldRaw
+            (lam a. lam l. lam r. mapInsert l.0 l.1 (mapInsert r.0 r.1 a))
+            (lam a. lam l. lam. mapInsert l.0 l.1 a)
+            (mapEmpty nameCmp)
+            uni.types in
+          varMapUnion below {reprs = reprsHere, metas = metasHere} in
+        -- NOTE(vipa, 2024-01-21): A var is relevant above if it is
+        -- relevant here and is externally visible
+        let relevantAbove =
+          { reprs = mapFromSeq _symCmp (filter reprExternallyVisible (mapBindings relevantHere.reprs))
+          , metas = mapFromSeq nameCmp (filter metaExternallyVisible (mapBindings relevantHere.metas))
+          } in
         let res = RTAnd
           { children =
             zipWith (lam opUse. lam tree. {scale = opUse.scaling , val = tree}) opUses subTrees
@@ -3470,45 +3538,13 @@ lang NonMemoTreeBuilder = RepTypesShallowSolverInterface + UnifyPure + RepTypesH
             res
           , constraint = uni
           , relevantHere = relevantHere
-          , relevantAbove = varMapDifference relevantHere locals
+          , relevantAbove = relevantAbove
           , approx = approx
           , history = HStart (concat (nameGetStr impl.op) "-impl")
           } in
         (branch, Some res)
       else (branch, None ())
     else (branch, None ())
-
-  sem perUseInImpl : all a. Set (Name, Type) -> Unification -> SBContent a -> TmOpVarRec -> (SBContent a, Option (RTree a))
-  sem perUseInImpl seen uni branch = | opUse ->
-    let opUse = {opUse with ty = pureApplyUniToType uni opUse.ty} in
-    solFor seen branch opUse
-
-  type UniVarSubst = {metas : Map Name Name, reprs : Map Symbol Symbol}
-  sem substUniVars : UniVarSubst -> Type -> Type
-  sem substUniVars subst =
-  | ty & TyRepr x ->
-    match deref (botRepr x.repr) with BotRepr b then
-      let repr = optionMapOr (BotRepr b) (lam sym. BotRepr {b with sym = sym})
-        (mapLookup b.sym subst.reprs) in
-      TyRepr {x with repr = ref repr}
-    else ty
-  | ty & TyMetaVar x ->
-    match deref x.contents with Unbound b then
-      let ident = optionGetOr b.ident (mapLookup b.ident subst.metas) in
-      let kind = smap_Kind_Type (substUniVars subst) b.kind in
-      TyMetaVar {x with contents = ref (Unbound {b with ident = ident, kind = kind})}
-    else ty
-  | ty -> smap_Type_Type (substUniVars subst) ty
-
-  sem substUniVarsInUni : UniVarSubst -> Unification -> Unification
-  sem substUniVarsInUni subst = | uni ->
-    let new = substituteInUnification
-      (lam pair. (optionGetOr pair.0 (mapLookup pair.0 subst.metas), pair.1))
-      (lam pair. (optionGetOr pair.0 (mapLookup pair.0 subst.reprs), pair.1))
-      (substUniVars subst)
-      uni in
-    match new with Some uni then uni else
-    error "Compiler error, substUniVarsInUni failed"
 
   -- NOTE(vipa, 2023-11-07): This typically assumes that the types
   -- have a representation that is equal if the two types are
@@ -3522,12 +3558,8 @@ lang NonMemoTreeBuilder = RepTypesShallowSolverInterface + UnifyPure + RepTypesH
 end
 
 lang TreeSolverBase = NonMemoTreeBuilder
-  type Relevant = VarMap ()
-  type Constraint = Unification
-  type Var = Symbol
-  type Val = Name
-
-  sem solveWork : all a. Bool -> RepTree (VarMap ()) Unification Symbol Name [SolverSolution a] -> [SolverSolution a]
+  sem solveWork : all a. Bool -> RepTree Relevant Constraint Var Val [SolverSolution a] -> [SolverSolution a]
+  sem solveWorkAll : all a. Bool -> RepTree Relevant Constraint Var Val [SolverSolution a] -> [[SolverSolution a]]
 
   sem topSolve debug global = | STQContent query ->
     let top = RTAnd
@@ -3542,6 +3574,19 @@ lang TreeSolverBase = NonMemoTreeBuilder
       , history = HStart "root"
       } in
     solveWork debug top
+  sem topSolveAll debug global = | STQContent query ->
+    let top = RTAnd
+      { children = query
+      , selfCost = 0.0
+      , dep = Dep ()
+      , construct = lam. lam x. map (lam x. SSContent x) x
+      , constraint = emptyUnification ()
+      , relevantHere = foldl varMapUnion varMapEmpty (map (lam x. rtGetRelevantAbove x.val) query)
+      , relevantAbove = varMapEmpty
+      , approx = foldl _intersectApproxFromBelow (pufEmpty _symCmp) (map (lam x. x.val) query)
+      , history = HStart "root"
+      } in
+    solveWorkAll debug top
 
   sem mkEqInterface : () -> RTEqInterface Relevant Constraint Var Val
   sem mkEqInterface = | _ ->
@@ -3570,20 +3615,22 @@ lang TreeSolverBase = NonMemoTreeBuilder
     , constraintEq = lam a. lam b. if uniImplies a b then uniImplies b a else false
     , debugEnv = pprintEnvEmpty
     , debugInterface = mkDebugInterface ()
-    , pruneRedundant = lam l. lam r.
-      let lFitsWhereRCouldBe = lazy (lam. uniImplies r.0 l.0) in
-      let rFitsWhereLCouldBe = lazy (lam. uniImplies l.0 r.0) in
-      let lUsefulHelper = lam l. lam r. lam lFits. lam rFits.
-        -- NOTE(vipa, 2024-01-14): Strictly cheaper is always useful
-        if ltf l.1 r.1 then true else
-        -- NOTE(vipa, 2024-01-14): Otherwise it's only useful if it's provably more flexible
-        not (lazyForce rFits) in
-      let rUseful = lUsefulHelper r l rFitsWhereLCouldBe lFitsWhereRCouldBe in
-      -- NOTE(vipa, 2024-01-14): At least one must be useful, thus
-      -- we default to `l` if `r` fails to be useful on its own
-      if not rUseful then { lUseful = true, rUseful = false } else
-      let lUseful = lUsefulHelper l r lFitsWhereRCouldBe rFitsWhereLCouldBe in
-      { lUseful = lUseful, rUseful = rUseful }
+    , pruneRedundant =
+      let f = lam l. lam r.
+        let lFitsWhereRCouldBe = lazy (lam. uniImplies r.0 l.0) in
+        let rFitsWhereLCouldBe = lazy (lam. uniImplies l.0 r.0) in
+        let lUsefulHelper = lam l. lam r. lam lFits. lam rFits.
+          -- NOTE(vipa, 2024-01-14): Strictly cheaper is always useful
+          if ltf l.1 r.1 then true else
+          -- NOTE(vipa, 2024-01-14): Otherwise it's only useful if it's provably more flexible
+          not (lazyForce rFits) in
+        let rUseful = lUsefulHelper r l rFitsWhereLCouldBe lFitsWhereRCouldBe in
+        -- NOTE(vipa, 2024-01-14): At least one must be useful, thus
+        -- we default to `l` if `r` fails to be useful on its own
+        if not rUseful then { lUseful = true, rUseful = false } else
+        let lUseful = lUsefulHelper l r lFitsWhereRCouldBe rFitsWhereLCouldBe in
+        { lUseful = lUseful, rUseful = rUseful }
+      in Some f
     }
 
   sem mkDebugInterface : () -> RTDebugInterface PprintEnv Relevant Constraint Var Val
@@ -3684,8 +3731,8 @@ lang TreeSolverBase = NonMemoTreeBuilder
   sem mkPartitionInternalInterface : () -> RTPartitionInternalInterface Relevant Constraint Var Val
   sem mkPartitionInternalInterface = | _ ->
     { varsToRelevant = lam vars.
-      { reprs = setOfSeq _symCmp vars
-      , metas = setEmpty nameCmp
+      { reprs = mapFromSeq _symCmp (map (lam x. (x, negi 1)) vars)
+      , metas = mapEmpty nameCmp
       }
     , emptyRelevant = varMapEmpty
     , subtractRelevant = varMapDifference
@@ -3701,8 +3748,8 @@ lang TreeSolverBase = NonMemoTreeBuilder
       -- named repr.
       let reprs = pufFold
         (lam a. lam. lam. a)
-        (lam a. lam l. lam. setInsert l.0 a)
-        (setEmpty _symCmp)
+        (lam a. lam l. lam. mapInsert l.0 l.1 a)
+        (mapEmpty _symCmp)
         uni.reprs in
       -- NOTE(vipa, 2024-01-15): A meta-var is fixed if it points to a
       -- type and all (repr and meta) vars in that type are fully
@@ -3712,7 +3759,7 @@ lang TreeSolverBase = NonMemoTreeBuilder
       --   (lam a. lam l. lam ty.)
       --   (setEmpty nameCmp)
       --   uni.types in
-      let metas = setEmpty nameCmp in
+      let metas = mapEmpty nameCmp in
       { reprs = reprs
       , metas = metas
       }
@@ -3730,9 +3777,9 @@ lang TreeSolverBase = NonMemoTreeBuilder
         let processInput = lam accPair. lam i. lam pair.
           match accPair with (puf, lonely) in
           let varmap = pair.1 in
-          let reprs = setToSeq (varmap.reprs) in
+          let reprs = mapKeys (varmap.reprs) in
           let reprs = map (lam x. Left x) reprs in
-          let metas = setToSeq (varmap.metas) in
+          let metas = mapKeys (varmap.metas) in
           let metas = map (lam x. Right x) metas in
           match concat reprs metas with [center] ++ rest then
             let puf = foldl (lam puf. lam x. (pufUnify merge (center, 0) (x, 0) puf).puf) puf rest in
@@ -3778,6 +3825,47 @@ lang TreeSolverBottomUp = TreeSolverBase
          else ());
         match top with RTSingle x then Some x.value else
         collapseLeaves top
+      let collapseLeaves = lam top.
+        propagate (rtCollapseLeaves collapseLeavesInterface top)
+    in match start top with Some res then res else
+      errorSingle [] "Could not find a consistent assignment of impls across the program"
+
+  sem solveWorkAll debug = | top ->
+    let propagateInterface =
+      { mkPropagateInterface ()
+        with pruneRedundant = None ()
+      } in
+    let debugInterface = mkDebugInterface () in
+    let collapseLeavesInterface = mkCollapseLeavesInterface () in
+    let partitionInternalInterface = mkPartitionInternalInterface () in
+    recursive
+      let start = lam top.
+        (if debug then
+          printLn (json2string (rtDebugJson debugInterface pprintEnvEmpty top).1)
+         else ());
+        match rtPropagate propagateInterface top with Some top then
+          (if debug then
+            printLn (json2string (rtDebugJson debugInterface pprintEnvEmpty top).1)
+           else ());
+          -- checkDone (rtPartitionInternalComponents partitionInternalInterface top)
+          checkDone top
+        else None ()
+      let propagate = lam top.
+        match rtPropagate propagateInterface top with Some top then
+          checkDone top
+        else None ()
+      let checkDone = lam top.
+        (if debug then
+          printLn (json2string (rtDebugJson debugInterface pprintEnvEmpty top).1)
+         else ());
+        switch top
+        case RTSingle x then
+          Some [x.value]
+        case RTOr {singles = ss, others = []} then
+          Some (map (lam s. s.value) ss)
+        case _ then
+          collapseLeaves top
+        end
       let collapseLeaves = lam top.
         propagate (rtCollapseLeaves collapseLeavesInterface top)
     in match start top with Some res then res else
@@ -4404,11 +4492,22 @@ lang SATishSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpers
     printLn "\n# Solution cost tree:";
     recursive let work = lam indent. lam solWithMeta.
       match solWithMeta.sol with SolContent x in
-      printLn (join [indent, nameGetStr x.impl.op, " (cost: ", float2string x.cost, ", scaling: ", float2string solWithMeta.scale, ", info: ", info2str x.impl.info, ")"]);
       -- TODO(vipa, 2023-11-28): This will print things in a strange
       -- order, and de-duped, which might not be desirable
-      for_ x.subSols (lam x. work (concat indent "  ") x)
-    in (iter (lam x. match x with SSContent x in work "" {idxes = setEmpty subi, scale = 1.0, sol = x}) solutions)
+      join
+        [ indent, nameGetStr x.impl.op, " (cost: ", float2string x.cost
+        , ", scaling: ", float2string solWithMeta.scale, ", info: ", info2str x.impl.info
+        , ")\n"
+        , join (map (lam x. work (concat indent "  ") x) x.subSols)
+        ]
+    in
+    let solutions = map
+      (lam x. match x with SSContent x in work "" {idxes = setEmpty subi, scale = 1.0, sol = x})
+      solutions in
+    join
+      [ "\n# Solution cost tree:\n"
+      , join solutions
+      ]
 
   sem topSolve debug global = | STQContent topTrees ->
     let constraintOr = lam a. lam b.
@@ -4936,14 +5035,20 @@ lang LazyTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHe
     printLn "debugBranchState"
 
   sem debugSolution global = | solutions ->
-    printLn "\n# Solution cost tree:";
     recursive let work = lam indent. lam sol.
       match sol with SolContent x in
-      printLn (join [indent, nameGetStr x.impl.op, " (cost: ", float2string x.cost, ", scaling: ", float2string x.scale, ", info: ", info2str x.impl.info, ")"]);
       -- TODO(vipa, 2023-11-28): This will print things in a strange
       -- order, and de-duped, which might not be desirable
-      for_ x.subSols (lam x. work (concat indent "  ") x.sol)
-    in (iter (lam x. match x with SSContent x in work "" x) solutions)
+      join
+        [ indent, nameGetStr x.impl.op, " (cost: ", float2string x.cost
+        , ", scaling: ", float2string x.scale, ", info: ", info2str x.impl.info
+        , ")\n"
+        , join (map (lam x. work (concat indent "  ") x.sol) x.subSols)
+        ]
+    in join
+      [ "\n# Solution cost tree:\n"
+      , join (map (lam x. match x with SSContent x in work "" x) solutions)
+      ]
 
   sem topSolve debug global = | STQContent choices ->
     let sols = exploreSolutions 0.0 (emptyUnification ()) choices in
@@ -5305,14 +5410,20 @@ lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypes
     ()
 
   sem debugSolution global = | solutions ->
-    printLn "\n# Solution cost tree:";
     recursive let work = lam indent. lam sol.
       match sol with SolContent x in
-      printLn (join [indent, nameGetStr x.impl.op, " (cost: ", float2string x.cost, ", scaling: ", float2string x.scale, ", info: ", info2str x.impl.info, ")"]);
       -- TODO(vipa, 2023-11-28): This will print things in a strange
       -- order, and de-duped, which might not be desirable
-      for_ x.subSols (lam x. work (concat indent "  ") x.sol)
-    in (iter (lam x. match x with SSContent x in work "" x) solutions)
+      join
+        [ indent, nameGetStr x.impl.op, " (cost: ", float2string x.cost
+        , ", scaling: ", float2string x.scale, ", info: ", info2str x.impl.info
+        , ")\n"
+        , join (map (lam x. work (concat indent "  ") x.sol) x.subSols)
+        ]
+    in join
+      [ "\n# Solution cost tree:\n"
+      , join (map (lam x. match x with SSContent x in work "" x) solutions)
+      ]
 
   sem addImpl global branch = | impl ->
     match branch with SBContent branch in
@@ -5323,9 +5434,9 @@ lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypes
     let externalVars = getVarsInType filter varMapEmpty impl.specType in
     let countInternalVarUses = lam acc. lam idxedOpUse.
       let internal = varMapDifference (getVarsInType filter varMapEmpty idxedOpUse.opUse.ty) externalVars in
-      let addOne = lam acc. lam k. mapInsertWith addi k 1 acc in
-      let metas = setFold addOne acc.metas internal.metas in
-      let reprs = setFold addOne acc.reprs internal.reprs in
+      let addOne = lam acc. lam k. lam. mapInsertWith addi k 1 acc in
+      let metas = mapFoldWithKey addOne acc.metas internal.metas in
+      let reprs = mapFoldWithKey addOne acc.reprs internal.reprs in
       {metas = metas, reprs = reprs} in
     -- recursive let mkCommands
     --   : [SolveCommand] -> VarMap Int -> [{idxes : Set Int, opUse : TmOpVarRec}] -> [SolveCommand]
