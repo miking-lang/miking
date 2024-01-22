@@ -1848,6 +1848,15 @@ let rtGetApprox : all a. all constraint. all var. all val. all relevant.
     case RTOr x then x.approx
     case RTSingle x then x.approx
     end
+let rtSetApprox : all a. all constraint. all var. all val. all relevant.
+  PureUnionFind var (Set val)
+  -> RepTree relevant constraint var val a
+  -> RepTree relevant constraint var val a
+  = lam approx. lam tree. switch tree
+    case RTAnd x then RTAnd {x with approx = approx}
+    case RTOr x then RTOr {x with approx = approx}
+    case RTSingle x then RTSingle {x with approx = approx}
+    end
 let rtMap : all a. all constraint. all var. all val. all relevant. all b.
   (constraint -> a -> b)
   -> RepTree relevant constraint var val a
@@ -2435,7 +2444,6 @@ let directedStepper : all a. all acc.
     case Right res then [fixup res]
     end
 
-
 type RTMaterializeConsistentInterface env relevant constraint var val =
   { partitionConsistentConstraints : all x. [(x, constraint)] -> [([x], constraint)]
   , filterConstraint : relevant -> constraint -> constraint
@@ -2789,6 +2797,26 @@ let rtPartitionInternalComponents : all relevant. all constraint. all var. all v
         end
     in work tree
 
+let rtCartProd : all a. all constraint. all var. all val. all relevant.
+  (constraint -> constraint -> Option constraint)
+  -> [{approx : PureUnionFind var (Set val), constraint : constraint, value : [RTSingleRec a constraint var val relevant]}]
+  -> [Lazy [RTSingleRec a constraint var val relevant]]
+  -> [{approx : PureUnionFind var (Set val), constraint : constraint, value : [RTSingleRec a constraint var val relevant]}]
+  = lam constraintAnd. lam prev. lam options.
+    let stepElemElem = lam prev. lam new.
+      match constraintAnd prev.constraint new.constraint with Some constraint then
+        match _approxAnd prev.approx new.approx with Some approx then Some
+          { constraint = constraint
+          , approx = approx.res
+          , value = snoc prev.value new
+          }
+        else None ()
+      else None () in
+    let stepListElem = lam acc. lam options.
+      if null acc then acc else  -- NOTE(vipa, 2024-01-14): Early exit
+      filterOption (seqLiftA2 stepElemElem acc (lazyForce options)) in
+    foldl stepListElem prev options
+
 type RTCollapseLeavesInterface env relevant constraint var val =
   { constraintAnd : constraint -> constraint -> Option constraint
   , filterConstraint : relevant -> constraint -> constraint
@@ -2871,7 +2899,7 @@ let rtCollapseLeaves : all env. all relevant. all constraint. all var. all val. 
               , approx = x.approx
               , value = []
               } in
-            let results = foldl stepListElem [start] children in
+            let results = rtCartProd fs.constraintAnd [start] children in
             let mkResult = lam result.
               let andFs =
                 { andFs with preComputedConstraint = Some result.constraint
@@ -3079,6 +3107,31 @@ let rtEq : all relevant. all constraint. all var. all val. all a.
         end
     in work a b
 
+let rtPruneRedundant : all a. all constraint. all var. all val. all relevant.
+  ((constraint, Float) -> (constraint, Float) -> {lUseful : Bool, rUseful : Bool})
+  -> [[RTSingleRec a constraint var val relevant]]
+  -> [RTSingleRec a constraint var val relevant]
+  = lam pruneRedundant. lam nonRedundantPartitions.
+    type Single a = RTSingleRec a constraint var val relevant in
+    let juggle = lam sing : Single a. (sing, (sing.constraint, sing.cost)) in
+    let filterAccumL : all a. all x. all y. (a -> x -> (a, Bool)) -> a -> [x] -> (a, [x])
+      = lam f.
+        recursive let work = lam kept. lam acc. lam l.
+          match l with [x] ++ l then
+            match f acc x with (acc, keep) in
+            work (if keep then snoc kept x else kept) acc l
+          else (acc, kept)
+        in work [] in
+    recursive let work = lam pruned. lam rest.
+      match rest with [new] ++ rest then
+        let f = lam old. lam new. pruneRedundant old.1 new.1 in
+        match filterAccumL (_pruneListElement f) pruned new with (pruned, new) in
+        work (concat pruned new) rest
+      else map (lam x. x.0) pruned
+    in match map (map juggle) nonRedundantPartitions with [pruned] ++ rest
+      then work pruned rest
+      else error "Compiler error: empty list to pruneRedundant in rtPropagate"
+
 type RTPropagateInterface env relevant constraint var val =
   { constraintAnd : constraint -> constraint -> Option {lChanged : Bool, rChanged : Bool, res : constraint}
   , filterApprox : relevant -> var -> Bool
@@ -3118,30 +3171,9 @@ let rtPropagate : all env. all relevant. all constraint. all var. all val. all a
             Some {changed = res.0, constraint = res.1 .0, approx = res.1 .1}
           else None ()
         else Some {changed = false, constraint = hConstraint, approx = hApprox} in
-    let pruneRedundant : all a.
-      [[Single a]]
-      -> [Single a]
-      = match fs.pruneRedundant with Some pruneRedundant
-        then lam nonRedundantPartitions.
-          let juggle = lam sing : Single a. (sing, (sing.constraint, sing.cost)) in
-          let filterAccumL : all a. all x. all y. (a -> x -> (a, Bool)) -> a -> [x] -> (a, [x])
-            = lam f.
-              recursive let work = lam kept. lam acc. lam l.
-                match l with [x] ++ l then
-                  match f acc x with (acc, keep) in
-                  work (if keep then snoc kept x else kept) acc l
-                else (acc, kept)
-              in work [] in
-          recursive let work = lam pruned. lam rest.
-            match rest with [new] ++ rest then
-              let f = lam old. lam new. pruneRedundant old.1 new.1 in
-              match filterAccumL (_pruneListElement f) pruned new with (pruned, new) in
-              work (concat pruned new) rest
-            else map (lam x. x.0) pruned
-          in match map (map juggle) nonRedundantPartitions with [pruned] ++ rest
-            then work pruned rest
-            else error "Compiler error: empty list to pruneRedundant in rtPropagate"
-        else lam nonRedundantPartitions. join nonRedundantPartitions in
+    let pruneRedundant : all a. [[Single a]] -> [Single a] = match fs.pruneRedundant with Some f
+      then lam x. rtPruneRedundant f x
+      else join in
     let workSingle
       : all a. Option (constraint, Approx) -> Single a -> Option (Status, Single a)
       = lam fromAbove. lam x.
@@ -3303,6 +3335,110 @@ let rtPropagate : all env. all relevant. all constraint. all var. all val. all a
         end
     in optionMap (lam x. x.1) (work true (None ()) tree)
 
+type RTMaterializeHomogeneousInterface env relevant constraint var val =
+  { propagateInterface : RTPropagateInterface env relevant constraint var val
+  , constraintAnd : constraint -> constraint -> Option constraint
+  , cmpVal : val -> val -> Int
+  }
+
+let rtMaterializeHomogeneous : all env. all relevant. all constraint. all var. all val. all a.
+  RTMaterializeHomogeneousInterface env relevant constraint var val
+  -> RepTree relevant constraint var val a
+  -> Option {value : a, cost : Float}
+  = lam fs. lam tree.
+    type Never in
+    type Approx = PureUnionFind var (Set val) in
+    type Tree a = RepTree relevant constraint var val a in
+    type Single a = RTSingleRec a constraint var val relevant in
+    let pruneRedundant = match fs.propagateInterface.pruneRedundant with Some f
+      then rtPruneRedundant f
+      else join in
+    let cmpf = lam a. lam b. if ltf a b then negi 1 else if gtf a b then 1 else 0 in
+    let orFs =
+      { constraintAnd = fs.constraintAnd
+      , filterConstraint = fs.propagateInterface.filterConstraint
+      , filterApprox = fs.propagateInterface.filterApprox
+      , unionRelevant = fs.propagateInterface.unionRelevant
+      , preComputedConstraint = None ()
+      , preComputedApprox = None ()
+      , historyLabel = "homogeneous-or"
+      } in
+    let andFs =
+      { constraintAnd = fs.constraintAnd
+      , filterConstraint = fs.propagateInterface.filterConstraint
+      , filterApprox = fs.propagateInterface.filterApprox
+      , preComputedConstraint = None ()
+      , preComputedApprox = None ()
+      , historyLabel = "homogeneous-and"
+      , constraintEq = fs.propagateInterface.constraintEq
+      , debugInterface = fs.propagateInterface.debugInterface
+      , debugEnv = fs.propagateInterface.debugEnv
+      } in
+    let nextCallIdx = ref 0 in
+    recursive
+      let descend : all a. Tree a -> [Single a] = lam tree.
+        let approx = rtGetApprox tree in
+        let approxHasUnfixedVars = pufFoldRaw
+          (lam a. lam. lam. a)
+          (lam a. lam. lam v. if a then true else gti (setSize v) 1)
+          false
+          approx in
+        if approxHasUnfixedVars
+        then pickApprox approx tree
+        else switch tree
+          case RTSingle x then [x]
+          case RTOr x then
+            let x : RTOrRec Never a constraint var val relevant = x in
+            let others = join (map descend x.others) in
+            let res = pruneRedundant (cons x.singles (map (lam x. [x]) others)) in
+            mapOption (rtConstructOr orFs x) res
+          case RTAnd x then
+            let x : RTAndRec Never a constraint var val relevant = x in
+            let children = map
+              (lam child. lazy (lam. descend child.val))
+              x.children in
+            let start =
+              { constraint = x.constraint
+              , approx = x.approx
+              , value = []
+              } in
+            let results = rtCartProd fs.constraintAnd [start] children in
+            let mkResult = lam result.
+              let andFs =
+                { andFs with preComputedConstraint = Some result.constraint
+                , preComputedApprox = Some result.approx
+                } in
+              rtConstructAnd andFs x result.value in
+            mapOption mkResult results
+          end
+      let pickApprox : all a. Approx -> Tree a -> [Single a] = lam approx. lam tree.
+        let valsWithCount = pufFold
+          (lam a. lam. lam. a)
+          (lam a. lam. lam vals.
+            mapUnionWith addi (mapMap (lam. 1) vals) a)
+          (mapEmpty fs.cmpVal)
+          approx in
+        let valsInOrder =
+          -- NOTE(vipa, 2024-01-22): Reverse order, i.e., highest
+          -- count first
+          let x = sort (lam a. lam b. subi b.1 a.1) (mapBindings valsWithCount) in
+          map (lam x. x.0) x in
+        let homogeneousApprox =
+          let empty = setEmpty fs.cmpVal in
+          let pickVal = lam prev.
+            let v = find (lam v. setMem v prev) valsInOrder in
+            optionMapOr empty (lam v. setInsert v empty) v in
+          pufMapOut pickVal approx in
+        let constrainedTree = rtPropagate fs.propagateInterface
+          (rtSetApprox homogeneousApprox tree) in
+        match constrainedTree with Some constrainedTree
+        then descend constrainedTree
+        else []
+    in
+    let solutions = descend tree in
+    let mkSol = lam sol. {value = sol.value, cost = sol.cost} in
+    optionMap mkSol (min (lam a. lam b. cmpf a.cost b.cost) solutions)
+
 lang NonMemoTreeBuilder = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpers + PrettyPrint + Cmp + Generalize + VarAccessHelpers + LocallyNamelessStuff + WildToMeta
   -- Global
   syn SolverGlobal a = | SGContent ()
@@ -3362,6 +3498,7 @@ lang NonMemoTreeBuilder = RepTypesShallowSolverInterface + UnifyPure + RepTypesH
       "This operation has no implementation, even when ignoring constraints from other operation uses."
 
   sem debugSolution global = | sols ->
+    let sum = foldl addf 0.0 (map (lam x. match x with SSContent (SolContent x) in x.scaledTotalCost) sols) in
     recursive let work = lam indent. lam sol.
       match sol with SolContent sol in
       let op = nameGetStr sol.impl.op in
@@ -3375,7 +3512,7 @@ lang NonMemoTreeBuilder = RepTypesShallowSolverInterface + UnifyPure + RepTypesH
         ] in
       msg
     in join
-      [ "\n# Solution cost tree:"
+      [ "\n# Solution cost tree (total: ", float2string sum, "):\n"
       , join (map (lam s. match s with SSContent x in work "" x) sols)
       ]
 
@@ -3666,6 +3803,13 @@ lang TreeSolverBase = NonMemoTreeBuilder
     , debugInterface = mkDebugInterface ()
     }
 
+  sem mkMaterializeHomogeneousInterface : () -> RTMaterializeHomogeneousInterface PprintEnv Relevant Constraint Var Val
+  sem mkMaterializeHomogeneousInterface = | _ ->
+    { constraintAnd = mergeUnifications
+    , cmpVal = nameCmp
+    , propagateInterface = mkPropagateInterface ()
+    }
+
   sem mkMaterializeLazyInterface : () -> RTMaterializeLazyInterface PprintEnv Relevant Constraint Var Val
   sem mkMaterializeLazyInterface = | _ ->
     { constraintAnd = mergeUnifications
@@ -3895,6 +4039,22 @@ lang TreeSolverGuided = TreeSolverBase
       let top = rtPartitionInternalComponents partitionInternalInterface top in
       match rtPropagate propagateInterface top with Some top then
         match rtMaterializeConsistent materializeConsistentInterface top with Some res then
+          res.value
+        else errorSingle [] "Could not find a consistent assignment of impls across the program (though it may have been missed)"
+      else errorSingle [] "Could not find a consistent assignment of impls across the program"
+    else errorSingle [] "Could not find a consistent assignment of impls across the program"
+end
+
+lang TreeSolverHomogeneous = TreeSolverBase
+  sem solveWork debug = | top ->
+    let propagateInterface = mkPropagateInterface () in
+    let partitionInternalInterface = mkPartitionInternalInterface () in
+    let materializeConsistentInterface = mkMaterializeConsistentInterface () in
+    let materializeHomogeneousInterface = mkMaterializeHomogeneousInterface () in
+    match rtPropagate propagateInterface top with Some top then
+      let top = rtPartitionInternalComponents partitionInternalInterface top in
+      match rtPropagate propagateInterface top with Some top then
+        match rtMaterializeHomogeneous materializeHomogeneousInterface top with Some res then
           res.value
         else errorSingle [] "Could not find a consistent assignment of impls across the program (though it may have been missed)"
       else errorSingle [] "Could not find a consistent assignment of impls across the program"
