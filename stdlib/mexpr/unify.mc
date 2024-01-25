@@ -366,6 +366,21 @@ con PUFOut : all k. all out. out -> PUFContent k out
 type PureUnionFind k out =
   Map k {level : Int, content : PUFContent k out}
 
+let pufPhysicalCmp : all k. all out. (out -> out -> Int) -> PureUnionFind k out -> PureUnionFind k out -> Int
+  = lam outCmp. lam a. lam b.
+    let cmp = mapGetCmpFun a in
+    let ceq = lam a. lam b. switch (a, b)
+      case (PUFLink a, PUFLink b) then cmp a b
+      case (PUFEmpty _, PUFEmpty _) then 0
+      case (PUFOut a, PUFOut b) then outCmp a b
+      case _ then subi (constructorTag a) (constructorTag b)
+      end in
+    let f = lam a. lam b.
+      let res = subi a.level b.level in
+      if neqi 0 res then res else
+      ceq a.content b.content in
+    mapCmp f a b
+
 let pufToDebug
   : all k. all out. all env.
   String

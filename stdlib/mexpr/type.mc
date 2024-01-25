@@ -153,7 +153,9 @@ lang VarTypeSubstitute = VarTypeAst + MetaVarTypeAst
   | TyMetaVar t & ty ->
     switch deref t.contents
     case Unbound r then
-      match mapLookup r.ident subst with Some tyvar then tyvar else ty
+      match mapLookup r.ident subst with Some tyvar
+      then tyvar
+      else smap_Type_Type (substituteMetaVars subst) ty
     case Link to then
       substituteMetaVars subst to
     end

@@ -3335,6 +3335,41 @@ let rtPropagate : all env. all relevant. all constraint. all var. all val. all a
         end
     in optionMap (lam x. x.1) (work true (None ()) tree)
 
+let rtHomogenizeTop : all env. all relevant. all constraint. all var. all val. all a.
+  (val -> val -> Int)
+  -> RepTree relevant constraint var val a
+  -> [RepTree relevant constraint var val a]
+  = lam cmpVal. lam tree.
+    let approx = rtGetApprox tree in
+    let vals = pufFoldRaw
+      (lam a. lam. lam. a)
+      (lam a. lam k. lam vals. setUnion a vals)
+      (setEmpty cmpVal)
+      approx in
+    let vals = setToSeq vals in
+    let stepWith = lam prev. lam val.
+      let singleton = setInsert val (setEmpty cmpVal) in
+      let f = lam v. if setMem val v then singleton else v in
+      pufMapOut f prev in
+    recursive let stepAll = lam seen. lam toStep.
+      let needMore = pufFoldRaw
+        (lam a. lam. lam. a)
+        (lam a. lam. lam vals. if a then a else gti (setSize vals) 1)
+        false in
+      match partition needMore toStep with (needMore, enough) in
+      match needMore with [] then enough else
+      let res = seqLiftA2 stepWith needMore vals in
+      -- NOTE(vipa, 2024-01-25): Since all approxes come from the same
+      -- one, and the only change we've made has been to map `out`s, we
+      -- know that they are physically equal exactly if they are equal,
+      -- thus this is a valid way to deduplicate them.
+      let res = setOfSeq (pufPhysicalCmp setCmp) res in
+      let res = setSubtract res seen in
+      let seen = setUnion seen res in
+      concat enough (stepAll seen (setToSeq res)) in
+    let approxes = stepAll (setEmpty (pufPhysicalCmp setCmp)) [approx] in
+    map (lam approx. rtSetApprox approx tree) approxes
+
 type RTMaterializeHomogeneousInterface env relevant constraint var val =
   { propagateInterface : RTPropagateInterface env relevant constraint var val
   , constraintAnd : constraint -> constraint -> Option constraint
@@ -3572,6 +3607,7 @@ lang NonMemoTreeBuilder = RepTypesShallowSolverInterface + UnifyPure + RepTypesH
     let specType = impl.specType in
     let opUses = impl.opUses in
     let uni = impl.uni in
+    let refEnv = ref pprintEnvEmpty in
     let implFilter = {metaLevel = impl.metaLevel, scope = impl.reprScope} in
     let locals =
       let res = varMapEmpty in
@@ -4057,6 +4093,45 @@ lang TreeSolverHomogeneous = TreeSolverBase
         match rtMaterializeHomogeneous materializeHomogeneousInterface top with Some res then
           res.value
         else errorSingle [] "Could not find a consistent assignment of impls across the program (though it may have been missed)"
+      else errorSingle [] "Could not find a consistent assignment of impls across the program"
+    else errorSingle [] "Could not find a consistent assignment of impls across the program"
+end
+
+lang TreeSolverMixed = TreeSolverBase
+  sem solveWork debug = | top ->
+    let propagateInterface = mkPropagateInterface () in
+    let partitionInternalInterface = mkPartitionInternalInterface () in
+    let materializeConsistentInterface = mkMaterializeConsistentInterface () in
+    let materializeHomogeneousInterface = mkMaterializeHomogeneousInterface () in
+    let debugInterface = mkDebugInterface () in
+    let cmpf = lam a. lam b. if ltf a b then negi 1 else if gtf a b then 1 else 0 in
+    type Tree = RepTree Relevant Constraint Var Val [SolverSolution a] in
+    type Res = {value : [SolverSolution a], cost : OpCost} in
+
+    (if debug then
+      match rtDebugJson debugInterface pprintEnvEmpty top with (env, debug) in
+      printLn (json2string debug)
+     else ());
+
+    match rtPropagate propagateInterface top with Some top then
+      let top = rtPartitionInternalComponents partitionInternalInterface top in
+      match rtPropagate propagateInterface top with Some top then
+        let terminatingSolvers : [Tree -> Option Res] =
+          [ rtMaterializeHomogeneous materializeHomogeneousInterface
+          , rtMaterializeConsistent materializeConsistentInterface
+          ] in
+        let steppingSolvers : [Tree -> [Tree]] =
+          [ lam top : Tree.
+            let res = rtHomogenizeTop nameCmp top in
+            let res = mapOption (rtPropagate propagateInterface) res in
+            res
+          ] in
+        let sols = mapOption (lam f. f top) terminatingSolvers in
+        let steppedTrees = join (map (lam f. f top) steppingSolvers) in
+        let moreSols = filterOption (seqLiftA2 (lam f. lam tree. f tree) terminatingSolvers steppedTrees) in
+        let sol = min (lam a. lam b. cmpf a.cost b.cost) (concat sols moreSols) in
+        match sol with Some sol then sol.value else
+        errorSingle [] "Could not find a consistent assignment of impls across the program, but it might have been missed"
       else errorSingle [] "Could not find a consistent assignment of impls across the program"
     else errorSingle [] "Could not find a consistent assignment of impls across the program"
 end
