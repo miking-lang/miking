@@ -842,14 +842,17 @@ lang UnifyPure = Unify + MetaVarTypeAst + VarTypeSubstitute + ReprTypeAst + Cmp 
     match deref (botRepr x.repr) with BotRepr b then
       let repr = optionMapOr (BotRepr b) (lam pair. BotRepr {b with sym = pair.0, scope = pair.1})
         (mapLookup b.sym subst.reprs) in
-      TyRepr {x with repr = ref repr}
+      TyRepr {x with repr = ref repr, arg = substUniVars subst x.arg}
     else ty
   | ty & TyMetaVar x ->
-    match deref x.contents with Unbound b then
+    switch deref x.contents
+    case Unbound b then
       let pair = optionGetOr (b.ident, b.level) (mapLookup b.ident subst.metas) in
       let kind = smap_Kind_Type (substUniVars subst) b.kind in
       TyMetaVar {x with contents = ref (Unbound {b with ident = pair.0, level = pair.1, kind = kind})}
-    else ty
+    case Link ty then
+      substUniVars subst ty
+    end
   | ty -> smap_Type_Type (substUniVars subst) ty
 
   sem substUniVarsInUni : UniVarSubst -> Unification -> Unification
