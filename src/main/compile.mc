@@ -24,6 +24,7 @@ include "pmexpr/demote.mc"
 include "tuning/context-expansion.mc"
 include "tuning/tune-file.mc"
 include "jvm/compile.mc"
+include "wasm/compile.mc"
 include "peval/compile.mc"
 
 
@@ -109,6 +110,7 @@ let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
 
     let res =
       if options.toJVM then compileMCoreToJVM ast else
+      if options.toWasm then compileMCoreToWasm ast else
       if options.toJavaScript then compileMCoreToJS
         { compileJSOptionsEmpty with
           targetPlatform = parseJSTarget options.jsTarget

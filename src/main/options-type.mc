@@ -33,5 +33,6 @@ type Options = {
   disableJsGeneralOptimizations : Bool,
   disableJsTCO : Bool,
   output : Option String,
-  tuneOptions : TuneOptions
+  tuneOptions : TuneOptions,
+  toWasm: Bool
 }

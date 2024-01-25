@@ -36,7 +36,8 @@ let optionsDefault : Options = {
   disableJsGeneralOptimizations = false,
   disableJsTCO = false,
   output = None (),
-  tuneOptions = tuneOptionsDefault
+  tuneOptions = tuneOptionsDefault,
+  toWasm = false
 }
 
 -- Get the help string for options
