@@ -79,8 +79,8 @@ lang FutharkRecordParamLift = FutharkAst
               mapValues
                 (mapMapWithKey
                   (lam k : SID. lam v : ParamData.
-                    FERecordProj {
-                      rec = argExpr, key = k, ty = v.1,
+                    FEProj {
+                      target = argExpr, label = k, ty = v.1,
                       info = infoFutTm argExpr})
                   fields)
             else [argExpr])
@@ -125,14 +125,14 @@ lang FutharkRecordParamLift = FutharkAst
         mapRemove id (collectRecordFields paramReplace t.lhs)
       else sfold_FExpr_FExpr collectRecordFields paramReplace (FEApp t)
     else sfold_FExpr_FExpr collectRecordFields paramReplace (FEApp t)
-  | FERecordProj t ->
-    match t.rec with FEVar {ident = id} then
+  | FEProj t ->
+    match t.target with FEVar {ident = id} then
       match mapLookup id paramReplace with Some usedFields then
-        let fieldId = nameSym (concat (nameGetStr id) (sidToString t.key)) in
-        let usedFields = mapInsert t.key (fieldId, t.ty) usedFields in
+        let fieldId = nameSym (concat (nameGetStr id) (sidToString t.label)) in
+        let usedFields = mapInsert t.label (fieldId, t.ty) usedFields in
         mapInsert id usedFields paramReplace
-      else sfold_FExpr_FExpr collectRecordFields paramReplace (FERecordProj t)
-    else sfold_FExpr_FExpr collectRecordFields paramReplace (FERecordProj t)
+      else sfold_FExpr_FExpr collectRecordFields paramReplace (FEProj t)
+    else sfold_FExpr_FExpr collectRecordFields paramReplace (FEProj t)
   | FERecordUpdate t ->
     match t.rec with FEVar {ident = id} then
       mapRemove id paramReplace
@@ -140,10 +140,10 @@ lang FutharkRecordParamLift = FutharkAst
   | t -> sfold_FExpr_FExpr collectRecordFields paramReplace t
 
   sem replaceProjections (paramReplace : Map Name (Map SID ParamData)) =
-  | FERecordProj t ->
-    match t.rec with FEVar {ident = id} then
+  | FEProj t ->
+    match t.target with FEVar {ident = id} then
       match mapLookup id paramReplace with Some usedFields then
-        match mapLookup t.key usedFields with Some data then
+        match mapLookup t.label usedFields with Some data then
           let data : ParamData = data in
           FEVar {ident = data.0, ty = data.1, info = t.info}
         else
@@ -152,8 +152,8 @@ lang FutharkRecordParamLift = FutharkAst
           -- collection phase. If we were to get here, there is a bug in the
           -- implementation. What would be a good error message here?
           errorSingle [t.info] "Failed to replace record with its fields"
-      else smap_FExpr_FExpr (replaceProjections paramReplace) (FERecordProj t)
-    else smap_FExpr_FExpr (replaceProjections paramReplace) (FERecordProj t)
+      else smap_FExpr_FExpr (replaceProjections paramReplace) (FEProj t)
+    else smap_FExpr_FExpr (replaceProjections paramReplace) (FEProj t)
   | t -> smap_FExpr_FExpr (replaceProjections paramReplace) t
 
   sem liftRecordParametersDecl (replaceMap : Map Name FunctionReplaceData) =

@@ -8,7 +8,7 @@ include "futhark/pprint.mc"
 
 lang FutharkDeadcodeElimination = FutharkAst
   sem deadcodeEliminationType (used : Set Name) =
-  | FTyArray {dim = Some id} -> setInsert id used
+  | FTyArray {dim = Some (NamedDim id)} -> setInsert id used
   | t -> sfold_FType_FType deadcodeEliminationType used t
 
   sem deadcodeEliminationExpr (used : Set Name) =

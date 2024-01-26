@@ -48,10 +48,30 @@ let futPprintLabelString = lam env. lam sid.
   let id = nameNoSym (_futEscapeLabel (sidToString sid)) in
   pprintEnvGetStr env id
 
-lang FutharkConstPrettyPrint = FutharkAst
+lang FutharkLiteralSizePrettyPrint = FutharkAst
+  sem pprintIntSize : FutIntSize -> String
+  sem pprintIntSize =
+  | I8 _ -> "i8"
+  | I16 _ -> "i16"
+  | I32 _ -> "i32"
+  | I64 _ -> "i64"
+
+  sem pprintFloatSize : FutFloatSize -> String
+  sem pprintFloatSize =
+  | F32 _ -> "f32"
+  | F64 _ -> "f64"
+end
+
+lang FutharkConstPrettyPrint = FutharkAst + FutharkLiteralSizePrettyPrint
   sem pprintConst =
-  | FCInt t -> join [int2string t.val, "i64"]
-  | FCFloat t -> join [futharkFloat2string t.val, "f64"]
+  | FCInt t ->
+    concat
+      (int2string t.val)
+      (optionGetOrElse (lam. "") (optionMap pprintIntSize t.sz))
+  | FCFloat t ->
+    concat
+      (futharkFloat2string t.val)
+      (optionGetOrElse (lam. "") (optionMap pprintFloatSize t.sz))
   | FCBool t -> if t.val then "true" else "false"
   | FCAdd () -> "(+)"
   | FCSub () -> "(-)"
@@ -69,6 +89,13 @@ lang FutharkConstPrettyPrint = FutharkAst
   | FCLt () -> "(<)"
   | FCGeq () -> "(>=)"
   | FCLeq () -> "(<=)"
+  | FCAnd () -> "(&&)"
+  | FCOr () -> "(||)"
+  | FCBitAnd () -> "(&)"
+  | FCBitOr () -> "(|)"
+  | FCBitXor () -> "(^)"
+  | FCSrl () -> "(>>)"
+  | FCSll () -> "(<<)"
   | FCMap () -> "map"
   | FCMap2 () -> "map2"
   | FCReduce () -> "reduce"
@@ -123,19 +150,24 @@ lang FutharkTypeParamPrettyPrint = FutharkAst
     (env, cons '\'' n)
 end
 
-lang FutharkTypePrettyPrint = FutharkAst
+lang FutharkTypePrettyPrint = FutharkLiteralSizePrettyPrint
   sem pprintExpr : Int -> PprintEnv -> FutExpr -> (PprintEnv, String)
+
+  sem pprintArrayDim : PprintEnv -> FutArrayDim -> (PprintEnv, String)
+  sem pprintArrayDim env =
+  | NamedDim id -> futPprintEnvGetStr env id
+  | AbsDim n -> (env, int2string n)
 
   sem pprintType : Int -> PprintEnv -> FutType -> (PprintEnv, String)
   sem pprintType indent env =
   | FTyUnknown _ -> (env, "")
-  | FTyInt _ -> (env, "i64")
-  | FTyFloat _ -> (env, "f64")
+  | FTyInt t -> (env, pprintIntSize t.sz)
+  | FTyFloat t -> (env, pprintFloatSize t.sz)
   | FTyBool _ -> (env, "bool")
   | FTyIdent {ident = ident} -> futPprintEnvGetStr env ident
   | FTyArray {elem = elem, dim = dim} ->
     let pprintDim = lam dim.
-      optionMapOrElse (lam. (env, "")) (futPprintEnvGetStr env) dim in
+      optionMapOrElse (lam. (env, "")) (pprintArrayDim env) dim in
     match pprintDim dim with (env, dimStr) in
     match pprintType indent env elem with (env, elem) in
     (env, join ["[", dimStr, "]", elem])
@@ -164,9 +196,9 @@ lang FutharkExprPrettyPrint = FutharkAst + FutharkConstPrettyPrint +
   | FEVar _ -> true
   | FEVarExt _ -> true
   | FESizeCoercion _ -> true
+  | FEProj _ -> false
   | FERecord _ -> true
   | FERecordUpdate _ -> true
-  | FERecordProj _ -> false
   | FEArray _ -> true
   | FEArrayAccess _ -> false
   | FEArrayUpdate _ -> false
@@ -206,6 +238,10 @@ lang FutharkExprPrettyPrint = FutharkAst + FutharkConstPrettyPrint +
     -- eliminated from the AST at an earlier point. As they have no effect on
     -- the evaluation of the program, they are replaced by empty tuples.
     (env, join ["()"])
+  | FEProj {target = target, label = label} ->
+    match pprintParen indent env target with (env, target) in
+    match futPprintLabelString env label with (env, str) in
+    (env, join [target, ".", str])
   | FERecord {fields = fields} ->
     let pprintField = lam env. lam k. lam v.
       match futPprintLabelString env k with (env, str) in
@@ -214,10 +250,6 @@ lang FutharkExprPrettyPrint = FutharkAst + FutharkConstPrettyPrint +
     in
     match mapMapAccum pprintField env fields with (env, fields) in
     (env, join ["{", strJoin "," (mapValues fields), "}"])
-  | FERecordProj {rec = rec, key = key} ->
-    match pprintParen indent env rec with (env, rec) in
-    match futPprintLabelString env key with (env, str) in
-    (env, join [rec, ".", str])
   | FERecordUpdate {rec = rec, key = key, value = value} ->
     match pprintParen indent env rec with (env, rec) in
     match futPprintLabelString env key with (env, key) in
@@ -352,6 +384,9 @@ lang FutharkPrettyPrint =
     match futPprintEnvGetStr env ident with (env, ident) in
     match pprintType 0 env ty with (env, ty) in
     (env, join ["type ", ident, " ", strJoin " " typeParams, " = ", ty])
+  | FDeclModuleAlias { ident = ident, moduleId = moduleId } ->
+    match futPprintEnvGetStr env ident with (env, ident) in
+    (env, join ["module ", ident, " = ", moduleId])
 end
 
 mexpr

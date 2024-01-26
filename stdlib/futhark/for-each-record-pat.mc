@@ -14,12 +14,12 @@ lang FutharkForEachRecordPattern = FutharkAst
           fieldData in
       FERecord {fields = fields, ty = t.ty, info = t.info}
     else FEVar t
-  | FERecordProj ({rec = FEVar {ident = id}} & t) ->
+  | FEProj ({target = FEVar {ident = id}} & t) ->
     if nameEq recId id then
-      match mapLookup t.key fieldData with Some (fieldId, ty) then
+      match mapLookup t.label fieldData with Some (fieldId, ty) then
         FEVar {ident = fieldId, ty = ty, info = t.info}
-      else FERecordProj {t with rec = useRecordFieldsInBody recId fieldData t.rec}
-    else FERecordProj {t with rec = useRecordFieldsInBody recId fieldData t.rec}
+      else FEProj {t with target = useRecordFieldsInBody recId fieldData t.target}
+    else FEProj {t with target = useRecordFieldsInBody recId fieldData t.target}
   | FERecordUpdate ({rec = FEVar {ident = id}} & t) ->
     if nameEq recId id then
       let fields : Map SID FutExpr =
