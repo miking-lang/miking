@@ -399,26 +399,6 @@ lang RepTypesShallowSolverInterface = OpVarAst + OpImplAst + UnifyPure
   sem cmpSolution : all a. SolverSolution a -> SolverSolution a -> Int
 end
 
-type SolutionDebugTarget
-con SDTNone : () -> SolutionDebugTarget
-con SDTStdout : () -> SolutionDebugTarget
-con SDTFunc : (Int -> String -> ()) -> SolutionDebugTarget
-type ReprSolverOptions =
-  { debugBranchState : Bool
-  , debugFinalSolution : SolutionDebugTarget
-  , debugSolveProcess : Bool
-  , debugSolveTiming : Bool
-  , solveAll : Bool
-  }
-
-let defaultReprSolverOptions : ReprSolverOptions =
-  { debugBranchState = false
-  , debugFinalSolution = SDTNone ()
-  , debugSolveProcess = false
-  , debugSolveTiming = false
-  , solveAll = false
-  }
-
 type VarMap v = {reprs : Map Symbol v, metas : Map Name v}
 let varMapEmpty : all v. VarMap v = unsafeCoerce
   { metas = mapEmpty nameCmp
@@ -661,6 +641,26 @@ lang LocallyNamelessStuff = MetaVarTypeAst + ReprTypeAst + AllTypeAst + VarTypeA
     , res = ty
     }
 end
+
+type SolutionDebugTarget
+con SDTNone : () -> SolutionDebugTarget
+con SDTStdout : () -> SolutionDebugTarget
+con SDTFunc : (Int -> String -> ()) -> SolutionDebugTarget
+type ReprSolverOptions =
+  { debugBranchState : Bool
+  , debugFinalSolution : SolutionDebugTarget
+  , debugSolveProcess : Bool
+  , debugSolveTiming : Bool
+  , solveAll : Bool
+  }
+
+let defaultReprSolverOptions : ReprSolverOptions =
+  { debugBranchState = false
+  , debugFinalSolution = SDTNone ()
+  , debugSolveProcess = false
+  , debugSolveTiming = false
+  , solveAll = false
+  }
 
 lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + VarAst + LetAst + OpDeclAst + ReprDeclAst + ReprTypeAst + UnifyPure + AliasTypeAst + PrettyPrint + ReprSubstAst + RepTypesHelpers
   -- Top interface, meant to be used outside --
@@ -4394,8 +4394,9 @@ lang TreeSolverZ3 = TreeSolverBase + MExprAst
         (st, snoc acc.1 (AEq (ALit l, ALit out))))
       (state, equalities)
       puf in
-    match f getReprVar getRepr state [] uni.reprs with (state, equalities) in
-    match f getMetaVar (tyToZ3 []) state [] uni.types with (state, equalities) in
+    let equalities = [] in
+    match f getReprVar getRepr state equalities uni.reprs with (state, equalities) in
+    match f getMetaVar (tyToZ3 []) state equalities uni.types with (state, equalities) in
     (state, equalities)
 
   sem pprintZ3Helper : String -> String -> [Ast] -> String
@@ -4439,6 +4440,48 @@ lang TreeSolverZ3 = TreeSolverBase + MExprAst
       match arm with (idx, body) in
       join ["(ite (= ", scrut, " ", int2string idx, ")\n", iindent, pprintZ3Ast iindent body, "\n", indent, acc, ")"] in
     foldr f (pprintZ3Ast iindent default) arms
+
+  sem parseZ3Output : String -> Option RTExtSol
+  sem parseZ3Output =
+  | _ -> None ()
+  | "sat\n\"" ++ str ++ "\"\n" ->
+    recursive let ltrim = lam str.
+      switch str
+      case "" then str
+      case " " ++ str then ltrim str
+      case str then str
+      end in
+    let partitionWhile : all a. (a -> Bool) -> [a] -> ([a], [a]) = lam pred. lam seq.
+      match index (lam x. not (pred x)) seq with Some idx
+      then splitAt seq idx
+      else (seq, []) in
+    let repeatUntilNone : all a. all x. (x -> Option (a, x)) -> x -> ([a], x) = lam f.
+      recursive let work = lam acc. lam x.
+        match f x with Some (a, x) then
+          work (snoc acc a) x
+        else (acc, x)
+      in work [] in
+    recursive let parseOne = lam str.
+      switch ltrim str
+      case "(and " ++ str then
+        match repeatUntilNone parseOne str with (children, str) in
+        match ltrim str with ")" ++ str in
+        Some (RTExtAnd children, str)
+      case "(or " ++ str then
+        match partitionWhile isDigit str with (digits, str) in
+        let str = ltrim str in
+        match parseOne str with Some (child, str) then
+          match ltrim str with ")" ++ str in
+          Some (RTExtOr {idx = string2int digits, sub = child}, str)
+        else None ()
+      case "single" ++ str then
+        Some (RTExtSingle (), str)
+      case _ then
+        None ()
+      end in
+    match parseOne str with Some (rt, str)
+    then if null str then Some rt else error (concat "Extra stuff left in str: " str)
+    else None ()
 
   sem solveWork debug = | top ->
     let propagateInterface = mkPropagateInterface () in
@@ -4500,9 +4543,10 @@ lang TreeSolverZ3 = TreeSolverBase + MExprAst
               , child.val.boolExpr
               ) in
             match uniToZ3 st uni with (st, predicates) in
+            let lenEq = AEq (ALit "(seq.len ss)", ALit (int2string (length children))) in
             let boolExpr = AMatch
               ( "sol"
-              , [("(solAnd ss)", AAnd (concat predicates (mapi childToBool children)))]
+              , [("(solAnd ss)", AAnd (join [[lenEq], predicates, mapi childToBool children]))]
               , Some (ALit "false")
               ) in
             (st, {costExpr = costExpr, boolExpr = boolExpr})
@@ -4585,14 +4629,17 @@ lang TreeSolverZ3 = TreeSolverBase + MExprAst
         , "(eval (pp-sol sol))"
         ] in
 
-      printLn "# Input model:";
-      printLn program;
+      -- printLn "# Input model:";
+      -- printLn program;
       let res = sysRunCommand ["z3", "-smt2", "-in"] program "." in
-      printLn "# Output:";
-      printLn res.stdout;
-      printLn "# Error:";
-      printLn res.stderr;
-      printLn (join ["# Exit code: ", int2string res.returncode]);
+      -- printLn "# Output:";
+      -- printLn res.stdout;
+      -- printLn "# Error:";
+      -- printLn res.stderr;
+      -- printLn (join ["# Exit code: ", int2string res.returncode]);
+      match parseZ3Output res.stdout with Some rtext
+      then mk rtext
+      else errorSingle [] "Z3 could not find an optimal solution"
 
       error "TODOsolve"
     else errorSingle [] "Could not find a consistent assignment of impls across the program"
