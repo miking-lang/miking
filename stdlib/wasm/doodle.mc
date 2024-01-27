@@ -22,12 +22,6 @@ lang WasmAST
         instructions: [Instr]
     }
 
-    -- syn TableFunc = 
-    -- | TableFunction {
-    --     arity: Int,
-    --     instructions: [Instr]
-    -- }
-
     syn Mod = 
     | Module {
         functions: [Func],
@@ -48,7 +42,7 @@ let ctxAddedFunc = lam ctx: Context. lam f: (use WasmAST in Func).
 
 let lastFunctionName = lam ctx : Context. 
     use WasmAST in 
-    match (head ctx.functions) with Function {alias = a, args=_, instructions= _}
+    match (head ctx.functions) with Function {alias = a, args = _, instructions = _}
         then a
         else error "???"
 
