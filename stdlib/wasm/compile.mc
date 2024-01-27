@@ -92,14 +92,22 @@ lang WasmCompile = MExprAst + WasmAST
     sem compileCtx ctx =
     | TmConst { val = c, info = _ } -> 
         match c with CInt {val = v} 
-            then (let newCtx = ctxAddedFunc ctx (Function {
-                args=[], 
-                alias=(concat "f" (int2string ctx.nextFunctionId)),
-                instructions = [I32Const v]
-            }) in (newCtx, [Call (lastFunctionName newCtx)])) 
+            then (ctx, [I32Const v])
         else match c with CAddi _ then (ctx, [Call "addi"])
         else error "TmConst(???)"
-    -- | TmVar { ident = (id, _) } -> (concat "TmVar_" id)
+    | TmVar r -> (ctx, [LocalGet r.ident.0])
+    | TmLam r -> 
+        match compileCtx ctx r.body with (ctx2, instrs)
+        then
+            let fid = (concat "f" (int2string ctx2.nextFunctionId)) in
+            let f = Function {
+                alias = fid,
+                args = [r.ident.0],
+                instructions = instrs
+            } in
+            let ctx3 = ctxAddedFunc ctx2 f in
+            (ctx3, [Call (lastFunctionName ctx3)])
+        else error "Could not compile TmLam"
     | TmApp { lhs = l, rhs = r} -> 
         let rresult = compileCtx ctx r in 
         match rresult with (rctx, rinstrs)
@@ -134,7 +142,8 @@ let mol = (Function({
     alias="meaningOfLife",
     instructions=[I32Const 42]
 })) in
-let add123 = (addi_ (int_ 1) (addi_ (int_ 2) (int_ 3))) in
+-- let add123 = (addi_ (int_ 1) (addi_ (int_ 2) (int_ 3))) in
+let f1 = (app_ (lam_ "x" tyint_ (addi_ (var_ "x") (int_ 1))) (int_ 3)) in
 utest ctxAddedFunc emptyCtx mol with {nextFunctionId = 1, functions=[mol]} in
 utest lastFunctionName (ctxAddedFunc emptyCtx mol) with "meaningOfLife" in
-(printLn (pprintMod (compile add123)))
+(printLn (pprintMod (compile f1)))
