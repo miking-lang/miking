@@ -91,9 +91,8 @@ lang WasmCompile = MExprAst + WasmAST
     sem compileCtx : Context -> Expr -> (Context, [Instr])
     sem compileCtx ctx =
     | TmConst { val = c, info = _ } -> 
-        match c with CInt {val = v} 
-            then (ctx, [I32Const v])
-        else match c with CAddi _ then (ctx, [Call "addi"])
+        match c with CInt {val = v} then (ctx, [I32Const v])
+        else match c with CAddi _ then (ctx, [I32Add()])
         else error "TmConst(???)"
     | TmVar r -> (ctx, [LocalGet r.ident.0])
     | TmLam r -> 
