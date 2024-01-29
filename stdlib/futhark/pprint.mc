@@ -55,6 +55,10 @@ lang FutharkLiteralSizePrettyPrint = FutharkAst
   | I16 _ -> "i16"
   | I32 _ -> "i32"
   | I64 _ -> "i64"
+  | U8 _ -> "u8"
+  | U16 _ -> "u16"
+  | U32 _ -> "u32"
+  | U64 _ -> "u64"
 
   sem pprintFloatSize : FutFloatSize -> String
   sem pprintFloatSize =
