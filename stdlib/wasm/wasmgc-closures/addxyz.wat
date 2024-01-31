@@ -77,13 +77,12 @@
             (ref.cast (ref $i32box) (local.get $y))
             (struct.get $clos $func_pointer (local.get $cl))))
 
-
-    ;; (func $apply-twice (param $clos (ref $clos-i32-i32)) (param $x anyref) (result (ref $i32box))
-    ;;     (call_indirect
-    ;;         (type $type-twice)  ;; Function type
-    ;;         (ref.cast (ref $clos-i32-i32) (struct.get $clos-i32-i32 $env (local.get $clos)))
-    ;;         (ref.cast (ref $i32box) (local.get $x))
-    ;;         (struct.get $clos-i32-i32 $func_pointer (local.get $clos)))) 
+    (func $apply_f (param $cl (ref $clos)) (param $x anyref) (result (ref $clos))
+        (call_indirect
+            (type $f_type)
+            (ref.cast (ref $f_env) (struct.get $clos $env (local.get $cl)))
+            (ref.cast (ref $i32box) (local.get $x))
+            (struct.get $clos $func_pointer (local.get $cl))))
 
     (func $apply (param $clos (ref $clos)) (param $env anyref) (result anyref)
         (local $fp i32)
@@ -91,29 +90,39 @@
         (local.set $fp (struct.get $clos $func_pointer (local.get $clos)))
         (if (i32.eq (local.get $fp) (i32.const 0))
             (then (local.set $result (call $apply_h (local.get $clos) (local.get $env))) )
-            ;; (else (local.set $result (call $box (i32.const 666)))))
-            (else (local.set $result (call $apply_g (local.get $clos) (local.get $env)))))
+            (else (if (i32.eq (local.get $fp) (i32.const 1))
+                      (then (local.set $result (call $apply_g (local.get $clos) (local.get $env))))
+                      (else (local.set $result (call $apply_f (local.get $clos) (local.get $env)))))))
         (local.get $result)
     )
 
-
-
-
-    ;; (elem (i32.const 0) $addi $twice)
-
-   
-
     (func (export "mexpr") (result i32)
-        (local $result (ref $i32box))
-        (local.set $result (ref.cast (ref $i32box) 
-            (call $apply 
-            (ref.cast (ref $clos) 
+        (local $fresult (ref $clos))
+        (local $gresult (ref $clos))
+        (local $hresult (ref $i32box))
+        (local.set 
+            $fresult 
+            (ref.cast 
+                (ref $clos) 
                 (call $apply 
                     (struct.new $clos 
-                        (i32.const 1)
-                        (ref.cast anyref (struct.new $g_env (call $box (i32.const 1)))))
-                    (ref.cast anyref (call $box (i32.const 10)))))
-                (call $box (i32.const 10)))))
-        (call $unbox (local.get $result))
+                        (i32.const 2)
+                        (ref.cast anyref (struct.new $f_env)))
+                    (ref.cast anyref (call $box (i32.const 10))))))
+        (local.set
+            $gresult
+            (ref.cast 
+                (ref $clos)
+                (call $apply
+                    (local.get $fresult)
+                    (call $box (i32.const 11)))))
+        (local.set
+            $hresult
+            (ref.cast 
+                (ref $i32box)
+                (call $apply
+                    (local.get $gresult)
+                    (call $box (i32.const 12)))))
+        (call $unbox (local.get $hresult))
     )
 )
