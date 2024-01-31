@@ -1,19 +1,8 @@
 include "ast-builder.mc"
 include "common.mc"
+include "math.mc"
 include "ocaml/pprint.mc"
 include "mexpr/record.mc"
-
--- Converts a given float to a string that uses a valid representation in
--- Futhark. This is needed because the 'float2string' intrinsic emits the
--- digits of the faction after the dot if the value is an integer.
-let futharkFloat2string = lam f.
-  let s = float2string f in
-  if eqi (floorfi f) (ceilfi f) then
-    snoc s '0'
-  else s
-
-utest futharkFloat2string 2.0 with "2.0"
-utest futharkFloat2string 3.14 with "3.14"
 
 let _futReplaceInvalidChar = lam c.
   if isAlphaOrUnderscore c then c
@@ -67,15 +56,35 @@ lang FutharkLiteralSizePrettyPrint = FutharkAst
 end
 
 lang FutharkConstPrettyPrint = FutharkAst + FutharkLiteralSizePrettyPrint
+  -- NOTE(larshum, 2024-01-31): Prints floating-point numbers in a way that is
+  -- supported by Futhark. Firstly, we print NaN and infinity as an access into
+  -- the appropriate module based on the size of the floating point, as these
+  -- are not directly available as literals in Futhark. Secondly, we add a zero
+  -- to the end of floating points that are equal to integers due to an
+  -- incompatibility between the format used by 'float2string' and the
+  -- floating-point format used in Futhark.
+  sem futharkFloatToString : Float -> Option FutFloatSize -> String
+  sem futharkFloatToString v =
+  | sz ->
+    let sz = match sz with Some (F32 _) then F32 () else F64 () in
+    let szStr = pprintFloatSize sz in
+    if neqf v v then
+      concat szStr ".nan"
+    else if eqf v inf then
+      concat szStr ".inf"
+    else if eqf v (negf inf) then
+      join ["-", szStr, ".inf"]
+    else if eqf (subf (int2float (roundfi v)) v) 0.0 then
+      join [float2string v, "0", szStr]
+    else concat (float2string v) szStr
+
   sem pprintConst =
   | FCInt t ->
     concat
       (int2string t.val)
       (optionGetOrElse (lam. "") (optionMap pprintIntSize t.sz))
   | FCFloat t ->
-    concat
-      (futharkFloat2string t.val)
-      (optionGetOrElse (lam. "") (optionMap pprintFloatSize t.sz))
+    futharkFloatToString t.val t.sz
   | FCBool t -> if t.val then "true" else "false"
   | FCAdd () -> "(+)"
   | FCSub () -> "(-)"
@@ -396,6 +405,19 @@ end
 mexpr
 
 use FutharkPrettyPrint in
+
+utest futharkFloatToString 0.0 (None ()) with "0.0f64" in
+utest futharkFloatToString 0.0 (Some (F32 ())) with "0.0f32" in
+utest futharkFloatToString 0.0 (Some (F64 ())) with "0.0f64" in
+utest futharkFloatToString inf (None ()) with "f64.inf" in
+utest futharkFloatToString inf (Some (F32 ())) with "f32.inf" in
+utest futharkFloatToString inf (Some (F64 ())) with "f64.inf" in
+utest futharkFloatToString (negf inf) (None ()) with "-f64.inf" in
+utest futharkFloatToString (negf inf) (Some (F32 ())) with "-f32.inf" in
+utest futharkFloatToString (negf inf) (Some (F64 ())) with "-f64.inf" in
+utest futharkFloatToString nan (None ()) with "f64.nan" in
+utest futharkFloatToString nan (Some (F32 ())) with "f32.nan" in
+utest futharkFloatToString nan (Some (F64 ())) with "f64.nan" in
 
 let printDecl = lam decl.
   let prog = FProg {decls = [decl]} in
