@@ -1,1 +1,8 @@
-while inotifywait -e close_write inner-outer.wat; do wasm-as -all inner-outer.wat -o inner-outer.wasm; done
+clear; 
+wasm-as -all $1 -o $2; 
+echo $1; 
+echo $2;
+while inotifywait -e close_write $1; do 
+    clear; 
+    wasm-as -all $1 -o $2; 
+done

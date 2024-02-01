@@ -1,8 +1,8 @@
-(module  
+(module
     (type $type-i32-i32 (func (param i32) (result i32)))
     (type $clos-i32-i32 (struct
         (field $func_pointer i32)
-        (field $arg0 anyref)
+        (field $env anyref)
     ))
 
     (type $i32box (struct (field $value i32)))
@@ -14,12 +14,12 @@
         (struct.get $i32box $value (local.get $box)))
 
     (type $type-add (func (param (ref $i32box)) (param (ref $i32box)) (result (ref $i32box))))
-    (type $type-twice (func (param (ref $clos-i32-i32)) (param (ref $i32box)) (result (ref $i32box))))  
+    (type $type-twice (func (param (ref $clos-i32-i32)) (param (ref $i32box)) (result (ref $i32box))))
 
     (func $addi (param $x (ref $i32box)) (param $y (ref $i32box)) (result (ref $i32box))
         (call $box (i32.add 
-            (struct.get $i32box $value (local.get $x)) 
-            (struct.get $i32box $value (local.get $y))))
+            (call $unbox (local.get $x)) 
+            (call $unbox (local.get $y))))
     )
 
     (func $twice (param $clos (ref $clos-i32-i32)) 
@@ -48,25 +48,25 @@
         (call_indirect
             (type $type-add)  ;; Function type
             ;; (struct.new $i32box (i32.const 10))
-            (ref.cast (ref $i32box) (struct.get $clos-i32-i32 $arg0 (local.get $clos)))
+            (ref.cast (ref $i32box) (struct.get $clos-i32-i32 $env (local.get $clos)))
             (ref.cast (ref $i32box) (local.get $x))
             (struct.get $clos-i32-i32 $func_pointer (local.get $clos))))  
 
     (func $apply-twice (param $clos (ref $clos-i32-i32)) (param $x anyref) (result (ref $i32box))
         (call_indirect
             (type $type-twice)  ;; Function type
-            (ref.cast (ref $clos-i32-i32) (struct.get $clos-i32-i32 $arg0 (local.get $clos)))
+            (ref.cast (ref $clos-i32-i32) (struct.get $clos-i32-i32 $env (local.get $clos)))
             (ref.cast (ref $i32box) (local.get $x))
             (struct.get $clos-i32-i32 $func_pointer (local.get $clos)))) 
 
-    (func $apply (param $clos (ref $clos-i32-i32)) (param $arg anyref) (result anyref)
+    (func $apply (param $clos (ref $clos-i32-i32)) (param $env anyref) (result anyref)
         (local $fp i32)
         (local $result anyref)
         (local.set $fp (struct.get $clos-i32-i32 $func_pointer (local.get $clos)))
         (if (i32.eq (local.get $fp) (i32.const 0))
-            (then (local.set $result (call $apply-add (local.get $clos) (local.get $arg))) )
+            (then (local.set $result (call $apply-add (local.get $clos) (local.get $env))) )
             ;; (else (local.set $result (call $box (i32.const 666)))))
-            (else (local.set $result (call $apply-twice (local.get $clos) (local.get $arg)))))
+            (else (local.set $result (call $apply-twice (local.get $clos) (local.get $env)))))
         (local.get $result)
     )
 
@@ -75,6 +75,6 @@
         (local $addTwo (ref $clos-i32-i32))
         (local.set $incr (call $make-addi (i32.const 1)))
         (local.set $addTwo (call $make-twice (local.get $incr)))
-        (call $unbox (ref.cast (ref $i32box) (call $apply (local.get $addTwo) (call $box (i32.const 40)))))
+        (call $unbox (ref.cast (ref $i32box) (call $apply (local.get $addTwo) (call $box (i32.const -2)))))
     )
 )

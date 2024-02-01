@@ -1,5 +1,5 @@
 include "mexpr/pprint.mc"
-
+include "mexpr/lamlift.mc"
 include "mexpr/ast.mc"
 include "mexpr/info.mc"
 include "mexpr/type.mc"
@@ -115,6 +115,7 @@ lang WasmCompile = MExprAst + WasmAST
                 then (lrctx, join [rinstrs, linstrs])
                 else error "???"
             else error "???"
+    | TmLet r -> error "Encountered Unhandled TmLet"
     | whatever -> error "I don't know this."
 
     sem compile: Expr -> Mod
@@ -128,10 +129,13 @@ end
 lang WasmCompilePPrint = WasmCompile + WasmPrettyPrint end
 
 let compileMCoreToWasm = lam ast.
-    -- use MExprPrettyPrint in
-    -- printLn (expr2str ast);
-    use WasmCompilePPrint in
-    printLn (pprintMod (compile ast));
+    use MExprLambdaLift in
+    let ast = liftLambdas ast in
+    use MExprPrettyPrint in
+    printLn (expr2str ast)
+
+    -- use WasmCompilePPrint in
+    -- printLn (pprintMod (compile ast));
     ""
 
 mexpr
@@ -141,8 +145,10 @@ let mol = (Function({
     alias="meaningOfLife",
     instructions=[I32Const 42]
 })) in
--- let add123 = (addi_ (int_ 1) (addi_ (int_ 2) (int_ 3))) in
 let f1 = (app_ (lam_ "x" tyint_ (addi_ (var_ "x") (int_ 1))) (int_ 3)) in
-utest ctxAddedFunc emptyCtx mol with {nextFunctionId = 1, functions=[mol]} in
-utest lastFunctionName (ctxAddedFunc emptyCtx mol) with "meaningOfLife" in
-(printLn (pprintMod (compile f1)))
+(printLn (compileMCoreToWasm f1))
+-- let add123 = (addi_ (int_ 1) (addi_ (int_ 2) (int_ 3))) in
+-- let f1 = (app_ (lam_ "x" tyint_ (addi_ (var_ "x") (int_ 1))) (int_ 3)) in
+-- utest ctxAddedFunc emptyCtx mol with {nextFunctionId = 1, functions=[mol]} in
+-- utest lastFunctionName (ctxAddedFunc emptyCtx mol) with "meaningOfLife" in
+-- (printLn (pprintMod (compile f1)))
