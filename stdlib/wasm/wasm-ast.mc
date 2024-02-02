@@ -28,6 +28,15 @@ lang WasmAST
         instructions: [Instr]
     }
 
+    syn WasmType = 
+    | StructType {
+        name: String,
+        fields: [{
+            name: String,
+            typeString: String
+        }]
+    }
+
     syn Mod = 
     | Module {
         functions: [Func],

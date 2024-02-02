@@ -4,6 +4,7 @@ include "seq.mc"
 include "common.mc"
 
 let indent2str = lam indent. make (muli indent 4) ' '
+let indent2strnewline = lam indent. concat "\n" (make (muli indent 4) ' ')
 
 lang WasmPPrint = WasmAST
     sem pprintInstr: Int -> Instr -> String
@@ -46,6 +47,16 @@ lang WasmPPrint = WasmAST
         let instrStrs = strJoin sep (map (pprintInstr 1) r.instructions) in
         join ["(func $", r.name, " ", params, " ", result, "\n    ", localStrs, sep, instrStrs, ")"]
     
+    sem pprintType indent = 
+    | StructType r -> 
+        let indent1 = indent2strnewline (addi 1 indent) in
+        let indent2 = indent2strnewline (addi 2 indent) in
+        let pprintField = lam field. 
+            join ["(field $", field.name, " ", field.typeString, ")"] in
+        let fieldsStr = match r.fields with []
+            then ""
+            else concat indent2 (strJoin indent2 (map pprintField r.fields)) in
+        join ["(type $", r.name, indent1, "(struct", fieldsStr, "))"]
 end
 
 mexpr
@@ -59,6 +70,8 @@ utest pprintInstr 0 (Call ("f", [I32Const 10])) with "(call $f\n    (i32.const 1
 utest pprintInstr 0 (Call ("f", [I32Const 10, I32Const 20])) with "(call $f\n    (i32.const 10)\n    (i32.const 20))" in 
 utest pprintInstr 0 (StructGet {typeAlias="foo", field="bar", value=LocalGet "s"}) with
     "(struct.get $foo $bar\n    (local.get $s))" in
+utest pprintType 0 (StructType {name="point", fields=[{name="x", typeString="i32"}, {name="y", typeString="i32"}]}) with
+    "(type $point\n    (struct\n        (field $x i32)\n        (field $y i32)))" in
+utest pprintType 0 (StructType {name="empty", fields=[]}) with
+    "(type $empty\n    (struct))" in
 ()
--- (printLn (pprintInstr 0 (I32Add (I32Const 10, LocalGet "x"))))
---      "(i32.add (i32.const 10) (local.get $x))" in )

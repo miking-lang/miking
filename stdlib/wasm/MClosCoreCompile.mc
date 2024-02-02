@@ -26,9 +26,10 @@ lang MClosCoreCompile = MClosCore + WasmAST
         Call ("box", [addInstr])
     | TmFunc(id) -> 
         let fp = fNameToId id in
+        let envName = concat id "-env" in
         StructNew {
             typeAlias = "clos",
-            values = [I32Const fp, StructNew {typeAlias = "f-env", values = []}]
+            values = [I32Const fp, StructNew {typeAlias = envName, values = []}]
         }
     | TmVar(id) -> LocalGet id
     | TmEnvVar(env, id) -> match env with BasicEnv r
@@ -83,6 +84,31 @@ lang MClosCoreCompile = MClosCore + WasmAST
             }
         else 
             error "error"
+
+    sem compileEnvToWasmType: Env -> WasmType
+    sem compileEnvToWasmType = 
+    | BasicEnv r -> 
+        let var2wasmfield = lam var. {name = var, typeString = "(ref $i32box)"} in
+        StructType {
+            name = r.wasmTypeAlias,
+            fields = map var2wasmfield r.envVars
+        }
+
+    sem wrapExprInMExpr : Instr -> Func
+    sem wrapExprInMExpr = 
+    | instr -> 
+        let setResultInstr = LocalSet("result", instr) in
+        let unboxResultInstr = Call(
+            "unbox", 
+            [RefCast {
+                typeAlias = "i32box", 
+                value = LocalGet "result"}]) in
+        Function {
+            name = "mexpr",
+            args = [],
+            locals = [{name = "result", typeAlias="anyref"}],
+            instructions = [setResultInstr, unboxResultInstr]
+        } 
 end
 
 mexpr
@@ -111,28 +137,31 @@ let f = FuncDef("f", f_env, "x", TmApp(TmFunc("g"), TmEnvAdd {
     value = TmVar("x")
 })) in
 
+let gEnvType = compileEnvToWasmType g_env in 
+let gEnvTypeStr = (use WasmPPrint in pprintType 0 gEnvType) in 
+utest gEnvTypeStr with "(type $g-env\n    (struct\n        (field $x (ref $i32box))))" in 
 utest compileExpr (TmInt 10) with Call ("box", [I32Const 10]) in
 
-let mcc1 = TmApp(TmFunc("f"), TmInt(10)) in
-let wasm1 = compileExpr mcc1 in
-let str1 = (use WasmPPrint in (pprintInstr 0 wasm1)) in
+-- let mcc1 = TmApp(TmFunc("f"), TmInt(10)) in
+-- let wasm1 = compileExpr mcc1 in
+-- let str1 = (use WasmPPrint in (pprintInstr 0 wasm1)) in
 
-let mcc2 = TmApp(TmFunc("f"), 
-    TmEnvVar(BasicEnv {wasmTypeAlias = "some-env", envVars = ["x"]}, "x")) in
-let wasm2 = compileExpr mcc2 in
-let str2 = (use WasmPPrint in (pprintInstr 0 wasm2)) in 
+-- let mcc2 = TmApp(TmFunc("f"), 
+--     TmEnvVar(BasicEnv {wasmTypeAlias = "some-env", envVars = ["x"]}, "x")) in
+-- let wasm2 = compileExpr mcc2 in
+-- let str2 = (use WasmPPrint in (pprintInstr 0 wasm2)) in 
 
-let mcc3 = TmEnvAdd {
-    src = BasicEnv {envVars = ["y"], wasmTypeAlias = "base"},
-    target = BasicEnv {envVars = ["x", "y"], wasmTypeAlias = "base-with-x"},
-    newId = "x",
-    value = TmInt(10)
-} in 
-let wasm3 = compileExpr mcc3 in 
-let str3 = (use WasmPPrint in (pprintInstr 0 wasm3)) in
+-- let mcc3 = TmEnvAdd {
+--     src = BasicEnv {envVars = ["y"], wasmTypeAlias = "base"},
+--     target = BasicEnv {envVars = ["x", "y"], wasmTypeAlias = "base-with-x"},
+--     newId = "x",
+--     value = TmInt(10)
+-- } in 
+-- let wasm3 = compileExpr mcc3 in 
+-- let str3 = (use WasmPPrint in (pprintInstr 0 wasm3)) in
 
 -- let make_f = compileDef f in
--- let f_str = (use WasmPPrint in (pprintFunc make_f)) in 
+-- let f_str = (use WasmPPrint in5r (pprintFunc make_f)) in 
 -- let make_g = compileDef g in
 -- let g_str = (use WasmPPrint in (pprintFunc make_g)) in 
 -- let make_h = compileDef h in
@@ -149,7 +178,9 @@ let str3 = (use WasmPPrint in (pprintInstr 0 wasm3)) in
 -- (printLn str3)
 
 -- let e = TmApp(TmApp(TmApp(TmFunc("f"), TmInt(10)), TmInt(20)), TmInt(30)) in 
-let e = TmApp(TmApp(TmFunc("f"), TmInt(10)), TmInt(2)) in 
+let e = TmApp(TmApp(TmApp(TmFunc("f"), TmInt(10)), TmInt(2)), TmInt(42)) in 
 let wasm = compileExpr e in
-let str = (use WasmPPrint in (pprintInstr 0 wasm)) in
-(printLn str1)
+let main = wrapExprInMExpr wasm in
+let str = (use WasmPPrint in (pprintFunc main)) in
+-- let str = (use WasmPPrint in (pprintInstr 0 wasm)) in
+(printLn str)

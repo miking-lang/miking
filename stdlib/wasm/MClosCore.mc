@@ -14,7 +14,10 @@ lang MClosCore
     }
 
     syn Env =
-    | BasicEnv { envVars: [String], wasmTypeAlias: String }
+    | BasicEnv { 
+        envVars: [String], 
+        wasmTypeAlias: String
+    }
 
     syn Def = 
     | FuncDef(String, Env, String, Expr)
