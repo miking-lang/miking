@@ -47,6 +47,14 @@ lang WasmPPrint = WasmAST
         let instrStrs = strJoin sep (map (pprintInstr 1) r.instructions) in
         join ["(func $", r.name, " ", params, " ", result, "\n    ", localStrs, sep, instrStrs, ")"]
     
+    sem pprintMemory indent = 
+    | Table t -> 
+        join [indent2str indent, "(table ", int2string t.size, " ", t.typeString, ")"]
+    | Elem e -> 
+        let offsetStr = pprintInstr 0 e.offset in
+        let funcNamesStr = strJoin " " (map (concat "$") e.funcNames) in
+        join [indent2str indent, "(elem ", offsetStr, " ", funcNamesStr, ")"]
+
     sem pprintType indent = 
     | StructType r -> 
         let indent1 = indent2strnewline (addi 1 indent) in
@@ -56,7 +64,21 @@ lang WasmPPrint = WasmAST
         let fieldsStr = match r.fields with []
             then ""
             else concat indent2 (strJoin indent2 (map pprintField r.fields)) in
-        join ["(type $", r.name, indent1, "(struct", fieldsStr, "))"]
+        join [indent2str indent, "(type $", r.name, indent1, "(struct", fieldsStr, "))"]
+
+    sem pprintMod = 
+    | Module m -> 
+        let pprintExport = lam n. join ["    (export \"", n, "\" (func $", n, "))"] in
+        -- let pprintExport = lam n. n in 
+        let tableStr = pprintMemory 1 m.table in
+        let elemStr = pprintMemory 1 m.elem in 
+        let typeStr = strJoin "\n" (map (pprintType 1) m.types) in
+        let funcStr = strJoin "\n\n" (map pprintFunc m.functions) in 
+        let exportStr = strJoin "\n" (map pprintExport m.exports) in 
+
+        join ["(module\n", tableStr, "\n\n", typeStr, "\n\n", funcStr, 
+            "\n\n", elemStr, "\n", exportStr, ")"]
+    
 end
 
 mexpr
@@ -74,4 +96,8 @@ utest pprintType 0 (StructType {name="point", fields=[{name="x", typeString="i32
     "(type $point\n    (struct\n        (field $x i32)\n        (field $y i32)))" in
 utest pprintType 0 (StructType {name="empty", fields=[]}) with
     "(type $empty\n    (struct))" in
+utest pprintMemory 1 (Table {size = 5, typeString = "funcref"}) with
+    "    (table 5 funcref)" in
+utest pprintMemory 1 (Elem {offset=I32Const 0, funcNames=["f", "g", "h"]}) with
+    "    (elem (i32.const 0) $f $g $h)" in 
 ()

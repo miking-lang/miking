@@ -37,9 +37,16 @@ lang WasmAST
         }]
     }
 
+    syn WasmMemory = 
+    | Table {size: Int, typeString: String}
+    | Elem {offset: Instr, funcNames: [String]}
+
     syn Mod = 
     | Module {
         functions: [Func],
+        table: WasmMemory, 
+        elem: WasmMemory, 
+        types: [WasmType],
         exports: [String]
     }
 end
