@@ -34,15 +34,21 @@ lang WasmPPrint = WasmAST
     | RefCast r -> 
         let sValue = pprintInstr (addi indent 1) r.value in
         join [indent2str indent, "(ref.cast\n", indent2str (addi 1 indent), "(ref $", r.typeAlias, ")\n", sValue, ")"]
+    | CallIndirect r ->
+        let addedIndent = indent2str (addi 1 indent) in 
+        let typeStr = join [addedIndent, "(type $", r.typeString, ")"] in 
+        let argsStr = strJoin "\n" (map (pprintInstr (addi 1 indent)) r.args) in
+        let fpStr = pprintInstr (addi 1 indent) r.fp in
+        join [indent2str indent, "(call_indirect\n", typeStr, "\n", argsStr, "\n", fpStr, ")"]
 
     sem pprintFunc = 
     | Function r -> 
-        let argNameToArg = lam arg. join ["(param $", arg, " anyref)"] in
+        let argNameToArg = lam arg. join ["(param $", arg.name, " ", arg.typeString, ")"] in
         let pprintLocal = lam local. 
             join ["(local $", local.name, " ", local.typeAlias, ")"] in
         let params = strJoin " " (map argNameToArg r.args) in
-        let result = "(result anyref)" in
         let sep = concat "\n" (indent2str 1) in
+        let result = join ["(result ", r.resultTypeString, ")"] in 
         let localStrs = strJoin "\n    " (map pprintLocal r.locals) in
         let instrStrs = strJoin sep (map (pprintInstr 1) r.instructions) in
         join ["(func $", r.name, " ", params, " ", result, "\n    ", localStrs, sep, instrStrs, ")"]
@@ -65,6 +71,11 @@ lang WasmPPrint = WasmAST
             then ""
             else concat indent2 (strJoin indent2 (map pprintField r.fields)) in
         join [indent2str indent, "(type $", r.name, indent1, "(struct", fieldsStr, "))"]
+    | FunctionType r -> 
+        let param2str = lam p. join ["(param ", p, ")"] in 
+        let paramStr = strJoin " " (map param2str r.paramTypeStrings) in 
+        let resultStr = join ["(result ", r.resultTypeString, ")"] in
+        join [indent2str indent, "(type $", r.name, " (func ", paramStr, " ", resultStr, "))"]
 
     sem pprintMod = 
     | Module m -> 
@@ -100,4 +111,9 @@ utest pprintMemory 1 (Table {size = 5, typeString = "funcref"}) with
     "    (table 5 funcref)" in
 utest pprintMemory 1 (Elem {offset=I32Const 0, funcNames=["f", "g", "h"]}) with
     "    (elem (i32.const 0) $f $g $h)" in 
+utest pprintType 1 (FunctionType {
+    name="generic-type",
+    paramTypeStrings=["anyref", "anyref"],
+    resultTypeString="anyref"
+}) with "    (type $generic-type (func (param anyref) (param anyref) (result anyref)))" in 
 ()

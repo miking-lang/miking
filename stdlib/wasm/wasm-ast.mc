@@ -19,12 +19,18 @@ lang WasmAST
         typeAlias: String,
         value: Instr
     }
+    | CallIndirect {
+        typeString: String,
+        args: [Instr],
+        fp: Instr
+    }
 
     syn Func = 
     | Function {
         name: String,
-        args: [String],
+        args: [{name: String, typeString: String}],
         locals: [{name: String, typeAlias: String}],
+        resultTypeString: String,
         instructions: [Instr]
     }
 
@@ -35,6 +41,11 @@ lang WasmAST
             name: String,
             typeString: String
         }]
+    }
+    | FunctionType {
+        name: String,
+        paramTypeStrings: [String],
+        resultTypeString: String
     }
 
     syn WasmMemory = 
