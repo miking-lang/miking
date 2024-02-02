@@ -26,7 +26,7 @@ lang MClosCoreCompile = MClosCore + WasmAST
     sem compileExpr ctx = 
     | TmApp(TmFunc fname, TmEnvAdd r) -> 
         let fp = findName ctx.nameToFP fname in 
-        let idToTMEnvVar = lam env. lam id. TmEnvVar(env, id) in
+        let idToTMEnvVar = lam env. lam var. TmEnvVar(env, var.name) in
         let allValues = lam env.
             match env with BasicEnv r
                 then
@@ -96,12 +96,12 @@ lang MClosCoreCompile = MClosCore + WasmAST
 
     sem compileDef: Context -> Def -> Func
     sem compileDef ctx = 
-    | FuncDef(fname, env, id, body) -> match env with BasicEnv r
+    | FuncDef(fname, env, id, typeStr, body) -> match env with BasicEnv r
         then
             let envType = r.wasmTypeAlias in
             let locals = [
                 {name = "env", typeAlias=join["(ref $", envType, ")"]},
-                {name=id, typeAlias="(ref $i32box)"}
+                {name=id, typeAlias= join["(ref $", typeStr, ")"]}
             ] in
             let body = compileExpr ctx body in 
             let setLocal = LocalSet (
@@ -109,7 +109,7 @@ lang MClosCoreCompile = MClosCore + WasmAST
                 RefCast {typeAlias = envType, value = LocalGet "arg0"}) in
             let setLocal2 = LocalSet (
                 id,
-                RefCast {typeAlias = "i32box", value = LocalGet "arg1"}) in
+                RefCast {typeAlias = typeStr, value = LocalGet "arg1"}) in
             Function {
                 name = fname,
                 args = [
@@ -126,7 +126,7 @@ lang MClosCoreCompile = MClosCore + WasmAST
     sem compileEnvToWasmType: Env -> WasmType
     sem compileEnvToWasmType = 
     | BasicEnv r -> 
-        let var2wasmfield = lam var. {name = var, typeString = "(ref $i32box)"} in
+        let var2wasmfield = lam var. {name = var.name, typeString = var.typeString} in
         StructType {
             name = r.wasmTypeAlias,
             fields = map var2wasmfield r.envVars
@@ -153,7 +153,7 @@ lang MClosCoreCompile = MClosCore + WasmAST
     sem createCtx = 
     | defs -> 
         let def2tuple = lam index. lam def. 
-            match def with FuncDef(name, _, _, _)
+            match def with FuncDef(name, _, _, _, _)
                 then (name, index)
                 else error "Unsupported Def"
         in {nameToFP = mapi def2tuple defs}
@@ -161,11 +161,11 @@ lang MClosCoreCompile = MClosCore + WasmAST
     -- sem compile: [Def] -> Expr -> Context
     sem compile defs = 
     | expr -> 
-        let def2env = lam def. match def with FuncDef(_, env, _, _)
+        let def2env = lam def. match def with FuncDef(_, env, _, _, _)
             then env 
             else error "Unknown Def"
         in 
-        let def2name = lam def. match def with FuncDef(name, _, _, _)
+        let def2name = lam def. match def with FuncDef(name, _, _, _, _)
             then name 
             else error "Unknown Def"
         in 
@@ -252,39 +252,57 @@ lang MClosCoreCompile = MClosCore + WasmAST
             types = types,
             exports = ["mexpr"]
         }
-    -- Module {functions = [], exports = []}
 end
 
 mexpr
--- let h lam env. lam z. x + y + z
 use MClosCoreCompile in 
-let h_env = BasicEnv {wasmTypeAlias = "h-env", envVars=["y", "x"]} in
-let h = FuncDef("h", h_env, "z", TmAdd(
-    TmAdd(
-        TmEnvVar(h_env, "x"), 
-        TmEnvVar(h_env, "y")
-    ), TmVar("z"))) in
 
-let g_env = BasicEnv {wasmTypeAlias = "g-env", envVars=["x"]} in
-let g = FuncDef("g", g_env, "y", TmApp(TmFunc("h"), TmEnvAdd {
-    src = g_env,
-    target = h_env, 
-    newId = "y",
-    value = TmVar("y")
-})) in
+let add_env = BasicEnv {wasmTypeAlias = "add-env", envVars=[{name="x", typeString="(ref $i32box)"}]} in
+let add = FuncDef("add", add_env, "y", "i32box", TmAdd(
+    TmEnvVar(add_env, "x"), 
+    TmVar("y")
+)) in  
 
-let f_env = BasicEnv {wasmTypeAlias = "f-env", envVars=[]} in
-let f = FuncDef("f", f_env, "x", TmApp(TmFunc("g"), TmEnvAdd {
-    src = f_env,
-    target = g_env, 
-    newId = "x",
-    value = TmVar("x")
-})) in
+let makeadd_env = BasicEnv {wasmTypeAlias = "makeadd-env", envVars=[]} in
+let makeadd = FuncDef("makeadd", makeadd_env, "x", "i32box",
+    TmApp(TmFunc("add"), TmEnvAdd {
+        src = makeadd_env,
+        target = add_env, 
+        newId = "x",
+        value = TmVar("x")
+    })) in
 
-let gEnvType = compileEnvToWasmType g_env in 
-let gEnvTypeStr = (use WasmPPrint in pprintType 0 gEnvType) in 
-let main = TmApp(TmApp(TmApp(TmFunc("f"), TmInt(1)), TmInt(-5)), TmInt(1)) in 
+let twice_env = BasicEnv {wasmTypeAlias = "twice-env", envVars=[{name="f", typeString="(ref $clos)"}]} in
+let twice = FuncDef("twice", twice_env, "x", "i32box",
+    TmApp(
+        TmEnvVar(twice_env, "f"),
+        TmApp(
+            TmEnvVar(twice_env, "f"),
+            TmVar("x"))
+    )) in 
 
-let mod = compile [f, g, h] main in
+let maketwice_env = BasicEnv {wasmTypeAlias = "maketwice-env", envVars=[]} in
+let maketwice = FuncDef("maketwice", maketwice_env, "f", "clos", TmApp(
+    TmFunc("twice"),
+    TmEnvAdd {
+        src = maketwice_env,
+        target = twice_env,
+        newId = "f",
+        value = TmVar("f")
+    }
+)) in 
+
+let main = 
+    TmApp(
+        TmApp(
+            TmFunc("maketwice"),
+            TmApp(
+                TmFunc("makeadd"),
+                TmInt(-1)
+            )),
+        TmInt(0)) in 
+
+
+let mod = compile [maketwice, twice, makeadd, add] main in
 let s = (use WasmPPrint in pprintMod mod) in 
 (printLn s)

@@ -41,17 +41,18 @@ lang WasmPPrint = WasmAST
         let fpStr = pprintInstr (addi 1 indent) r.fp in
         join [indent2str indent, "(call_indirect\n", typeStr, "\n", argsStr, "\n", fpStr, ")"]
 
-    sem pprintFunc = 
+    sem pprintFunc indent = 
     | Function r -> 
         let argNameToArg = lam arg. join ["(param $", arg.name, " ", arg.typeString, ")"] in
         let pprintLocal = lam local. 
-            join ["(local $", local.name, " ", local.typeAlias, ")"] in
+            join [indent2str (addi 1 indent), "(local $", local.name, " ", local.typeAlias, ")"] in
         let params = strJoin " " (map argNameToArg r.args) in
         let sep = concat "\n" (indent2str 1) in
         let result = join ["(result ", r.resultTypeString, ")"] in 
-        let localStrs = strJoin "\n    " (map pprintLocal r.locals) in
-        let instrStrs = strJoin sep (map (pprintInstr 1) r.instructions) in
-        join ["(func $", r.name, " ", params, " ", result, "\n    ", localStrs, sep, instrStrs, ")"]
+        let localSep = match r.locals with [] then "" else "\n" in 
+        let localStrs = strJoin "\n" (map pprintLocal r.locals) in
+        let instrStrs = strJoin "\n" (map (pprintInstr (addi 1 indent)) r.instructions) in
+        join [indent2str indent, "(func $", r.name, " ", params, " ", result, localSep, localStrs, sep, instrStrs, ")"]
     
     sem pprintMemory indent = 
     | Table t -> 
@@ -84,7 +85,7 @@ lang WasmPPrint = WasmAST
         let tableStr = pprintMemory 1 m.table in
         let elemStr = pprintMemory 1 m.elem in 
         let typeStr = strJoin "\n" (map (pprintType 1) m.types) in
-        let funcStr = strJoin "\n\n" (map pprintFunc m.functions) in 
+        let funcStr = strJoin "\n\n" (map (pprintFunc 1) m.functions) in 
         let exportStr = strJoin "\n" (map pprintExport m.exports) in 
 
         join ["(module\n", tableStr, "\n\n", typeStr, "\n\n", funcStr, 

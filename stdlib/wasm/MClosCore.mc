@@ -15,12 +15,12 @@ lang MClosCore
 
     syn Env =
     | BasicEnv { 
-        envVars: [String], 
+        envVars: [{name: String, typeString: String}], 
         wasmTypeAlias: String
     }
 
     syn Def = 
-    | FuncDef(String, Env, String, Expr)
+    | FuncDef(String, Env, String, String, Expr)
 end
 
 mexpr
