@@ -178,7 +178,7 @@ utest pp (substituteIdentifiers replace (expr "x")) with pp (expr "y") using eqS
 let parseProgram : String -> Expr =
   lam str.
   let parseArgs = {defaultBootParserParseMExprStringArg with allowFree = true} in
-  let ast = parseMExprString parseArgs str in
+  let ast = parseMExprStringExn parseArgs str in
   symbolizeAllowFree ast
 in
 

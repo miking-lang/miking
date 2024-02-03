@@ -12,6 +12,8 @@ include "stringid.mc"
 include "builtin.mc"
 include "seq.mc"
 include "name.mc"
+include "result.mc"
+include "either.mc"
 
 let gstr = lam t. lam n. bootParserGetString t n
 let gname = lam t. lam n. nameNoSym (bootParserGetString t n)
@@ -101,8 +103,11 @@ lang BootParser = MExprAst + ConstTransformer
     in
     constTransform arg.builtin (matchTerm t (bootParserGetId t))
 
-  -- Parses an MExpr string and returns the final MExpr AST
-  sem parseMExprString (arg : BootParserParseMExprStringArg) =
+  -- Parses an MExpr string and returns the final MExpr AST or a list of error
+  -- messages and associated infos.
+  sem parseMExprString
+    : BootParserParseMExprStringArg -> String -> Either [(Info, String)] Expr
+  sem parseMExprString arg =
   | str ->
     let t =
       bootParserParseMExprString
@@ -112,11 +117,40 @@ lang BootParser = MExprAst + ConstTransformer
         arg.keywords
         str
     in
-    constTransform arg.builtin (matchTerm t (bootParserGetId t))
+    if eqi (bootParserGetId t) 600 /- Error -/ then
+      let n = glistlen t 0 in
+      let infos = create n (lam i. ginfo t i) in
+      let msgs = create n (lam i. gstr t i) in
+      Left (zip infos msgs)
+    else
+      Right (constTransform arg.builtin (matchTerm t (bootParserGetId t)))
 
-  sem parseMExprStringKeywords (keywords : [String]) =
+  sem parseMExprStringExn : BootParserParseMExprStringArg -> String -> Expr
+  sem parseMExprStringExn arg =
+  | str ->
+    switch parseMExprString arg str
+    case Left es then
+      error (join [
+        "parseMExprStringExn failed with the error message:\n",
+        join (map (lam e. join ["\n", infoErrorString e.0 e.1, "\n"]) es)
+      ])
+    case Right ast then ast
+    end
+
+  -- Parses an MExpr string with additional keywords, using the default
+  -- boot-parser arguments.
+  sem parseMExprStringKeywords
+    : [String] -> String -> Either [(Info, String)] Expr
+  sem parseMExprStringKeywords keywords =
   | str ->
     parseMExprString
+      { _defaultBootParserParseMExprStringArg () with keywords = keywords }
+      str
+
+  sem parseMExprStringKeywordsExn : [String] -> String -> Expr
+  sem parseMExprStringKeywordsExn keywords =
+  | str ->
+    parseMExprStringExn
       { _defaultBootParserParseMExprStringArg () with keywords = keywords }
       str
 
@@ -408,19 +442,15 @@ use BootParserTest in
 let norm : String -> String = lam str.
   filter (lam x. not (or (or (eqChar x ' ') (eqChar x '\n')) (eqChar x '\t'))) str in
 
-let parseMExprStringKeywords = lam ks.
-  parseMExprString { defaultBootParserParseMExprStringArg with keywords = ks }
-in
-
 -- Test the combination of parsing and pretty printing
-let parse = lam ks. lam s. expr2str (parseMExprStringKeywords ks s) in
+let parse = lam ks. lam s. expr2str (parseMExprStringKeywordsExn ks s) in
 let lside : [String] -> String -> String = lam ks. lam s. norm (parse ks s) in
 let lsideClosed = lside [] in
 let rside : String -> String = norm in
 
 -- Test that info gives the right columns and rows
 let l_info : [String] -> String -> Info = lam ks. lam s.
-  infoTm (parseMExprStringKeywords ks s) in
+  infoTm (parseMExprStringKeywordsExn ks s) in
 let l_infoClosed = l_info [] in
 let r_info : Int -> Int -> Int -> Int -> Info = lam r1. lam c1. lam r2. lam c2.
       Info {filename = "internal", row1 = r1, col1 = c1, row2 = r2, col2 = c2} in
@@ -428,7 +458,7 @@ let r_info : Int -> Int -> Int -> Int -> Info = lam r1. lam c1. lam r2. lam c2.
 -- TmVar
 let s = "_asdXA123" in
 utest lside ["_asdXA123"] s with rside s in
-utest match parseMExprStringKeywords [""] "#var\"\"" with TmVar r
+utest match parseMExprStringKeywordsExn [""] "#var\"\"" with TmVar r
       then nameGetStr r.ident else "ERROR" with "" in
 
 -- TmApp
@@ -447,7 +477,7 @@ utest l_info ["_aas_12"] "  _aas_12 " with r_info 1 2 1 9 in
 let s = "let y = lam x.x in y" in
 utest lsideClosed s with rside s in
 utest l_infoClosed "  \n lam x.x" with r_info 2 1 2 8 in
-utest match parseMExprStringKeywords [] s with TmLet r then infoTm r.body else NoInfo ()
+utest match parseMExprStringKeywordsExn [] s with TmLet r then infoTm r.body else NoInfo ()
 with r_info 1 8 1 15 in
 utest l_info ["y"] "  let x = 4 in y  " with r_info 1 2 1 14 in
 let s = "(printLn x); 10" in
@@ -461,7 +491,7 @@ utest lsideClosed s with rside s in
 let s = "   recursive let x = 5 \n let foo = 7 in x " in
 utest l_infoClosed s with r_info 1 3 2 15 in
 utest
-  match parseMExprStringKeywords [] s with TmRecLets r then
+  match parseMExprStringKeywordsExn [] s with TmRecLets r then
     let fst : RecLetBinding = head r.bindings in
     fst.info
   else never
@@ -502,7 +532,7 @@ let s = "{a = 5}" in
 utest lsideClosed s with rside s in
 let s = "{bar = \"Hello\", foo = 123}" in
 let t = urecord_ [("bar", str_ "Hello"), ("foo", int_ 123)] in
-utest parseMExprStringKeywords [] s with t using eqExpr in
+utest parseMExprStringKeywordsExn [] s with t using eqExpr in
 utest l_infoClosed " {} " with r_info 1 1 1 3 in
 utest l_infoClosed " {foo = 123} " with r_info 1 1 1 12 in
 
@@ -511,7 +541,7 @@ let s = "{a with foo = 5}" in
 utest lside ["a"] s with rside s in
 let s = "{{bar='a', foo=7} with bar = 'b'}" in
 let t = recordupdate_ (urecord_ [("bar", char_ 'a'), ("foo", int_ 7)]) "bar" (char_ 'b') in
-utest parseMExprStringKeywords [] s with t using eqExpr in
+utest parseMExprStringKeywordsExn [] s with t using eqExpr in
 utest l_info ["foo"] " {foo with a = 18 } " with r_info 1 1 1 19 in
 
 -- NOTE(caylak, 2021-03-17): Commented out because test fails since parsing of TyVariant is not supported yet
@@ -539,7 +569,7 @@ let s = "match foo with _ then 7 else 2" in
 utest lside ["foo"] s with rside s in
 utest l_infoClosed "match [4] with x then x else [] " with r_info 1 0 1 31 in
 let s = " match bar with Foo {a = x} then x else 2" in
-utest match parseMExprStringKeywords ["Foo", "bar"] s with TmMatch r then infoPat r.pat else NoInfo ()
+utest match parseMExprStringKeywordsExn ["Foo", "bar"] s with TmMatch r then infoPat r.pat else NoInfo ()
 with r_info 1 16 1 27 in
 
 -- TmMatch, PatSeqTot, PatSeqEdge
@@ -547,70 +577,70 @@ let s = "match x with \"\" then x else 2" in
 utest lside ["x"] s with rside s in
 let s = "match x with [x,y,z] then x else 2" in
 utest lside ["x"] s with rside s in
-utest match parseMExprStringKeywords ["x"] s with TmMatch r then infoPat r.pat else NoInfo ()
+utest match parseMExprStringKeywordsExn ["x"] s with TmMatch r then infoPat r.pat else NoInfo ()
 with r_info 1 13 1 20 in
 let s = " match x with [a] ++ v ++ [x,y,z] then x else 2" in
 utest lside ["x"] s with rside s in
-utest match parseMExprStringKeywords ["x"] s with TmMatch r then infoPat r.pat else NoInfo ()
+utest match parseMExprStringKeywordsExn ["x"] s with TmMatch r then infoPat r.pat else NoInfo ()
 with r_info 1 14 1 33 in
 let s = "match x with \"\" ++ x ++ [y] then x else x" in
 utest lside ["x"] s with rside s in
-utest match parseMExprStringKeywords ["x"] s with TmMatch r then infoPat r.pat else NoInfo ()
+utest match parseMExprStringKeywordsExn ["x"] s with TmMatch r then infoPat r.pat else NoInfo ()
 with r_info 1 13 1 27 in
 let s = "match x with [z] ++ x ++ \"\" then z else 2" in
 utest lside ["x"] s with rside s in
-utest match parseMExprStringKeywords ["x"] s with TmMatch r then infoPat r.pat else NoInfo ()
+utest match parseMExprStringKeywordsExn ["x"] s with TmMatch r then infoPat r.pat else NoInfo ()
 with r_info 1 13 1 27 in
 
 --TmMatch, PatRecord
 let s = "match x with {} then x else 2" in
 utest lside ["x"] s with rside s in
-utest match parseMExprStringKeywords ["x"] s with TmMatch r then infoPat r.pat else NoInfo ()
+utest match parseMExprStringKeywordsExn ["x"] s with TmMatch r then infoPat r.pat else NoInfo ()
 with r_info 1 13 1 15 in
 let s = "match x with {bar=_, foo=x} then x else 2" in
 let t = match_ (var_ "x")
                (prec_ [("bar", pvarw_), ("foo", pvar_ "x")])
                (var_ "x") (int_ 2) in
-utest parseMExprStringKeywords ["x"] s with t using eqExpr in
-utest match parseMExprStringKeywords ["x"] s with TmMatch r then infoPat r.pat else NoInfo ()
+utest parseMExprStringKeywordsExn ["x"] s with t using eqExpr in
+utest match parseMExprStringKeywordsExn ["x"] s with TmMatch r then infoPat r.pat else NoInfo ()
 with r_info 1 13 1 27 in
 
 --TmMatch, PatCon
 let s = "match x with Foo {foo = x} then x else 100" in
 utest lside ["x", "Foo"] s with rside s in
-utest match parseMExprStringKeywords ["x", "Foo"] s with TmMatch r then infoPat r.pat else NoInfo ()
+utest match parseMExprStringKeywordsExn ["x", "Foo"] s with TmMatch r then infoPat r.pat else NoInfo ()
 with r_info 1 13 1 26 in
 
 --TmMatch, PatInt, PatBool, PatChar
 let s = "match x with [1,2,12] then x else x" in
 utest lside ["x"] s with rside s in
-utest match parseMExprStringKeywords ["x"] s with TmMatch r then infoPat r.pat else NoInfo ()
+utest match parseMExprStringKeywordsExn ["x"] s with TmMatch r then infoPat r.pat else NoInfo ()
 with r_info 1 13 1 21 in
 let s = "match x with 'A' then x else x" in
 utest lside ["x"] s with rside s in
-utest match parseMExprStringKeywords ["x"] s with TmMatch r then infoPat r.pat else NoInfo ()
+utest match parseMExprStringKeywordsExn ["x"] s with TmMatch r then infoPat r.pat else NoInfo ()
 with r_info 1 13 1 16 in
 let s = "match x with [true,false] then x else x" in
 utest lside ["x"] s with rside s in
-utest match parseMExprStringKeywords ["x"] s with TmMatch r then infoPat r.pat else NoInfo ()
+utest match parseMExprStringKeywordsExn ["x"] s with TmMatch r then infoPat r.pat else NoInfo ()
 with r_info 1 13 1 25 in
 
 -- TmMatch, PatAnd, PatOr, PatNot
 let s = "match x with 1 & x then x else x" in
 utest lside ["x"] s with rside s in
-utest match parseMExprStringKeywords ["x"] s with TmMatch r then infoPat r.pat else NoInfo ()
+utest match parseMExprStringKeywordsExn ["x"] s with TmMatch r then infoPat r.pat else NoInfo ()
 with r_info 1 13 1 18 in
 let s = "match x with 1 | x then x else x" in
 utest lside ["x"] s with rside s in
-utest match parseMExprStringKeywords ["x"] s with TmMatch r then infoPat r.pat else NoInfo ()
+utest match parseMExprStringKeywordsExn ["x"] s with TmMatch r then infoPat r.pat else NoInfo ()
 with r_info 1 13 1 18 in
 let s = "match x with !y then x else x" in
 utest lside ["x"] s with rside s in
-utest match parseMExprStringKeywords ["x"] s with TmMatch r then infoPat r.pat else NoInfo ()
+utest match parseMExprStringKeywordsExn ["x"] s with TmMatch r then infoPat r.pat else NoInfo ()
 with r_info 1 13 1 15 in
 let s = "match 1 with (a & b) | (!c) then x else x" in
 utest lside ["x"] s with rside s in
-utest match parseMExprStringKeywords ["x"] s with TmMatch r then infoPat r.pat else NoInfo ()
+utest match parseMExprStringKeywordsExn ["x"] s with TmMatch r then infoPat r.pat else NoInfo ()
 with r_info 1 14 1 26 in
 
 -- TmUtest
@@ -635,47 +665,47 @@ utest l_infoClosed "   \n  external y! : Int in 1" with r_info 2 2 2 24 in
 -- TyUnknown
 let s = "let y:Unknown = lam x.x in y" in
 utest lsideClosed s with rside "let y = lam x.x in y" in
-utest match parseMExprStringKeywords [] s with TmLet l then infoTy l.tyAnnot else NoInfo ()
+utest match parseMExprStringKeywordsExn [] s with TmLet l then infoTy l.tyAnnot else NoInfo ()
 with r_info 1 6 1 13 in
 let s = "lam x:Int. lam y:Char. x" in
 utest lsideClosed s with rside s in
-utest match parseMExprStringKeywords [] " \n lam x:Int. lam y:Char. x" with TmLam l then infoTy l.tyAnnot else NoInfo ()
+utest match parseMExprStringKeywordsExn [] " \n lam x:Int. lam y:Char. x" with TmLam l then infoTy l.tyAnnot else NoInfo ()
 with r_info 2 7 2 10 in
 
 -- TyInt
 let s = "let y:Int = lam x.x in y" in
 utest lsideClosed s with rside s in
-utest match parseMExprStringKeywords [] s with TmLet l then infoTy l.tyAnnot else NoInfo ()
+utest match parseMExprStringKeywordsExn [] s with TmLet l then infoTy l.tyAnnot else NoInfo ()
 with r_info 1 6 1 9 in
 
 -- TyFloat
 let s = "let y:Float = lam x.x in y" in
 utest lsideClosed s with rside s in
-utest match parseMExprStringKeywords [] s with TmLet l then infoTy l.tyAnnot else NoInfo ()
+utest match parseMExprStringKeywordsExn [] s with TmLet l then infoTy l.tyAnnot else NoInfo ()
 with r_info 1 6 1 11 in
 
 -- TyChar
 let s = "let y:Char = lam x.x in y" in
 utest lsideClosed s with rside s in
-utest match parseMExprStringKeywords [] s with TmLet l then infoTy l.tyAnnot else NoInfo ()
+utest match parseMExprStringKeywordsExn [] s with TmLet l then infoTy l.tyAnnot else NoInfo ()
 with r_info 1 6 1 10 in
 
 -- TyArrow
 let s = "let y:Int->Int = lam x.x in y" in
 utest lsideClosed s with rside s in
-utest match parseMExprStringKeywords [] s with TmLet l then infoTy l.tyAnnot else NoInfo ()
+utest match parseMExprStringKeywordsExn [] s with TmLet l then infoTy l.tyAnnot else NoInfo ()
 with r_info 1 6 1 14 in
 
 -- Nested TyArrow
 let s = "let y:[Float]->Int = lam x.x in y" in
 utest lsideClosed s with rside s in
-utest match parseMExprStringKeywords [] s with TmLet l then infoTy l.tyAnnot else NoInfo ()
+utest match parseMExprStringKeywordsExn [] s with TmLet l then infoTy l.tyAnnot else NoInfo ()
 with r_info 1 6 1 18 in
 
 -- TySeq
 let s = "let y:[Int] = lam x.x in y" in
 utest lsideClosed s with rside s in
-utest match parseMExprStringKeywords [] s with TmLet l then infoTy l.tyAnnot else NoInfo ()
+utest match parseMExprStringKeywordsExn [] s with TmLet l then infoTy l.tyAnnot else NoInfo ()
 with r_info 1 6 1 11 in
 
 -- Nested TySeq
@@ -690,14 +720,14 @@ let recTy = tyseq_ (tyrecord_ [
 let typedLet = lam letTy.
   bind_ (let_ "y" letTy (ulam_ "x" (var_ "x")))
         (var_ "y") in
-utest parseMExprStringKeywords [] s with typedLet recTy using eqExpr in
-utest match parseMExprStringKeywords [] s with TmLet l then infoTy l.tyAnnot else NoInfo ()
+utest parseMExprStringKeywordsExn [] s with typedLet recTy using eqExpr in
+utest match parseMExprStringKeywordsExn [] s with TmLet l then infoTy l.tyAnnot else NoInfo ()
 with r_info 1 6 1 56 in
 
 -- TyTensor
 let s = "let y:Tensor[Int] = lam x.x in y" in
 utest lsideClosed s with rside s in
-utest match parseMExprStringKeywords [] s with TmLet l then infoTy l.tyAnnot else NoInfo ()
+utest match parseMExprStringKeywordsExn [] s with TmLet l then infoTy l.tyAnnot else NoInfo ()
 with r_info 1 6 1 17 in
 
 -- Nested TyTensor
@@ -710,15 +740,15 @@ in
 let typedLet = lam letTy.
   bind_ (let_ "y" letTy (ulam_ "x" (var_ "x")))
         (var_ "y") in
-utest parseMExprStringKeywords [] s with typedLet recTy using eqExpr in
-utest match parseMExprStringKeywords [] s with TmLet l then infoTy l.tyAnnot else NoInfo ()
+utest parseMExprStringKeywordsExn [] s with typedLet recTy using eqExpr in
+utest match parseMExprStringKeywordsExn [] s with TmLet l then infoTy l.tyAnnot else NoInfo ()
 with r_info 1 6 1 30 in
 
 -- TyRecord
 let s = "let y:{a:Int,b:[Char]} = lam x.x in y" in
 let recTy = tyrecord_ [("a", tyint_), ("b", tystr_)] in
-utest parseMExprStringKeywords [] s with typedLet recTy using eqExpr in
-utest match parseMExprStringKeywords [] s with TmLet l then infoTy l.tyAnnot else NoInfo ()
+utest parseMExprStringKeywordsExn [] s with typedLet recTy using eqExpr in
+utest match parseMExprStringKeywordsExn [] s with TmLet l then infoTy l.tyAnnot else NoInfo ()
 with r_info 1 6 1 22 in
 
 -- Nested TyRecord
@@ -730,58 +760,63 @@ let recTy = tyrecord_ [
   ("b", tyrecord_ [
     ("b_1", tystr_),
     ("b_2", tyfloat_)])] in
-utest parseMExprStringKeywords [] s with typedLet recTy using eqExpr in
-utest match parseMExprStringKeywords [] s with TmLet l then infoTy l.tyAnnot else NoInfo ()
+utest parseMExprStringKeywordsExn [] s with typedLet recTy using eqExpr in
+utest match parseMExprStringKeywordsExn [] s with TmLet l then infoTy l.tyAnnot else NoInfo ()
 with r_info 1 6 1 54 in
 
 -- TyVariant
 let s = "let y:<> = lam x.x in y" in
 -- NOTE(caylak,2021-03-17): Parsing of TyVariant is not supported yet
 --utest lsideClosed s with rside s in
-utest match parseMExprStringKeywords [] s with TmLet l then infoTy l.tyAnnot else NoInfo ()
+utest match parseMExprStringKeywordsExn [] s with TmLet l then infoTy l.tyAnnot else NoInfo ()
 with r_info 1 6 1 8 in
 
 -- TyVar
 let s = "let y:_asd = lam x.x in y" in
 utest lsideClosed s with rside s in
-utest match parseMExprStringKeywords [] s with TmLet l then infoTy l.tyAnnot else NoInfo ()
+utest match parseMExprStringKeywordsExn [] s with TmLet l then infoTy l.tyAnnot else NoInfo ()
 with r_info 1 6 1 10 in
 
 -- TyAll
 let s = "let y:all x.x = lam x.x in y" in
 utest lsideClosed s with rside s in
-utest match parseMExprStringKeywords [] s with TmLet l then infoTy l.tyAnnot else NoInfo ()
+utest match parseMExprStringKeywordsExn [] s with TmLet l then infoTy l.tyAnnot else NoInfo ()
 with r_info 1 6 1 13 in
 
 -- Nested TyAll
 let s = "let y:all x.(all y.all z.z)->all w.w = lam x.x in y" in
 utest lsideClosed s with rside s in
-utest match parseMExprStringKeywords [] s with TmLet l then infoTy l.tyAnnot else NoInfo ()
+utest match parseMExprStringKeywordsExn [] s with TmLet l then infoTy l.tyAnnot else NoInfo ()
 with r_info 1 6 1 36 in
 
 -- TyCon
 let s = "let y:Foo = lam x.x in y" in
 utest lsideClosed s with rside s in
-utest match parseMExprStringKeywords [] s with TmLet l then infoTy l.tyAnnot else NoInfo ()
+utest match parseMExprStringKeywordsExn [] s with TmLet l then infoTy l.tyAnnot else NoInfo ()
 with r_info 1 6 1 9 in
 
 -- TyApp
 let s = "let y:(Int->Int)Int = lam x.x in y" in
 utest lsideClosed s with rside s in
-utest match parseMExprStringKeywords [] s with TmLet l then infoTy l.tyAnnot else NoInfo ()
+utest match parseMExprStringKeywordsExn [] s with TmLet l then infoTy l.tyAnnot else NoInfo ()
 with r_info 1 7 1 19 in
 
 -- Nested TyApp
 let s = "let y:((Int->Int)Int->Int)Int = lam x.x in y" in
 utest lsideClosed s with rside s in
-utest match parseMExprStringKeywords [] s with TmLet l then infoTy l.tyAnnot else NoInfo ()
+utest match parseMExprStringKeywordsExn [] s with TmLet l then infoTy l.tyAnnot else NoInfo ()
 with r_info 1 8 1 29 in
 
 -- Allow free variables
 utest
-  match parseMExprString
+  match parseMExprStringExn
    { defaultBootParserParseMExprStringArg with allowFree = true } "x"
   with TmVar r then nameGetStr r.ident else "ERROR"
 with "x" in
+
+-- Parse error
+utest eitherIsLeft (parseMExprString defaultBootParserParseMExprStringArg "!!!")
+  with true
+in
 
 ()
