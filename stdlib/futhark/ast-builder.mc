@@ -39,6 +39,10 @@ let futRecordTy_ = use FutharkAst in
                         fieldSeq),
              info = NoInfo ()}
 
+let futProjTy_ = use FutharkAst in
+  lam target. lam label.
+  FTyProj {target = target, label = stringToSid label, info = NoInfo ()}
+
 let futUnitTy_ = lam. futRecordTy_ []
 
 let futArrowTy_ = use FutharkAst in

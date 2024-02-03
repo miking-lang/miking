@@ -194,6 +194,10 @@ lang FutharkTypePrettyPrint = FutharkLiteralSizePrettyPrint
     in
     match mapAccumL pprintField env labels with (env, fields) in
     (env, join ["{", strJoin "," fields, "}"])
+  | FTyProj {target = target, label = label} ->
+    match pprintType indent env target with (env, target) in
+    match futPprintLabelString env label with (env, label) in
+    (env, join [target, ".", label])
   | FTyArrow {from = from, to = to} ->
     match pprintType indent env from with (env, from) in
     match pprintType indent env to with (env, to) in
@@ -396,7 +400,11 @@ lang FutharkPrettyPrint =
     match mapAccumL pprintTypeParam env typeParams with (env, typeParams) in
     match futPprintEnvGetStr env ident with (env, ident) in
     match pprintType 0 env ty with (env, ty) in
-    (env, join ["type ", ident, " ", strJoin " " typeParams, " = ", ty])
+    let typarams =
+      if null typeParams then ""
+      else cons ' ' (strJoin " " typeParams)
+    in
+    (env, join ["type ", ident, typarams, " = ", ty])
   | FDeclModuleAlias { ident = ident, moduleId = moduleId } ->
     match futPprintEnvGetStr env ident with (env, ident) in
     (env, join ["module ", ident, " = ", moduleId])

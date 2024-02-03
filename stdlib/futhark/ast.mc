@@ -89,6 +89,7 @@ lang FutharkTypeAst = FutharkTypeParamAst + FutharkLiteralSizeAst
   | FTyIdent { ident : Name, info : Info }
   | FTyArray { elem : FutType, dim : Option FutArrayDim, info : Info }
   | FTyRecord { fields : Map SID FutType, info : Info }
+  | FTyProj { target : FutType, label : SID, info : Info }
   | FTyArrow { from : FutType, to : FutType, info : Info }
   | FTyAll { ident : Name, ty : FutType, info : Info }
 
@@ -100,6 +101,7 @@ lang FutharkTypeAst = FutharkTypeParamAst + FutharkLiteralSizeAst
   | FTyIdent t -> t.info
   | FTyArray t -> t.info
   | FTyRecord t -> t.info
+  | FTyProj t -> t.info
   | FTyArrow t -> t.info
   | FTyAll t -> t.info
 
@@ -111,6 +113,7 @@ lang FutharkTypeAst = FutharkTypeParamAst + FutharkLiteralSizeAst
   | FTyIdent t -> FTyIdent {t with info = info}
   | FTyArray t -> FTyArray {t with info = info}
   | FTyRecord t -> FTyRecord {t with info = info}
+  | FTyProj t -> FTyProj {t with info = info}
   | FTyArrow t -> FTyArrow {t with info = info}
   | FTyAll t -> FTyAll {t with info = info}
 
@@ -123,6 +126,9 @@ lang FutharkTypeAst = FutharkTypeParamAst + FutharkLiteralSizeAst
   | FTyRecord t ->
     match mapMapAccum (lam acc. lam. lam e. f acc e) acc t.fields with (acc, fields) in
     (acc, FTyRecord {t with fields = fields})
+  | FTyProj t ->
+    match f acc t.target with (acc, target) in
+    (acc, FTyProj {t with target = target})
   | FTyArrow t ->
     match f acc t.from with (acc, from) in
     match f acc t.to with (acc, to) in
