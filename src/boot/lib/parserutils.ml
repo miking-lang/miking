@@ -8,15 +8,19 @@ open Symbutils
 (* Tab length when calculating the info field *)
 let tablength = 8
 
-let error_to_ustring e =
-  match e with
-  | Lexer.Lex_error m ->
-      message2str m
+let error_to_error_message = function
+  | Lexer.Lex_error m | Error m ->
+      Some m
   | Parsing.Parse_error ->
-      message2str (Lexer.parse_error_message ())
-  | Error m ->
-      message2str m
+      Some (Lexer.parse_error_message ())
   | _ ->
+      None
+
+let error_to_ustring e =
+  match error_to_error_message e with
+  | Some m ->
+      message2str m
+  | None ->
       us (Printexc.to_string e)
 
 module ExtIdMap = Map.Make (Ustring)

@@ -115,6 +115,10 @@ let idInfo = 500
 
 let idNoInfo = 501
 
+(* Error *)
+
+let idError = 600
+
 let sym = Symb.gensym ()
 
 let patNameToStr = function NameStr (x, _) -> x | NameWildcard -> us ""
@@ -287,6 +291,10 @@ let getData = function
       (idInfo, [], [], [], [], [fn], [r1; c1; r2; c2], [], [], [])
   | PTreeInfo NoInfo ->
       (idNoInfo, [], [], [], [], [], [], [], [], [])
+  (* Error *)
+  | PTreeError es ->
+      let fis, msgs = List.split es in
+      (idError, fis, [List.length es], [], [], msgs, [], [], [], [])
   | _ ->
       failwith "The AST node is unknown"
 
@@ -983,7 +991,12 @@ let parseMExprString allow_free keywords str =
     Symbolize.allow_free := allow_free_prev ;
     r
   with (Lexer.Lex_error _ | Msg.Error _ | Parsing.Parse_error) as e ->
-    reportErrorAndExit e
+    PTreeError
+      [ ( match Parserutils.error_to_error_message e with
+        | Some (id, _, info, _) ->
+            (info, id2str id)
+        | None ->
+            (NoInfo, us (Printexc.to_string e)) ) ]
 
 let rec is_value = function
   | TmConst (_, _) ->
