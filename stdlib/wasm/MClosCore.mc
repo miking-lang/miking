@@ -5,6 +5,7 @@ lang MClosCore
     | TmInt(Int)
     | TmEnvVar(Env, String)
     | TmVar(String)
+    | TmMatchVar String
     | TmFunc(String)
     | TmEnvAdd {
         src: Env,
@@ -13,7 +14,8 @@ lang MClosCore
         value: Expr
     }
     | TmConstruct {
-        ident: String
+        ident: String,
+        args: [Expr]
     }
     | TmMatch {
         target: Expr,
@@ -25,7 +27,7 @@ lang MClosCore
     syn Pat = 
     | Wildcard
     | IntPat Int
-    | ADTPat String
+    | ADTPat (String, [String])
 
     syn Env =
     | BasicEnv { 

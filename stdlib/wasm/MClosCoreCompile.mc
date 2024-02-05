@@ -6,7 +6,8 @@ include "common.mc"
 
 type Context = {
     nameToFP: [(String, Int)],
-    adt2typeid: [(String, Int)]
+    adt2typeid: [(String, Int)],
+    matchIdent2Expr: [(String, (use WasmAST in Instr))]
 }
 
 recursive
@@ -74,6 +75,18 @@ lang MClosCoreCompile = MClosCore + WasmAST
             values = [I32Const fp, StructNew {typeAlias = envName, values = []}]
         }
     | TmVar(id) -> LocalGet id
+    | TmMatchVar id ->
+        let pred = lam tup. 
+            match tup with (ident, instr) 
+                then (if eqString ident id 
+                    then Some (instr)
+                    else None ())
+                else 
+                    None ()
+        in 
+        match findMap pred ctx.matchIdent2Expr with Some instr
+            then instr
+            else error "Unbound match var!"
     | TmEnvVar(env, id) -> match env with BasicEnv r
         then 
             StructGet {
@@ -85,13 +98,21 @@ lang MClosCoreCompile = MClosCore + WasmAST
                 })
             }
         else error "Only BasicEnv is supported!"
-    | TmConstruct {ident = adtIdent} -> 
-        StructNew {typeAlias = adtIdent, values = [I32Const (findName ctx.adt2typeid adtIdent)]}
-    | TmMatch r -> Select {
-            cond = compileTargetPat ctx r.target r.pat,
-            thn = compileExpr ctx r.thn,
-            els = compileExpr ctx r.els
-        }
+    | TmConstruct {ident = adtIdent, args = args} -> 
+        let compiledArgs = map (compileExpr ctx) args in 
+        let argsWithTypeid = concat 
+            compiledArgs 
+            [I32Const (findName ctx.adt2typeid adtIdent)] in
+        StructNew {typeAlias = adtIdent, values = argsWithTypeid}
+    | TmMatch r ->
+        let res = compileTargetPat ctx r.target r.pat in 
+        match res with (cond, ctx) 
+            then Select {
+                cond = cond,
+                thn = compileExpr ctx r.thn,
+                els = compileExpr ctx r.els
+            }
+            else error "Unexpected result!"
     | TmEnvAdd r -> 
         error "Unsupported TmEnvAdd"
         -- let idToTMEnvVar = lam env. lam id. TmEnvVar(env, id) in
@@ -110,22 +131,30 @@ lang MClosCoreCompile = MClosCore + WasmAST
         --     else error "???"
         -- else error "???"
 
+    sem compileTargetPat : Context -> Expr -> Pat -> (Instr, Context)
     sem compileTargetPat ctx target =
-    | Wildcard () -> I32Const 1
-    | IntPat i -> I32Eq (compileExpr ctx target, I32Const i) 
-    | ADTPat ident ->
-        let targetExpr = compileExpr ctx target in
+    | Wildcard () -> (I32Const 1, ctx)
+    | IntPat i -> (I32Eq (compileExpr ctx target, I32Const i), ctx)
+    | ADTPat (ident, args) ->
+        let targetInstr = compileExpr ctx target in
         let expectedTypeId = findName ctx.adt2typeid ident in  
-        I32And (
-            RefTest {typeAlias=ident, value = compileExpr ctx target},
+        let castTarget = RefCast {typeAlias = ident, value = targetInstr} in 
+        let condInstr = I32And (
+            RefTest {typeAlias=ident, value = targetInstr},
             I32Eq (I32Const expectedTypeId, StructGet {
                 typeAlias = ident,
                 field = "_typeid",
-                value = RefCast {typeAlias = ident, value = targetExpr}
+                value = castTarget
             })
-        )
-        
-
+        ) in 
+        let bind = lam i. lam arg. 
+            (arg, StructGet {
+                typeAlias = ident,
+                value = castTarget,
+                field = concat "field" (int2string i)
+            }) in 
+        let allBindings = mapi bind args in 
+        (condInstr, {ctx with matchIdent2Expr = concat ctx.matchIdent2Expr allBindings})
 
     sem compileDef: Context -> Def -> Func
     sem compileDef ctx = 
@@ -134,15 +163,18 @@ lang MClosCoreCompile = MClosCore + WasmAST
             let envType = r.wasmTypeAlias in
             let locals = [
                 {name = "env", typeAlias=join["(ref $", envType, ")"]},
-                {name=id, typeAlias= join["(ref $", typeStr, ")"]}
+                {name=id, typeAlias= join[typeStr]}
             ] in
             let body = compileExpr ctx body in 
             let setLocal = LocalSet (
                 "env",
                 RefCast {typeAlias = envType, value = LocalGet "arg0"}) in
+            -- let setLocal2 = LocalSet (
+            --     id,
+            --     RefCast {typeAlias = typeStr, value = LocalGet "arg1"}) in
             let setLocal2 = LocalSet (
                 id,
-                RefCast {typeAlias = typeStr, value = LocalGet "arg1"}) in
+                LocalGet "arg1") in
             Function {
                 name = fname,
                 args = [
@@ -172,9 +204,9 @@ lang MClosCoreCompile = MClosCore + WasmAST
             {name = concat "field" (int2string i), typeString=argType} in 
         let constr2struct = lam constr. StructType {
             name = join [adt.ident, "-", constr.ident],
-            fields = cons 
-                {name = "_typeid", typeString="i32"} 
+            fields = concat 
                 (mapi argType2field constr.argTypes)
+                [{name = "_typeid", typeString="i32"}]
         } in 
        map constr2struct adt.constructors
     | other -> []
@@ -210,7 +242,8 @@ lang MClosCoreCompile = MClosCore + WasmAST
                 then mapi (lam i. lam c. (join [adt.ident, "-", c.ident], i)) adt.constructors
                 else error "Unsupported Def" in 
         {nameToFP = mapi funcdef2tuple funcDefs,
-         adt2typeid = join (map adtdef2tuple adtDefs)}
+         adt2typeid = join (map adtdef2tuple adtDefs),
+         matchIdent2Expr = []}
 
     -- sem compile: [Def] -> Expr -> Context
     sem compile defs = 
@@ -322,6 +355,13 @@ let enumExample = ADTDef {
         {ident = "Blue", argTypes = []}
     ]
 } in 
+let intList = ADTDef {
+    ident = "IntList",
+    constructors = [
+        {ident = "IntNil", argTypes = []},
+        {ident = "IntCons", argTypes = ["anyref", "anyref"]}
+    ]
+} in 
 let add_env = BasicEnv {wasmTypeAlias = "add-env", envVars=[{name="x", typeString="(ref $i32box)"}]} in
 let add = FuncDef("add", add_env, "y", "i32box", TmAdd(
     TmEnvVar(add_env, "x"), 
@@ -357,13 +397,32 @@ let maketwice = FuncDef("maketwice", maketwice_env, "f", "clos", TmApp(
     }
 )) in 
 
-let main = 
-    TmMatch {
-        target = TmConstruct {ident = "Color-Green"},
-        pat = ADTPat "Color-Blue",
-        thn = TmInt(23),
-        els = TmInt(42)
-    } in 
+let sum_env = BasicEnv {wasmTypeAlias = "sum-env", envVars = []} in
+let sum = FuncDef("sum", sum_env, "l", "anyref", TmMatch {
+    target = TmVar "l",
+    pat = ADTPat ("IntList-IntCons", ["x", "xs"]),
+    thn = TmAdd(TmMatchVar("x"), TmApp(TmFunc "sum", TmMatchVar "xs")),
+    els = TmInt(0)
+}) in 
+
+-- let main = 
+    -- TmMatch {
+    --     target = TmConstruct {ident = "Color-Green", args = []},
+    --     pat = ADTPat ("Color-Blue", []),
+    --     thn = TmInt(23),
+    --     els = TmInt(42)
+    -- } in 
+let l = TmConstruct {ident = "IntList-IntCons", args = [
+    TmInt 10, 
+    TmConstruct {ident = "IntList-IntCons", args = [
+        TmInt 20,
+        TmConstruct {ident = "IntList-IntCons", args = [
+            TmInt 30,
+            TmConstruct {ident = "IntList-IntNil", args = []}
+        ]}
+    ]}
+]} in 
+let main = TmApp(TmFunc "sum", l) in 
     -- TmApp(
     --     TmApp(
     --         TmFunc("maketwice"),
@@ -374,6 +433,6 @@ let main =
     --     TmInt(0)) in 
 
 
-let mod = compile [maketwice, twice, makeadd, add, enumExample] main in
+let mod = compile [sum, intList] main in
 let s = (use WasmPPrint in pprintMod mod) in 
 (printLn s)

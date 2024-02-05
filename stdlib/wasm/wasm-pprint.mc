@@ -108,7 +108,7 @@ lang WasmPPrint = WasmAST
         -- let pprintExport = lam n. n in 
         let tableStr = pprintMemory 1 m.table in
         let elemStr = pprintMemory 1 m.elem in 
-        let typeStr = strJoin "\n" (map (pprintType 1) m.types) in
+        let typeStr = strJoin "\n\n" (map (pprintType 1) m.types) in
         let funcStr = strJoin "\n\n" (map (pprintFunc 1) m.functions) in 
         let exportStr = strJoin "\n" (map pprintExport m.exports) in 
 
