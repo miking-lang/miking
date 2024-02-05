@@ -12,6 +12,20 @@ lang MClosCore
         newId: String,
         value: Expr
     }
+    | TmConstruct {
+        ident: String
+    }
+    | TmMatch {
+        target: Expr,
+        pat: Pat,
+        thn: Expr,
+        els: Expr
+    }
+
+    syn Pat = 
+    | Wildcard
+    | IntPat Int
+    | ADTPat String
 
     syn Env =
     | BasicEnv { 
@@ -21,6 +35,13 @@ lang MClosCore
 
     syn Def = 
     | FuncDef(String, Env, String, String, Expr)
+    | ADTDef {
+        ident: String,
+        constructors: [{
+            ident: String,
+            argTypes: [String]
+        }]
+    }
 end
 
 mexpr

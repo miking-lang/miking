@@ -18,6 +18,14 @@ lang WasmPPrint = WasmAST
         let s1 = pprintInstr (addi indent 1) i1 in
         let s2 = pprintInstr (addi indent 1) i2 in 
         join [indent2str indent, "(i32.add\n", s1, "\n", s2, ")"]
+    | I32Eq (i1, i2) -> 
+        let s1 = pprintInstr (addi indent 1) i1 in
+        let s2 = pprintInstr (addi indent 1) i2 in 
+        join [indent2str indent, "(i32.eq\n", s1, "\n", s2, ")"]
+    | I32And (i1, i2) -> 
+        let s1 = pprintInstr (addi indent 1) i1 in
+        let s2 = pprintInstr (addi indent 1) i2 in 
+        join [indent2str indent, "(i32.and\n", s1, "\n", s2, ")"]               
     | Call (fname, instructions) -> 
         let s = match instructions with [] 
             then ""
@@ -34,25 +42,41 @@ lang WasmPPrint = WasmAST
     | RefCast r -> 
         let sValue = pprintInstr (addi indent 1) r.value in
         join [indent2str indent, "(ref.cast\n", indent2str (addi 1 indent), "(ref $", r.typeAlias, ")\n", sValue, ")"]
+    | RefTest r -> 
+        let sValue = pprintInstr (addi indent 1) r.value in
+        join [indent2str indent, "(ref.test\n", indent2str (addi 1 indent), "(ref $", r.typeAlias, ")\n", sValue, ")"]
     | CallIndirect r ->
         let addedIndent = indent2str (addi 1 indent) in 
         let typeStr = join [addedIndent, "(type $", r.typeString, ")"] in 
         let argsStr = strJoin "\n" (map (pprintInstr (addi 1 indent)) r.args) in
         let fpStr = pprintInstr (addi 1 indent) r.fp in
         join [indent2str indent, "(call_indirect\n", typeStr, "\n", argsStr, "\n", fpStr, ")"]
+    | IfThenElse ite ->
+        let indentPlusOne = addi indent 1 in 
+        let cndStr = pprintInstr indentPlusOne ite.cond in
+        let thnStr = pprintInstr indentPlusOne ite.thn in 
+        let elsStr = pprintInstr indentPlusOne ite.els in 
+        join [indent2str indent, "(if\n", cndStr, "\n", thnStr, "\n", elsStr, ")"]
+    | Select s ->
+        let indentPlusOne = addi indent 1 in 
+        let cndStr = pprintInstr indentPlusOne s.cond in
+        let thnStr = pprintInstr indentPlusOne s.thn in 
+        let elsStr = pprintInstr indentPlusOne s.els in 
+        join [indent2str indent, "(select\n", "\n", thnStr, "\n", elsStr, "\n", cndStr, ")"]
 
     sem pprintFunc indent = 
     | Function r -> 
         let argNameToArg = lam arg. join ["(param $", arg.name, " ", arg.typeString, ")"] in
         let pprintLocal = lam local. 
             join [indent2str (addi 1 indent), "(local $", local.name, " ", local.typeAlias, ")"] in
+        let paramSep = match r.args with [] then "" else " " in 
         let params = strJoin " " (map argNameToArg r.args) in
         let sep = concat "\n" (indent2str 1) in
         let result = join ["(result ", r.resultTypeString, ")"] in 
         let localSep = match r.locals with [] then "" else "\n" in 
         let localStrs = strJoin "\n" (map pprintLocal r.locals) in
         let instrStrs = strJoin "\n" (map (pprintInstr (addi 1 indent)) r.instructions) in
-        join [indent2str indent, "(func $", r.name, " ", params, " ", result, localSep, localStrs, sep, instrStrs, ")"]
+        join [indent2str indent, "(func $", r.name, paramSep, params, " ", result, localSep, localStrs, sep, instrStrs, ")"]
     
     sem pprintMemory indent = 
     | Table t -> 
@@ -90,7 +114,6 @@ lang WasmPPrint = WasmAST
 
         join ["(module\n", tableStr, "\n\n", typeStr, "\n\n", funcStr, 
             "\n\n", elemStr, "\n", exportStr, ")"]
-    
 end
 
 mexpr
@@ -117,4 +140,9 @@ utest pprintType 1 (FunctionType {
     paramTypeStrings=["anyref", "anyref"],
     resultTypeString="anyref"
 }) with "    (type $generic-type (func (param anyref) (param anyref) (result anyref)))" in 
+let eq33 = I32Eq (I32Const 3, I32Const 3) in 
+utest pprintInstr 1 eq33 with 
+    "    (i32.eq\n        (i32.const 3)\n        (i32.const 3))" in 
+let ite = IfThenElse {cond = eq33, thn = I32Const 23, els = I32Const 42} in
+utest pprintInstr 0 ite with "(if\n    (i32.eq\n        (i32.const 3)\n        (i32.const 3))\n    (i32.const 23)\n    (i32.const 42))" in 
 ()

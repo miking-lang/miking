@@ -1,10 +1,11 @@
 lang WasmAST
     syn Instr =
     | I32Const Int
+    | I32Add (Instr, Instr)
+    | I32And (Instr, Instr)
+    | I32Eq (Instr, Instr)
     | LocalGet String
     | LocalSet (String, Instr)
-    | I32Add (Instr, Instr)
-    -- | CallIndirect Instr Instr Instr
     | Call (String, [Instr])
     | StructGet {
         typeAlias: String,
@@ -19,10 +20,24 @@ lang WasmAST
         typeAlias: String,
         value: Instr
     }
+    | RefTest {
+        typeAlias: String,
+        value: Instr
+    }
     | CallIndirect {
         typeString: String,
         args: [Instr],
         fp: Instr
+    }
+    | IfThenElse {
+        cond: Instr,
+        thn: Instr,
+        els: Instr
+    }
+    | Select {
+        cond: Instr,
+        thn: Instr,
+        els: Instr
     }
 
     syn Func = 
