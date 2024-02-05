@@ -229,28 +229,26 @@ lang TCUnify = Unify + AliasTypeAst + MetaVarTypeAst + DataKindAst + PrettyPrint
     match getTypeStringCode 0 env r with (env, r) in
     (env, join ["types ", l, " != ", r])
   | Records _ -> (env, "record inequality (pprint todo)")
-  | Kinds (Data d1, Data d1) ->
-    let diffstr =
-      let getDiff = lam ks1. lam ks2.
-        match ks2.upper with Some upper then
-          let diff = setSubtract ks1.lower (setUnion ks2.lower upper) in
-          if not (setIsEmpty diff) then Some diff else None ()
-        else None ()
-      in
-      match
-        findMap
-          (lam x.
-            match mapLookup x.0 d2.types with Some ks then
-              match getDiff x.1 ks with Some _ & diff then diff else
-                getDiff ks x.1
-            else None ())
-          (mapBindings d1.types)
-      with Some diff then
-        match mapAccumL pprintConName pprintEnv (setToSeq diff) with (_, diff) in
-        join ["these constructors required by one kind but not allowed in the other:\n",
-              strJoin " " diff, "\n"]
-      else ""
-    in (env, diffstr)
+  | Kinds (Data d1, Data d2) ->
+    let getDiff = lam ks1. lam ks2.
+      match ks2.upper with Some upper then
+        let diff = setSubtract ks1.lower (setUnion ks2.lower upper) in
+        if not (setIsEmpty diff) then Some diff else None ()
+      else None ()
+    in
+    match
+      findMap
+        (lam x.
+          match mapLookup x.0 d2.types with Some ks then
+            match getDiff x.1 ks with Some _ & diff then diff else
+              getDiff ks x.1
+          else None ())
+        (mapBindings d1.types)
+    with Some diff then
+      match mapAccumL pprintConName env (setToSeq diff) with (env, diff) in
+      (env, join ["these constructors required by one kind but not allowed in the other:\n",
+                  strJoin " " diff, "\n"])
+    else (env, "")
   | Kinds _ -> (env, "kind inequality (pprint todo)")
 
 
@@ -310,7 +308,6 @@ lang TCUnify = Unify + AliasTypeAst + MetaVarTypeAst + DataKindAst + PrettyPrint
       expected, "\n",
       "*    Found an expression of type: ",
       found, "\n",
-      diffstr,
       if and (null kinds) (null aliases) then "" else "* where",
       kinds,
       aliases,
@@ -1055,7 +1052,7 @@ lang ReprDeclTypeCheck = ReprDeclAst + TypeCheck + ResolveType + WildToMeta
     TmReprDecl {x with inexpr = inexpr, ty = tyTm inexpr, pat = pat, repr = repr}
 end
 
-lang PropagateTypeAnnot = FunTypeAst + LamAst + UnknownTypeAst
+lang PropagateTypeAnnot = FunTypeAst + LamAst + UnknownTypeAst + AllTypeAst
   sem propagateTyAnnot =
   | (tm, TyAll a) -> propagateTyAnnot (tm, a.ty)
   | (TmLam l, TyArrow a) ->
