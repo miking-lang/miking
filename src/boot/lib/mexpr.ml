@@ -1022,7 +1022,7 @@ let parseMExprString allow_free keywords str =
     in
     Symbolize.allow_free := allow_free_prev ;
     r
-  with (Lexer.Lex_error _ | Msg.Error _ | Parsing.Parse_error) as e ->
+  with (Lexer.Lex_error _ | Msg.Error _ | Parser.Error) as e ->
     PTreeError
       [ ( match Parserutils.error_to_error_message e with
         | Some (id, _, info, _) ->
@@ -1108,7 +1108,7 @@ let rec parseMCoreFile
     in
     Symbolize.allow_free := allow_free_prev ;
     r
-  with (Lexer.Lex_error _ | Msg.Error _ | Parsing.Parse_error) as e ->
+  with (Lexer.Lex_error _ | Msg.Error _ | Parser.Error) as e ->
     reportErrorAndExit e
 
 (* Evaluates a constant application. This is the standard delta function

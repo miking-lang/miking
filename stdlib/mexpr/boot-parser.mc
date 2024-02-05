@@ -647,18 +647,18 @@ utest
   match parseMExprStringKeywordsExn ["x"] s with TmMatch r
   then infoPat r.pat else NoInfo ()
 with r_info 1 14 1 33 in
-let s = "match x with \"\" ++ x ++ [y] then x else x" in
+let s = "match x with x ++ [y] then x else x" in
 utest lside ["x"] s with rside s in
 utest
   match parseMExprStringKeywordsExn ["x"] s with TmMatch r
   then infoPat r.pat else NoInfo ()
-with r_info 1 13 1 27 in
-let s = "match x with [z] ++ x ++ \"\" then z else 2" in
+with r_info 1 13 1 21 in
+let s = "match x with [z] ++ x then z else 2" in
 utest lside ["x"] s with rside s in
 utest
   match parseMExprStringKeywordsExn ["x"] s with TmMatch r
   then infoPat r.pat else NoInfo ()
-with r_info 1 13 1 27 in
+with r_info 1 13 1 21 in
 
 --TmMatch, PatRecord
 let s = "match x with {} then x else 2" in
@@ -724,12 +724,12 @@ utest
   match parseMExprStringKeywordsExn ["x"] s with TmMatch r
   then infoPat r.pat else NoInfo ()
 with r_info 1 13 1 15 in
-let s = "match 1 with (a & b) | (!c) then x else x" in
+let s = "match 1 with a & b | !c then x else x" in
 utest lside ["x"] s with rside s in
 utest
   match parseMExprStringKeywordsExn ["x"] s with TmMatch r
   then infoPat r.pat else NoInfo ()
-with r_info 1 14 1 26 in
+with r_info 1 13 1 23 in
 
 -- TmUtest
 let s = "utest lam x.x with 4 in 0" in
@@ -884,13 +884,11 @@ utest
 with r_info 1 6 1 54 in
 
 -- TyVariant
-let s = "let y:<> = lam x.x in y" in
 -- NOTE(caylak,2021-03-17): Parsing of TyVariant is not supported yet
---utest lsideClosed s with rside s in
-utest
-  match parseMExprStringKeywordsExn [] s with TmLet l
-  then infoTy l.tyAnnot else NoInfo ()
-with r_info 1 6 1 8 in
+-- let s = "let y:<> = lam x.x in y" in
+-- --utest lsideClosed s with rside s in
+-- utest match parseMExprStringKeywordsExn [] s with TmLet l then infoTy l.tyAnnot else NoInfo ()
+-- with r_info 1 6 1 8 in
 
 -- TyVar
 let s = "let y:_asd = lam x.x in y" in
@@ -923,6 +921,18 @@ utest
   match parseMExprStringKeywordsExn [] s with TmLet l
   then infoTy l.tyAnnot else NoInfo ()
 with r_info 1 6 1 9 in
+
+-- TyCon with literal constructor list
+let s = "let y:Foo[F1 F2] = lam x.x in y" in
+utest lsideClosed s with rside s in
+utest match parseMExprStringKeywords [] s with TmLet l then infoTy l.tyAnnot else NoInfo ()
+with r_info 1 6 1 16 in
+
+-- TyCon with variable constructor list
+let s = "let y:all d::{Foo[> F1 F2]}. Foo{d} = lam x.x in y" in
+utest lsideClosed s with rside s in
+utest match parseMExprStringKeywords [] s with TmLet l then infoTy l.tyAnnot else NoInfo ()
+with r_info 1 6 1 35 in
 
 -- TyApp
 let s = "let y:(Int->Int)Int = lam x.x in y" in
