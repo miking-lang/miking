@@ -14,8 +14,8 @@ include "seq.mc"
 let compileMCoreToWasm = lam ast.
     use MExprLowerNestedPatterns in 
     let ast = lowerAll ast in 
-    -- use MExprLambdaLift in
-    -- let ast = liftLambdas ast in
+    use MExprLambdaLift in
+    let ast = liftLambdas ast in
     -- (printLn "Lifted Lambdas: ");
     -- (printLn (use MExprPrettyPrint in expr2str ast));
     -- use MExprClosAst in

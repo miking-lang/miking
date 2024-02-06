@@ -1,19 +1,12 @@
 (module
-    ;; === Start of stdlib === 
     (type $clos (struct
         (field $func_pointer i32)
         (field $env anyref)
     ))
+
     (type $i32box (struct (field $value i32)))
-    (func $box (param $x i32) (result (ref $i32box)) (struct.new $i32box (local.get $x)))
-    (func $unbox (param $box (ref $i32box)) (result i32) (struct.get $i32box $value (local.get $box)))
-
-    (type $generic_type (func (param anyref) (param anyref) (result anyref)))
 
 
-    ;; === End of stdlib ===
-
-    ;; === Enviroment Types === 
     (type $h-env 
         (struct 
             (field $y (ref $i32box)) 
@@ -22,7 +15,11 @@
     (type $f-env (struct))
 
 
-    ;; === Functions
+    (func $box (param $x i32) (result (ref $i32box)) (struct.new $i32box (local.get $x)))
+    (func $unbox (param $box (ref $i32box)) (result i32) (struct.get $i32box $value (local.get $box)))
+
+    (type $generic_type (func (param anyref) (param anyref) (result anyref)))
+    
     (func $f (param $arg0 anyref) (param $arg1 anyref) (result anyref)
     (local $env (ref $f-env))
     (local $x (ref $i32box))
@@ -87,7 +84,9 @@
                 (local.get $z)))))
 
 
-    ;; Compiled Table
+
+
+
     (table 10 funcref)
     (elem (i32.const 0) $h $g $f)
 
@@ -101,7 +100,6 @@
             (struct.get $clos $func_pointer (local.get $cl)))
     )
 
-    ;; Compiled MExpr 
     (func $mexpr (result i32)
         (local $result anyref)
             (local.set $result
@@ -122,6 +120,5 @@
                 (ref $i32box)
                 (local.get $result))))
 
-    ;; Exports
     (export "mexpr" (func $mexpr))
 )

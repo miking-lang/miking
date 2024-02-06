@@ -436,21 +436,14 @@ let enumExample = ADTDef {
         {ident = "Blue", argTypes = []}
     ]
 } in 
-let intList = ADTDef {
-    ident = "IntList",
-    constructors = [
-        {ident = "IntNil", argTypes = []},
-        {ident = "IntCons", argTypes = ["anyref", "anyref"]}
-    ]
-} in 
 let add_env = BasicEnv {wasmTypeAlias = "add-env", envVars=[{name="x", typeString="(ref $i32box)"}]} in
-let add = FuncDef("add", add_env, "y", "i32box", TmAdd(
+let add = FuncDef("add", add_env, "y", "(ref $i32box)", TmAdd(
     TmEnvVar(add_env, "x"), 
     TmVar("y")
 )) in  
 
 let makeadd_env = BasicEnv {wasmTypeAlias = "makeadd-env", envVars=[]} in
-let makeadd = FuncDef("makeadd", makeadd_env, "x", "i32box",
+let makeadd = FuncDef("makeadd", makeadd_env, "x", "(ref $i32box)",
     TmApp(TmFunc("add"), TmEnvAdd {
         src = makeadd_env,
         target = add_env, 
@@ -458,26 +451,33 @@ let makeadd = FuncDef("makeadd", makeadd_env, "x", "i32box",
         value = TmVar("x")
     })) in
 
-let twice_env = BasicEnv {wasmTypeAlias = "twice-env", envVars=[{name="f", typeString="(ref $clos)"}]} in
-let twice = FuncDef("twice", twice_env, "x", "i32box",
-    TmApp(
-        TmEnvVar(twice_env, "f"),
-        TmApp(
-            TmEnvVar(twice_env, "f"),
-            TmVar("x"))
-    )) in 
+-- let twice_env = BasicEnv {wasmTypeAlias = "twice-env", envVars=[{name="f", typeString="(ref $clos)"}]} in
+-- let twice = FuncDef("twice", twice_env, "x", "(ref $i32box)",
+--     TmApp(
+--         TmEnvVar(twice_env, "f"),
+--         TmApp(
+--             TmEnvVar(twice_env, "f"),
+--             TmVar("x"))
+--     )) in 
 
-let maketwice_env = BasicEnv {wasmTypeAlias = "maketwice-env", envVars=[]} in
-let maketwice = FuncDef("maketwice", maketwice_env, "f", "clos", TmApp(
-    TmFunc("twice"),
-    TmEnvAdd {
-        src = maketwice_env,
-        target = twice_env,
-        newId = "f",
-        value = TmVar("f")
-    }
-)) in 
+-- let maketwice_env = BasicEnv {wasmTypeAlias = "maketwice-env", envVars=[]} in
+-- let maketwice = FuncDef("maketwice", maketwice_env, "f", "(ref $clos)", TmApp(
+--     TmFunc("twice"),
+--     TmEnvAdd {
+--         src = maketwice_env,
+--         target = twice_env,
+--         newId = "f",
+--         value = TmVar("f")
+--     }
+-- )) in 
 
+let intList = ADTDef {
+    ident = "IntList",
+    constructors = [
+        {ident = "IntNil", argTypes = []},
+        {ident = "IntCons", argTypes = ["anyref", "anyref"]}
+    ]
+} in 
 let sum_env = BasicEnv {wasmTypeAlias = "sum-env", envVars = []} in
 let sum = FuncDef("sum", sum_env, "l", "anyref", TmMatch {
     target = TmVar "l",
@@ -485,14 +485,6 @@ let sum = FuncDef("sum", sum_env, "l", "anyref", TmMatch {
     thn = TmAdd(TmMatchVar("x"), TmApp(TmFunc "sum", TmMatchVar "xs")),
     els = TmInt(0)
 }) in 
-
--- let main = 
---     TmMatch {
---         target = TmConstruct {ident = "Color-Green", args = []},
---         pat = ADTPat ("Color-Red", []),
---         thn = TmInt(23),
---         els = TmInt(42)
---     } in 
 let l = TmConstruct {ident = "IntList-IntCons", args = [
     TmInt 10, 
     TmConstruct {ident = "IntList-IntCons", args = [
