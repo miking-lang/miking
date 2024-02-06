@@ -177,10 +177,10 @@ mexpr
 
 use TestLang in
 
+con ICtx : Int -> Ctx in
 let intCtx : Iso Int Ctx =
-  con Ctx : Int -> Ctx in
-  { fwd = lam i. Ctx i
-  , bwd = lam c. match c with Ctx i in i }
+  { fwd = lam i. ICtx i
+  , bwd = lam c. match c with ICtx i in i }
 in
 
 let effProg : Eff Int =
