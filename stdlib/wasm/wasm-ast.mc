@@ -31,8 +31,8 @@ lang WasmAST
     }
     | IfThenElse {
         cond: Instr,
-        thn: Instr,
-        els: Instr
+        thn: [Instr],
+        els: [Instr]
     }
     | Select {
         cond: Instr,

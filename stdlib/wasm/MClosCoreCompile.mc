@@ -3,11 +3,30 @@ include "wasm-ast.mc"
 include "wasm-pprint.mc"
 include "string.mc"
 include "common.mc"
+include "option.mc"
 
+-- Todo figure out how to use Either type for result.
 type Context = {
     nameToFP: [(String, Int)],
     adt2typeid: [(String, Int)],
-    matchIdent2Expr: [(String, (use WasmAST in Instr))]
+    matchIdent2Expr: [(String, (use WasmAST in Instr))],
+    locals: [{ident: String, typeString: String}],
+    instructions: [(use WasmAST in Instr)],
+    resultInstr: Option (use WasmAST in Instr),
+    resultLocalIdent: Option String,
+    nextFreeLocal: Int
+}
+
+let emptyContext : Context = 
+    use WasmAST in {
+    nameToFP = [],
+    adt2typeid = [],
+    matchIdent2Expr = [],
+    locals = [],
+    instructions = [],
+    resultInstr = None (),
+    resultLocalIdent = None(),
+    nextFreeLocal = 0
 }
 
 recursive
@@ -31,8 +50,19 @@ let isADTDef = lam def.
     use MClosCore in 
     match def with ADTDef _ then true else false
 
+let extractValue = lam ctx. 
+    use WasmAST in 
+    match ctx.resultInstr with Some (instr)
+        then instr
+        else match ctx.resultLocalIdent with Some (localIdent)
+            then LocalGet localIdent
+            else error "ResultInstr or ResultLocal must be set to extract a value."
+
+let ctxReturnInstruction = lam ctx : Context. lam instr. 
+    {ctx with resultInstr = Some instr, resultLocalIdent = None ()}
+
 lang MClosCoreCompile = MClosCore + WasmAST
-    sem compileExpr: Context -> Expr -> Instr
+    sem compileExpr: Context -> Expr -> Context
     sem compileExpr ctx = 
     | TmApp(TmFunc fname, TmEnvAdd r) -> 
         let fp = findName ctx.nameToFP fname in 
@@ -41,80 +71,99 @@ lang MClosCoreCompile = MClosCore + WasmAST
             match env with BasicEnv r
                 then
                     let tmEnvVars = map (idToTMEnvVar env) r.envVars in
-                    map (compileExpr ctx) tmEnvVars
+                    map (lam var. (extractValue (compileExpr ctx var))) tmEnvVars
                 else error "???" in
         let newEnv = match r.target with BasicEnv targetEnv
             then match r.src with BasicEnv sourceEnv
                 then StructNew {
                     typeAlias = targetEnv.wasmTypeAlias,
-                    values = cons (compileExpr ctx r.value) (allValues r.src)
-                } 
+                    values = cons (extractValue (compileExpr ctx r.value)) (allValues r.src)
+                }
             else error "???"
         else error "???" in 
-        StructNew {
+        ctxReturnInstruction ctx (StructNew {
             typeAlias = "clos",
             values = [I32Const fp, newEnv]
-        }
+        })
     | TmApp(e1, e2) -> 
-        let res1 = compileExpr ctx e1 in
-        let res2 = compileExpr ctx e2 in 
-        Call ("apply", [res1, res2])
-    | TmInt(i) -> 
-        Call ("box", [I32Const i])
+        let ctx1 = compileExpr ctx e1 in
+        let ctx2 = compileExpr ctx1 e2 in 
+        let res1 = extractValue ctx1 in 
+        let res2 = extractValue ctx2 in 
+        ctxReturnInstruction ctx (Call ("apply", [res1, res2])) 
+    | TmInt(i) ->
+        ctxReturnInstruction ctx (Call ("box", [I32Const i]))
     | TmAdd(e1, e2) -> 
         let unbox = lam e. Call ("unbox", [e]) in
-        let r1 = unbox (compileExpr ctx e1) in
-        let r2 = unbox (compileExpr ctx e2) in 
-        let addInstr = I32Add(r1, r2) in
-        Call ("box", [addInstr])
+        let ctx1 = compileExpr ctx e1 in
+        let ctx2 = compileExpr ctx1 e2 in 
+        let res1 = unbox (extractValue ctx1) in 
+        let res2 = unbox (extractValue ctx2) in 
+        let addInstr = I32Add(res1, res2) in
+        ctxReturnInstruction ctx2 (Call ("box", [addInstr]))
     | TmFunc(id) -> 
         let fp = findName ctx.nameToFP id in
         let envName = concat id "-env" in
-        StructNew {
+        ctxReturnInstruction ctx (StructNew {
             typeAlias = "clos",
             values = [I32Const fp, StructNew {typeAlias = envName, values = []}]
-        }
-    | TmVar(id) -> LocalGet id
+        })
+    | TmVar(id) -> 
+        ctxReturnInstruction ctx (LocalGet id)
     | TmMatchVar id ->
-        let pred = lam tup. 
-            match tup with (ident, instr) 
-                then (if eqString ident id 
-                    then Some (instr)
-                    else None ())
-                else 
-                    None ()
-        in 
-        match findMap pred ctx.matchIdent2Expr with Some instr
-            then instr
-            else error "Unbound match var!"
+        ctxReturnInstruction ctx (LocalGet id)
+    --     let pred = lam tup. 
+    --         match tup with (ident, instr) 
+    --             then (if eqString ident id 
+    --                 then Some (instr)
+    --                 else None ())
+    --             else 
+    --                 None ()
+    --     in 
+    --     match findMap pred ctx.matchIdent2Expr with Some instr
+    --         then [instr]
+    --         else error "Unbound match var!"
     | TmEnvVar(env, id) -> match env with BasicEnv r
         then 
-            StructGet {
+            ctxReturnInstruction ctx (StructGet {
                 typeAlias = r.wasmTypeAlias,
                 field = id,
                 value = (RefCast {
                     typeAlias = r.wasmTypeAlias,
                     value = LocalGet "env"
                 })
-            }
+            })
         else error "Only BasicEnv is supported!"
     | TmConstruct {ident = adtIdent, args = args} -> 
-        let compiledArgs = map (compileExpr ctx) args in 
+        let compiledArgs = map (lam var. (extractValue (compileExpr ctx var))) args in 
         let argsWithTypeid = concat 
             compiledArgs 
             [I32Const (findName ctx.adt2typeid adtIdent)] in
-        StructNew {typeAlias = adtIdent, values = argsWithTypeid}
+        ctxReturnInstruction ctx (StructNew {typeAlias = adtIdent, values = argsWithTypeid})
     | TmMatch r ->
-        let res = compileTargetPat ctx r.target r.pat in 
-        match res with (cond, ctx) 
-            then Select {
-                cond = cond,
-                thn = compileExpr ctx r.thn,
-                els = compileExpr ctx r.els
-            }
-            else error "Unexpected result!"
-    | TmEnvAdd r -> 
-        error "Unsupported TmEnvAdd"
+        let resultLocalIdent = concat "tmp" (int2string ctx.nextFreeLocal) in
+        let ctx = {ctx with 
+            nextFreeLocal = addi 1 ctx.nextFreeLocal,
+            locals = cons {ident=resultLocalIdent, typeString="anyref"} ctx.locals} in
+        let condCtx = compileTargetPat ctx r.target r.pat in 
+        let thnCtx = compileExpr {condCtx with instructions = []} r.thn in
+        let elsCtx = compileExpr {thnCtx with instructions = []} r.els in 
+        let condInstr = extractValue condCtx in
+        let ite = IfThenElse {
+            cond = extractValue (condCtx),
+            thn = concat 
+                thnCtx.instructions 
+                [LocalSet (resultLocalIdent, extractValue thnCtx)],
+            els = concat 
+                elsCtx.instructions 
+                [LocalSet (resultLocalIdent, extractValue elsCtx)]
+        } in 
+        {elsCtx with 
+            resultInstr = None (),
+            resultLocalIdent = Some (resultLocalIdent),
+            instructions = cons ite (concat condCtx.instructions ctx.instructions)}
+    -- | TmEnvAdd r -> 
+    --     error "Unsupported TmEnvAdd"
         -- let idToTMEnvVar = lam env. lam id. TmEnvVar(env, id) in
         -- let allValues = lam env.
         --     match env with BasicEnv r
@@ -131,30 +180,52 @@ lang MClosCoreCompile = MClosCore + WasmAST
         --     else error "???"
         -- else error "???"
 
-    sem compileTargetPat : Context -> Expr -> Pat -> (Instr, Context)
+    sem compileTargetPat : Context -> Expr -> Pat -> Context
     sem compileTargetPat ctx target =
-    | Wildcard () -> (I32Const 1, ctx)
-    | IntPat i -> (I32Eq (compileExpr ctx target, I32Const i), ctx)
+    | Wildcard () -> 
+        ctxReturnInstruction ctx (I32Const 1)
+    | IntPat i -> 
+        let ctx = compileExpr ctx target in 
+        ctxReturnInstruction ctx (I32Eq ((Call ("unbox", [extractValue ctx]), I32Const i)))
     | ADTPat (ident, args) ->
-        let targetInstr = compileExpr ctx target in
-        let expectedTypeId = findName ctx.adt2typeid ident in  
-        let castTarget = RefCast {typeAlias = ident, value = targetInstr} in 
-        let condInstr = I32And (
-            RefTest {typeAlias=ident, value = targetInstr},
-            I32Eq (I32Const expectedTypeId, StructGet {
-                typeAlias = ident,
-                field = "_typeid",
-                value = castTarget
-            })
-        ) in 
+        let resultIdent = concat "tmp" (int2string ctx.nextFreeLocal) in 
+        let ctx = {ctx with
+            nextFreeLocal = addi 1 ctx.nextFreeLocal,
+            locals = cons 
+                {ident = resultIdent, typeString = "i32"}
+                ctx.locals} in 
+        let targetCtx = compileExpr ctx target in
+        let targetInstr = extractValue targetCtx in 
+        let expectedTypeId = findName ctx.adt2typeid ident in 
+        let castTarget = RefCast {typeAlias = ident, value = targetInstr} in  
         let bind = lam i. lam arg. 
-            (arg, StructGet {
+            (LocalSet (arg, StructGet {
                 typeAlias = ident,
                 value = castTarget,
                 field = concat "field" (int2string i)
-            }) in 
+            })) in 
         let allBindings = mapi bind args in 
-        (condInstr, {ctx with matchIdent2Expr = concat ctx.matchIdent2Expr allBindings})
+        let ite = IfThenElse {
+            cond = RefTest {typeAlias=ident, value = targetInstr},
+            thn = [IfThenElse {
+                cond = I32Eq (I32Const expectedTypeId, StructGet {
+                    typeAlias = ident,
+                    field = "_typeid",
+                    value = castTarget
+                }),
+                thn = cons 
+                    (LocalSet (resultIdent, I32Const 1))
+                    allBindings ,
+                els = [LocalSet (resultIdent, I32Const 0)]
+            }],
+            els = [LocalSet (resultIdent, I32Const 0)]
+        } in 
+        let argsAsLocals = map (lam arg. {ident = arg, typeString = "anyref"}) args in 
+        {ctx with 
+            instructions = cons ite ctx.instructions,
+            resultInstr = None (),
+            resultLocalIdent = Some (resultIdent), 
+            locals = concat argsAsLocals ctx.locals}
 
     sem compileDef: Context -> Def -> Func
     sem compileDef ctx = 
@@ -165,13 +236,15 @@ lang MClosCoreCompile = MClosCore + WasmAST
                 {name = "env", typeAlias=join["(ref $", envType, ")"]},
                 {name=id, typeAlias= join[typeStr]}
             ] in
-            let body = compileExpr ctx body in 
+            let ctx = compileExpr ctx body in 
+            let resultInstr = extractValue ctx in 
+            let ctxLocals = map 
+                (lam loc. {name = loc.ident, typeAlias = loc.typeString})
+                ctx.locals in 
+            let locals = concat locals ctxLocals in 
             let setLocal = LocalSet (
                 "env",
                 RefCast {typeAlias = envType, value = LocalGet "arg0"}) in
-            -- let setLocal2 = LocalSet (
-            --     id,
-            --     RefCast {typeAlias = typeStr, value = LocalGet "arg1"}) in
             let setLocal2 = LocalSet (
                 id,
                 LocalGet "arg1") in
@@ -183,7 +256,7 @@ lang MClosCoreCompile = MClosCore + WasmAST
                 ],
                 locals = locals,
                 resultTypeString = "anyref",
-                instructions = [setLocal, setLocal2, body]
+                instructions = join [[setLocal, setLocal2], reverse ctx.instructions, [resultInstr]]
             }
         else 
             error "error"
@@ -211,10 +284,13 @@ lang MClosCoreCompile = MClosCore + WasmAST
        map constr2struct adt.constructors
     | other -> []
 
-    sem wrapExprInMExpr: Instr -> Func
+    sem wrapExprInMExpr: Context -> Func
     sem wrapExprInMExpr = 
-    | instr -> 
-        let setResultInstr = LocalSet("result", instr) in
+    | ctx -> 
+        let locals = map 
+            (lam loc. {name = loc.ident, typeAlias = loc.typeString})
+            ctx.locals in 
+        let setResultInstr = LocalSet("result", extractValue ctx) in
         let unboxResultInstr = Call(
             "unbox", 
             [RefCast {
@@ -224,8 +300,8 @@ lang MClosCoreCompile = MClosCore + WasmAST
             name = "mexpr",
             args = [],
             resultTypeString = "i32",
-            locals = [{name = "result", typeAlias="anyref"}],
-            instructions = [setResultInstr, unboxResultInstr]
+            locals = cons {name = "result", typeAlias="anyref"} locals,
+            instructions = join [reverse ctx.instructions, [setResultInstr, unboxResultInstr]]
         }
 
     sem createCtx: [Def] -> Context
@@ -241,7 +317,8 @@ lang MClosCoreCompile = MClosCore + WasmAST
             match def with ADTDef adt  
                 then mapi (lam i. lam c. (join [adt.ident, "-", c.ident], i)) adt.constructors
                 else error "Unsupported Def" in 
-        {nameToFP = mapi funcdef2tuple funcDefs,
+        {emptyContext with 
+         nameToFP = mapi funcdef2tuple funcDefs,
          adt2typeid = join (map adtdef2tuple adtDefs),
          matchIdent2Expr = []}
 
@@ -284,13 +361,16 @@ lang MClosCoreCompile = MClosCore + WasmAST
         } in
         let unbox = Function {
             name = "unbox",
-            args = [{name="box", typeString="(ref $i32box)"}],
+            args = [{name="box", typeString="anyref"}],
             locals = [],
             resultTypeString = "i32",
             instructions = [StructGet {
                 typeAlias = "i32box",
                 field="value",
-                value = LocalGet "box"
+                value = RefCast {
+                    typeAlias = "i32box",
+                    value = LocalGet "box" 
+                }
             }]
         } in 
         let apply = Function {
@@ -335,6 +415,7 @@ lang MClosCoreCompile = MClosCore + WasmAST
 
         let types = join [[closType, i32boxType, genericType], adtTypes, (map compileEnvToWasmType envs)] in 
         let functions = map (compileDef ctx) funcDefs in
+        -- let functions = [] in 
         let main = wrapExprInMExpr (compileExpr ctx expr) in 
         Module {
             functions = join [[box, unbox], functions, [apply, main]],
@@ -406,12 +487,12 @@ let sum = FuncDef("sum", sum_env, "l", "anyref", TmMatch {
 }) in 
 
 -- let main = 
-    -- TmMatch {
-    --     target = TmConstruct {ident = "Color-Green", args = []},
-    --     pat = ADTPat ("Color-Blue", []),
-    --     thn = TmInt(23),
-    --     els = TmInt(42)
-    -- } in 
+--     TmMatch {
+--         target = TmConstruct {ident = "Color-Green", args = []},
+--         pat = ADTPat ("Color-Red", []),
+--         thn = TmInt(23),
+--         els = TmInt(42)
+--     } in 
 let l = TmConstruct {ident = "IntList-IntCons", args = [
     TmInt 10, 
     TmConstruct {ident = "IntList-IntCons", args = [
@@ -423,6 +504,7 @@ let l = TmConstruct {ident = "IntList-IntCons", args = [
     ]}
 ]} in 
 let main = TmApp(TmFunc "sum", l) in 
+-- let main = TmAdd(TmInt(1), TmInt(2)) in 
     -- TmApp(
     --     TmApp(
     --         TmFunc("maketwice"),
@@ -431,8 +513,13 @@ let main = TmApp(TmFunc "sum", l) in
     --             TmInt(-1)
     --         )),
     --     TmInt(0)) in 
+-- let main = TmMatch {
+--     target = TmInt(10),
+--     pat = IntPat(12),
+--     thn = TmInt(1),
+--     els = TmInt(-1)
+-- } in 
 
-
-let mod = compile [sum, intList] main in
+let mod = compile [intList, sum] main in
 let s = (use WasmPPrint in pprintMod mod) in 
 (printLn s)

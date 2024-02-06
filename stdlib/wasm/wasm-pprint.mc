@@ -54,8 +54,10 @@ lang WasmPPrint = WasmAST
     | IfThenElse ite ->
         let indentPlusOne = addi indent 1 in 
         let cndStr = pprintInstr indentPlusOne ite.cond in
-        let thnStr = pprintInstr indentPlusOne ite.thn in 
-        let elsStr = pprintInstr indentPlusOne ite.els in 
+        let thnStr = strJoin "\n" (map (pprintInstr indentPlusOne) ite.thn) in 
+        let thnStr = join [indent2str indentPlusOne, "(then\n", thnStr, ")"] in 
+        let elsStr = strJoin "\n" (map (pprintInstr indentPlusOne) ite.els) in 
+        let elsStr = join [indent2str indentPlusOne, "(else\n", elsStr, ")"] in 
         join [indent2str indent, "(if\n", cndStr, "\n", thnStr, "\n", elsStr, ")"]
     | Select s ->
         let indentPlusOne = addi indent 1 in 
@@ -143,6 +145,6 @@ utest pprintType 1 (FunctionType {
 let eq33 = I32Eq (I32Const 3, I32Const 3) in 
 utest pprintInstr 1 eq33 with 
     "    (i32.eq\n        (i32.const 3)\n        (i32.const 3))" in 
-let ite = IfThenElse {cond = eq33, thn = I32Const 23, els = I32Const 42} in
+let ite = IfThenElse {cond = eq33, thn = [I32Const 23], els = [I32Const 42]} in
 utest pprintInstr 0 ite with "(if\n    (i32.eq\n        (i32.const 3)\n        (i32.const 3))\n    (i32.const 23)\n    (i32.const 42))" in 
 ()
