@@ -3,18 +3,11 @@ include "mexpr/ast.mc"
 lang MClosAst = MExprAst
     syn Expr = 
     | TmFuncDef {funcIdent: Name,
-                 argIdent: Name,
+                 args: [{ident: Name, ty: Type}],
                  body: Expr,
-                 env: [String],
                  tyAnnot: Type,
-                 tyParam: Type,
                  ty: Type,
                  info: Info}
-    | TMEnvVar {ident : Name,
-                ty: Type,
-                info: Info,
-                frozen: Bool}
-    | TmEnvAdd String
 
     sem infoTm =
     | TmFuncDef t -> t.info

@@ -1,7 +1,8 @@
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/lamlift.mc"
-
+include "mexpr/pprint.mc"
+include "mexpr/eq.mc"
 
 include "mclos-ast.mc"
 include "mclos-pprint.mc"
@@ -10,88 +11,70 @@ include "common.mc"
 include "string.mc"
 include "name.mc"
 
-lang Transpiler = MClosAst
-    -- sem collectDefs : [Expr] -> [String], 
-    -- sem subEnvVar envVars = 
-    -- | TmVar r -> 
+type SigType = {
+    ident: Name,
+    tyAnnot: (use MClosAst in Type),
+    ty: (use MClosAst in Type),
+    info: Info
+}
 
-    sem collectNestedDefs acc envVars name counter = 
-    | TmLam r -> match r.body with TmLam inner
-        then 
-            let lowerIdent = nameSym (concat name (int2string counter)) in
-            let newBody = TmApp {
-                lhs = TmVar {
-                    ident = lowerIdent, 
-                    ty = inner.ty,
-                    info = inner.info,
-                    frozen = false
-                }, 
-                rhs = TmEnvAdd (nameGetStr r.ident),
-                ty = r.ty,
-                info = r.info
-            } in 
-            -- let newBody = TmEnvAdd (nameGetStr r.ident) in 
-            let funcDef = TmFuncDef {
-                funcIdent = nameSym (concat name (int2string counter)),
-                argIdent = r.ident,
-                body = newBody,
-                env = envVars,
-                tyAnnot = r.tyAnnot,
-                tyParam = r.tyParam,
-                ty = r.ty,
-                info = r.info} in 
-            let acc = cons funcDef acc in 
-            let envVars = cons (nameGetStr r.ident) envVars in 
-            let counter = addi 1 counter in 
-            collectNestedDefs acc envVars name counter r.body
-        else 
-            let funcDef = TmFuncDef {
-                funcIdent = nameSym (concat name (int2string counter)),
-                argIdent = r.ident,
-                body = r.body,
-                env = envVars,
-                tyAnnot = r.tyAnnot,
-                tyParam = r.tyParam,
-                ty = r.ty,
-                info = r.info} in 
-            cons funcDef acc
-    | _ -> acc
+lang MClosTranspiler = MClosAst
+    sem extractFuncDef: [{ident: Name, ty: Type}] -> SigType -> Expr -> Expr
+    sem extractFuncDef argsAcc sig = 
+    | TmLam lamRec -> 
+        let newArgsAcc = (snoc argsAcc {ident = lamRec.ident, ty = lamRec.tyParam}) in 
+        extractFuncDef newArgsAcc sig lamRec.body
+    | other ->  
+        TmFuncDef {
+            funcIdent = sig.ident,
+            tyAnnot = sig.tyAnnot,
+            ty = sig.ty,
+            info = sig.info,
+            body = other,
+            args = argsAcc
+        }
 
-    sem collectDefs acc envVars = 
-    | TmLet letRec -> 
-        let identStr = nameGetStr letRec.ident in 
-        collectNestedDefs [] [] identStr 0 letRec.body
-    | other -> acc
-    -- sem transpile = 
-    -- | TmLet letRec -> match letRec.body with TmLam lamRec 
-    --     then TmFuncDef {ident = letRec.ident,
-    --                     body = lamRec.body,
-    --                     env = "???",
-    --                     tyAnnot = lamRec.tyAnnot,
-    --                     tyParam = lamRec.tyParam,
-    --                     ty = lamRec.ty,
-    --                     info = lamRec.info}
-    --     else error "Unsupported TmLet body!"
-    -- | other -> other
+    sem transpileAcc : [Expr] -> Expr -> [Expr]
+    sem transpileAcc acc = 
+    | TmLet r -> 
+        let sig: SigType = {
+            ident = r.ident,
+            tyAnnot = r.tyAnnot,
+            ty = r.ty,
+            info = r.info
+        } in 
+        let funDef = (extractFuncDef [] sig r.body) in 
+        let acc = cons funDef acc in 
+        transpileAcc acc r.inexpr
+    | other -> cons other acc
+
+    sem transpile =
+    | expr -> reverse (transpileAcc [] expr)
 end
 
-mexpr 
-use MExprLambdaLift in 
-let addxy = ulet_ "f" 
-    (ulam_ "x"
-        (ulam_ "y" (addi_ (var_ "x") (var_ "y")))) in 
-let liftedAddxy = liftLambdas addxy in 
-use MClosPrettyPrint in 
--- (printLn (expr2str addxy)) ; 
--- (printLn (expr2str liftedAddxy)) ;
-use Transpiler in
-let defs = collectDefs [] [] liftedAddxy in 
-use MClosPrettyPrint in 
-() ;
-printLn (strJoin "\n" (map expr2str defs))
--- let f1 = (app_ (lam_ "x" tyint_ (addi_ (var_ "x") (int_ 1))) (int_ 3)) in
--- let f1 = liftLambdas f1 in 
--- use Transpiler in 
--- let transpiled = transpile f1 in
+mexpr
+use MClosTranspiler in 
+let body = (addi_ (var_ "x") (int_ 10)) in 
+let f = ulet_ "f" (ulam_ "x" body) in 
+let expr = app_ (var_ "f") (int_ 10) in 
+let prog = bind_ f expr in 
+let transpiled = transpile prog in 
+match head transpiled with TmFuncDef f in 
+    utest nameGetStr f.funcIdent with "f" in 
+    utest length f.args with 1 in 
+    utest nameGetStr (head f.args).ident with "x" in 
+    utest f.body with body using (use MExprEq in eqExpr) in 
+
+let body = (addi_ (var_ "x") (var_ "y")) in 
+let g = ulet_ "g" (ulam_ "x" (ulam_ "y" body)) in 
+let expr = app_ (app_ (var_ "g") (int_ 10)) (int_ 20) in 
+let prog = bind_ g expr in 
+let transpiled = transpile prog in 
+match head transpiled with TmFuncDef f in 
+    utest nameGetStr f.funcIdent with "g" in 
+    utest length f.args with 2 in 
+    utest f.body with body using (use MExprEq in eqExpr) in 
 -- use MClosPrettyPrint in 
--- printLn (expr2str transpiled)
+-- (printLn (expr2str prog)) ;
+-- (printLn (strJoin "\n\n" (map expr2str transpiled))) ;
+() 
