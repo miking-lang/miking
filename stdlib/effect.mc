@@ -1,4 +1,5 @@
 include "option.mc"
+include "either.mc"
 
 lang Effect
   -- NOTE(aathn, 2024-02-06): If we had GADTs, we could remove the
@@ -151,13 +152,12 @@ lang NonDet = Effect
   syn Response =
   | NDChooseR NDItem
 
-  sem choose : all a. [a] -> Eff a
-  sem choose =
+  sem choose : all a. Iso a NDItem -> [a] -> Eff a
+  sem choose i =
   | is ->
-    con Item : a -> NDItem in
     perform
-      (NDChooseQ (map (lam i. Item i) is))
-      (lam x. match x with NDChooseR (Item i) in i)
+      (NDChooseQ (map (lam item. i.fwd item) is))
+      (lam x. match x with NDChooseR item in i.bwd item)
 
   sem handleND : all a. Eff a -> Eff [a]
   sem handleND =
@@ -171,24 +171,54 @@ lang NonDet = Effect
     handleEff (lam x. return [x]) handler e
 end
 
-lang TestLang = Reader + NonDet end
+lang Failure = Effect
+  syn Failure =
+
+  syn Query =
+  | FailQ Failure
+
+  syn Response =
+
+  sem fail : all a. all b. Iso a Failure -> a -> Eff b
+  sem fail i =
+  | a ->
+    perform (FailQ (i.fwd a)) (lam. error "failed branch was executed!")
+
+  sem handleFail : all a. all b. Iso b Failure -> Eff a -> Eff (Either b a)
+  sem handleFail i =
+  | e ->
+    let handler = lam. lam q.
+      match q with FailQ f then
+        Some (return (Left (i.bwd f)))
+      else None ()
+    in
+    handleEff (lam x. return (Right x)) handler e
+end
+
+lang TestLang = Reader + NonDet + Failure end
 
 mexpr
 
 use TestLang in
 
 con ICtx : Int -> Ctx in
-let intCtx : Iso Int Ctx =
+let iCtx : Iso Int Ctx =
   { fwd = lam i. ICtx i
   , bwd = lam c. match c with ICtx i in i }
 in
 
+con IItem : Int -> NDItem in
+let iItem : Iso Int NDItem =
+  { fwd = lam i. IItem i
+  , bwd = lam w. match w with IItem i in i}
+in
+
 let effProg : Eff Int =
-  bind (choose [0,1]) (lam i.
-  bind (choose [2,3]) (lam j.
-  bind (ask intCtx) (lam k.
+  bind (choose iItem [0,1]) (lam i.
+  bind (choose iItem [2,3]) (lam j.
+  bind (ask iCtx) (lam k.
   return (addi (addi i j) k))))
 in
 
-utest runEff (handleND (handleReader intCtx 7 effProg)) with [9,10,10,11] in
+utest runEff (handleND (handleReader iCtx 7 effProg)) with [9,10,10,11] in
 ()
