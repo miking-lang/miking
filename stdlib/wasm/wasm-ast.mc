@@ -8,24 +8,24 @@ lang WasmAST
     | LocalSet (String, Instr)
     | Call (String, [Instr])
     | StructGet {
-        typeAlias: String,
-        value: Instr,
-        field: String
+        structIdent: String,
+        field: String,
+        value: Instr
     }
     | StructNew {
-        typeAlias: String,
+        structIdent: String,
         values: [Instr]
     }
     | RefCast {
-        typeAlias: String,
+        ty: WasmType,
         value: Instr
     }
     | RefTest {
-        typeAlias: String,
+        ty: WasmType,
         value: Instr
     }
     | CallIndirect {
-        typeString: String,
+        ty: String,
         args: [Instr],
         fp: Instr
     }
@@ -40,28 +40,34 @@ lang WasmAST
         els: Instr
     }
 
-    syn Func = 
-    | Function {
-        name: String,
-        args: [{name: String, typeString: String}],
-        locals: [{name: String, typeAlias: String}],
-        resultTypeString: String,
+    syn Def = 
+    | FunctionDef {
+        ident: String,
+        args: [{ident: String, ty: WasmType}],
+        locals: [{ident: String, ty: WasmType}],
+        resultTy: WasmType,
         instructions: [Instr]
+    }
+    | StructTypeDef {
+        ident: String,
+        fields: [{
+            ident: String,
+            ty: WasmType
+        }]
+    }
+    | FunctionTypeDef {
+        ident: String,
+        paramTys: [WasmType],
+        resultTy: WasmType
     }
 
     syn WasmType = 
-    | StructType {
-        name: String,
-        fields: [{
-            name: String,
-            typeString: String
-        }]
-    }
-    | FunctionType {
-        name: String,
-        paramTypeStrings: [String],
-        resultTypeString: String
-    }
+    | Tyi32 ()
+    | Tyi64 ()
+    | Tyf32 ()
+    | Tyf64 ()
+    | Anyref ()
+    | Ref String
 
     syn WasmMemory = 
     | Table {size: Int, typeString: String}
@@ -69,7 +75,7 @@ lang WasmAST
 
     syn Mod = 
     | Module {
-        functions: [Func],
+        definitions: [Def],
         table: WasmMemory, 
         elem: WasmMemory, 
         types: [WasmType],
