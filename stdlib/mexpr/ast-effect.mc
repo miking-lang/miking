@@ -46,32 +46,22 @@ let parse =
 in
 
 con CLog : Char -> Log in
-let cLog : Iso Char Log =
-  { fwd = lam c. CLog c
-  , bwd = lam w. match w with CLog c in c}
-in
+let getLog = lam w. match w with CLog c in c in
 
 con IFail : Int -> Failure in
-let iFail : Iso Int Failure =
-  { fwd = lam i. IFail i
-  , bwd = lam w. match w with IFail i in i}
-in
+let getFail = lam w. match w with IFail i in i in
 
--- The order of warnings and errors is not significant, thus we call
--- this function on a result to be compared in a utest to get a stable
--- ordering.
-let prepTest
-  : all a. Eff a -> ([Char], Either Int a)
+let runTest
+  : all a. Eff a -> (Either Int a, [Char])
   = lam x.
-    match runEff (handleWriter cLog (handleFail iFail x)) with (r, w) in
-    (sort cmpChar w, r)
+    runEff (handleWriter getLog (handleFail getFail x))
 in
 
 ---------------------------------------
 -- Test smapEff_Expr_Expr --
 ---------------------------------------
 
-let _prepTest = lam e1. lam e2. prepTest (effMap (eqExpr e1) e2) in
+let prepTest = lam e1. lam e2. runTest (effMap (eqExpr e1) e2) in
 
 -- Renames variables by concatenating its name to itself. variables with names
 -- 'y' gives a warning 'b' and variables with names 'z' gives an error 1.
@@ -80,13 +70,13 @@ recursive let f : Expr -> Eff Expr
     match e with TmVar r then
       let name = nameGetStr r.ident in
       let e =
-        match name with "z" then fail iFail 1
+        match name with "z" then fail (IFail 1)
         else
           return
             (TmVar { r with ident = nameSetStr r.ident (concat name name) })
       in
       match name with "y" then
-        bind (tell cLog 'b') (lam. e)
+        bind (tell (CLog 'b')) (lam. e)
       else e
     else
       smapEff_Expr_Expr f e
@@ -106,7 +96,7 @@ let expected = parse "
   "
 in
 
-utest _prepTest expected (f e) with (['b'], Right true) in
+utest prepTest expected (f e) with (Right true, ['b']) in
 ---
 
 -- Test 2
@@ -122,7 +112,7 @@ let expected = parse "
   "
 in
 
-utest _prepTest expected (f e) with (['b', 'b'], Right true) in
+utest prepTest expected (f e) with (Right true, ['b', 'b']) in
 ---
 
 -- Test 3
@@ -132,7 +122,7 @@ let e = parse "
   "
 in
 
-utest _prepTest e (f e) with ([], Left 1) in
+utest prepTest e (f e) with (Left 1, []) in
 ---
 
 -- Test 4
@@ -142,7 +132,7 @@ let e = parse "
   "
 in
 
-utest _prepTest e (f e) with (['b'], Left 1) in
+utest prepTest e (f e) with (Left 1, ['b']) in
 ---
 
 -- Test 5
@@ -158,7 +148,7 @@ let expected = parse "
   "
 in
 
-utest _prepTest expected (f e) with (['b'], Right true) in
+utest prepTest expected (f e) with (Right true, ['b']) in
 ---
 
 ()

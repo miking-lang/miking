@@ -3,13 +3,10 @@ include "either.mc"
 
 lang Effect
   -- NOTE(aathn, 2024-02-06): If we had GADTs, we could remove the
-  -- Response type in favor of having a Query type with a type
-  -- parameter indicating the return type.
+  -- Response type in favor of having a parameterized Query type where
+  -- the parameter indicates the return type.
   syn Query =
   syn Response =
-
-  type Iso a b =
-    { fwd : a -> b, bwd : b -> a }
 
   syn Eff a =
   | Pure a
@@ -64,22 +61,30 @@ lang Reader = Effect
   syn Ctx =
 
   syn Query =
-  | ReaderGetQ ()
+  | ReaderAskQ ()
 
   syn Response =
-  | ReaderGetR Ctx
+  | ReaderAskR Ctx
 
-  sem ask : all a. Iso a Ctx -> Eff a
+  sem ask : all a. (Ctx -> a) -> Eff a
   sem ask =
-  | i -> perform (ReaderGetQ ()) (lam x. match x with ReaderGetR c in i.bwd c)
+  | proj -> perform (ReaderAskQ ()) (lam x. match x with ReaderAskR c in proj c)
 
-  sem handleReader : all b. all a. Iso b Ctx -> b -> Eff a -> Eff a
-  sem handleReader i ctx =
+  sem local : all a. all b. (b -> Ctx -> Ctx) -> b -> Eff a -> Eff a
+  sem local update b =
+  | Pure x -> Pure x
+  | Impure (q, k1) ->
+    let k2 = lam r. local update b (k1 r) in
+    match q with ReaderAskQ _ then
+      Impure (q, lam r. match r with ReaderAskR c in k2 (ReaderAskR (update b c)))
+    else Impure (q, k2)
+
+  sem handleReader : all a. Ctx -> Eff a -> Eff a
+  sem handleReader ctx =
   | e ->
-    let c = i.fwd ctx in
     let handler = lam continue. lam q.
-      match q with ReaderGetQ () then
-        Some (continue (ReaderGetR c))
+      match q with ReaderAskQ () then
+        Some (continue (ReaderAskR ctx))
       else None ()
     in
     handleEff return handler e
@@ -89,21 +94,21 @@ lang Writer = Effect
   syn Log =
 
   syn Query =
-  | WriterPutQ Log
+  | WriterTellQ Log
 
   syn Response =
-  | WriterPutR ()
+  | WriterTellR ()
 
-  sem tell : all a. Iso a Log -> a -> Eff ()
-  sem tell i =
-  | l -> perform (WriterPutQ (i.fwd l)) (lam. ())
+  sem tell : all a. Log -> Eff ()
+  sem tell =
+  | l -> perform (WriterTellQ l) (lam. ())
 
-  sem handleWriter : all a. all b. Iso b Log -> Eff a -> Eff (a, [b])
-  sem handleWriter i =
+  sem handleWriter : all a. all b. (Log -> b) -> Eff a -> Eff (a, [b])
+  sem handleWriter proj =
   | e ->
     let handler = lam continue. lam q.
-      match q with WriterPutQ l then
-        Some (effMap (lam al. (al.0, cons (i.bwd l) al.1)) (continue (WriterPutR ())))
+      match q with WriterTellQ l then
+        Some (effMap (lam al. (al.0, cons (proj l) al.1)) (continue (WriterTellR ())))
       else None ()
     in
     handleEff (lam x. return (x, [])) handler e
@@ -114,30 +119,30 @@ lang State = Effect
 
   syn Query =
   | StateGetQ ()
-  | StatePutQ State
+  | StatePutQ (State -> State)
 
   syn Response =
   | StateGetR State
   | StatePutR ()
 
-  sem get : all a. Iso a State -> Eff a
+  sem get : all a. (State -> a) -> Eff a
   sem get =
-  | i -> perform (StateGetQ ()) (lam x. match x with StateGetR s in i.bwd s)
+  | proj -> perform (StateGetQ ()) (lam x. match x with StateGetR s in proj s)
 
-  sem put : all a. Iso a State -> a -> Eff ()
-  sem put i =
-  | s -> perform (StatePutQ (i.fwd s)) (lam. ())
+  sem put : all a. (a -> State -> State) -> a -> Eff ()
+  sem put update =
+  | a -> perform (StatePutQ (update a)) (lam. ())
 
-  sem handleState : all a. all b. Iso b State -> b -> Eff a -> Eff (a, b)
-  sem handleState i s =
-  | Pure x -> return (x, s)
+  sem handleState : all a. all b. (State -> b) -> State -> Eff a -> Eff (a, b)
+  sem handleState proj s =
+  | Pure x -> return (x, proj s)
   | Impure (q, k) ->
-    let continue = lam s. lam r. handleState i s (k r) in
+    let continue = lam s. lam r. handleState proj s (k r) in
     switch q
     case StateGetQ () then
-      continue s (StateGetR (i.fwd s))
-    case StatePutQ s then
-      continue (i.bwd s) (StatePutR ())
+      continue s (StateGetR s)
+    case StatePutQ f then
+      continue (f s) (StatePutR ())
     case _ then
       Impure (q, continue s)
     end
@@ -146,18 +151,27 @@ end
 lang NonDet = Effect
   syn NDItem =
 
+  -- NOTE(aathn, 2024-02-07): If we had GADTs, we wouldn't need this
+  -- NDItem type, we could simply have
+  -- NDChooseQ : all a. [a] -> Query a.
   syn Query =
   | NDChooseQ [NDItem]
 
   syn Response =
   | NDChooseR NDItem
 
-  sem choose : all a. Iso a NDItem -> [a] -> Eff a
-  sem choose i =
+  sem choose : all a. [a] -> Eff a
+  sem choose =
   | is ->
+    -- NOTE(aathn, 2024-02-07): We cheat by defining a local
+    -- constructor which will escape its scope -- this is safe since
+    -- it will always be handled by the corresponding continuation,
+    -- but it would be rejected by the new typechecker, and it would
+    -- be unnecessary if we had GADTs as stated above.
+    con Item : a -> NDItem in
     perform
-      (NDChooseQ (map (lam item. i.fwd item) is))
-      (lam x. match x with NDChooseR item in i.bwd item)
+      (NDChooseQ (map (lam i. Item i) is))
+      (lam x. match x with NDChooseR (Item i) in i)
 
   sem handleND : all a. Eff a -> Eff [a]
   sem handleND =
@@ -179,46 +193,46 @@ lang Failure = Effect
 
   syn Response =
 
-  sem fail : all a. all b. Iso a Failure -> a -> Eff b
-  sem fail i =
+  sem fail : all a. Failure -> Eff a
+  sem fail =
   | a ->
-    perform (FailQ (i.fwd a)) (lam. error "failed branch was executed!")
+    perform (FailQ a) (lam. error "failed branch was executed!")
 
-  sem handleFail : all a. all b. Iso b Failure -> Eff a -> Eff (Either b a)
-  sem handleFail i =
+  sem handleFail : all a. all b. (Failure -> b) -> Eff a -> Eff (Either b a)
+  sem handleFail proj =
   | e ->
     let handler = lam. lam q.
       match q with FailQ f then
-        Some (return (Left (i.bwd f)))
+        Some (return (Left (proj f)))
       else None ()
     in
     handleEff (lam x. return (Right x)) handler e
 end
 
-lang TestLang = Reader + NonDet + Failure end
+lang TestLang = Reader + NonDet
+  sem getInt : Ctx -> Int
+  sem addInt : Int -> Ctx -> Ctx
+
+  sem effProg : () -> Eff Int
+  sem effProg = | () ->
+    local addInt 3
+      (bind (choose [0,1]) (lam i.
+      bind (choose [2,3]) (lam j.
+      bind (ask getInt) (lam k.
+      return (addi (addi i j) k)))))
+end
+
+lang TestLangImpl = TestLang
+  syn Ctx = | ICtx Int
+  sem getInt = | ICtx i -> i
+  sem addInt j = | ICtx i -> ICtx (addi j i)
+end
 
 mexpr
 
-use TestLang in
+use TestLangImpl in
 
-con ICtx : Int -> Ctx in
-let iCtx : Iso Int Ctx =
-  { fwd = lam i. ICtx i
-  , bwd = lam c. match c with ICtx i in i }
-in
+utest runEff (handleND (handleReader (ICtx 7) (effProg ())))
+with [12,13,13,14] in
 
-con IItem : Int -> NDItem in
-let iItem : Iso Int NDItem =
-  { fwd = lam i. IItem i
-  , bwd = lam w. match w with IItem i in i}
-in
-
-let effProg : Eff Int =
-  bind (choose iItem [0,1]) (lam i.
-  bind (choose iItem [2,3]) (lam j.
-  bind (ask iCtx) (lam k.
-  return (addi (addi i j) k))))
-in
-
-utest runEff (handleND (handleReader iCtx 7 effProg)) with [9,10,10,11] in
 ()
