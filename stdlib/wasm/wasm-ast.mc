@@ -6,6 +6,7 @@ lang WasmAST
     | I32Eq (Instr, Instr)
     | LocalGet String
     | LocalSet (String, Instr)
+    | GlobalGet String
     | Call (String, [Instr])
     | StructGet {
         structIdent: String,
@@ -15,6 +16,22 @@ lang WasmAST
     | StructNew {
         structIdent: String,
         values: [Instr]
+    }
+    | ArrayNew {
+        tyIdent: String,
+        initValue: Instr,
+        size: Instr
+    }
+    | ArrayGet {
+        tyIdent: String,
+        value: Instr,
+        index: Instr
+    }
+    | ArraySet {
+        tyIdent: String,
+        value: Instr,
+        index: Instr,
+        value2: Instr
     }
     | RefCast {
         ty: WasmType,
@@ -66,6 +83,7 @@ lang WasmAST
     | Tyi64 ()
     | Tyf32 ()
     | Tyf64 ()
+    | Array WasmType
     | Anyref ()
     | Ref String
 

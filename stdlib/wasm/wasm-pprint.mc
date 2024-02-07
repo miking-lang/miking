@@ -20,6 +20,7 @@ lang WasmPPrint = WasmAST
     sem pprintInstr indent = 
     | I32Const i -> join [indent2str indent, "(i32.const ", (int2string i), ")"]
     | LocalGet id -> join [indent2str indent, "(local.get $", id, ")"]
+    | GlobalGet id -> join [indent2str indent, "(global.get $", id, ")"]
     | LocalSet (id, value) -> 
         let valStr = pprintInstr (addi indent 1) value in
         join [indent2str indent, "(local.set $", id, "\n", valStr, ")"]
@@ -48,6 +49,25 @@ lang WasmPPrint = WasmAST
             then ""
             else (concat "\n" (strJoin "\n" (map (pprintInstr (addi indent 1)) r.values))) in
         join [indent2str indent, "(struct.new $", r.structIdent, s, ")"]
+    | ArrayNew r -> 
+        let indent1 = addi 1 indent in 
+        let tyStr = cons '$' r.tyIdent in 
+        let initStr = pprintInstr indent1 r.initValue in 
+        let sizeStr = pprintInstr indent1 r.size in 
+        join [indent2str indent, "(array.new ", tyStr, "\n", initStr, "\n", sizeStr, ")"]
+    | ArrayGet r -> 
+        let indent1 = addi 1 indent in 
+        let tyStr = cons '$' r.tyIdent in 
+        let valueStr = pprintInstr indent1 r.value in 
+        let indexStr = pprintInstr indent1 r.index in 
+        join [indent2str indent, "(array.get ", tyStr, "\n", valueStr, "\n", indexStr, ")"]
+    | ArraySet r -> 
+        let indent1 = addi 1 indent in 
+        let tyStr = cons '$' r.tyIdent in 
+        let valueStr = pprintInstr indent1 r.value in 
+        let value2Str = pprintInstr indent1 r.value2 in 
+        let indexStr = pprintInstr indent1 r.index in 
+        join [indent2str indent, "(array.set ", tyStr, "\n", valueStr, "\n", indexStr, "\n", value2Str, ")"]
     | RefCast r -> 
         let sValue = pprintInstr (addi indent 1) r.value in
         let sTy = pprintWasmType r.ty in 
@@ -93,7 +113,7 @@ lang WasmPPrint = WasmAST
         let resultStr = join ["(result ", pprintWasmType r.resultTy, ")"] in 
         let localStr = strJoin "\n" (map pprintLocal r.locals) in
         let bodyStr = strJoin "\n" (map (pprintInstr (addi 1 indent)) r.instructions) in
-        join ["(func", argsSep, argsStr, " ", resultStr, "\n", localStr, "\n", bodyStr, ")"]
+        join ["(func $", r.ident, argsSep, argsStr, " ", resultStr, "\n", localStr, "\n", bodyStr, ")"]
     | StructTypeDef r -> 
         let indent1 = indent2strnewline (addi 1 indent) in
         let indent2 = indent2strnewline (addi 2 indent) in
