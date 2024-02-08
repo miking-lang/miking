@@ -70,13 +70,13 @@ lang Reader = Effect
   sem ask =
   | proj -> perform (ReaderAskQ ()) (lam x. match x with ReaderAskR c in proj c)
 
-  sem local : all a. all b. (b -> Ctx -> Ctx) -> b -> Eff a -> Eff a
-  sem local update b =
+  sem local : all a. (Ctx -> Ctx) -> Eff a -> Eff a
+  sem local update =
   | Pure x -> Pure x
   | Impure (q, k1) ->
-    let k2 = lam r. local update b (k1 r) in
+    let k2 = lam r. local update (k1 r) in
     match q with ReaderAskQ _ then
-      Impure (q, lam r. match r with ReaderAskR c in k2 (ReaderAskR (update b c)))
+      Impure (q, lam r. match r with ReaderAskR c in k2 (ReaderAskR (update c)))
     else Impure (q, k2)
 
   sem handleReader : all a. Ctx -> Eff a -> Eff a
@@ -129,9 +129,9 @@ lang State = Effect
   sem get =
   | proj -> perform (StateGetQ ()) (lam x. match x with StateGetR s in proj s)
 
-  sem put : all a. (a -> State -> State) -> a -> Eff ()
-  sem put update =
-  | a -> perform (StatePutQ (update a)) (lam. ())
+  sem modify : (State -> State) -> Eff ()
+  sem modify =
+  | update -> perform (StatePutQ update) (lam. ())
 
   sem handleState : all a. all b. (State -> b) -> State -> Eff a -> Eff (a, b)
   sem handleState proj s =
@@ -215,7 +215,7 @@ lang TestLang = Reader + NonDet
 
   sem effProg : () -> Eff Int
   sem effProg = | () ->
-    local addInt 3
+    local (addInt 3)
       (bind (choose [0,1]) (lam i.
       bind (choose [2,3]) (lam j.
       bind (ask getInt) (lam k.
