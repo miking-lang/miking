@@ -40,6 +40,10 @@ lang WasmPPrint = WasmAST
         let s1 = pprintInstr (addi indent 1) i1 in
         let s2 = pprintInstr (addi indent 1) i2 in 
         join [indent2str indent, "(i32.eq\n", s1, "\n", s2, ")"]
+    | I32Ne (i1, i2) -> 
+        let s1 = pprintInstr (addi indent 1) i1 in
+        let s2 = pprintInstr (addi indent 1) i2 in 
+        join [indent2str indent, "(i32.ne\n", s1, "\n", s2, ")"]
     | I32And (i1, i2) -> 
         let s1 = pprintInstr (addi indent 1) i1 in
         let s2 = pprintInstr (addi indent 1) i2 in 
@@ -104,6 +108,12 @@ lang WasmPPrint = WasmAST
         let thnStr = pprintInstr indentPlusOne s.thn in 
         let elsStr = pprintInstr indentPlusOne s.els in 
         join [indent2str indent, "(select\n", "\n", thnStr, "\n", elsStr, "\n", cndStr, ")"]
+    | Loop l -> 
+        let bodyStr = strJoin "\n" (map (pprintInstr (addi indent 1)) l.body) in
+        join [indent2str indent, "(loop $", l.ident, "\n", bodyStr, ")"]
+    | BrIf r ->
+        let condStr = pprintInstr (addi 1 indent) r.cond in 
+        join [indent2str indent, "(br_if $", r.ident, "\n", condStr, ")"]
 
     sem pprintDef indent = 
     | FunctionDef r -> 

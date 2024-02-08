@@ -6,10 +6,19 @@ lang WasmAST
     | I32Mul (Instr, Instr)
     | I32And (Instr, Instr)
     | I32Eq (Instr, Instr)
+    | I32Ne (Instr, Instr)
     | LocalGet String
     | LocalSet (String, Instr)
     | GlobalGet String
     | Call (String, [Instr])
+    | Loop {
+        ident: String,
+        body: [Instr]
+    }
+    | BrIf {
+        ident: String,
+        cond: Instr
+    }
     | StructGet {
         structIdent: String,
         field: String,

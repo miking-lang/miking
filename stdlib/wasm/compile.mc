@@ -11,6 +11,7 @@ include "mexpr/pprint.mc"
 include "wasm-ast.mc"
 include "wasm-pprint.mc"
 include "wasm-stdlib.mc"
+include "wasm-apply.mc"
 include "mclos-ast.mc"
 include "mclos-transpile.mc"
 
@@ -31,6 +32,13 @@ type WasmCompileContext = {
     nextFp: Int,
     mainExpr: (use MClosAst in Option Expr)
 }
+
+let accArity = lam acc: Set Int. lam def: (use WasmAST in Def).
+    use WasmAST in 
+    match def with FunctionDef funDef
+        then setInsert (length funDef.args) acc
+        else acc
+
 
 let findFuncDef = lam ctx : WasmCompileContext. lam ident : String. 
     use WasmAST in 
@@ -147,9 +155,10 @@ lang WasmCompiler = MClosAst + WasmAST
     sem ctxAcc : WasmCompileContext -> Expr -> WasmCompileContext
     sem ctxAcc globalCtx = 
     | TmFuncDef f -> 
-        let args = create (length f.args) 
-            (lam i. {ident = concat "arg" (int2string i), 
-                     ty = Anyref()}) in 
+        let args = map (lam arg. {ident = nameGetStr arg.ident, ty = Anyref()}) f.args in
+        -- let args = create (length f.args) 
+        --     (lam i. {ident = concat "arg" (int2string i), 
+        --              ty = Anyref()}) in 
         let exprCtx = compileExpr globalCtx emptyExprCtx f.body in 
         ctxWithFuncDef globalCtx (FunctionDef {
             ident = nameGetStr  f.funcIdent,
@@ -187,10 +196,24 @@ lang WasmCompiler = MClosAst + WasmAST
     sem compile : [Expr] -> Mod
     sem compile = 
     | exprs -> 
-        let stdlibDefs = [nullLikeDef, genericType2Def, argsArrayType, closType, i32boxDef, apply, box, unbox, addiWasm, subiWasm, muliWasm] in 
+        -- Add stdlib definitions
+        let stdlibDefs = [i32boxDef, box, unbox, addiWasm, subiWasm, muliWasm] in 
         let ctx = emptyCompileCtx in
         let ctx = foldl ctxWithFuncDef ctx stdlibDefs in 
+
+        -- Compile functions
         let ctx = createCtx ctx exprs in 
+
+        -- Add apply, exec and dispatch based on aritites
+        let arities = foldl accArity (setEmpty subi) ctx.defs in 
+        let arities = setToSeq arities in 
+        let genericTypes = map genGenericType arities in 
+        let execs = map genExec arities in 
+        let dispatch = genDispatch arities in 
+        let ctx = {ctx with
+            defs = join [[argsArrayType, closDef, nullLikeDef], genericTypes, execs, [dispatch, apply], ctx.defs]
+        } in 
+
         let sortedKVs = sort (tupleCmp2 (lam s1. lam s2. 0) subi) (mapToSeq ctx.ident2fp) in
         let sortedNames = map (lam kv. match kv with (k, v) in k) sortedKVs in 
         Module {
