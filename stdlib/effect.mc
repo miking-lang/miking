@@ -1,6 +1,48 @@
 include "option.mc"
 include "either.mc"
 
+/- This file implements an extensible effects library inspired by
+   algebraic effects / free(er) monads.  To learn more, see e.g.,
+   [1,2,3].
+
+   The main part of the library is the `Effect` fragment, which defines
+   a type `Eff a` representing generic effectful computations.  Users
+   may extend `Eff` with their own effectful operations along with
+   handlers for those operations.  See the fragments below for
+   examples.
+
+   Effects interact well with language fragment composition.  To use a
+   given effect, simply include the corresponding fragment and start
+   using the effectful operations.  A `sem` clause in one language
+   fragment may use a given effect (e.g., a read-only context) without
+   interfering with the definitions of other clauses (e.g., without
+   having to add an extra parameter even in clauses where the context
+   is unused).  The only requirement is that the `sem` returns an
+   `Eff`-type.
+
+   There are two main limitations of the implementation at current.
+   The first is that there is no static check that all effects have
+   been handled.  Trying to extract a value from an effectful
+   computation without handling all effects will give a runtime error.
+   This could potentially be solved by constructor types or an
+   extension of them using row polymorphism.  The second limitation is
+   that the runtime performance is not very good.  There are
+   techniques for improving the efficiency (e.g., [3]), but these are
+   not implemented currently, and achieving very good performance in
+   an in-language implementation may take a lot of effort.
+
+   To get optimal support for this kind of effect system, integrating
+   it into the language somehow seems like the best solution.  For
+   example, we could consider adding primitives piggybacking on OCaml
+   5's effect handlers and adding a static check based on some
+   variation of effect rows.
+
+   [1]: https://v2.ocaml.org/manual/effects.html
+   [2]: https://okmij.org/ftp/Haskell/extensible/more.pdf
+   [3]: https://okmij.org/ftp/Computation/free-monad.html
+
+-/
+
 lang Effect
   -- NOTE(aathn, 2024-02-06): If we had GADTs, we could remove the
   -- Response type in favor of having a parameterized Query type where
