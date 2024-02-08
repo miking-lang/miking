@@ -128,6 +128,15 @@ lang WasmPPrint = WasmAST
         let paramStr = strJoin " " (map param2str r.paramTys) in 
         let resultStr = join ["(result ", pprintWasmType r.resultTy, ")"] in
         join [indent2str indent, "(type $", r.ident, " (func ", paramStr, " ", resultStr, "))"]
+    | ArrayTypeDef r -> 
+        let param2str = lam paramTy. 
+            join ["(mut ", pprintWasmType paramTy, ")"] in 
+        let paramsStr = strJoin " " (map param2str r.paramTys) in 
+        join [indent2str indent, "(type $", r.ident, " (array ", paramsStr, "))"]
+    | GlobalDef r ->
+        let initValueStr = pprintInstr (addi indent 1) r.initValue in
+        let tyStr = pprintWasmType r.ty in 
+        join [indent2str indent, "(global $", r.ident, " ", tyStr, "\n", initValueStr, ")"]
 
     sem pprintMemory indent = 
     | Table t -> 
@@ -136,6 +145,17 @@ lang WasmPPrint = WasmAST
         let offsetStr = pprintInstr 0 e.offset in
         let funcNamesStr = strJoin " " (map (concat "$") e.funcNames) in
         join [indent2str indent, "(elem ", offsetStr, " ", funcNamesStr, ")"]
+
+    sem pprintMod = 
+    | Module m -> 
+        let pprintExport = lam n. join ["    (export \"", n, "\" (func $", n, "))"] in
+        let tableStr = pprintMemory 1 m.table in
+        let elemStr = pprintMemory 1 m.elem in 
+        let defsStr = strJoin "\n\n" (map (pprintDef 1) m.definitions) in 
+        let exportStr = strJoin "\n" (map pprintExport m.exports) in 
+
+        join ["(module\n", tableStr, "\n\n", defsStr, 
+            "\n\n", elemStr, "\n", exportStr, ")"]
 end
 
 mexpr

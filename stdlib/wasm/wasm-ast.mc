@@ -77,6 +77,15 @@ lang WasmAST
         paramTys: [WasmType],
         resultTy: WasmType
     }
+    | ArrayTypeDef {
+        ident: String,
+        paramTys: [WasmType]
+    }
+    | GlobalDef {
+        ident: String,
+        ty: WasmType, 
+        initValue: Instr
+    }
 
     syn WasmType = 
     | Tyi32 ()

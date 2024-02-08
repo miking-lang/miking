@@ -1,6 +1,32 @@
 include "wasm-ast.mc"
 include "wasm-pprint.mc"
 
+let nullLikeDef = 
+    use WasmAST in
+    GlobalDef {
+        ident = "null-like",
+        ty = Anyref (),
+        initValue = StructNew {
+            structIdent = "i32box",
+            values = [I32Const 0]
+        }
+    }
+
+let argsArrayType = 
+    use WasmAST in 
+    ArrayTypeDef {
+        ident = "args-array",
+        paramTys = [Anyref ()]
+    }
+
+let genericType2Def =
+    use WasmAST in 
+    FunctionTypeDef {
+        ident = "generic-type",
+        paramTys = [Anyref (), Anyref ()],
+        resultTy = Anyref()
+    }
+
 let closType = 
     use WasmAST in (StructTypeDef {
     ident = "clos",
@@ -8,8 +34,18 @@ let closType =
         {ident = "func-pointer", ty = Tyi32 ()},
         {ident = "max-arity", ty = Tyi32 ()},
         {ident = "cur-arity", ty = Tyi32 ()},
-        {ident = "args", ty = Array (Anyref ())}
+        {ident = "args", ty = Ref "args-array"}
     ]})
+
+let i32boxDef = 
+    use WasmAST in 
+    StructTypeDef {
+        ident = "i32box",
+        fields = [{
+            ident = "value",
+            ty = Tyi32 ()
+        }]
+    }
 
 let apply = 
     use WasmAST in 
@@ -79,6 +115,11 @@ let apply =
                         field = "func-pointer",
                         value = LocalGet "cl"
                     },
+                    StructGet {
+                        structIdent = "clos",
+                        field = "max-arity",
+                        value = LocalGet "cl"
+                    },
                     I32Add (
                         I32Const 1,
                         StructGet {
@@ -87,11 +128,6 @@ let apply =
                             value = LocalGet "cl"
                         }
                     ),
-                    StructGet {
-                        structIdent = "clos",
-                        field = "max-arity",
-                        value = LocalGet "cl"
-                    },
                     LocalGet "new-array"
                 ]
             }),
@@ -133,6 +169,53 @@ let apply =
             LocalGet "result"
         ]
     }
+
+let box = 
+    use WasmAST in 
+    FunctionDef {
+        ident = "box",
+        args = [{ident="x", ty=Tyi32 ()}],
+        locals = [],
+        resultTy = Ref "i32box",
+        instructions = [StructNew {
+            structIdent = "i32box",
+            values = [LocalGet "x"]
+        }]
+    }
+
+let unbox = 
+    use WasmAST in 
+    FunctionDef {
+        ident = "unbox",
+        args = [{ident="box", ty=Anyref ()}],
+        locals = [],
+        resultTy = Tyi32 (),
+        instructions = [StructGet {
+            structIdent = "i32box",
+            field="value",
+            value = RefCast {
+                ty = Ref "i32box",
+                value = LocalGet "box" 
+            }
+        }]
+    }
+
+let addiWasm = 
+    use WasmAST in
+    FunctionDef {
+        ident = "addi",
+        args = [{ident="lhs", ty=Anyref ()}, {ident="rhs", ty=Anyref()}],
+        locals = [],
+        resultTy = Anyref (),
+        instructions = [
+            Call ("box", [
+                I32Add(
+                    Call ("unbox", [RefCast {ty = Ref "i32box", value = LocalGet "lhs"}]),
+                    Call ("unbox", [RefCast {ty = Ref "i32box", value = LocalGet "rhs"}])
+                )
+            ])
+        ]
+}
 
 mexpr
 use WasmPPrint in 
