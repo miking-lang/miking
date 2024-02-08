@@ -112,14 +112,14 @@ let createClosure = lam globalCtx: WasmCompileContext. lam exprCtx. lam ident: S
 let createArithOpClosure = lam globalCtx. lam exprCtx. lam opIdent. 
     use WasmAST in 
     createClosure globalCtx exprCtx opIdent
-    -- let resultCtx = createClosure globalCtx exprCtx opIdent in 
-    -- ctxInstrResult resultCtx (Call ("box", [extractResult resultCtx]))
 
 lang WasmCompiler = MClosAst + WasmAST
     sem compileConst : WasmCompileContext -> WasmExprContext -> Const -> WasmExprContext
     sem compileConst globalCtx exprCtx = 
     | CInt {val = i} -> ctxInstrResult exprCtx (Call ("box", [I32Const i]))
     | CAddi _ -> createArithOpClosure globalCtx exprCtx "addi"
+    | CMuli _ -> createArithOpClosure globalCtx exprCtx "muli"
+    | CSubi _ -> createArithOpClosure globalCtx exprCtx "subi"
 
     sem compileExpr : WasmCompileContext -> WasmExprContext -> Expr -> WasmExprContext
     sem compileExpr globalCtx exprCtx = 
@@ -187,7 +187,7 @@ lang WasmCompiler = MClosAst + WasmAST
     sem compile : [Expr] -> Mod
     sem compile = 
     | exprs -> 
-        let stdlibDefs = [nullLikeDef, genericType2Def, argsArrayType, closType, i32boxDef, apply, box, unbox, addiWasm] in 
+        let stdlibDefs = [nullLikeDef, genericType2Def, argsArrayType, closType, i32boxDef, apply, box, unbox, addiWasm, subiWasm, muliWasm] in 
         let ctx = emptyCompileCtx in
         let ctx = foldl ctxWithFuncDef ctx stdlibDefs in 
         let ctx = createCtx ctx exprs in 
@@ -224,7 +224,7 @@ mexpr
 use WasmCompiler in 
 -- let body = (int_ 10) in 
 let myadd = ulet_ "myadd" (ulam_ "x" (ulam_ "y" (int_ 0))) in 
-let body = (app_ (app_ (var_ "addi") (int_ 1)) (int_ 2)) in 
+let body = (app_ (app_ (var_ "muli") (int_ 1)) (int_ 2)) in 
 let g = ulet_ "g" body in 
 let expr = app_ (app_ (var_ "g") (int_ 10)) (int_ 20) in 
 let prog = bind_ myadd (bind_ g expr) in 

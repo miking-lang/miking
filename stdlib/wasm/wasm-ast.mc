@@ -2,6 +2,8 @@ lang WasmAST
     syn Instr =
     | I32Const Int
     | I32Add (Instr, Instr)
+    | I32Sub (Instr, Instr)
+    | I32Mul (Instr, Instr)
     | I32And (Instr, Instr)
     | I32Eq (Instr, Instr)
     | LocalGet String

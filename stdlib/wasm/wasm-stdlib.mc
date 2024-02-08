@@ -200,22 +200,50 @@ let unbox =
         }]
     }
 
-let addiWasm = 
-    use WasmAST in
+let createIntBinop = lam ident. lam instrProducer.
+    use WasmAST in 
     FunctionDef {
-        ident = "addi",
+        ident = ident,
         args = [{ident="lhs", ty=Anyref ()}, {ident="rhs", ty=Anyref()}],
         locals = [],
         resultTy = Anyref (),
         instructions = [
             Call ("box", [
-                I32Add(
-                    Call ("unbox", [RefCast {ty = Ref "i32box", value = LocalGet "lhs"}]),
-                    Call ("unbox", [RefCast {ty = Ref "i32box", value = LocalGet "rhs"}])
-                )
+                instrProducer 
+                    (Call ("unbox", [RefCast {ty = Ref "i32box", value = LocalGet "lhs"}]))
+                    (Call ("unbox", [RefCast {ty = Ref "i32box", value = LocalGet "rhs"}]))
             ])
         ]
-}
+    }
+
+let addiWasm = 
+    use WasmAST in 
+    createIntBinop "addi" (lam l. lam r. I32Add (l, r))
+
+let subiWasm = 
+    use WasmAST in 
+    createIntBinop "subi" (lam l. lam r. I32Sub (l, r))
+
+let muliWasm = 
+    use WasmAST in 
+    createIntBinop "muli" (lam l. lam r. I32Mul (l, r))
+
+-- let addiWasm = 
+--     use WasmAST in
+--     FunctionDef {
+--         ident = "addi",
+--         args = [{ident="lhs", ty=Anyref ()}, {ident="rhs", ty=Anyref()}],
+--         locals = [],
+--         resultTy = Anyref (),
+--         instructions = [
+--             Call ("box", [
+--                 I32Add(
+--                     Call ("unbox", [RefCast {ty = Ref "i32box", value = LocalGet "lhs"}]),
+--                     Call ("unbox", [RefCast {ty = Ref "i32box", value = LocalGet "rhs"}])
+--                 )
+--             ])
+--         ]
+-- }
 
 mexpr
 use WasmPPrint in 
