@@ -8,29 +8,61 @@ include "boot-parser.mc"
 /-
 
   This file implements shallow mapping/folding with `Eff a` from
-  `effect.mc` over `Expr`s.
+  `effect.mc` over `Expr`, `Pat`, and `Type`.
 
   -/
 
 lang AstEffect = Ast + Effect
+
+  sem smapEffFromTraversal
+    : all a. all b. (all acc. ((acc -> a -> (acc, a)) -> acc -> b -> (acc, b)))
+    -> (a -> Eff a)
+    -> b
+    -> Eff b
+  sem smapEffFromTraversal smapAccumL f =
+  | e ->
+    let effMapMChildren : b -> Eff [a] =
+      lam x.
+      (smapAccumL
+         (lam acc. lam a. (effMap2 snoc acc (f a), a))
+         (return []) x).0
+    in
+    let setChildren : b -> [a] -> b =
+      lam x. lam children.
+      let f =
+        lam acc. lam e.
+        match acc with [h] ++ t then (t, h) else ([], e)
+      in
+      (smapAccumL f children x).1
+    in
+    effMap (setChildren e) (effMapMChildren e)
 
   -- Perform a computation on the the immediate sub-expressions of an
   -- expression.  Note that this function is capable of emulating
   -- smapAccumL through use of the State effect.
   sem smapEff_Expr_Expr : all a. (Expr -> Eff Expr) -> Expr -> Eff Expr
   sem smapEff_Expr_Expr f =
-  | e ->
-    let getChildren : Expr -> [Expr] = sfold_Expr_Expr snoc [] in
-    let updateChildren : Expr -> [Expr] -> Expr =
-      lam e. lam children.
-      let f =
-        lam acc. lam e.
-        match acc with [h] ++ t then (t, h) else ([], e)
-      in
-      (smapAccumL_Expr_Expr f children e).1
-    in
-    effMap (updateChildren e)
-      (effMapM f (getChildren e))
+  | e -> smapEffFromTraversal #frozen"smapAccumL_Expr_Expr" f e
+
+  sem smapEff_Expr_Type : all a. (Type -> Eff Type) -> Expr -> Eff Expr
+  sem smapEff_Expr_Type f =
+  | e -> smapEffFromTraversal #frozen"smapAccumL_Expr_Type" f e
+
+  sem smapEff_Expr_Pat : all a. (Pat -> Eff Pat) -> Expr -> Eff Expr
+  sem smapEff_Expr_Pat f =
+  | e -> smapEffFromTraversal #frozen"smapAccumL_Expr_Pat" f e
+
+  sem smapEff_Expr_TypeLabel : all a. (Type -> Eff Type) -> Expr -> Eff Expr
+  sem smapEff_Expr_TypeLabel f =
+  | e -> smapEffFromTraversal #frozen"smapAccumL_Expr_TypeLabel" f e
+
+  sem smapEff_Type_Type : all a. (Type -> Eff Type) -> Type -> Eff Type
+  sem smapEff_Type_Type f =
+  | e -> smapEffFromTraversal #frozen"smapAccumL_Type_Type" f e
+
+  sem smapEff_Pat_Pat : all a. (Pat -> Eff Pat) -> Pat -> Eff Pat
+  sem smapEff_Pat_Pat f =
+  | e -> smapEffFromTraversal #frozen"smapAccumL_Pat_Pat" f e
 
 end
 
@@ -57,9 +89,9 @@ let runTest
     runEff (handleWriter getLog (handleFail getFail x))
 in
 
----------------------------------------
+----------------------------
 -- Test smapEff_Expr_Expr --
----------------------------------------
+----------------------------
 
 let prepTest = lam e1. lam e2. runTest (effMap (eqExpr e1) e2) in
 
