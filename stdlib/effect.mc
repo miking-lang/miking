@@ -141,7 +141,7 @@ lang Writer = Effect
   syn Response =
   | WriterTellR ()
 
-  sem tell : all a. Log -> Eff ()
+  sem tell : Log -> Eff ()
   sem tell =
   | l -> perform (WriterTellQ l) (lam. ())
 
