@@ -106,7 +106,8 @@ lang BootParser = MExprAst + ConstTransformer
   -- Parses an MExpr string and returns the final MExpr AST or a list of error
   -- messages and associated infos.
   sem parseMExprString
-    : BootParserParseMExprStringArg -> String -> Either [(Info, String)] Expr
+    : all a. BootParserParseMExprStringArg -> String
+      -> Result a (Info, String) Expr
   sem parseMExprString arg =
   | str ->
     let t =
@@ -121,26 +122,26 @@ lang BootParser = MExprAst + ConstTransformer
       let n = glistlen t 0 in
       let infos = create n (lam i. ginfo t i) in
       let msgs = create n (lam i. gstr t i) in
-      Left (zip infos msgs)
+      foldl1 result.withAnnotations (zipWith (curry result.err) infos msgs)
     else
-      Right (constTransform arg.builtin (matchTerm t (bootParserGetId t)))
+      result.ok (constTransform arg.builtin (matchTerm t (bootParserGetId t)))
 
   sem parseMExprStringExn : BootParserParseMExprStringArg -> String -> Expr
   sem parseMExprStringExn arg =
   | str ->
-    switch parseMExprString arg str
-    case Left es then
+    switch result.consume (parseMExprString arg str)
+    case (_, Left es) then
       error (join [
         "parseMExprStringExn failed with the error message:\n",
         join (map (lam e. join ["\n", infoErrorString e.0 e.1, "\n"]) es)
       ])
-    case Right ast then ast
+    case (_, Right ast) then ast
     end
 
   -- Parses an MExpr string with additional keywords, using the default
   -- boot-parser arguments.
   sem parseMExprStringKeywords
-    : [String] -> String -> Either [(Info, String)] Expr
+    : all a. [String] -> String -> Result a (Info, String) Expr
   sem parseMExprStringKeywords keywords =
   | str ->
     parseMExprString
@@ -896,7 +897,10 @@ utest
 with "x" in
 
 -- Parse error
-utest eitherIsLeft (parseMExprString defaultBootParserParseMExprStringArg "!!!")
+utest
+  eitherIsLeft
+    (result.consume
+       (parseMExprString defaultBootParserParseMExprStringArg "!!!")).1
   with true
 in
 
