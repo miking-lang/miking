@@ -82,8 +82,7 @@ let ctxWithFuncDef = lam ctx. lam def.
         else 
             {ctx with defs = snoc ctx.defs def}
 
-
-let createClosure = lam arity. lam fp. 
+let createClosureStruct = lam arity: Int. lam fp: Int. 
     use WasmAST in 
     StructNew {
         structIdent = "clos",
@@ -99,10 +98,28 @@ let createClosure = lam arity. lam fp.
         ]
     }
 
+let createClosure = lam globalCtx: WasmCompileContext. lam exprCtx. lam ident: String.
+    use WasmAST in 
+    match findFuncDef globalCtx ident with Some def
+        then 
+            match def with FunctionDef f in
+            let arity = length f.args in 
+            match mapLookup f.ident globalCtx.ident2fp with Some (fp) in 
+            ctxInstrResult exprCtx (createClosureStruct arity fp) 
+        else 
+            error (join ["Identifier '", ident, "' is not a function!"])
+
+let createArithOpClosure = lam globalCtx. lam exprCtx. lam opIdent. 
+    use WasmAST in 
+    createClosure globalCtx exprCtx opIdent
+    -- let resultCtx = createClosure globalCtx exprCtx opIdent in 
+    -- ctxInstrResult resultCtx (Call ("box", [extractResult resultCtx]))
+
 lang WasmCompiler = MClosAst + WasmAST
     sem compileConst : WasmCompileContext -> WasmExprContext -> Const -> WasmExprContext
     sem compileConst globalCtx exprCtx = 
     | CInt {val = i} -> ctxInstrResult exprCtx (Call ("box", [I32Const i]))
+    | CAddi _ -> createArithOpClosure globalCtx exprCtx "addi"
 
     sem compileExpr : WasmCompileContext -> WasmExprContext -> Expr -> WasmExprContext
     sem compileExpr globalCtx exprCtx = 
@@ -111,10 +128,11 @@ lang WasmCompiler = MClosAst + WasmAST
     | TmVar {ident = ident} ->
         match findFuncDef globalCtx (nameGetStr ident) with Some d
             then
-                match d with FunctionDef f in
-                let arity = length f.args in 
-                match mapLookup f.ident globalCtx.ident2fp with Some (fp) in 
-                ctxInstrResult exprCtx (createClosure arity fp) -- todo create closure
+                createClosure globalCtx exprCtx (nameGetStr ident)
+                -- match d with FunctionDef f in
+                -- let arity = length f.args in 
+                -- match mapLookup f.ident globalCtx.ident2fp with Some (fp) in 
+                -- ctxInstrResult exprCtx (createClosure arity fp) 
             else ctxLocalResult exprCtx (nameGetStr ident)
     | TmApp {lhs = lhs, rhs = rhs} ->
         let leftCtx = compileExpr globalCtx exprCtx lhs in 
@@ -189,11 +207,17 @@ let compileMCoreToWasm = lam ast.
     let ast = lowerAll ast in 
     use MExprLambdaLift in
     let ast = liftLambdas ast in
+    use MClosTranspiler in 
+    let exprs = transpile ast in
+    use WasmCompiler in 
+    let wasmModule = compile exprs in
+    use WasmPPrint in 
+    printLn (pprintMod wasmModule) ;
     -- (printLn "Lifted Lambdas: ");
     -- (printLn (use MExprPrettyPrint in expr2str ast));
     -- use MExprClosAst in
     -- let ast =  closureConvert ast in
-    (printLn (use MExprPrettyPrint in expr2str ast)) ;
+    -- (printLn (use MExprPrettyPrint in expr2str ast)) ;
     ""
 
 mexpr
