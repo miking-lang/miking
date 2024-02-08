@@ -66,21 +66,49 @@ lang AstEffect = Ast + Effect
 
 end
 
-lang TestLang = AstEffect + Writer + Failure + BootParser + MExprEq end
+lang TestLang = AstEffect + Writer + Failure + BootParser + MExprEq
+
+  sem iFail : Int -> Failure
+  sem cLog : Char -> Log
+
+  -- Renames variables by concatenating its name to itself. variables with names
+  -- 'y' gives a warning 'b' and variables with names 'z' gives an error 1.
+  sem f : Expr -> Eff Expr
+  sem f =
+  | TmVar r ->
+      let name = nameGetStr r.ident in
+      match name with "z" then fail (iFail 1)
+      else
+        let newVar =
+          TmVar { r with ident = nameSetStr r.ident (concat name name) }
+        in
+        match name with "y" then
+          bind (tell (cLog 'b')) (lam. return newVar)
+        else
+          return newVar
+  | e ->
+    smapEff_Expr_Expr f e
+
+end
+
+lang TestLangImpl = TestLang
+  syn Failure = | IFail Int
+  syn Log = | CLog Char
+
+  sem iFail = | i -> IFail i
+  sem cLog = | c -> CLog c
+end
 
 mexpr
 
-use TestLang in
+use TestLangImpl in
 
 let parse =
   parseMExprString
     { _defaultBootParserParseMExprStringArg () with allowFree = true }
 in
 
-con CLog : Char -> Log in
 let getLog = lam w. match w with CLog c in c in
-
-con IFail : Int -> Failure in
 let getFail = lam w. match w with IFail i in i in
 
 let runTest
@@ -94,25 +122,6 @@ in
 ----------------------------
 
 let prepTest = lam e1. lam e2. runTest (effMap (eqExpr e1) e2) in
-
--- Renames variables by concatenating its name to itself. variables with names
--- 'y' gives a warning 'b' and variables with names 'z' gives an error 1.
-recursive let f : Expr -> Eff Expr
-  = lam e.
-    match e with TmVar r then
-      let name = nameGetStr r.ident in
-      let e =
-        match name with "z" then fail (IFail 1)
-        else
-          return
-            (TmVar { r with ident = nameSetStr r.ident (concat name name) })
-      in
-      match name with "y" then
-        bind (tell (CLog 'b')) (lam. e)
-      else e
-    else
-      smapEff_Expr_Expr f e
-in
 
 
 -- Test 1
