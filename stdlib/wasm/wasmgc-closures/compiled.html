@@ -1,8 +1,0 @@
-<script>
-  var module = WebAssembly.instantiateStreaming(fetch("compiled.wasm"), {}).then(module => {
-    console.log("Successfully loaded compiled.wasm!");
-
-    const { mexpr } = module.instance.exports;
-    console.log(mexpr());
-  })
-</script>
