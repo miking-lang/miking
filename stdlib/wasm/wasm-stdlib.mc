@@ -1,46 +1,6 @@
 include "wasm-ast.mc"
 include "wasm-pprint.mc"
 
-let i32boxDef = 
-    use WasmAST in 
-    StructTypeDef {
-        ident = "i32box",
-        fields = [{
-            ident = "value",
-            ty = Tyi32 ()
-        }]
-    }
-
-let box = 
-    use WasmAST in 
-    FunctionDef {
-        ident = "box",
-        args = [{ident="x", ty=Tyi32 ()}],
-        locals = [],
-        resultTy = Ref "i32box",
-        instructions = [StructNew {
-            structIdent = "i32box",
-            values = [LocalGet "x"]
-        }]
-    }
-
-let unbox = 
-    use WasmAST in 
-    FunctionDef {
-        ident = "unbox",
-        args = [{ident="box", ty=Anyref ()}],
-        locals = [],
-        resultTy = Tyi32 (),
-        instructions = [StructGet {
-            structIdent = "i32box",
-            field="value",
-            value = RefCast {
-                ty = Ref "i32box",
-                value = LocalGet "box" 
-            }
-        }]
-    }
-
 let createIntBinop = lam ident. lam instrProducer.
     use WasmAST in 
     FunctionDef {
@@ -49,11 +9,11 @@ let createIntBinop = lam ident. lam instrProducer.
         locals = [],
         resultTy = Anyref (),
         instructions = [
-            Call ("box", [
+            I31Cast (
                 instrProducer 
-                    (Call ("unbox", [RefCast {ty = Ref "i32box", value = LocalGet "lhs"}]))
-                    (Call ("unbox", [RefCast {ty = Ref "i32box", value = LocalGet "rhs"}]))
-            ])
+                    (I31GetS (RefCast {ty = I31Ref (), value = LocalGet "lhs"}))
+                    (I31GetS (RefCast {ty = I31Ref(), value = LocalGet "rhs"}))
+            )
         ]
     }
 

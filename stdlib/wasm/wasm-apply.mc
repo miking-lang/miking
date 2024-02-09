@@ -9,10 +9,7 @@ let nullLikeDef =
     GlobalDef {
         ident = "null-like",
         ty = Anyref (),
-        initValue = StructNew {
-            structIdent = "i32box",
-            values = [I32Const 0]
-        }
+        initValue = I31Cast (I32Const 0)
     }
 
 let argsArrayType = 

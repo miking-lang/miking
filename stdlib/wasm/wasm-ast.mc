@@ -68,6 +68,9 @@ lang WasmAST
         els: Instr
     }
     | Return Instr
+    | I31Cast Instr
+    | I31GetS Instr
+    | I31GetU Instr
 
     syn Def = 
     | FunctionDef {
@@ -107,6 +110,7 @@ lang WasmAST
     | Array WasmType
     | Anyref ()
     | Ref String
+    | I31Ref ()
 
     syn WasmMemory = 
     | Table {size: Int, typeString: String}

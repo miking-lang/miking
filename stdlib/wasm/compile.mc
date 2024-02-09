@@ -127,7 +127,7 @@ let createArithOpClosure = lam globalCtx. lam exprCtx. lam opIdent.
 lang WasmCompiler = MClosAst + WasmAST
     sem compileConst : WasmCompileContext -> WasmExprContext -> Const -> WasmExprContext
     sem compileConst globalCtx exprCtx = 
-    | CInt {val = i} -> ctxInstrResult exprCtx (Call ("box", [I32Const i]))
+    | CInt {val = i} -> ctxInstrResult exprCtx (I31Cast (I32Const i))
     | CAddi _ -> createArithOpClosure globalCtx exprCtx "addi"
     | CMuli _ -> createArithOpClosure globalCtx exprCtx "muli"
     | CSubi _ -> createArithOpClosure globalCtx exprCtx "subi"
@@ -176,12 +176,10 @@ lang WasmCompiler = MClosAst + WasmAST
                 error "Main expression is already set!"
             else 
                 let exprCtx = compileExpr globalCtx emptyExprCtx mainExpr in 
-                let resultExpr = Call ("unbox", [
-                    RefCast {
-                        ty = Ref "i32box",
-                        value = (extractResult exprCtx)
-                    }
-                ]) in 
+                let resultExpr = I31GetS (RefCast {
+                    ty = I31Ref (),
+                    value = (extractResult exprCtx)
+                }) in 
                 ctxWithFuncDef globalCtx (FunctionDef {
                     ident = "mexpr",
                     args = [],
@@ -199,7 +197,7 @@ lang WasmCompiler = MClosAst + WasmAST
     sem compile = 
     | exprs -> 
         -- Add stdlib definitions
-        let stdlibDefs = [i32boxDef, box, unbox, addiWasm, subiWasm, muliWasm] in 
+        let stdlibDefs = [addiWasm, subiWasm, muliWasm] in 
         let ctx = emptyCompileCtx in
         let ctx = foldl ctxWithFuncDef ctx stdlibDefs in 
 

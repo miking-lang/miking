@@ -14,6 +14,7 @@ lang WasmPPrint = WasmAST
     | Tyf32 () -> "f32"
     | Tyf64 () -> "f64"
     | Anyref () -> "anyref"
+    | I31Ref () -> "i31ref"
     | Ref ident -> join ["(ref $", ident, ")"]
 
     sem pprintInstr: Int -> Instr -> String
@@ -117,6 +118,15 @@ lang WasmPPrint = WasmAST
     | Return instr ->
         let instrStr = pprintInstr (addi 1 indent) instr in 
         join [indent2str indent, "(return\n", instrStr, ")"]
+    | I31Cast instr -> 
+        let instrStr = pprintInstr (addi 1 indent) instr in 
+        join [indent2str indent, "(ref.i31\n", instrStr, ")"]
+    | I31GetU instr -> 
+            let instrStr = pprintInstr (addi 1 indent) instr in 
+            join [indent2str indent, "(i31.get_u\n", instrStr, ")"]
+    | I31GetS instr -> 
+            let instrStr = pprintInstr (addi 1 indent) instr in 
+            join [indent2str indent, "(i31.get_s\n", instrStr, ")"]
 
     sem pprintDef indent = 
     | FunctionDef r -> 
@@ -181,6 +191,12 @@ end
 
 mexpr
 use WasmPPrint in 
+-- Test i31 
+utest pprintWasmType (I31Ref ()) with "i31ref" in 
+utest pprintInstr 0 (I31Cast (I32Const 10)) with "(ref.i31\n    (i32.const 10))" in
+utest pprintInstr 0 (I31GetS (LocalGet "x")) with "(i31.get_s\n    (local.get $x))" in
+utest pprintInstr 0 (I31GetU (LocalGet "x")) with "(i31.get_u\n    (local.get $x))" in
+
 utest pprintInstr 0 (I32Const 10) with "(i32.const 10)" in 
 utest pprintInstr 0 (LocalGet "x") with "(local.get $x)" in 
 utest pprintInstr 0 (I32Add (I32Const 10, LocalGet "x")) with
