@@ -92,7 +92,7 @@ let ctxWithFuncDef = lam ctx. lam def.
 
 let createClosureStruct = lam arity: Int. lam fp: Int. 
     use WasmAST in 
-    StructNew {
+    let closure = StructNew {
         structIdent = "clos",
         values = [
             I32Const fp,
@@ -104,7 +104,10 @@ let createClosureStruct = lam arity: Int. lam fp: Int.
                 size = I32Const arity
             }
         ]
-    }
+    } in 
+    match arity with 0
+        then Call ("exec-0", [closure])
+        else closure
 
 let createClosure = lam globalCtx: WasmCompileContext. lam exprCtx. lam ident: String.
     use WasmAST in 
@@ -167,7 +170,6 @@ lang WasmCompiler = MClosAst + WasmAST
             resultTy = Anyref(), 
             instructions = snoc exprCtx.instructions (extractResult exprCtx)
         })
-    -- | _ -> globalCtx
     | mainExpr -> 
         match globalCtx.mainExpr with Some _ 
             then 

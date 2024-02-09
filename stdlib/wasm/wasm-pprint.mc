@@ -114,6 +114,9 @@ lang WasmPPrint = WasmAST
     | BrIf r ->
         let condStr = pprintInstr (addi 1 indent) r.cond in 
         join [indent2str indent, "(br_if $", r.ident, "\n", condStr, ")"]
+    | Return instr ->
+        let instrStr = pprintInstr (addi 1 indent) instr in 
+        join [indent2str indent, "(return\n", instrStr, ")"]
 
     sem pprintDef indent = 
     | FunctionDef r -> 

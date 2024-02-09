@@ -25,6 +25,14 @@ lang MClosTranspiler = MClosAst
         let newArgsAcc = (snoc argsAcc {ident = lamRec.ident, ty = lamRec.tyParam}) in 
         extractFuncDef newArgsAcc sig lamRec.body
     | other ->  
+        -- This is top level let expression that is not a function definition
+        -- E.g. let meaningOfLife = 42 in 100 + meaningOfLife.
+        -- For now, we deal with this by creating a nullary function.
+        -- Any usage of this variable is simply a call to this function
+        -- It might be better to treat this as a global variable with 
+        -- initialisation. 
+        -- The current implementation relies on the fact that body of the let
+        -- is pure. For non-pure bodies, this implementation is incorrect.
         TmFuncDef {
             funcIdent = sig.ident,
             tyAnnot = sig.tyAnnot,

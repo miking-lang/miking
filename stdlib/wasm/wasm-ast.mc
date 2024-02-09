@@ -67,6 +67,7 @@ lang WasmAST
         thn: Instr,
         els: Instr
     }
+    | Return Instr
 
     syn Def = 
     | FunctionDef {

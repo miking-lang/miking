@@ -183,18 +183,18 @@ let apply =
                                 }    
                             )
                         }
-                    ]}],
-                els = [LocalSet ("i", I32Const 0)]
-            },
-            ArraySet {
-                tyIdent = "args-array",
-                value = LocalGet "new-array",
-                index = StructGet {
-                    structIdent = "clos",
-                    field = "cur-arity",
-                    value = LocalGet "cl"
-                },
-                value2 = LocalGet "arg"
+                    ]},
+                    ArraySet {
+                        tyIdent = "args-array",
+                        value = LocalGet "new-array",
+                        index = StructGet {
+                            structIdent = "clos",
+                            field = "cur-arity",
+                            value = LocalGet "cl"
+                        },
+                        value2 = LocalGet "arg"
+                    }],
+                els = []
             },
             LocalSet ("new-clos", StructNew {
                 structIdent = "clos", 
