@@ -328,7 +328,7 @@ recursive let bindF_ = use MExprAst in
   else match letexpr with TmType t then
     TmType {t with inexpr = bindF_ f t.inexpr expr}
   else match letexpr with TmExt t then
-    TmExt {t with inexpr = bindF_ f t.inexpr expr}
+    TmExt {t with inexpr = bindF_ f t.inexpfr expr}
   else
     f letexpr expr -- Insert at the end of the chain
 end
