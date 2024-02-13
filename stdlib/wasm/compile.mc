@@ -36,7 +36,8 @@ type WasmCompileContext = {
     defs: [(use WasmAST in Def)],
     ident2fp: Map String Int,
     nextFp: Int,
-    mainExpr: (use MClosAst in Option Expr)
+    mainExpr: (use MClosAst in Option Expr),
+    constr2typeid: Map String Int
 }
 
 let accArity = lam acc: Set Int. lam def: (use WasmAST in Def).
@@ -56,7 +57,8 @@ let emptyCompileCtx : WasmCompileContext = {
     defs = [],
     ident2fp = mapEmpty cmpString,
     nextFp = 0,
-    mainExpr = None ()
+    mainExpr = None (),
+    constr2typeid = mapEmpty cmpString
 }
 
 type WasmExprContext = {
@@ -181,31 +183,46 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
         ]) in 
         ctxInstrResult rightCtx applyInstr
     | TmRecord {bindings = bindings, ty = ty} -> 
-        -- We rely on the type lifting pass to have created a type
-        -- definition for this TmRecord. 
-        -- We then rely on the TypeCompiler to have created a 
-        -- struct definition that matches the new of this type def.
-        let tyStr = 
-            (match ty with TyCon {ident = ident} in nameGetStr ident) in 
+        match mapIsEmpty bindings with true
+            then ctxInstrResult exprCtx (GlobalGet "null-like")
+            else 
+                -- We rely on the type lifting pass to have created a type
+                -- definition for this TmRecord. 
+                -- We then rely on the TypeCompiler to have created a 
+                -- struct definition that matches the new of this type def.
+                let tyStr = 
+                    (match ty with TyCon {ident = ident} in nameGetStr ident) in 
 
-        -- TODO: Fix ordering of parameters
-        -- Currenlty it is assumed that the order is the same
-        -- in the def as in the TmRecord but this is of course
-        -- not normally the case.
-        let bindingPairs = mapToSeq bindings in 
-        let work = lam ctxAccPair. lam pair.
-            match ctxAccPair with (ctx, acc) in 
-            match pair with (sid, expr) in 
-            let ident = sidToString sid in 
-            let ctx = compileExpr globalCtx ctx expr in 
-            let acc = cons (ident, extractResult ctx) acc in 
-            (ctx, acc) in
-        match foldl work (exprCtx, []) bindingPairs with (ctx, acc) in 
-        let structNewInstr = StructNew {
-            structIdent = tyStr,
-            values = map snd acc
-        } in 
-        ctxInstrResult ctx structNewInstr
+                -- TODO: Fix ordering of parameters
+                -- Currenlty it is assumed that the order is the same
+                -- in the def as in the TmRecord but this is of course
+                -- not normally the case.
+                let bindingPairs = mapToSeq bindings in 
+                let work = lam ctxAccPair. lam pair.
+                    match ctxAccPair with (ctx, acc) in 
+                    match pair with (sid, expr) in 
+                    let ident = sidToString sid in 
+                    let ctx = compileExpr globalCtx ctx expr in 
+                    let acc = cons (ident, extractResult ctx) acc in 
+                    (ctx, acc) in
+                match foldl work (exprCtx, []) bindingPairs with (ctx, acc) in 
+                let structNewInstr = StructNew {
+                    structIdent = tyStr,
+                    values = map snd acc
+                } in 
+                ctxInstrResult ctx structNewInstr
+    | TmConApp r ->
+        let exprCtx = compileExpr globalCtx exprCtx r.body in 
+        let structIdent = nameGetStr r.ident in 
+        let typeid = 
+            (match mapLookup structIdent globalCtx.constr2typeid with Some t in t) in 
+        ctxInstrResult exprCtx (StructNew {
+            structIdent = structIdent,
+            values = [
+                extractResult exprCtx,
+                I32Const typeid
+            ]
+        })
     | _ -> exprCtx
 
 
@@ -259,7 +276,10 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
         -- let ctx = foldl addType ctx typeEnv in 
         let typeCtx = compileTypes typeEnv in 
         -- iter (lam def. (printLn (pprintDef 0 def))) typeCtx.defs ; 
-        let ctx = {ctx with defs = concat ctx.defs typeCtx.defs} in 
+        let ctx = 
+            {ctx with 
+                defs = concat ctx.defs typeCtx.defs,
+                constr2typeid = typeCtx.constr2typeid} in 
 
         -- Compile functions
         let ctx = createCtx ctx exprs in 
@@ -288,6 +308,7 @@ end
 let compileMCoreToWasm = lam ast.
     use MExprLowerNestedPatterns in 
     let ast = lowerAll ast in 
+    -- (use MClosPrettyPrint in printLn (expr2str ast) );
     use MExprLambdaLift in
     let ast = liftLambdas ast in
     use MExprTypeLift in 
@@ -322,23 +343,33 @@ end
 
 mexpr
 use TestLang in 
--- let variantTyName = nameSym "FooBar" in 
--- let fooName = nameSym "Foo" in 
--- let barName = nameSym "Bar" in 
--- let variant = typeCheck (symbolize (bindall_ [
---     ntype_ variantTyName [] (tyvariant_ []),
---     ncondef_ fooName (tyarrow_ tyint_ (ntycon_ variantTyName)),
---     ncondef_ barName (tyarrow_ tystr_ (ntycon_ variantTyName)),
---     uunit_
--- ])) in 
--- compileMCoreToWasm variant
+let variantTyName = nameSym "FooBar" in 
+let fooName = nameSym "Foo" in 
+let barName = nameSym "Bar" in 
+let variant = typeCheck (symbolize (bindall_ [
+    ntype_ variantTyName [] (tyvariant_ []),
+    ncondef_ fooName (tyarrow_ tyint_ (ntycon_ variantTyName)),
+    ncondef_ barName (tyarrow_ tyint_ (ntycon_ variantTyName)),
+    (ulet_ "f" (nconapp_ fooName (int_ 12))),
+    (ulet_ "g" (nconapp_ barName (int_ 42))),
+    uunit_
+])) in 
+compileMCoreToWasm variant
 -- ; 
 -- let recordTyName = nameSym "MyRecordType" in 
 -- let recordTypeDef = typeCheck (symbolize (bindall_ [
 --     ntype_ recordTyName [] (tyrecord_ [("x", tyint_)]),
 --     record_
 -- ])) in 
-let recordExpr = typeCheck (symbolize (
-    urecord_ [("x", int_ 10), ("y", int_ 20)]
-)) in 
-compileMCoreToWasm recordExpr
+-- let target = urecord_ [("x", int_ 10), ("y", int_ 20)] in
+-- let pat = PatRecord {
+--     bindings = mapFromSeq cmpSID [(stringToSid "x", PatNamed {ident = PName (nameNoSym "foo"), info=NoInfo(), ty = tyunknown_})],
+--     info = NoInfo (),
+--     ty = TyUnknown {info = NoInfo()}
+-- } in 
+-- let thn = nvar_ (nameNoSym "foo") in 
+-- let els = int_ (-1) in 
+-- let recordExpr = typeCheck (symbolize (
+--     match_ target pat thn els
+-- )) in 
+-- compileMCoreToWasm recordExpr

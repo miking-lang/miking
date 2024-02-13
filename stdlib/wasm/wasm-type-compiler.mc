@@ -39,12 +39,14 @@ let pprintTuple = lam kv.
 
 type WasmTypeContext = {
     name2ident : Map Name String,
+    constr2typeid: Map String Int,
     defs : [(use WasmAST in Def)]
 }
 
 let emptyTypeCtx = {
     defs = [],
-    name2ident = mapEmpty nameCmp
+    name2ident = mapEmpty nameCmp,
+    constr2typeid = mapEmpty cmpString
 }
 
 lang WasmTypeCompiler = MClosAst + WasmAST + MExprPrettyPrint
@@ -64,6 +66,7 @@ lang WasmTypeCompiler = MClosAst + WasmAST + MExprPrettyPrint
     sem compileType : WasmTypeContext -> (Name, Type) -> WasmTypeContext
     sem compileType ctx =
     | (name, TyVariant {constrs = constrs}) -> 
+
         let constr2def = lam constrPair.
             StructTypeDef {
                 ident = join [
@@ -77,7 +80,13 @@ lang WasmTypeCompiler = MClosAst + WasmAST + MExprPrettyPrint
                 ]
             } in
         let constrPairs = mapToSeq constrs in 
-        {ctx with defs = concat ctx.defs (map constr2def constrPairs)}
+        let newMap = foldli 
+            (lam m. lam i. lam c. mapInsert (nameGetStr (fst c)) i m)
+            ctx.constr2typeid
+            constrPairs in 
+        {ctx with 
+            constr2typeid = newMap,
+            defs = concat ctx.defs (map constr2def constrPairs)}
     | (name, TyRecord {fields = f}) ->
         let f = mapToSeq f in  
         let f = map (lam pair. pair.0) f in 
