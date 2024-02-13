@@ -22,7 +22,8 @@ lang MClosTranspiler = MClosAst
     sem extractFuncDef: [{ident: Name, ty: Type}] -> SigType -> Expr -> Expr
     sem extractFuncDef argsAcc sig = 
     | TmLam lamRec -> 
-        let newArgsAcc = (snoc argsAcc {ident = lamRec.ident, ty = lamRec.tyParam}) in 
+        let newArg = match (nameGetStr lamRec.ident) with "" then (nameNoSym "_unnamed") else lamRec.ident in 
+        let newArgsAcc = (snoc argsAcc {ident = newArg, ty = lamRec.tyParam}) in 
         extractFuncDef newArgsAcc sig lamRec.body
     | other ->  
         -- This is top level let expression that is not a function definition
