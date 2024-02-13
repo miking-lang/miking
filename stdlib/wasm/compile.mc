@@ -180,6 +180,32 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
             extractResult rightCtx
         ]) in 
         ctxInstrResult rightCtx applyInstr
+    | TmRecord {bindings = bindings, ty = ty} -> 
+        -- We rely on the type lifting pass to have created a type
+        -- definition for this TmRecord. 
+        -- We then rely on the TypeCompiler to have created a 
+        -- struct definition that matches the new of this type def.
+        let tyStr = 
+            (match ty with TyCon {ident = ident} in nameGetStr ident) in 
+
+        -- TODO: Fix ordering of parameters
+        -- Currenlty it is assumed that the order is the same
+        -- in the def as in the TmRecord but this is of course
+        -- not normally the case.
+        let bindingPairs = mapToSeq bindings in 
+        let work = lam ctxAccPair. lam pair.
+            match ctxAccPair with (ctx, acc) in 
+            match pair with (sid, expr) in 
+            let ident = sidToString sid in 
+            let ctx = compileExpr globalCtx ctx expr in 
+            let acc = cons (ident, extractResult ctx) acc in 
+            (ctx, acc) in
+        match foldl work (exprCtx, []) bindingPairs with (ctx, acc) in 
+        let structNewInstr = StructNew {
+            structIdent = tyStr,
+            values = map snd acc
+        } in 
+        ctxInstrResult ctx structNewInstr
     | _ -> exprCtx
 
 
