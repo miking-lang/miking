@@ -27,10 +27,10 @@ lang MClosAst = MExprAst
         (acc, TmFuncDef {t with tyAnnot = tyAnnot})
 
     sem smapAccumL_Expr_TypeLabel (f : acc -> Type -> (acc, Type)) (acc : acc) =
-    | TmFuncDef t ->
-        match f acc t.tyParam with (acc, tyParam) in
-        match f acc t.ty with (acc, ty) in
-        (acc, TmFuncDef {t with tyParam = tyParam, ty = ty})
+    -- | TmFuncDef t ->
+    --     match f acc t.tyParam with (acc, tyParam) in
+    --     match f acc t.ty with (acc, ty) in
+    --     (acc, TmFuncDef {t with tyParam = tyParam, ty = ty})
 
     sem smapAccumL_Expr_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
     | TmFuncDef t ->

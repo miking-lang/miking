@@ -2,7 +2,9 @@ include "mexpr/pprint.mc"
 include "mexpr/lamlift.mc"
 include "mexpr/lamlift.mc"
 include "mexpr/shallow-patterns.mc"
+include "mexpr/type-lift.mc"
 include "mexpr/ast.mc"
+include "mexpr/symbolize.mc"
 include "mexpr/info.mc"
 include "mexpr/type.mc"
 include "mexpr/ast-builder.mc"
@@ -11,6 +13,7 @@ include "mexpr/pprint.mc"
 include "wasm-ast.mc"
 include "wasm-pprint.mc"
 include "wasm-stdlib.mc"
+include "wasm-type-compiler.mc"
 include "wasm-apply.mc"
 include "mclos-ast.mc"
 include "mclos-transpile.mc"
@@ -25,6 +28,9 @@ include "tuple.mc"
 --     args: [{ident: String, ty: (use WasmAST in WasmType)}],
 --     resultTy: (use WasmAST in WasmType)
 -- }
+
+let fst = lam pair. match pair with (x, _) in x
+let snd = lam pair. match pair with (_, x) in x
 
 type WasmCompileContext = {
     defs: [(use WasmAST in Def)],
@@ -124,7 +130,28 @@ let createArithOpClosure = lam globalCtx. lam exprCtx. lam opIdent.
     use WasmAST in 
     createClosure globalCtx exprCtx opIdent
 
-lang WasmCompiler = MClosAst + WasmAST
+lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
+    -- sem addType : WasmCompileContext -> (Name, Type) -> WasmCompileContext
+    -- sem addType ctx = 
+    -- | (name, TyVariant v) ->
+    --     let constructors = mapToSeq v.constrs in
+    --     let constr2def = lam index. lam constr.
+    --         -- let ty = snd constr in 
+    --         let kv2field = lam kv.
+    --             {ident = nameGetStr (fst kv), ty = Anyref ()} in
+    --         let x = printLn (use MExprPrettyPrint in type2str (snd constr)) in
+    --         StructTypeDef {
+    --             -- ident = join [nameGetStr name, "_", (nameGetStr (fst constr))],
+    --             ident = nameGetStr (fst constr),
+    --             fields = [{ident = "_typeid", ty = Tyi32 ()}]
+    --         } in
+    --     let newDefs = mapi constr2def constructors in 
+    --     {ctx with defs = concat newDefs ctx.defs}
+    -- | (name, other) -> 
+    --     printLn (join ["Found other type '", nameGetStr name, "'"]) ;
+    --     let x = printLn (use MExprPrettyPrint in type2str other) in
+    --     ctx
+
     sem compileConst : WasmCompileContext -> WasmExprContext -> Const -> WasmExprContext
     sem compileConst globalCtx exprCtx = 
     | CInt {val = i} -> ctxInstrResult exprCtx (I31Cast (I32Const i))
@@ -153,6 +180,7 @@ lang WasmCompiler = MClosAst + WasmAST
             extractResult rightCtx
         ]) in 
         ctxInstrResult rightCtx applyInstr
+    | _ -> exprCtx
 
 
     sem ctxAcc : WasmCompileContext -> Expr -> WasmCompileContext
@@ -193,13 +221,19 @@ lang WasmCompiler = MClosAst + WasmAST
     sem createCtx ctx = 
     | exprs -> foldl ctxAcc ctx exprs
 
-    sem compile : [Expr] -> Mod
-    sem compile = 
+    -- sem compile : [Expr] -> Mod
+    sem compile typeEnv =
     | exprs -> 
         -- Add stdlib definitions
         let stdlibDefs = [addiWasm, subiWasm, muliWasm] in 
         let ctx = emptyCompileCtx in
         let ctx = foldl ctxWithFuncDef ctx stdlibDefs in 
+
+        -- Compile Types
+        -- let ctx = foldl addType ctx typeEnv in 
+        let typeCtx = compileTypes typeEnv in 
+        -- iter (lam def. (printLn (pprintDef 0 def))) typeCtx.defs ; 
+        let ctx = {ctx with defs = concat ctx.defs typeCtx.defs} in 
 
         -- Compile functions
         let ctx = createCtx ctx exprs in 
@@ -230,10 +264,23 @@ let compileMCoreToWasm = lam ast.
     let ast = lowerAll ast in 
     use MExprLambdaLift in
     let ast = liftLambdas ast in
+    use MExprTypeLift in 
+    match typeLift ast with (env, ast) in
+    -- iter (lam pair. (printLn (nameGetStr (fst pair))) ; 
+    --                 (printLn (type2str (snd pair)))) env ;
+    -- use MExprPrettyPrint in 
+    -- let variantMap = env.variants in 
+    -- let variantKVs = mapToSeq variantMap in 
+    -- let variants = map fst env in 
+    -- let variants = map nameGetStr variants in 
+    -- iter (lam kv. printLn (nameGetStr (fst kv)) ; printLn (type2str (snd kv))) env ;
+    -- let x = map (lam kv. match kv with (k, v) in printLn (nameGetStr k)) (mapToSeq env.variants) in 
+    -- printLn (expr2str ast) ;
     use MClosTranspiler in 
     let exprs = transpile ast in
     use WasmCompiler in 
-    let wasmModule = compile exprs in
+    let wasmModule = compile env exprs in
+    -- wasmModule
     use WasmPPrint in 
     printLn (pprintMod wasmModule) ;
     -- (printLn "Lifted Lambdas: ");
@@ -243,23 +290,20 @@ let compileMCoreToWasm = lam ast.
     -- (printLn (use MExprPrettyPrint in expr2str ast)) ;
     ""
 
+lang TestLang = WasmCompiler + MExprTypeCheck + MExprPrettyPrint +
+                WasmPPrint + Sym
+end
+
 mexpr
-use WasmCompiler in 
--- let body = (int_ 10) in 
-let myadd = ulet_ "myadd" (ulam_ "x" (ulam_ "y" (int_ 0))) in 
-let body = (app_ (app_ (var_ "muli") (int_ 1)) (int_ 2)) in 
-let g = ulet_ "g" body in 
-let expr = app_ (app_ (var_ "g") (int_ 10)) (int_ 20) in 
-let prog = bind_ myadd (bind_ g expr) in 
-let transpiled = (use MClosTranspiler in transpile body) in 
--- let ctx = createCtx transpiled in 
-let mod = compile transpiled in 
-use WasmPPrint in 
-printLn (pprintMod mod)
--- let str = pprintDef 0 (head ctx.defs) in 
--- let str2 = pprintDef 0 (head (tail ctx.defs)) in 
--- printLn str ;
--- printLn str2 ;
--- printLn (mapLookupApplyOrElse int2string (lam. "fallback") "g" ctx.ident2fp) 
--- ;
--- ()
+use TestLang in 
+let tyName = nameSym "MyType" in 
+let fooName = nameSym "Foo" in 
+let barName = nameSym "Bar" in 
+let variant = typeCheck (symbolize (bindall_ [
+    ntype_ tyName [] (tyvariant_ []),
+    ncondef_ fooName (tyarrow_ tyint_ (ntycon_ tyName)),
+    ncondef_ barName (tyarrow_ tystr_ (ntycon_ tyName)),
+    uunit_
+])) in 
+let body = (int_ 10) in  
+compileMCoreToWasm variant
