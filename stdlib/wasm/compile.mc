@@ -296,14 +296,23 @@ end
 
 mexpr
 use TestLang in 
-let tyName = nameSym "MyType" in 
-let fooName = nameSym "Foo" in 
-let barName = nameSym "Bar" in 
-let variant = typeCheck (symbolize (bindall_ [
-    ntype_ tyName [] (tyvariant_ []),
-    ncondef_ fooName (tyarrow_ tyint_ (ntycon_ tyName)),
-    ncondef_ barName (tyarrow_ tystr_ (ntycon_ tyName)),
-    uunit_
-])) in 
-let body = (int_ 10) in  
-compileMCoreToWasm variant
+-- let variantTyName = nameSym "FooBar" in 
+-- let fooName = nameSym "Foo" in 
+-- let barName = nameSym "Bar" in 
+-- let variant = typeCheck (symbolize (bindall_ [
+--     ntype_ variantTyName [] (tyvariant_ []),
+--     ncondef_ fooName (tyarrow_ tyint_ (ntycon_ variantTyName)),
+--     ncondef_ barName (tyarrow_ tystr_ (ntycon_ variantTyName)),
+--     uunit_
+-- ])) in 
+-- compileMCoreToWasm variant
+-- ; 
+-- let recordTyName = nameSym "MyRecordType" in 
+-- let recordTypeDef = typeCheck (symbolize (bindall_ [
+--     ntype_ recordTyName [] (tyrecord_ [("x", tyint_)]),
+--     record_
+-- ])) in 
+let recordExpr = typeCheck (symbolize (
+    urecord_ [("x", int_ 10), ("y", int_ 20)]
+)) in 
+compileMCoreToWasm recordExpr
