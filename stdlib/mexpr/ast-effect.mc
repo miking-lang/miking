@@ -104,7 +104,7 @@ mexpr
 use TestLangImpl in
 
 let parse =
-  parseMExprString
+  parseMExprStringExn
     { _defaultBootParserParseMExprStringArg () with allowFree = true }
 in
 
