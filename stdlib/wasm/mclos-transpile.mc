@@ -55,6 +55,18 @@ lang MClosTranspiler = MClosAst
         let funDef = (extractFuncDef [] sig r.body) in 
         let acc = cons funDef acc in 
         transpileAcc acc r.inexpr
+    | TmRecLets {bindings = bindings, inexpr = inexpr} ->
+        let work = lam acc. lam r. 
+            let sig = {
+                ident = r.ident,
+                tyAnnot = r.tyAnnot,
+                info = r.info, 
+                ty = r.tyBody
+            } in 
+            let funDef = (extractFuncDef [] sig r.body) in 
+            cons funDef acc in
+        let acc = foldl work acc bindings in 
+        transpileAcc acc inexpr
     | other -> cons other acc
 
     sem transpile =

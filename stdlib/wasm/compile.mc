@@ -196,9 +196,9 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
                 ctxInstrResult ctx structNewInstr
     | TmConApp r ->
         let exprCtx = compileExpr globalCtx exprCtx r.body in 
-        let structIdent = nameGetStr r.ident in 
+        let structIdent = name2str r.ident in 
         let typeid = 
-            (match mapLookup structIdent globalCtx.constr2typeid with Some t in t) in 
+            (match mapLookup (nameGetStr r.ident) globalCtx.constr2typeid with Some t in t) in 
         ctxInstrResult exprCtx (StructNew {
             structIdent = structIdent,
             values = [
@@ -250,6 +250,65 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
             })
         ) in
         ctxInstrResult ctx eqInstr
+    | PatCon {ident = ident, subpat = PatNamed {ident = PName innerName}} ->
+        let structIdent = name2str ident in 
+        let typeid = (match mapLookup (nameGetStr ident) globalCtx.constr2typeid with Some t in t) in 
+
+        let refTest = RefTest {
+            ty = Ref structIdent,
+            value = targetInstr
+        } in 
+
+        let typeidTest = I32Eq (
+            I32Const typeid, 
+            StructGet {
+                structIdent = structIdent,
+                field = "_typeid",
+                value = RefCast {
+                    ty = Ref structIdent,
+                    value = targetInstr
+                }
+            }
+        ) in 
+
+        let innerIdent = nameGetStr innerName in 
+        let setInnerIdent = LocalSet (
+            innerIdent,
+            StructGet {
+                structIdent = structIdent,
+                field = "value",
+                value = RefCast {
+                    ty = Ref structIdent,
+                    value = targetInstr
+                }
+            }
+        ) in 
+
+        let resultLocal = concat "patcon" (int2string ctx.nextLocal) in 
+
+        let setResultLocal = lam i. LocalSet (resultLocal, I32Const i) in 
+
+        let ite = IfThenElse {
+            cond = refTest,
+            thn = [IfThenElse {
+                cond = typeidTest,
+                thn = [setResultLocal 1, setInnerIdent],
+                els =[setResultLocal 0]
+            }],
+            els = [setResultLocal 0]
+        } in 
+
+        let ctx = {ctx with
+            locals = concat
+                [
+                    {ident = resultLocal, ty = Tyi32 ()}, 
+                    {ident = innerIdent, ty = Anyref ()}
+                ]
+                ctx.locals,
+            nextLocal = addi 1 ctx.nextLocal,
+            instructions = cons ite ctx.instructions} in  
+
+        ctxLocalResult ctx resultLocal
     | PatRecord {bindings = bindings, ty = ty} ->
         let bindingPairs = mapToSeq bindings in 
         -- let updatename2ident = lam ctx. lam i. lam pair. 
@@ -371,6 +430,9 @@ let compileMCoreToWasm = lam ast.
 
     use MClosTranspiler in 
     let exprs = transpile ast in
+
+    -- (use MClosPrettyPrint in (iter (lam e. printLn (expr2str e)) exprs));
+
     use WasmCompiler in 
     let wasmModule = compile env exprs in
     -- wasmModule
@@ -384,35 +446,43 @@ end
 
 mexpr
 use TestLang in 
--- let variantTyName = nameSym "FooBar" in 
--- let fooName = nameSym "Foo" in 
--- let barName = nameSym "Bar" in 
--- let variant = typeCheck (symbolize (bindall_ [
---     ntype_ variantTyName [] (tyvariant_ []),
---     ncondef_ fooName (tyarrow_ tyint_ (ntycon_ variantTyName)),
---     ncondef_ barName (tyarrow_ tyint_ (ntycon_ variantTyName)),
---     (ulet_ "f" (nconapp_ fooName (int_ 12))),
---     (ulet_ "g" (nconapp_ barName (int_ 42))),
---     uunit_
--- ])) in 
--- compileMCoreToWasm variant
--- ; 
-let target = urecord_ [("x", int_ 23), ("y", int_ 42)] in
-let pat = PatRecord {
-    bindings = mapFromSeq cmpSID [
-        -- (stringToSid "x", PatNamed {ident = PName (nameNoSym "foo"), info=NoInfo(), ty = tyunknown_})
-        (stringToSid "x", npvar_ (nameNoSym "foo")),
-        (stringToSid "y", npvar_ (nameNoSym "bar"))
-        -- (stringToSid "x", pint_ 25),
-        -- (stringToSid "y", pint_ 25)
-    ],
-    info = NoInfo (),
-    ty = TyUnknown {info = NoInfo()}
-} in 
-let thn = nvar_ (nameNoSym "bar") in 
--- let thn = int_ 1 in 
-let els = int_ (-1) in 
-let recordExpr = typeCheck (symbolize (
+let variantTyName = nameSym "FooBar" in 
+let iName = nameSym "i" in 
+let fooName = nameSym "Foo" in 
+let barName = nameSym "Bar" in 
+let target = (nconapp_ fooName (int_ 12)) in 
+let pat = npcon_ fooName (npvar_ iName) in 
+let thn = nvar_ iName in 
+let els = int_ -1 in 
+let matchExpr = typeCheck (symbolize (
     match_ target pat thn els
 )) in 
-compileMCoreToWasm recordExpr
+let expr = typeCheck (symbolize (bindall_ [
+    ntype_ variantTyName [] (tyvariant_ []),
+    ncondef_ fooName (tyarrow_ tyint_ (ntycon_ variantTyName)),
+    ncondef_ barName (tyarrow_ tyint_ (ntycon_ variantTyName)),
+    uunit_
+    -- (ulet_ "f" (nconapp_ fooName (int_ 12))),
+    -- (ulet_ "g" (nconapp_ barName (int_ 42))),
+    -- matchExpr
+])) in 
+
+-- compileMCoreToWasm variant
+-- ; 
+-- let target = urecord_ [("x", int_ 23), ("y", int_ 42)] in
+-- let pat = PatRecord {
+--     bindings = mapFromSeq cmpSID [
+--         -- (stringToSid "x", PatNamed {ident = PName (nameNoSym "foo"), info=NoInfo(), ty = tyunknown_})
+--         (stringToSid "x", npvar_ (nameNoSym "foo")),
+--         (stringToSid "y", npvar_ (nameNoSym "bar"))
+--         -- (stringToSid "x", pint_ 25),
+--         -- (stringToSid "y", pint_ 25)
+--     ],
+--     info = NoInfo (),
+--     ty = TyUnknown {info = NoInfo()}
+-- } in 
+-- let thn = addi_ (nvar_ (nameNoSym "bar")) (nvar_ (nameNoSym "foo")) in 
+-- -- let thn = int_ 1 in 
+-- let els = int_ (-1) in 
+
+compileMCoreToWasm expr

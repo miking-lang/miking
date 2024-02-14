@@ -70,11 +70,7 @@ lang WasmTypeCompiler = MClosAst + WasmAST + MExprPrettyPrint
 
         let constr2def = lam constrPair.
             StructTypeDef {
-                ident = join [
-                    nameGetStr name,
-                    "-",
-                    nameGetStr (fst constrPair)
-                ],
+                ident = name2str (fst constrPair),
                 fields = [
                     {ident = "value", ty = Anyref ()},
                     {ident = "_typeid", ty = Tyi32 ()}
