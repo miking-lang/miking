@@ -144,7 +144,7 @@ lang WasmPPrint = WasmAST
         let resultStr = join ["(result ", pprintWasmType r.resultTy, ")"] in 
         let localStr = strJoin "\n" (map pprintLocal r.locals) in
         let bodyStr = strJoin "\n" (map (pprintInstr (addi 1 indent)) r.instructions) in
-        join ["(func $", r.ident, argsSep, argsStr, " ", resultStr, "\n", localStr, "\n", bodyStr, ")"]
+        join [indent2str indent, "(func $", r.ident, argsSep, argsStr, " ", resultStr, "\n", localStr, "\n", bodyStr, ")"]
     | StructTypeDef r -> 
         let indent1 = indent2strnewline (addi 1 indent) in
         let indent2 = indent2strnewline (addi 2 indent) in

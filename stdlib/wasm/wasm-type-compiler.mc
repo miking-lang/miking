@@ -17,6 +17,7 @@ include "wasm-stdlib.mc"
 include "wasm-apply.mc"
 include "mclos-ast.mc"
 include "mclos-transpile.mc"
+include "util.mc"
 
 include "string.mc"
 include "seq.mc"
@@ -90,10 +91,13 @@ lang WasmTypeCompiler = MClosAst + WasmAST + MExprPrettyPrint
     | (name, TyRecord {fields = f}) ->
         let f = mapToSeq f in  
         let f = map (lam pair. pair.0) f in 
+        -- The fields of the record are ordered by 
+        -- the SIDs of the record field identifiers
+        let f = sort cmpSID f in 
         let f = map sidToString f in 
         let str2field = lam s. {ident = s, ty = Anyref ()} in 
         {ctx with defs = cons (StructTypeDef {
-            ident = nameGetStr name, 
+            ident = name2str name, 
             fields = map str2field f
         }) ctx.defs}
     | (name, TyVar {ident = ident}) -> 
