@@ -4,15 +4,18 @@ include "wasm-pprint.mc"
 let createIntBinop = lam ident. lam instrProducer.
     use WasmAST in 
     FunctionDef {
-        ident = ident,
-        args = [{ident="lhs", ty=Anyref ()}, {ident="rhs", ty=Anyref()}],
+        ident = (nameNoSym ident),
+        args = [
+            {ident=(nameNoSym "lhs"), ty=Anyref ()},
+            {ident=(nameNoSym "rhs"), ty=Anyref()}
+        ],
         locals = [],
         resultTy = Anyref (),
         instructions = [
             I31Cast (
                 instrProducer 
-                    (I31GetS (RefCast {ty = I31Ref (), value = LocalGet "lhs"}))
-                    (I31GetS (RefCast {ty = I31Ref(), value = LocalGet "rhs"}))
+                    (I31GetS (RefCast {ty = I31Ref (), value = LocalGet (nameNoSym "lhs")}))
+                    (I31GetS (RefCast {ty = I31Ref(), value = LocalGet (nameNoSym "rhs")}))
             )
         ]
     }

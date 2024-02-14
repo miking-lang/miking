@@ -1,3 +1,5 @@
+include "name.mc"
+
 lang WasmAST
     syn Instr =
     | I32Const Int
@@ -7,39 +9,39 @@ lang WasmAST
     | I32And (Instr, Instr)
     | I32Eq (Instr, Instr)
     | I32Ne (Instr, Instr)
-    | LocalGet String
-    | LocalSet (String, Instr)
-    | GlobalGet String
-    | Call (String, [Instr])
+    | LocalGet Name
+    | LocalSet (Name, Instr)
+    | GlobalGet Name
+    | Call (Name, [Instr])
     | Loop {
-        ident: String,
+        ident: Name,
         body: [Instr]
     }
     | BrIf {
-        ident: String,
+        ident: Name,
         cond: Instr
     }
     | StructGet {
-        structIdent: String,
-        field: String,
+        structIdent: Name,
+        field: Name,
         value: Instr
     }
     | StructNew {
-        structIdent: String,
+        structIdent: Name,
         values: [Instr]
     }
     | ArrayNew {
-        tyIdent: String,
+        tyIdent: Name,
         initValue: Instr,
         size: Instr
     }
     | ArrayGet {
-        tyIdent: String,
+        tyIdent: Name,
         value: Instr,
         index: Instr
     }
     | ArraySet {
-        tyIdent: String,
+        tyIdent: Name,
         value: Instr,
         index: Instr,
         value2: Instr
@@ -53,7 +55,7 @@ lang WasmAST
         value: Instr
     }
     | CallIndirect {
-        ty: String,
+        ty: Name,
         args: [Instr],
         fp: Instr
     }
@@ -74,30 +76,30 @@ lang WasmAST
 
     syn Def = 
     | FunctionDef {
-        ident: String,
-        args: [{ident: String, ty: WasmType}],
-        locals: [{ident: String, ty: WasmType}],
+        ident: Name,
+        args: [{ident: Name, ty: WasmType}],
+        locals: [{ident: Name, ty: WasmType}],
         resultTy: WasmType,
         instructions: [Instr]
     }
     | StructTypeDef {
-        ident: String,
+        ident: Name,
         fields: [{
-            ident: String,
+            ident: Name,
             ty: WasmType
         }]
     }
     | FunctionTypeDef {
-        ident: String,
+        ident: Name,
         paramTys: [WasmType],
         resultTy: WasmType
     }
     | ArrayTypeDef {
-        ident: String,
+        ident: Name,
         paramTys: [WasmType]
     }
     | GlobalDef {
-        ident: String,
+        ident: Name,
         ty: WasmType, 
         initValue: Instr
     }
@@ -109,12 +111,12 @@ lang WasmAST
     | Tyf64 ()
     | Array WasmType
     | Anyref ()
-    | Ref String
+    | Ref Name
     | I31Ref ()
 
     syn WasmMemory = 
     | Table {size: Int, typeString: String}
-    | Elem {offset: Instr, funcNames: [String]}
+    | Elem {offset: Instr, funcNames: [Name]}
 
     syn Mod = 
     | Module {
@@ -122,7 +124,7 @@ lang WasmAST
         table: WasmMemory, 
         elem: WasmMemory, 
         types: [WasmType],
-        exports: [String]
+        exports: [Name]
     }
 end
 

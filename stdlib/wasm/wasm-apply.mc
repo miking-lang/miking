@@ -4,10 +4,12 @@ include "wasm-pprint.mc"
 include "string.mc"
 include "seq.mc"
 
+let argsArrayName = nameNoSym "args-array"
+
 let nullLikeDef = 
     use WasmAST in
     GlobalDef {
-        ident = "null-like",
+        ident = nameNoSym "null-like",
         ty = Anyref (),
         initValue = I31Cast (I32Const 0)
     }
@@ -15,54 +17,54 @@ let nullLikeDef =
 let argsArrayType = 
     use WasmAST in 
     ArrayTypeDef {
-        ident = "args-array",
+        ident = argsArrayName,
         paramTys = [Anyref ()]
     }
 
 let closDef = 
     use WasmAST in (StructTypeDef {
-    ident = "clos",
+    ident = nameNoSym "clos",
     fields = [
-        {ident = "func-pointer", ty = Tyi32 ()},
-        {ident = "max-arity", ty = Tyi32 ()},
-        {ident = "cur-arity", ty = Tyi32 ()},
-        {ident = "args", ty = Ref "args-array"}
+        {ident = nameNoSym "func-pointer", ty = Tyi32 ()},
+        {ident = nameNoSym "max-arity", ty = Tyi32 ()},
+        {ident = nameNoSym "cur-arity", ty = Tyi32 ()},
+        {ident = nameNoSym "args", ty = Ref argsArrayName}
     ]})
 
 let genGenericType = lam arity. 
     use WasmAST in 
     FunctionTypeDef {
-        ident = concat "generic-type-" (int2string arity),
+        ident = nameNoSym (concat "generic-type-" (int2string arity)),
         paramTys = make arity (Anyref ()),
-        resultTy = Anyref()
+        resultTy = Anyref ()
     }
 
 let genExec = lam arity. 
     use WasmAST in 
     let getArg = lam i. 
         ArrayGet {
-            tyIdent = "args-array",
+            tyIdent = argsArrayName,
             value = StructGet {
-                structIdent = "clos",
-                field = "args",
-                value = LocalGet "cl"
+                structIdent = nameNoSym "clos",
+                field = nameNoSym "args",
+                value = LocalGet (nameNoSym "cl")
             },
             index = I32Const i
         } in 
     let args = map getArg (range 0 arity 1) in 
     FunctionDef {
-        ident = concat "exec-" (int2string arity), 
-        args = [{ident = "cl", ty = Ref "clos"}],
+        ident = nameNoSym (concat "exec-" (int2string arity)), 
+        args = [{ident = nameNoSym "cl", ty = Ref (nameNoSym "clos")}],
         locals = [],
         resultTy = Anyref (),
         instructions = [
             CallIndirect {
-                ty = concat "generic-type-" (int2string arity),
+                ty = nameNoSym (concat "generic-type-" (int2string arity)),
                 args = args,
                 fp = StructGet {
-                    structIdent = "clos",
-                    field = "func-pointer",
-                    value = LocalGet "cl"
+                    structIdent = nameNoSym "clos",
+                    field = nameNoSym "func-pointer",
+                    value = LocalGet (nameNoSym "cl")
                 }
             }
         ]
@@ -75,37 +77,37 @@ let genDispatch = lam arities: [Int].
         match remaining with []
             -- Should throw error on this case.
             then 
-                LocalSet ("result", GlobalGet "null-like")
+                LocalSet (nameNoSym "result", GlobalGet (nameNoSym "null-like"))
             else 
                 let arity = head remaining in 
                 IfThenElse {
                     cond = I32Eq (
-                        LocalGet "arity",
+                        LocalGet (nameNoSym "arity"),
                         I32Const arity
                     ),
-                    thn = [LocalSet ("result", Call (
-                            concat "exec-" (int2string arity),
-                            [LocalGet "cl"]
+                    thn = [LocalSet ((nameNoSym "result"), Call (
+                            nameNoSym (concat "exec-" (int2string arity)),
+                            [LocalGet (nameNoSym "cl")]
                         ))],
                     els = [work (tail remaining)]
                 } 
     in 
     FunctionDef {
-        ident = "dispatch",
-        args = [{ident = "cl", ty = Ref "clos"}],
+        ident = nameNoSym "dispatch",
+        args = [{ident = nameNoSym"cl", ty = Ref (nameNoSym "clos")}],
         locals = [
-            {ident = "arity", ty = Tyi32 ()},
-            {ident = "result", ty = Anyref()}
+            {ident = nameNoSym "arity", ty = Tyi32 ()},
+            {ident = nameNoSym "result", ty = Anyref()}
         ],
         resultTy = Anyref (),
         instructions = [
-            LocalSet ("arity", StructGet {
-                structIdent = "clos",
-                field = "max-arity",
-                value = LocalGet "cl"
+            LocalSet ((nameNoSym "arity"), StructGet {
+                structIdent = nameNoSym "clos",
+                field = nameNoSym "max-arity",
+                value = LocalGet (nameNoSym "cl")
             }),
             work arities,
-            LocalGet "result"
+            LocalGet (nameNoSym "result")
         ]
     }
 
@@ -113,127 +115,127 @@ let apply =
     use WasmAST in 
     let copyIndex = lam instr. 
         ArraySet {
-            tyIdent = "args-array",
-            value = LocalGet "new-array",
+            tyIdent = nameNoSym "args-array",
+            value = LocalGet (nameNoSym "new-array"),
             index = instr,
             value2 = ArrayGet {
-                tyIdent = "args-array",
+                tyIdent = nameNoSym "args-array",
                 value = StructGet {
-                    structIdent = "clos",
-                    field = "args",
-                    value = LocalGet "cl"
+                    structIdent = nameNoSym "clos",
+                    field = nameNoSym "args",
+                    value = LocalGet (nameNoSym "cl")
                 },
                 index = instr
             }
         } in 
     FunctionDef {
-        ident = "apply",
+        ident = nameNoSym "apply",
         args = [
-            {ident = "lhs", ty = Anyref ()},
-            {ident = "arg", ty = Anyref ()}
+            {ident = nameNoSym "lhs", ty = Anyref ()},
+            {ident = nameNoSym "arg", ty = Anyref ()}
         ],
         locals = [
-            {ident = "cl", ty = Ref "clos"},
-            {ident = "new-array", ty = Ref "args-array"},
-            {ident = "result", ty = Anyref ()},
-            {ident = "new-clos", ty = Ref "clos"},
-            {ident = "i", ty = Tyi32 ()}
+            {ident = nameNoSym "cl", ty = Ref (nameNoSym "clos")},
+            {ident = nameNoSym "new-array", ty = Ref (nameNoSym "args-array")},
+            {ident = nameNoSym "result", ty = Anyref ()},
+            {ident = nameNoSym "new-clos", ty = Ref (nameNoSym "clos")},
+            {ident = nameNoSym "i", ty = Tyi32 ()}
         ],
         resultTy = Anyref (), 
         instructions = [
-            LocalSet ("cl", 
+            LocalSet (nameNoSym "cl", 
                 RefCast {
-                    ty = Ref "clos",
-                    value = LocalGet "lhs"
+                    ty = Ref (nameNoSym "clos"),
+                    value = LocalGet (nameNoSym "lhs")
                 }
             ),
-            LocalSet ("new-array", 
+            LocalSet (nameNoSym "new-array", 
                 ArrayNew {
-                    tyIdent = "args-array",
-                    initValue = GlobalGet "null-like",
+                    tyIdent = nameNoSym "args-array",
+                    initValue = GlobalGet (nameNoSym "null-like"),
                     size = StructGet {
-                        structIdent = "clos",
-                        field = "max-arity",
-                        value = LocalGet "cl"
+                        structIdent = nameNoSym "clos",
+                        field = nameNoSym "max-arity",
+                        value = LocalGet (nameNoSym "cl")
                     }
                 }
             ),
             IfThenElse {
                 cond = I32Ne (I32Const 0, StructGet {
-                        structIdent = "clos",
-                        field = "max-arity",
-                        value = LocalGet "cl"
+                        structIdent = nameNoSym "clos",
+                        field = nameNoSym "max-arity",
+                        value = LocalGet (nameNoSym "cl")
                     }),
                 thn = [Loop {
-                    ident = "args-copy-loop",
+                    ident = nameNoSym "args-copy-loop",
                     body = [
-                        copyIndex (LocalGet "i"),
-                        LocalSet ("i", I32Add (LocalGet "i", I32Const 1)),
+                        copyIndex (LocalGet (nameNoSym "i")),
+                        LocalSet (nameNoSym "i", I32Add (LocalGet (nameNoSym "i"), I32Const 1)),
                         BrIf {
-                            ident = "args-copy-loop",
+                            ident = nameNoSym "args-copy-loop",
                             cond = I32Ne (
-                                LocalGet "i",
+                                LocalGet (nameNoSym "i"),
                                 StructGet {
-                                    structIdent = "clos",
-                                    field = "max-arity",
-                                    value = LocalGet "cl"
+                                    structIdent = nameNoSym "clos",
+                                    field = nameNoSym "max-arity",
+                                    value = LocalGet (nameNoSym "cl")
                                 }    
                             )
                         }
                     ]},
                     ArraySet {
-                        tyIdent = "args-array",
-                        value = LocalGet "new-array",
+                        tyIdent = nameNoSym "args-array",
+                        value = LocalGet (nameNoSym "new-array"),
                         index = StructGet {
-                            structIdent = "clos",
-                            field = "cur-arity",
-                            value = LocalGet "cl"
+                            structIdent = nameNoSym "clos",
+                            field = nameNoSym "cur-arity",
+                            value = LocalGet (nameNoSym "cl")
                         },
-                        value2 = LocalGet "arg"
+                        value2 = LocalGet (nameNoSym "arg")
                     }],
                 els = []
             },
-            LocalSet ("new-clos", StructNew {
-                structIdent = "clos", 
+            LocalSet (nameNoSym "new-clos", StructNew {
+                structIdent = nameNoSym "clos", 
                 values = [
                     StructGet {
-                        structIdent = "clos",
-                        field = "func-pointer",
-                        value = LocalGet "cl"
+                        structIdent = nameNoSym "clos",
+                        field = nameNoSym "func-pointer",
+                        value = LocalGet (nameNoSym "cl")
                     },
                     StructGet {
-                        structIdent = "clos",
-                        field = "max-arity",
-                        value = LocalGet "cl"
+                        structIdent = nameNoSym "clos",
+                        field = nameNoSym "max-arity",
+                        value = LocalGet (nameNoSym "cl")
                     },
                     I32Add (
                         I32Const 1,
                         StructGet {
-                            structIdent = "clos",
-                            field = "cur-arity",
-                            value = LocalGet "cl"
+                            structIdent = nameNoSym "clos",
+                            field = nameNoSym "cur-arity",
+                            value = LocalGet (nameNoSym "cl")
                         }
                     ),
-                    LocalGet "new-array"
+                    LocalGet (nameNoSym "new-array")
                 ]
             }),
             IfThenElse {
                 cond = I32Eq (
                     StructGet {
-                        structIdent = "clos",
-                        field = "cur-arity",
-                        value = LocalGet "new-clos"
+                        structIdent = nameNoSym "clos",
+                        field = nameNoSym "cur-arity",
+                        value = LocalGet (nameNoSym "new-clos")
                     },
                     StructGet {
-                        structIdent = "clos",
-                        field = "max-arity",
-                        value = LocalGet "new-clos"
+                        structIdent = nameNoSym "clos",
+                        field = nameNoSym "max-arity",
+                        value = LocalGet (nameNoSym "new-clos")
                     }
                 ),
-                thn = [LocalSet ("result", Call ("dispatch", [LocalGet "new-clos"]))],
-                els = [LocalSet ("result", LocalGet "new-clos")]
+                thn = [LocalSet (nameNoSym "result", Call (nameNoSym "dispatch", [LocalGet (nameNoSym "new-clos")]))],
+                els = [LocalSet (nameNoSym "result", LocalGet (nameNoSym "new-clos"))]
             },
-            LocalGet "result"
+            LocalGet (nameNoSym "result")
         ]
     }
 

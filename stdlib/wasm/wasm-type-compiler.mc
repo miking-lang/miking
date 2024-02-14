@@ -28,41 +28,20 @@ include "assoc-seq.mc"
 let fst : all a. all b. (a, b) -> a = lam x. x.0
 let snd : all a. all b. (a, b) -> b = lam x. x.1
 
-let pprintTuple = lam kv. 
-    use MClosAst in 
-    (match snd kv with TyVariant {constrs = constrs} 
-        then iter (lam x. printLn "constr") (mapToSeq constrs) 
-        else (printLn "Not a variant")) ; 
-    use MExprPrettyPrint in 
-    let nameStr = nameGetStr (fst kv) in
-    let tyStr = type2str (snd kv) in 
-    printLn (join ["typedef ", nameStr, " = ", tyStr])
-
 type WasmTypeContext = {
-    name2ident : Map Name String,
-    constr2typeid: Map String Int,
+    constr2typeid: Map Name Int,
     defs : [(use WasmAST in Def)]
 }
 
 let emptyTypeCtx = {
     defs = [],
-    name2ident = mapEmpty nameCmp,
-    constr2typeid = mapEmpty cmpString
+    constr2typeid = mapEmpty nameCmp
 }
 
 lang WasmTypeCompiler = MClosAst + WasmAST + MExprPrettyPrint
     sem compileTypes : (AssocSeq Name Type) -> WasmTypeContext
     sem compileTypes = 
-    | env -> 
-        -- iter pprintTuple env ;    
-        foldl compileType emptyTypeCtx env
-        -- Module {
-        --     definitions = [],
-        --     table = Table {size = 0, typeString = "funcref"},
-        --     elem = Elem {offset = I32Const 0, funcNames = []},
-        --     types = [],
-        --     exports = []
-        -- }
+    | env -> foldl compileType emptyTypeCtx env
 
     sem compileType : WasmTypeContext -> (Name, Type) -> WasmTypeContext
     sem compileType ctx =
@@ -70,15 +49,15 @@ lang WasmTypeCompiler = MClosAst + WasmAST + MExprPrettyPrint
 
         let constr2def = lam constrPair.
             StructTypeDef {
-                ident = name2str (fst constrPair),
+                ident = fst constrPair,
                 fields = [
-                    {ident = "value", ty = Anyref ()},
-                    {ident = "_typeid", ty = Tyi32 ()}
+                    {ident = nameNoSym "value", ty = Anyref ()},
+                    {ident = nameNoSym "_typeid", ty = Tyi32 ()}
                 ]
             } in
         let constrPairs = mapToSeq constrs in 
         let newMap = foldli 
-            (lam m. lam i. lam c. mapInsert (nameGetStr (fst c)) i m)
+            (lam m. lam i. lam c. mapInsert (fst c) i m)
             ctx.constr2typeid
             constrPairs in 
         {ctx with 
@@ -91,9 +70,9 @@ lang WasmTypeCompiler = MClosAst + WasmAST + MExprPrettyPrint
         -- the SIDs of the record field identifiers
         let f = sort cmpSID f in 
         let f = map sidToString f in 
-        let str2field = lam s. {ident = s, ty = Anyref ()} in 
+        let str2field = lam s. {ident = nameNoSym s, ty = Anyref ()} in 
         {ctx with defs = cons (StructTypeDef {
-            ident = name2str name, 
+            ident = name, 
             fields = map str2field f
         }) ctx.defs}
     | (name, TyVar {ident = ident}) -> 
@@ -110,8 +89,6 @@ lang WasmTypeCompiler = MClosAst + WasmAST + MExprPrettyPrint
         ctx
     | (name,  TyCon {ident = ident}) -> 
         error "TyCon"
-        -- let newMap = mapInsert name (nameGetStr ident) ctx.name2ident in
-        -- {ctx with name2ident = newMap}
     | (name,  TyApp _) -> 
         error "TyApp" ;
         ctx
