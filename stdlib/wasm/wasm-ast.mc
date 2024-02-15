@@ -9,6 +9,11 @@ lang WasmAST
     | I32And (Instr, Instr)
     | I32Eq (Instr, Instr)
     | I32Ne (Instr, Instr)
+    | I32DivS (Instr, Instr)
+    | I32RemS (Instr, Instr)
+    | I32Shl (Instr, Instr)
+    | I32ShrS (Instr, Instr)
+    | I32ShrU (Instr, Instr)
     | LocalGet Name
     | LocalSet (Name, Instr)
     | GlobalGet Name

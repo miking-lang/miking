@@ -65,8 +65,6 @@ let emptyCompileCtx : WasmCompileContext = {
     constr2typeid = mapEmpty nameCmp
 }
 
-
-
 let emptyExprCtx : WasmExprContext = {
     locals = [],
     instructions = [],
@@ -149,6 +147,12 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
     | CAddi _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "addi")
     | CMuli _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "muli")
     | CSubi _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "subi")
+    | CDivi _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "divi")
+    | CModi _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "modi")
+    | CNegi _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "negi")
+    | CSlli _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "slli")
+    | CSrli _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "srli")
+    | CSrai _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "srai")
 
     sem compileExpr : WasmCompileContext -> WasmExprContext -> Expr -> WasmExprContext
     sem compileExpr globalCtx exprCtx = 
@@ -385,7 +389,7 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
     sem compile typeEnv =
     | exprs -> 
         -- Add stdlib definitions
-        let stdlibDefs = [addiWasm, subiWasm, muliWasm] in 
+        let stdlibDefs = integerIntrinsics in 
         let ctx = emptyCompileCtx in
         let ctx = foldl ctxWithSignatureWasmDef ctx stdlibDefs in 
         let ctx = foldl ctxWithFuncDef ctx stdlibDefs in 

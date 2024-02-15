@@ -55,7 +55,27 @@ lang WasmPPrint = WasmAST
     | I32And (i1, i2) -> 
         let s1 = pprintInstr (addi indent 1) i1 in
         let s2 = pprintInstr (addi indent 1) i2 in 
-        join [indent2str indent, "(i32.and\n", s1, "\n", s2, ")"]               
+        join [indent2str indent, "(i32.and\n", s1, "\n", s2, ")"]      
+    | I32DivS (i1, i2) -> 
+        let s1 = pprintInstr (addi indent 1) i1 in
+        let s2 = pprintInstr (addi indent 1) i2 in 
+        join [indent2str indent, "(i32.div_s\n", s1, "\n", s2, ")"]   
+    | I32RemS (i1, i2) -> 
+        let s1 = pprintInstr (addi indent 1) i1 in
+        let s2 = pprintInstr (addi indent 1) i2 in 
+        join [indent2str indent, "(i32.rem_s\n", s1, "\n", s2, ")"]                            
+    | I32Shl (i1, i2) -> 
+        let s1 = pprintInstr (addi indent 1) i1 in
+        let s2 = pprintInstr (addi indent 1) i2 in 
+        join [indent2str indent, "(i32.shl\n", s1, "\n", s2, ")"]               
+    | I32ShrS (i1, i2) -> 
+        let s1 = pprintInstr (addi indent 1) i1 in
+        let s2 = pprintInstr (addi indent 1) i2 in 
+        join [indent2str indent, "(i32.shr_s\n", s1, "\n", s2, ")"]               
+    | I32ShrU (i1, i2) -> 
+        let s1 = pprintInstr (addi indent 1) i1 in
+        let s2 = pprintInstr (addi indent 1) i2 in 
+        join [indent2str indent, "(i32.shr_u\n", s1, "\n", s2, ")"]               
     | Call (fname, instructions) -> 
         let s = match instructions with [] 
             then ""
