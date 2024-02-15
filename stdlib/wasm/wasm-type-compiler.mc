@@ -17,7 +17,6 @@ include "wasm-stdlib.mc"
 include "wasm-apply.mc"
 include "mclos-ast.mc"
 include "mclos-transpile.mc"
-include "util.mc"
 
 include "string.mc"
 include "seq.mc"
