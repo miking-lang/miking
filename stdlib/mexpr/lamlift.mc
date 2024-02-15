@@ -1040,5 +1040,19 @@ let nestedUtest = preprocess (bindall_ [
     addi_ (var_ "x") (int_ 1))))
 ]) in
 utest liftLambdas nestedUtest with nestedUtest using eqExpr in
-
-()
+();
+(let innerFunction = preprocess (bindall_ [
+  ulet_ "f" (ulam_ "x"
+    (bind_
+      (ulet_ "g" (ulam_ "y" (addi_ (var_ "y") (int_ 2))))
+      (muli_ (app_ (var_ "g") (var_ "x")) (int_ 2)))),
+  app_ (var_ "f") (int_ 1)]) in
+let expected = preprocess (bindall_ [
+  ulet_ "g" (ulam_ "y" (addi_ (var_ "y") (int_ 2))),
+  ulet_ "f" (ulam_ "x" (muli_ (app_ (var_ "g") (var_ "x")) (int_ 2))),
+  app_ (var_ "f") (int_ 1)]) in
+printLn "Original:";
+printLn (expr2str innerFunction);
+printLn "Lifted:";
+printLn (expr2str expected)
+)

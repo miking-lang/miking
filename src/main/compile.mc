@@ -110,7 +110,7 @@ let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
 
     let res =
       if options.toJVM then compileMCoreToJVM ast else
-      if options.toWasm then compileMCoreToWasm ast else
+      if options.toWasm then compileMCoreToWasm ast else 
       if options.toJavaScript then compileMCoreToJS
         { compileJSOptionsEmpty with
           targetPlatform = parseJSTarget options.jsTarget
