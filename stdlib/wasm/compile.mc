@@ -350,8 +350,8 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
             instructions = concat ctx.instructions localSetters} in 
         ctxInstrResult ctx (I32Const 1)
 
-    sem ctxAcc : WasmCompileContext -> Expr -> WasmCompileContext
-    sem ctxAcc globalCtx = 
+    sem compileFunction : WasmCompileContext -> Expr -> WasmCompileContext
+    sem compileFunction globalCtx = 
     | TmFuncDef f -> 
         let args = map (lam arg. {ident = arg.ident, ty = Anyref()}) f.args in
         let exprCtx = compileExpr globalCtx emptyExprCtx f.body in 
@@ -382,10 +382,6 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
                 let globalCtx = ctxWithSignatureWasmDef globalCtx funcDef in 
                 ctxWithFuncDef globalCtx funcDef
 
-    sem createCtx : WasmCompileContext -> [Expr] -> WasmCompileContext
-    sem createCtx ctx = 
-    | exprs -> foldl ctxAcc ctx exprs
-
     -- sem compile : [Expr] -> Mod
     sem compile typeEnv =
     | exprs -> 
@@ -407,7 +403,7 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
         let ctx = foldl ctxWithSignatureMExprDef ctx exprs in
 
         -- Compile functions
-        let ctx = createCtx ctx exprs in 
+        let ctx = foldl compileFunction ctx exprs in 
 
         -- Add apply, exec and dispatch based on aritites
         let arities = foldl accArity (setEmpty subi) ctx.defs in 
