@@ -144,6 +144,7 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
     sem compileConst : WasmCompileContext -> WasmExprContext -> Const -> WasmExprContext
     sem compileConst globalCtx exprCtx = 
     | CInt {val = i} -> ctxInstrResult exprCtx (I31Cast (I32Const i))
+    -- Integer Arithmatic Operators
     | CAddi _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "addi")
     | CMuli _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "muli")
     | CSubi _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "subi")
@@ -153,6 +154,13 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
     | CSlli _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "slli")
     | CSrli _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "srli")
     | CSrai _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "srai")
+    -- Integers Comparison Operators
+    | CEqi _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "eqi")
+    | CNeqi _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "neqi")
+    | CLti _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "lti")
+    | CGti _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "gti")
+    | CLeqi _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "leqi")
+    | CGeqi _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "geqi")
 
     sem compileExpr : WasmCompileContext -> WasmExprContext -> Expr -> WasmExprContext
     sem compileExpr globalCtx exprCtx = 

@@ -75,6 +75,30 @@ let sraiWasm =
     use WasmAST in 
     createIntBinop "srai" (lam l. lam r. I32ShrS (l, r))
 
+let eqiWasm = 
+    use WasmAST in
+    createIntBinop "eqi" (lam l. lam r. I32Eq (l, r))
+
+let neqiWasm = 
+    use WasmAST in
+    createIntBinop "neqi" (lam l. lam r. I32Ne (l, r))
+
+let ltiWasm = 
+    use WasmAST in
+    createIntBinop "lti" (lam l. lam r. I32LtS (l, r))
+
+let gtiWasm = 
+    use WasmAST in
+    createIntBinop "gti" (lam l. lam r. I32GtS (l, r))
+
+let leqiWasm = 
+    use WasmAST in
+    createIntBinop "leqi" (lam l. lam r. I32LeS (l, r))
+
+let geqiWasm = 
+    use WasmAST in
+    createIntBinop "geqi" (lam l. lam r. I32GeS (l, r))
+
 let integerIntrinsics = [
     addiWasm,
     subiWasm,
@@ -84,5 +108,11 @@ let integerIntrinsics = [
     negiWasm,
     slliWasm,
     srliWasm,
-    sraiWasm    
+    sraiWasm,
+    eqiWasm,
+    neqiWasm,
+    ltiWasm,
+    gtiWasm,
+    leqiWasm,
+    geqiWasm
 ]

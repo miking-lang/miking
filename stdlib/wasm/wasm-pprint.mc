@@ -52,6 +52,22 @@ lang WasmPPrint = WasmAST
         let s1 = pprintInstr (addi indent 1) i1 in
         let s2 = pprintInstr (addi indent 1) i2 in 
         join [indent2str indent, "(i32.ne\n", s1, "\n", s2, ")"]
+    | I32LtS (i1, i2) -> 
+        let s1 = pprintInstr (addi indent 1) i1 in
+        let s2 = pprintInstr (addi indent 1) i2 in 
+        join [indent2str indent, "(i32.lt_s\n", s1, "\n", s2, ")"]
+    | I32GtS (i1, i2) -> 
+        let s1 = pprintInstr (addi indent 1) i1 in
+        let s2 = pprintInstr (addi indent 1) i2 in 
+        join [indent2str indent, "(i32.gt_s\n", s1, "\n", s2, ")"]
+    | I32LeS (i1, i2) -> 
+        let s1 = pprintInstr (addi indent 1) i1 in
+        let s2 = pprintInstr (addi indent 1) i2 in 
+        join [indent2str indent, "(i32.le_s\n", s1, "\n", s2, ")"]
+    | I32GeS (i1, i2) -> 
+        let s1 = pprintInstr (addi indent 1) i1 in
+        let s2 = pprintInstr (addi indent 1) i2 in 
+        join [indent2str indent, "(i32.ge_s\n", s1, "\n", s2, ")"]
     | I32And (i1, i2) -> 
         let s1 = pprintInstr (addi indent 1) i1 in
         let s2 = pprintInstr (addi indent 1) i2 in 
