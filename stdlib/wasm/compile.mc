@@ -27,12 +27,25 @@ include "tuple.mc"
 let fst = lam pair. match pair with (x, _) in x
 let snd = lam pair. match pair with (_, x) in x
 
+type FunctionSignature = {
+    ident: Name,
+    arity: Int,
+    fp: Int
+}
+
 type WasmCompileContext = {
     defs: [(use WasmAST in Def)],
-    ident2fp: Map Name Int,
+    ident2sig: Map Name FunctionSignature,
     nextFp: Int,
     mainExpr: (use MClosAst in Option Expr),
     constr2typeid: Map Name Int
+}
+
+type WasmExprContext = {
+    locals: [{ident: Name, ty: (use WasmAST in WasmType)}],
+    instructions: [(use WasmAST in Instr)],
+    result: Either (use WasmAST in Instr) Name,
+    nextLocal: Int
 }
 
 let accArity = lam acc: Set Int. lam def: (use WasmAST in Def).
@@ -42,26 +55,18 @@ let accArity = lam acc: Set Int. lam def: (use WasmAST in Def).
         else acc
 
 
-let findFuncDef = lam ctx : WasmCompileContext. lam ident : Name. 
-    use WasmAST in 
-    find 
-        (lam def. match def with FunctionDef f then nameEq ident f.ident else false)
-        ctx.defs
+let findSignature = lam ctx : WasmCompileContext. lam ident : Name. 
+    mapLookup ident ctx.ident2sig
 
 let emptyCompileCtx : WasmCompileContext = {
     defs = [],
-    ident2fp = mapEmpty nameCmp,
+    ident2sig = mapEmpty nameCmp,
     nextFp = 0,
     mainExpr = None (),
     constr2typeid = mapEmpty nameCmp
 }
 
-type WasmExprContext = {
-    locals: [{ident: Name, ty: (use WasmAST in WasmType)}],
-    instructions: [(use WasmAST in Instr)],
-    result: Either (use WasmAST in Instr) Name,
-    nextLocal: Int
-}
+
 
 let emptyExprCtx : WasmExprContext = {
     locals = [],
@@ -82,16 +87,30 @@ let ctxInstrResult = lam ctx : WasmExprContext . lam instr : (use WasmAST in Ins
 let ctxLocalResult = lam ctx : WasmExprContext. lam ident : Name. 
     {ctx with result = Right ident}
 
-let ctxWithFuncDef = lam ctx. lam def. 
+let ctxWithSignature = lam ctx. lam ident. lam arity. 
+    let sig = {
+        ident = ident,
+        arity = arity,
+        fp = ctx.nextFp
+    } in 
+    {ctx with 
+        ident2sig = mapInsert ident sig ctx.ident2sig,
+        nextFp = addi 1 ctx.nextFp}
+
+let ctxWithSignatureWasmDef = lam ctx. lam def. 
     use WasmAST in 
-    match def with FunctionDef f 
-        then 
-            {ctx with 
-                defs = snoc ctx.defs def,
-                nextFp = addi 1 ctx.nextFp,
-                ident2fp = mapInsert f.ident ctx.nextFp ctx.ident2fp}
-        else 
-            {ctx with defs = snoc ctx.defs def}
+    match def with FunctionDef f in 
+    ctxWithSignature ctx (f.ident) (length f.args)
+
+let ctxWithSignatureMExprDef = lam ctx. lam expr.
+    use MClosAst in 
+    match expr with TmFuncDef f 
+        then ctxWithSignature ctx (f.funcIdent) (length f.args)
+        else ctx
+
+
+let ctxWithFuncDef = lam ctx. lam def. 
+    {ctx with defs = snoc ctx.defs def}
 
 let createClosureStruct = lam arity: Int. lam fp: Int. 
     use WasmAST in 
@@ -114,12 +133,9 @@ let createClosureStruct = lam arity: Int. lam fp: Int.
 
 let createClosure = lam globalCtx: WasmCompileContext. lam exprCtx. lam ident: Name.
     use WasmAST in 
-    match findFuncDef globalCtx ident with Some def
+    match findSignature globalCtx ident with Some sig
         then 
-            match def with FunctionDef f in
-            let arity = length f.args in 
-            match mapLookup f.ident globalCtx.ident2fp with Some (fp) in 
-            ctxInstrResult exprCtx (createClosureStruct arity fp) 
+            ctxInstrResult exprCtx (createClosureStruct sig.arity sig.fp) 
         else 
             error (join ["Identifier '", nameGetStr ident, "' is not a function!"])
 
@@ -140,7 +156,7 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
     | TmConst {val = c} -> 
         compileConst globalCtx exprCtx c
     | TmVar {ident = ident} ->
-        match findFuncDef globalCtx ident with Some _
+        match findSignature globalCtx ident with Some _
             then
                 createClosure globalCtx exprCtx ident
             else 
@@ -356,13 +372,15 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
                     ty = I31Ref (),
                     value = extractResult exprCtx
                  }) in
-                ctxWithFuncDef globalCtx (FunctionDef {
+                let funcDef = (FunctionDef {
                     ident = nameNoSym "mexpr",
                     args = [],
                     locals = exprCtx.locals,
                     resultTy = Tyi32 (), 
                     instructions = snoc exprCtx.instructions resultExpr
-                })
+                }) in 
+                let globalCtx = ctxWithSignatureWasmDef globalCtx funcDef in 
+                ctxWithFuncDef globalCtx funcDef
 
     sem createCtx : WasmCompileContext -> [Expr] -> WasmCompileContext
     sem createCtx ctx = 
@@ -374,15 +392,19 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
         -- Add stdlib definitions
         let stdlibDefs = [addiWasm, subiWasm, muliWasm] in 
         let ctx = emptyCompileCtx in
+        let ctx = foldl ctxWithSignatureWasmDef ctx stdlibDefs in 
         let ctx = foldl ctxWithFuncDef ctx stdlibDefs in 
 
         -- Compile Types
         let typeCtx = compileTypes typeEnv in 
-        -- iter (lam def. (printLn (pprintDef 0 def))) typeCtx.defs ; 
         let ctx = 
             {ctx with 
                 defs = concat ctx.defs typeCtx.defs,
                 constr2typeid = typeCtx.constr2typeid} in 
+
+        -- Add function signature to ctx *before* compilation
+        -- to support (mutual) recursion
+        let ctx = foldl ctxWithSignatureMExprDef ctx exprs in
 
         -- Compile functions
         let ctx = createCtx ctx exprs in 
@@ -397,11 +419,16 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
             defs = join [[argsArrayType, closDef, nullLikeDef], genericTypes, execs, [dispatch, apply], ctx.defs]
         } in 
 
-        let sortedKVs = sort (tupleCmp2 (lam s1. lam s2. 0) subi) (mapToSeq ctx.ident2fp) in
+        -- Sort function names by function pointer so they can be added
+        -- to the 'elem' instruction in the proper order.
+        let name2sigPairs = mapToSeq ctx.ident2sig in 
+        let name2fpPairs = map (lam ns. match ns with (n, s) in (n, s.fp)) name2sigPairs in 
+        let sortedKVs = sort (tupleCmp2 (lam s1. lam s2. 0) subi) name2fpPairs in
         let sortedNames = map (lam kv. match kv with (k, v) in k) sortedKVs in 
+
         Module {
             definitions = ctx.defs,
-            table = Table {size = mapSize ctx.ident2fp, typeString = "funcref"},
+            table = Table {size = mapSize ctx.ident2sig, typeString = "funcref"},
             elem = Elem {offset = I32Const 0, funcNames = sortedNames},
             types = [],
             exports = [nameNoSym "mexpr"]
