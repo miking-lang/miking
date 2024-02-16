@@ -39,6 +39,10 @@ let futRecordTy_ = use FutharkAst in
                         fieldSeq),
              info = NoInfo ()}
 
+let futTupleTy_ = use FutharkAst in
+  lam fields.
+  futRecordTy_ (create (length fields) (lam i. (int2string i, get fields i)))
+
 let futProjTy_ = use FutharkAst in
   lam target. lam label.
   FTyProj {target = target, label = stringToSid label, info = NoInfo ()}
@@ -114,6 +118,10 @@ let futRecord_ = use FutharkAst in
                        (lam kv : (String, FutExpr). (stringToSid kv.0, kv.1))
                        fieldSeq),
             ty = futUnknownTy_, info = NoInfo ()}
+
+let futTuple_ = use FutharkAst in
+  lam fields.
+  futRecord_ (create (length fields) (lam i. (int2string i, get fields i)))
 
 let futUnit_ = lam. futRecord_ []
 
