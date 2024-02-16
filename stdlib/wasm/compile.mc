@@ -291,9 +291,7 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
         } in 
         compileExpr globalCtx newCtx inexpr
     | TmNever _ ->
-        -- todo raise a trap
         ctxInstrResult exprCtx (Unreachable ())
-        -- ctxInstrResult exprCtx (I32DivS (I32Const 0, I32Const 0))
     | other ->
         error (concat 
             "Enountered unsupported expression: " 
@@ -397,12 +395,6 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
         ctxLocalResult ctx resultLocal
     | PatRecord {bindings = bindings, ty = ty} ->
         let bindingPairs = mapToSeq bindings in 
-        -- let updatename2ident = lam ctx. lam i. lam pair. 
-        --     match pair with (_, pat) in
-        --     match pat with PatNamed {ident = PName name} in
-        --     let uniqueIdent = concat (nameGetStr name) (int2string i) in 
-        --     {ctx with name2ident = mapInsert name uniqueIdent ctx.name2ident} in
-        -- let ctx = foldli updatename2ident ctx bindingPairs in 
         let tyStr = (match ty with TyCon {ident = ident} in ident) in 
 
         let pair2localIdent = lam index. lam pair. 
@@ -530,7 +522,6 @@ let compileMCoreToWasm = lam ast.
 
     use WasmCompiler in 
     let wasmModule = compile env exprs in
-    -- wasmModule
     use WasmPPrint in 
     printLn (pprintMod wasmModule) ;
     ""
@@ -541,46 +532,4 @@ end
 
 mexpr
 use TestLang in 
--- let variantTyName = nameSym "FooBar" in 
--- let iName = nameSym "i" in 
--- let fooName = nameSym "Foo" in 
--- let barName = nameSym "Bar" in 
--- let target = (nconapp_ fooName (int_ 12)) in 
--- let pat = npcon_ fooName (npvar_ iName) in 
--- let thn = nvar_ iName in 
--- let els = int_ -1 in 
--- -- let matchExpr = typeCheck (symbolize (
--- --     match_ target pat thn els
--- -- )) in 
--- let expr = typeCheck (symbolize (bindall_ [
---     ntype_ variantTyName [] (tyvariant_ []),
---     ncondef_ fooName (tyarrow_ tyint_ (ntycon_ variantTyName)),
---     ncondef_ barName (tyarrow_ tyint_ (ntycon_ variantTyName)),
---     uunit_
---     -- (ulet_ "f" (nconapp_ fooName (int_ 12))),
---     -- (ulet_ "g" (nconapp_ barName (int_ 42))),
---     -- matchExpr
--- ])) in 
-
--- compileMCoreToWasm expr
-
 compileMCoreToWasm (length_ (seq_ [int_ 1, int_ 2, int_ 3]))
-
--- -- ; 
--- let target = urecord_ [("x", int_ 23), ("y", int_ 42)] in
--- let pat = PatRecord {
---     bindings = mapFromSeq cmpSID [
---         -- (stringToSid "x", PatNamed {ident = PName (nameNoSym "foo"), info=NoInfo(), ty = tyunknown_})
---         (stringToSid "x", npvar_ (nameNoSym "foo")),
---         (stringToSid "y", npvar_ (nameNoSym "bar"))
---         -- (stringToSid "x", pint_ 25),
---         -- (stringToSid "y", pint_ 25)
---     ],
---     info = NoInfo (),
---     ty = TyUnknown {info = NoInfo()}
--- } in 
--- let thn = addi_ (nvar_ (nameNoSym "bar")) (nvar_ (nameNoSym "foo")) in 
--- -- let thn = int_ 1 in 
--- let els = int_ (-1) in 
--- let expr = match_ target pat thn els in 
--- compileMCoreToWasm target
