@@ -146,6 +146,7 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
     | CInt {val = i} -> ctxInstrResult exprCtx (I31Cast (I32Const i))
     | CBool {val = true} -> ctxInstrResult exprCtx (I31Cast (I32Const 1))
     | CBool {val = false} -> ctxInstrResult exprCtx (I31Cast (I32Const 0))
+    | CChar {val = c} -> ctxInstrResult exprCtx (I31Cast (I32Const (char2int c)))
     -- Integer Arithmatic Operators
     | CAddi _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "addi")
     | CMuli _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "muli")
@@ -163,6 +164,11 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
     | CGti _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "gti")
     | CLeqi _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "leqi")
     | CGeqi _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "geqi")
+    -- Character Operations
+    -- Since characters are represented as i31, we simply re-use the integer ops
+    | CEqc _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "eqi")
+    | CInt2Char _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "id")
+    | CChar2Int _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "id")
     -- Sequence Operations
     | CHead _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "head")
     | CTail _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "tail")
