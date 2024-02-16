@@ -22,6 +22,7 @@ lang WasmAST
     | LocalSet (Name, Instr)
     | GlobalGet Name
     | Call (Name, [Instr])
+    | Unreachable ()
     | Loop {
         ident: Name,
         body: [Instr]

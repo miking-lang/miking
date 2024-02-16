@@ -144,6 +144,8 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
     sem compileConst : WasmCompileContext -> WasmExprContext -> Const -> WasmExprContext
     sem compileConst globalCtx exprCtx = 
     | CInt {val = i} -> ctxInstrResult exprCtx (I31Cast (I32Const i))
+    | CBool {val = true} -> ctxInstrResult exprCtx (I31Cast (I32Const 1))
+    | CBool {val = false} -> ctxInstrResult exprCtx (I31Cast (I32Const 0))
     -- Integer Arithmatic Operators
     | CAddi _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "addi")
     | CMuli _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "muli")
@@ -161,6 +163,12 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
     | CGti _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "gti")
     | CLeqi _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "leqi")
     | CGeqi _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "geqi")
+    -- Sequence Operations
+    | CHead _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "head")
+    | CTail _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "tail")
+    | CLength _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "length")
+    -- | CCons _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "set")
+    -- | CNull _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "set")
 
     sem compileExpr : WasmCompileContext -> WasmExprContext -> Expr -> WasmExprContext
     sem compileExpr globalCtx exprCtx = 
@@ -212,6 +220,27 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
                     values = map snd acc
                 } in 
                 ctxInstrResult ctx structNewInstr
+    | TmSeq {tms = tms} -> 
+        recursive let work = lam ctx. lam remaining. 
+            match remaining with []
+                then 
+                    ctxInstrResult ctx (StructNew {
+                        structIdent = nilStructName,
+                        values = []
+                    })
+                else 
+                    let headCtx = compileExpr globalCtx ctx (head remaining) in
+                    let tailCtx = work headCtx (tail remaining) in
+                    let structInstr = StructNew {
+                        structIdent = consStructName,
+                        values = [
+                            extractResult headCtx,
+                            extractResult tailCtx
+                        ]
+                    } in 
+                    ctxInstrResult tailCtx structInstr
+        in
+        work exprCtx tms
     | TmConApp r ->
         let exprCtx = compileExpr globalCtx exprCtx r.body in 
         let structIdent = r.ident in 
@@ -247,7 +276,22 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
                     [LocalSet (resultLocalIdent, extractResult elsCtx)]
             })} in 
         ctxLocalResult result resultLocalIdent
-    | _ -> exprCtx
+    | TmLet {ident = ident, body = body, inexpr = inexpr} -> 
+        let bodyCtx = compileExpr globalCtx exprCtx body in 
+        let setLocal = LocalSet (ident, extractResult bodyCtx) in 
+        let newCtx = {bodyCtx with 
+            locals = cons {ident = ident, ty = Anyref ()} bodyCtx.locals,
+            instructions = snoc bodyCtx.instructions setLocal
+        } in 
+        compileExpr globalCtx newCtx inexpr
+    | TmNever _ ->
+        -- todo raise a trap
+        ctxInstrResult exprCtx (Unreachable ())
+        -- ctxInstrResult exprCtx (I32DivS (I32Const 0, I32Const 0))
+    | other ->
+        error (concat 
+            "Enountered unsupported expression: " 
+            (use MExprPrettyPrint in expr2str other))
 
     -- sem compilePat : WasmCompileContext -> WasmExprContext -> Pat -> WasmExprContext
     sem compilePat globalCtx ctx targetInstr = 
@@ -267,6 +311,24 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
                 value = targetInstr
             })
         ) in
+        ctxInstrResult ctx eqInstr
+    | PatBool {val = true} -> 
+        let eqInstr = I32Ne (
+            I32Const 0,
+            I31GetS (RefCast {
+                ty = I31Ref (),
+                value = targetInstr
+            })
+        ) in 
+        ctxInstrResult ctx eqInstr
+    | PatBool {val = false} -> 
+        let eqInstr = I32Eq (
+            I32Const 0,
+            I31GetS (RefCast {
+                ty = I31Ref (),
+                value = targetInstr
+            })
+        ) in 
         ctxInstrResult ctx eqInstr
     | PatCon {ident = ident, subpat = PatNamed {ident = PName innerName}} ->
         let structIdent = ident in 
@@ -396,11 +458,14 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
     -- sem compile : [Expr] -> Mod
     sem compile typeEnv =
     | exprs -> 
-        -- Add stdlib definitions
+        -- Add integer stdlib definitions
         let stdlibDefs = integerIntrinsics in 
         let ctx = emptyCompileCtx in
         let ctx = foldl ctxWithSignatureWasmDef ctx stdlibDefs in 
         let ctx = foldl ctxWithFuncDef ctx stdlibDefs in 
+
+        -- Add list stdlib definitions
+        let ctx = foldl ctxWithFuncDef ctx [consStructDef, nilStructDef] in 
 
         -- Compile Types
         let typeCtx = compileTypes typeEnv in 
@@ -478,9 +543,9 @@ use TestLang in
 -- let pat = npcon_ fooName (npvar_ iName) in 
 -- let thn = nvar_ iName in 
 -- let els = int_ -1 in 
--- let matchExpr = typeCheck (symbolize (
---     match_ target pat thn els
--- )) in 
+-- -- let matchExpr = typeCheck (symbolize (
+-- --     match_ target pat thn els
+-- -- )) in 
 -- let expr = typeCheck (symbolize (bindall_ [
 --     ntype_ variantTyName [] (tyvariant_ []),
 --     ncondef_ fooName (tyarrow_ tyint_ (ntycon_ variantTyName)),
@@ -491,22 +556,25 @@ use TestLang in
 --     -- matchExpr
 -- ])) in 
 
--- compileMCoreToWasm variant
--- ; 
-let target = urecord_ [("x", int_ 23), ("y", int_ 42)] in
-let pat = PatRecord {
-    bindings = mapFromSeq cmpSID [
-        -- (stringToSid "x", PatNamed {ident = PName (nameNoSym "foo"), info=NoInfo(), ty = tyunknown_})
-        (stringToSid "x", npvar_ (nameNoSym "foo")),
-        (stringToSid "y", npvar_ (nameNoSym "bar"))
-        -- (stringToSid "x", pint_ 25),
-        -- (stringToSid "y", pint_ 25)
-    ],
-    info = NoInfo (),
-    ty = TyUnknown {info = NoInfo()}
-} in 
-let thn = addi_ (nvar_ (nameNoSym "bar")) (nvar_ (nameNoSym "foo")) in 
--- let thn = int_ 1 in 
-let els = int_ (-1) in 
-let expr = match_ target pat thn els in 
-compileMCoreToWasm target
+-- compileMCoreToWasm expr
+
+compileMCoreToWasm (length_ (seq_ [int_ 1, int_ 2, int_ 3]))
+
+-- -- ; 
+-- let target = urecord_ [("x", int_ 23), ("y", int_ 42)] in
+-- let pat = PatRecord {
+--     bindings = mapFromSeq cmpSID [
+--         -- (stringToSid "x", PatNamed {ident = PName (nameNoSym "foo"), info=NoInfo(), ty = tyunknown_})
+--         (stringToSid "x", npvar_ (nameNoSym "foo")),
+--         (stringToSid "y", npvar_ (nameNoSym "bar"))
+--         -- (stringToSid "x", pint_ 25),
+--         -- (stringToSid "y", pint_ 25)
+--     ],
+--     info = NoInfo (),
+--     ty = TyUnknown {info = NoInfo()}
+-- } in 
+-- let thn = addi_ (nvar_ (nameNoSym "bar")) (nvar_ (nameNoSym "foo")) in 
+-- -- let thn = int_ 1 in 
+-- let els = int_ (-1) in 
+-- let expr = match_ target pat thn els in 
+-- compileMCoreToWasm target
