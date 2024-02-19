@@ -102,6 +102,19 @@ let geqiWasm =
     use WasmAST in
     createIntBinop "geqi" (lam l. lam r. I32GeS (l, r))
 
+let idWasm = 
+    use WasmAST in 
+    let arg = nameSym "arg" in 
+    FunctionDef {
+        ident = nameNoSym "id",
+        args = [
+            {ident = arg, ty = Anyref ()}
+        ],
+        locals = [],
+        resultTy = Anyref (),
+        instructions = [LocalGet arg]
+    }
+
 
 let integerIntrinsics = [
     addiWasm,
@@ -125,5 +138,6 @@ let integerIntrinsics = [
     -- lengthHelperWasm,
     lengthWasm,
     concatWasm,
+    getWasm,
     idWasm
 ]

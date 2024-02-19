@@ -110,16 +110,3 @@ let lengthWasm =
             ]))
         ]
     }
-
-let idWasm = 
-    use WasmAST in 
-    let arg = nameSym "arg" in 
-    FunctionDef {
-        ident = nameNoSym "id",
-        args = [
-            {ident = arg, ty = Anyref ()}
-        ],
-        locals = [],
-        resultTy = Anyref (),
-        instructions = [LocalGet arg]
-    }

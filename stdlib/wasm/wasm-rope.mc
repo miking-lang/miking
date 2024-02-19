@@ -13,6 +13,22 @@ let lenName = nameSym "_len"
 let arrName = nameSym "_arr"
 let offName = nameSym "_off"
 
+let genRefTest = lam n. lam target.
+    use WasmAST in 
+    RefTest {
+        ty = Ref n,
+        value = target
+    }
+
+let anyref2i32 = lam target.
+    use WasmAST in 
+    I31GetS (RefCast {
+        ty = I31Ref (),
+        value = target
+    })
+
+
+
 let anyrefArrName = nameSym "_anyref-arr"
 let anyrefArrDef = 
     use WasmAST in 
@@ -53,6 +69,26 @@ let concatDef =
         ]
     }
 
+
+let switchOnType = lam target. lam res. lam onLeaf. lam onSlice. lam onConcat. 
+    use WasmAST in 
+    IfThenElse {
+        cond = genRefTest leafName target,
+        thn = onLeaf (RefCast {ty=Ref leafName, value=target}),
+        els = [
+            IfThenElse {
+                cond = genRefTest concatName target,
+                thn = onConcat (RefCast {ty=Ref concatName, value=target}),
+                els = [
+                    IfThenElse {
+                        cond = genRefTest sliceName target,
+                        thn = onSlice (RefCast {ty=Ref sliceName, value=target}),
+                        els = [Unreachable ()]
+                    }
+                ]
+            }
+        ]
+    }
 let lengthWasm = 
     use WasmAST in 
     let arg = nameSym "arg" in 
@@ -124,4 +160,88 @@ let concatWasm =
                 LocalGet r
             ]
         }]
+    }
+
+let getWasm =
+    use WasmAST in 
+    let i_uncast = nameSym "i_uncast" in 
+    let i = nameSym "i" in 
+    let n = nameSym "n" in 
+    let arg = nameSym "arg" in 
+    let res = nameSym "res" in 
+    FunctionDef {
+        ident = nameNoSym "get",
+        args = [
+            {ident = arg, ty = Anyref ()},
+            {ident = i_uncast, ty = Anyref ()}
+        ],
+        locals = [
+            {ident = res, ty = Anyref ()},
+            {ident = n, ty = Tyi32 ()},
+            {ident = i, ty = Tyi32 ()}
+        ],
+        resultTy = Anyref (),
+        instructions = [
+            LocalSet (i, anyref2i32 (LocalGet i_uncast)),
+            switchOnType 
+                (LocalGet arg)
+                res 
+                (lam leaf. [LocalSet (res, ArrayGet {
+                    tyIdent = anyrefArrName,
+                    value = StructGet {
+                        structIdent = leafName,
+                        field = arrName,
+                        value = leaf
+                    },
+                    index = LocalGet i
+                })])
+                (lam slice. [(LocalSet (res, ArrayGet {
+                    tyIdent = anyrefArrName,
+                    value = StructGet {
+                        structIdent = sliceName,
+                        field = arrName,
+                        value = slice
+                    },
+                    index = I32Add (
+                        LocalGet i,
+                        StructGet {
+                            structIdent = sliceName,
+                            field = offName,
+                            value = slice
+                        }
+                    )
+                }))])
+                (lam cnct. [
+                    LocalSet (n, I31GetS 
+                        (RefCast {
+                            ty = I31Ref (), 
+                            value = (Call ((nameNoSym "length"), [StructGet {
+                                structIdent = concatName,
+                                field = lhsName,
+                                value = cnct
+                            }]))
+                        }
+                    )),
+                    IfThenElse {
+                        cond = I32LtS(LocalGet i, LocalGet n),
+                        thn = [Return (Call ((nameNoSym "get"), [
+                            StructGet {
+                                structIdent = concatName,
+                                field = lhsName,
+                                value = cnct
+                            },
+                            LocalGet i_uncast
+                        ]))],
+                        els = [Return (Call ((nameNoSym "get"), [
+                            StructGet {
+                                structIdent = concatName,
+                                field = rhsName,
+                                value = cnct
+                            },
+                            I31Cast (I32Sub(LocalGet i, LocalGet n))
+                        ]))]
+                    }
+                ]),
+            LocalGet res
+        ]
     }
