@@ -172,6 +172,8 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
     -- Sequence Operations
     | CHead _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "head")
     | CTail _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "tail")
+    | CCons _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "cons")
+    | CSnoc _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "snoc")
     | CConcat _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "concat")
     | CLength _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "length")
     | CGet _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "get")
@@ -584,5 +586,6 @@ end
 
 mexpr
 use TestLang in 
-compileMCoreToWasm (get_ (concat_ (seq_ [int_ 4, int_ 5]) (seq_ [int_ 1, int_ 2, int_ 3])) (int_ 2))
+compileMCoreToWasm (get_ (snoc_ (cons_ (int_ 42) (seq_ [int_ 1, int_ 2, int_ 3])) (int_ 23)) (int_ 4))
+-- compileMCoreToWasm (get_ (concat_ (seq_ [int_ 4, int_ 5]) (seq_ [int_ 1, int_ 2, int_ 3])) (int_ 2))
 -- compileMCoreToWasm (get_ (seq_ [int_ 1, int_ 2, int_ 3]) (int_ 1))

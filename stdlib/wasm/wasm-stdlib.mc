@@ -139,5 +139,7 @@ let integerIntrinsics = [
     lengthWasm,
     concatWasm,
     getWasm,
+    consWasm,
+    snocWasm,
     idWasm
 ]

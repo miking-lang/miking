@@ -245,3 +245,84 @@ let getWasm =
             LocalGet res
         ]
     }
+
+let consWasm = 
+    use WasmAST in 
+    let x = nameSym "x" in 
+    let xs = nameSym "xs" in 
+
+    let getLen = lam ident. I31GetU (RefCast {
+        ty = I31Ref (),
+        value = (Call (nameNoSym "length", [LocalGet ident]))
+    }) in 
+
+    let newLeaf = StructNew {
+        structIdent = leafName,
+        values = [
+            I32Const 1,
+            ArrayNew {
+                tyIdent = anyrefArrName,
+                initValue = LocalGet x,
+                size = I32Const 1
+            }
+        ]
+    } in 
+
+    FunctionDef {
+        ident = nameNoSym "cons",
+        args = [
+            {ident = x, ty = Anyref ()},
+            {ident = xs, ty = Anyref ()}
+        ],
+        locals = [],
+        resultTy = Anyref (),
+        instructions = [StructNew {
+            structIdent = concatName,
+            values = [
+                I32Add (getLen xs, I32Const 1),
+                newLeaf,
+                LocalGet xs
+            ]
+        }]
+    }
+
+let snocWasm = 
+    use WasmAST in 
+    let x = nameSym "x" in 
+    let xs = nameSym "xs" in 
+
+    let getLen = lam ident. I31GetU (RefCast {
+        ty = I31Ref (),
+        value = (Call (nameNoSym "length", [LocalGet ident]))
+    }) in 
+
+    let newLeaf = StructNew {
+        structIdent = leafName,
+        values = [
+            I32Const 1,
+            ArrayNew {
+                tyIdent = anyrefArrName,
+                initValue = LocalGet x,
+                size = I32Const 1
+            }
+        ]
+    } in 
+
+    FunctionDef {
+        ident = nameNoSym "snoc",
+        args = [
+            {ident = xs, ty = Anyref ()},
+            {ident = x, ty = Anyref ()}
+        ],
+        locals = [],
+        resultTy = Anyref (),
+        instructions = [StructNew {
+            structIdent = concatName,
+            values = [
+                I32Add (getLen xs, I32Const 1),
+                LocalGet xs,
+                newLeaf
+
+            ]
+        }]
+    }
