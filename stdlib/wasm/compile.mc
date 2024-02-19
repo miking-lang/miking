@@ -172,6 +172,7 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
     -- Sequence Operations
     | CHead _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "head")
     | CTail _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "tail")
+    | CConcat _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "concat")
     | CLength _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "length")
     -- | CCons _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "set")
     -- | CNull _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "set")
@@ -227,26 +228,56 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
                 } in 
                 ctxInstrResult ctx structNewInstr
     | TmSeq {tms = tms} -> 
-        recursive let work = lam ctx. lam remaining. 
-            match remaining with []
-                then 
-                    ctxInstrResult ctx (StructNew {
-                        structIdent = nilStructName,
-                        values = []
-                    })
-                else 
-                    let headCtx = compileExpr globalCtx ctx (head remaining) in
-                    let tailCtx = work headCtx (tail remaining) in
-                    let structInstr = StructNew {
-                        structIdent = consStructName,
-                        values = [
-                            extractResult headCtx,
-                            extractResult tailCtx
-                        ]
-                    } in 
-                    ctxInstrResult tailCtx structInstr
-        in
-        work exprCtx tms
+        let localName = nameSym "arr" in
+        let sizeInstr = I32Const (length tms) in 
+        let local = {ident = localName, ty = Ref argsArrayName} in 
+        let exprCtx = {exprCtx with locals = cons local exprCtx.locals} in 
+        let initLocal = LocalSet (localName, ArrayNew {
+            tyIdent = argsArrayName,
+            initValue = I31Cast (I32Const 0),
+            size = sizeInstr
+        }) in 
+        let exprCtx = {exprCtx with instructions = snoc exprCtx.instructions initLocal} in 
+        let work = lam ctx. lam i. lam tm. 
+            let ctx = compileExpr globalCtx ctx tm in 
+            let arraySet = ArraySet {
+                tyIdent = argsArrayName,
+                value = LocalGet localName,
+                index = I32Const i,
+                value2 = extractResult ctx
+            } in 
+            let ctx = {ctx with instructions = snoc ctx.instructions arraySet} in 
+            ctxInstrResult ctx (Unreachable())
+        in 
+        let ctx = foldli work exprCtx tms in 
+        ctxInstrResult ctx (StructNew {
+            structIdent = leafName,
+            values = [
+                sizeInstr,
+                LocalGet localName
+            ]
+        })
+        -- ctxInstrResult exprCtx (Unreachable ())
+        -- recursive let work = lam ctx. lam remaining. 
+        --     match remaining with []
+        --         then 
+        --             ctxInstrResult ctx (StructNew {
+        --                 structIdent = nilStructName,
+        --                 values = []
+        --             })
+        --         else 
+        --             let headCtx = compileExpr globalCtx ctx (head remaining) in
+        --             let tailCtx = work headCtx (tail remaining) in
+        --             let structInstr = StructNew {
+        --                 structIdent = consStructName,
+        --                 values = [
+        --                     extractResult headCtx,
+        --                     extractResult tailCtx
+        --                 ]
+        --             } in 
+        --             ctxInstrResult tailCtx structInstr
+        -- in
+        -- work exprCtx tms
     | TmConApp r ->
         let exprCtx = compileExpr globalCtx exprCtx r.body in 
         let structIdent = r.ident in 
@@ -479,7 +510,7 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
         let ctx = foldl ctxWithFuncDef ctx stdlibDefs in 
 
         -- Add list stdlib definitions
-        let ctx = foldl ctxWithFuncDef ctx [consStructDef, nilStructDef] in 
+        let ctx = foldl ctxWithFuncDef ctx [anyrefArrDef, leafDef, sliceDef, concatDef] in 
 
         -- Compile Types
         let typeCtx = compileTypes typeEnv in 
@@ -552,4 +583,4 @@ end
 
 mexpr
 use TestLang in 
-compileMCoreToWasm (length_ (seq_ [int_ 1, int_ 2, int_ 3]))
+compileMCoreToWasm (length_ (concat_ (seq_ [int_ 4, int_ 5]) (seq_ [int_ 1, int_ 2, int_ 3])))
