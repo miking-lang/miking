@@ -224,13 +224,24 @@ lang WasmPPrint = WasmAST
 
     sem pprintMod = 
     | Module m -> 
+        let pprintImport = lam r. join [
+            indent2str 1, 
+            "(import \"",
+            r.jsObjIdent, 
+            "\" \"",
+            r.jsFieldIdent, 
+            "\" (func $",
+            pprintName r.wasmIdent,
+            "))"
+        ] in 
         let pprintExport = lam n. join ["    (export \"", pprintName n, "\" (func $", pprintName n, "))"] in
         let tableStr = pprintMemory 1 m.table in
         let elemStr = pprintMemory 1 m.elem in 
         let defsStr = strJoin "\n\n" (map (pprintDef 1) m.definitions) in 
         let exportStr = strJoin "\n" (map pprintExport m.exports) in 
+        let importStr= strJoin "\n" (map pprintImport m.imports) in 
 
-        join ["(module\n", tableStr, "\n\n", defsStr, 
+        join ["(module\n", tableStr, "\n", importStr, "\n\n", defsStr, 
             "\n\n", elemStr, "\n", exportStr, ")"]
 end
 

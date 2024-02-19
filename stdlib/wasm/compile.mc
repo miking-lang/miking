@@ -292,10 +292,25 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
         compileExpr globalCtx newCtx inexpr
     | TmNever _ ->
         ctxInstrResult exprCtx (Unreachable ())
-    | other ->
-        error (concat 
-            "Enountered unsupported expression: " 
-            (use MExprPrettyPrint in expr2str other))
+    -- | TmUtest {test = lhs, expected = rhs, next = next, tusing = f} ->
+    --     match f with (Some fExpr)
+    --         then
+    --             let expr = app_ (app_ fExpr lhs) rhs in 
+    --             let ctx = compileExpr globalCtx exprCtx expr in 
+    --             let ite = IfThenElse {
+    --                 cond = extractResult ctx,
+    --                 thn = [Call (nameNoSym "utestSucc", [])],
+    --                 els = [Call (nameNoSym "utestFail", [])]
+    --             } in 
+    --             let ctx = {ctx with instructions = snoc ctx.instructions ite} in
+    --             compileExpr globalCtx ctx next
+    --         else 
+    --             error "Only utest specifying a 'using' are supported."
+
+    | other -> error "Unsupported Expression!"
+        -- error (concat 
+        --     "Enountered unsupported expression: " 
+        --     (use MExprPrettyPrint in expr2str other))
 
     -- sem compilePat : WasmCompileContext -> WasmExprContext -> Pat -> WasmExprContext
     sem compilePat globalCtx ctx targetInstr = 
@@ -420,6 +435,7 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
             locals = concat ctx.locals locals,
             instructions = concat ctx.instructions localSetters} in 
         ctxInstrResult ctx (I32Const 1)
+    | _ -> error "Missing pattern"
 
     sem compileFunction : WasmCompileContext -> Expr -> WasmCompileContext
     sem compileFunction globalCtx = 
@@ -501,6 +517,10 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
             table = Table {size = mapSize ctx.ident2sig, typeString = "funcref"},
             elem = Elem {offset = I32Const 0, funcNames = sortedNames},
             types = [],
+            imports = [
+                {jsObjIdent="imports", jsFieldIdent="utestSuccess", wasmIdent=nameNoSym "utestSucc"},
+                {jsObjIdent="imports", jsFieldIdent="utestFailure", wasmIdent=nameNoSym "utestFail"}
+            ],
             exports = [nameNoSym "mexpr"]
         }
 end

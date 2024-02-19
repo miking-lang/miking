@@ -134,6 +134,11 @@ lang WasmAST
         table: WasmMemory, 
         elem: WasmMemory, 
         types: [WasmType],
+        imports: [{
+            jsObjIdent: String,
+            jsFieldIdent: String,
+            wasmIdent: Name
+        }],
         exports: [Name]
     }
 end
