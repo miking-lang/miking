@@ -326,3 +326,92 @@ let snocWasm =
             ]
         }]
     }
+
+let headWasm = 
+    use WasmAST in 
+    let xs = nameSym "xs" in 
+    FunctionDef {
+        ident = nameNoSym "head",
+        args = [
+            {ident = xs, ty = Anyref ()}
+        ],
+        locals = [],
+        resultTy = Anyref (),
+        instructions = [
+            Call (nameNoSym "get", [
+                LocalGet xs,
+                I31Cast (I32Const 0)
+            ])
+        ]
+    }
+
+let tailWasm = 
+    use WasmAST in 
+    let xs = nameSym "xs" in 
+    let res = nameSym "res" in 
+    FunctionDef {
+        ident = nameNoSym "tail",
+        args = [
+            {ident = xs, ty = Anyref ()}
+        ],
+        locals = [{ident = res, ty = Anyref ()}],
+        resultTy = Anyref (),
+        instructions = [
+            switchOnType 
+                (LocalGet xs)
+                res
+                (lam leaf. [LocalSet (res, StructNew {
+                    structIdent = sliceName,
+                    values = [
+                        -- Length
+                        I32Sub (
+                            StructGet {
+                                structIdent = leafName,
+                                field = lenName,
+                                value = leaf
+                            }, 
+                            I32Const (1)
+                        ),
+                        -- Offset
+                        I32Const 1,
+                        -- Array
+                        StructGet {
+                            structIdent = leafName,
+                            field = arrName,
+                            value = leaf
+                        }
+                    ]
+                })])
+                (lam slice. [LocalSet (res, StructNew {
+                    structIdent = sliceName,
+                    values = [
+                        -- Length
+                        I32Sub(
+                            StructGet {
+                                structIdent = sliceName,
+                                field = lenName,
+                                value = slice
+                            }, 
+                            I32Const (1)
+                        ),
+                        -- Offset
+                        I32Add(
+                            StructGet {
+                                structIdent = sliceName,
+                                field = offName,
+                                value = slice
+                            }, 
+                            I32Const (1)
+                        ),
+                        StructGet {
+                            structIdent = sliceName,
+                            field = arrName,
+                            value = slice
+                        }
+                    ]
+                })])
+                -- Todo: Implement this!
+                (lam cnct. [Unreachable()]),
+            LocalGet res
+        ]
+    }

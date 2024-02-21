@@ -91,8 +91,18 @@ lang WasmTypeCompiler = MClosAst + WasmAST + MExprPrettyPrint
     | (name,  TyApp _) -> 
         error "TyApp" ;
         ctx
+    | (name, TyBool _) -> 
+        error "TyBool" 
+    | (name, TyInt _) -> 
+        error "TyInt" 
+    | (name, TyFloat _) -> 
+        error "TyFloat" 
+    | (name, TyChar _) ->
+        error "TyChar" 
+    | (name, TySeq _) -> 
+        error "TySeq" 
     | (name, ty) ->
-        printLn (type2str ty) ; 
+        -- printLn (type2str ty) ; 
         error (join ["unknown typedef for '", nameGetStr name, "'!"]) ;
         ctx
 end

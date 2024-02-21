@@ -326,20 +326,20 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
         compileExpr globalCtx newCtx inexpr
     | TmNever _ ->
         ctxInstrResult exprCtx (Unreachable ())
-    -- | TmUtest {test = lhs, expected = rhs, next = next, tusing = f} ->
-    --     match f with (Some fExpr)
-    --         then
-    --             let expr = app_ (app_ fExpr lhs) rhs in 
-    --             let ctx = compileExpr globalCtx exprCtx expr in 
-    --             let ite = IfThenElse {
-    --                 cond = extractResult ctx,
-    --                 thn = [Call (nameNoSym "utestSucc", [])],
-    --                 els = [Call (nameNoSym "utestFail", [])]
-    --             } in 
-    --             let ctx = {ctx with instructions = snoc ctx.instructions ite} in
-    --             compileExpr globalCtx ctx next
-    --         else 
-    --             error "Only utest specifying a 'using' are supported."
+    | TmUtest {test = lhs, expected = rhs, next = next} ->
+        error "TmUtest is not supported!"
+        -- let leftCtx = compileExpr globalCtx exprCtx lhs in 
+        -- let rightCtx = compileExpr globalCtx leftCtx rhs in 
+        -- let ite = IfThenElse {
+        --     cond = I32Eq (
+        --         anyref2i32 (extractResult leftCtx),
+        --         anyref2i32 (extractResult rightCtx)
+        --     ),
+        --     thn = [Call (nameNoSym "utestSucc", [])],
+        --     els = [Call (nameNoSym "utestFail", [])]
+        -- } in 
+        -- let ctx = {rightCtx with instructions = snoc rightCtx.instructions ite} in
+        -- compileExpr globalCtx ctx next
 
     | other -> error "Unsupported Expression!"
         -- error (concat 
@@ -586,6 +586,7 @@ end
 
 mexpr
 use TestLang in 
-compileMCoreToWasm (get_ (snoc_ (cons_ (int_ 42) (seq_ [int_ 1, int_ 2, int_ 3])) (int_ 23)) (int_ 4))
+-- compileMCoreToWasm (utest_ (addi_ (int_ 3) (int_ 4)) (int_ 7) uunit_)
+-- compileMCoreToWasm (get_ (snoc_ (cons_ (int_ 42) (seq_ [int_ 1, int_ 2, int_ 3])) (int_ 23)) (int_ 4))
 -- compileMCoreToWasm (get_ (concat_ (seq_ [int_ 4, int_ 5]) (seq_ [int_ 1, int_ 2, int_ 3])) (int_ 2))
--- compileMCoreToWasm (get_ (seq_ [int_ 1, int_ 2, int_ 3]) (int_ 1))
+compileMCoreToWasm (head_ (tail_ (tail_ (seq_ [int_ 1, int_ 2, int_ 3]))))

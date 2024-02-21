@@ -1,6 +1,5 @@
 include "wasm-ast.mc"
 include "wasm-pprint.mc"
--- include "wasm-headcons.mc"
 include "wasm-rope.mc"
 
 -- Integer Operations
@@ -133,8 +132,8 @@ let integerIntrinsics = [
     leqiWasm,
     geqiWasm,
     -- ,
-    -- headWasm,
-    -- tailWasm,
+    headWasm,
+    tailWasm,
     -- lengthHelperWasm,
     lengthWasm,
     concatWasm,
