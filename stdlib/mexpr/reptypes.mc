@@ -3474,6 +3474,11 @@ let rtMaterializeHomogeneous : all env. all relevant. all constraint. all var. a
     let mkSol = lam sol. {value = sol.value, cost = sol.cost} in
     optionMap mkSol (min (lam a. lam b. cmpf a.cost b.cost) solutions)
 
+type SolForError
+con SFEHere : Info -> SolForError
+con SFEBelow : [{call : Info, below : SolForError}] -> SolForError
+con SFEOr : [SolForError] -> SolForError
+
 lang NonMemoTreeBuilder = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpers + PrettyPrint + Cmp + Generalize + VarAccessHelpers + LocallyNamelessStuff + WildToMeta
   -- Global
   syn SolverGlobal a = | SGContent ()
@@ -3527,10 +3532,23 @@ lang NonMemoTreeBuilder = RepTypesShallowSolverInterface + UnifyPure + RepTypesH
   sem addOpUse debug global branch query = | opUse ->
     match branch with SBContent branch in
     match query with STQContent query in
-    match solFor (setEmpty cmpOpPair) branch opUse with (branch, Some res)
-    then (SBContent branch, STQContent (snoc query {scale = opUse.scaling, val = res}))
-    else errorSingle [opUse.info]
-      "This operation has no implementation, even when ignoring constraints from other operation uses."
+    switch solFor (setEmpty cmpOpPair) branch opUse
+    case (branch, Left err) then
+      recursive let constructTrace = lam acc. lam err. switch err
+        case SFEHere info then snoc acc (info, "Type does not fit.")
+        case SFEBelow [first] ++ _ then
+          constructTrace (snoc acc (first.call, "Because of this operation:")) first.below
+        case SFEOr [x] then
+          constructTrace acc x
+        case SFEOr [] then
+          snoc acc (NoInfo (), "No implementations available.")
+        case SFEOr _ then
+          snoc acc (NoInfo (), "Multiple implementations available, but none were valid.")
+        end
+      in errorMulti (constructTrace [(opUse.info, "This operation has no implementation")] err) "Could not find implementations, even when ignoring constraints from other operation uses."
+    case (branch, Right res) then
+      (SBContent branch, STQContent (snoc query {scale = opUse.scaling, val = res}))
+    end
 
   sem debugSolution global = | sols ->
     let sum = foldl addf 0.0 (map (lam x. match x with SSContent (SolContent x) in x.scaledTotalCost) sols) in
@@ -3563,22 +3581,22 @@ lang NonMemoTreeBuilder = RepTypesShallowSolverInterface + UnifyPure + RepTypesH
       seqCmp work a.subSols b.subSols
     in work a b
 
-  sem solFor : all a. Set (Name, Type) -> SBContent a -> TmOpVarRec -> (SBContent a, Option (RTree a))
+  sem solFor : all a. Set (Name, Type) -> SBContent a -> TmOpVarRec -> (SBContent a, Either SolForError (RTree a))
   sem solFor seen branch = | opUse ->
     -- NOTE(vipa, 2024-01-13): Check that we're not recursing to a
     -- previously seen type
     let nl = mkLocallyNameless branch.nameless opUse.ty in
     let branch = {branch with nameless = nl.state} in
     let opPair = (opUse.ident, nl.res) in
-    if setMem opPair seen then (branch, None ()) else  -- Early exit
+    if setMem opPair seen then (branch, Left (SFEOr [])) else  -- Early exit
     let seen = setInsert opPair seen in
 
     -- NOTE(vipa, 2024-01-13): Construct sub-trees for each impl in
     -- scope for the op
     let impls = optionMapOr [] setToSeq (mapLookup opUse.ident branch.implsPerOp) in
     match mapAccumL (perImpl seen opUse.ty) branch impls with (branch, trees) in
-    let trees = filterOption trees in
-    if null trees then (branch, None ()) else  -- Early exit
+    match eitherPartition trees with (fails, trees) in
+    if null trees then (branch, Left (SFEOr fails)) else  -- Early exit
 
     -- NOTE(vipa, 2024-01-13): Build the "or" node of those
     -- alternatives
@@ -3595,10 +3613,10 @@ lang NonMemoTreeBuilder = RepTypesShallowSolverInterface + UnifyPure + RepTypesH
         , approx = approx
         , history = HStart (concat (nameGetStr opUse.ident) "-or")
         } in
-      (branch, Some res)
-    else (branch, None ())
+      (branch, Right res)
+    else (branch, Left (SFEOr []))
 
-  sem perImpl : all a. Set (Name, Type) -> Type -> SBContent a -> OpImpl a -> (SBContent a, Option (RTree a))
+  sem perImpl : all a. Set (Name, Type) -> Type -> SBContent a -> OpImpl a -> (SBContent a, Either SolForError (RTree a))
   sem perImpl seen ty branch = | impl ->
     -- NOTE(vipa, 2024-01-21): Isolate this impl instance from all
     -- others by creating new repr- and meta-vars for each such var
@@ -3652,7 +3670,7 @@ lang NonMemoTreeBuilder = RepTypesShallowSolverInterface + UnifyPure + RepTypesH
       let opUses = map updateOpUseType opUses in
 
       match mapAccumL (solFor seen) branch opUses with (branch, subTrees) in
-      match optionMapM (lam x. x) subTrees with Some subTrees then
+      match optionMapM (lam x. eitherGetRight x) subTrees with Some subTrees then
         let approx = pufFoldRaw
           (lam acc. lam l. lam r.
             (pufUnify (lam. error "Compiler error when computing approx (unify)") l r acc).puf)
@@ -3662,7 +3680,7 @@ lang NonMemoTreeBuilder = RepTypesShallowSolverInterface + UnifyPure + RepTypesH
           (pufEmpty _symCmp)
           uni.reprs in
         let approx = foldl _intersectApproxFromBelow approx subTrees in
-        if _approxHasEmptyDomain approx then (branch, None ()) else -- Early exit
+        if _approxHasEmptyDomain approx then (branch, Left (SFEHere impl.info)) else -- Early exit
 
         -- NOTE(vipa, 2024-01-21): A var is relevant here if it's
         -- relevant below (i.e., in `relevantAbove` of a child) or
@@ -3715,9 +3733,11 @@ lang NonMemoTreeBuilder = RepTypesShallowSolverInterface + UnifyPure + RepTypesH
           , approx = approx
           , history = HStart (concat (nameGetStr impl.op) "-impl")
           } in
-        (branch, Some res)
-      else (branch, None ())
-    else (branch, None ())
+        (branch, Right res)
+      else
+        let f = lam opUse. lam either. optionMap (lam x. {call = opUse.info, below = x}) (eitherGetLeft either) in
+        (branch, Left (SFEBelow (mapOption (lam x. x) (zipWith f opUses subTrees))))
+    else (branch, Left (SFEHere impl.info))
 
   -- NOTE(vipa, 2023-11-07): This typically assumes that the types
   -- have a representation that is equal if the two types are
