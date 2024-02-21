@@ -1785,7 +1785,7 @@ lang TyAnnot = AnnotateSources + PrettyPrint + Ast + AliasTypeAst
     res
 end
 
-lang PprintTyAnnot = PrettyPrint + Annotator + Ast + AliasTypeAst
+lang PprintTyAnnot = PrettyPrint + Annotator + Ast + AliasTypeAst + MetaVarTypeAst
   syn Expr = | FakeExpr {id : Int, result : Ref String, real : Expr}
   syn Type = | FakeType {id : Int, result : Ref String, real : Type}
   syn Pat  = | FakePat  {id : Int, result : Ref String, real : Pat}
@@ -1813,6 +1813,13 @@ lang PprintTyAnnot = PrettyPrint + Annotator + Ast + AliasTypeAst
     modref x.result real;
     (env, cons '!' (cons '!' (int2string x.id)))
 
+  sem infoTm =
+  | FakeExpr x -> infoTm x.real
+  sem infoPat =
+  | FakePat x -> infoPat x.real
+  sem infoTy =
+  | FakeType x -> infoTy x.real
+
   sem subSwap
   : all a. (a -> Int -> (Ref String, a))
   -> [Ref String]
@@ -1836,6 +1843,18 @@ lang PprintTyAnnot = PrettyPrint + Annotator + Ast + AliasTypeAst
     match pprintAnnotExpr 0 pprintEnvEmpty tm with (_, output) in
     finalize output
 
+  sem sdisconnectMetas : Type -> Type
+  sem sdisconnectMetas =
+  | TyMetaVar t ->
+    let contents = switch deref t.contents
+      case Unbound u then
+        Unbound u
+      case Link ty then
+        Link (sdisconnectMetas ty)
+      end in
+    TyMetaVar {t with contents = ref contents}
+  | ty -> ty
+
   sem pprintAnnotExpr : Int -> PprintEnv -> Expr -> (PprintEnv, Output)
   sem pprintAnnotExpr indent env =
   | orig & x ->
@@ -1845,7 +1864,7 @@ lang PprintTyAnnot = PrettyPrint + Annotator + Ast + AliasTypeAst
     match smapAccumL_Expr_Pat (subSwap mkFakePat) subs x with (subs, x) in
     match pprintCode indent env x with (env, x) in
     match getTypeStringCode 0 env (_removeAliases (tyTm orig)) with (env, ty) in
-    (env, annotate ty (_fixOutput x subs))
+    (env, annotate ty (_fixOutput (infoTm orig) x subs))
 
   sem pprintAnnotPat : Int -> PprintEnv -> Pat -> (PprintEnv, Output)
   sem pprintAnnotPat indent env =
@@ -1856,24 +1875,24 @@ lang PprintTyAnnot = PrettyPrint + Annotator + Ast + AliasTypeAst
     match smapAccumL_Pat_Pat (subSwap mkFakePat) subs x with (subs, x) in
     match getPatStringCode indent env x with (env, x) in
     match getTypeStringCode 0 env (_removeAliases (tyPat orig)) with (env, ty) in
-    (env, annotate ty (_fixOutput x subs))
+    (env, annotate ty (_fixOutput (infoPat orig) x subs))
 
   sem pprintAnnotType : Int -> PprintEnv -> Type -> (PprintEnv, Output)
   sem pprintAnnotType indent env =
   | orig & x ->
     let subs = [] in
-    match smapAccumL_Type_Type (subSwap mkFakeType) subs x with (subs, x) in
+    match smapAccumL_Type_Type (subSwap mkFakeType) subs (sdisconnectMetas x) with (subs, x) in
     match getTypeStringCode indent env x with (env, x) in
     match getTypeStringCode 0 env (_removeAliases orig) with (env, ty) in
-    (env, annotate ty (_fixOutput x subs))
+    (env, annotate ty (_fixOutput (infoTy orig) x subs))
 
   sem _removeAliases : Type -> Type
   sem _removeAliases =
   | TyAlias x -> _removeAliases x.content
   | ty -> smap_Type_Type _removeAliases ty
 
-  sem _fixOutput : String -> [Ref String] -> Output
-  sem _fixOutput str = | subs ->
+  sem _fixOutput : Info -> String -> [Ref String] -> Output
+  sem _fixOutput info str = | subs ->
     recursive let splitWhile : all a. (a -> Bool) -> [a] -> ([a], [a]) = lam pred. lam seq.
       match seq with [x] ++ rest then
         if pred x then
@@ -1886,8 +1905,13 @@ lang PprintTyAnnot = PrettyPrint + Annotator + Ast + AliasTypeAst
       switch str
       case ['!', '!', c & ('0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9')] ++ str then
         match splitWhile isDigit (cons c str) with (number, str) in
-        let acc = concat acc (deref (get subs (string2int number))) in
-        work acc str
+        let idx = string2int number in
+        if geqi idx (length subs) then
+          warnSingle [info] "Compiler error: got a '!!idx' without a corresponding entry in 'subs', which should not be possible.";
+          work (join [acc, "!!", number]) str
+        else
+          let acc = concat acc (deref (get subs idx)) in
+          work acc str
       case [c] ++ str then
         work (snoc acc c) str
       case [] then
