@@ -140,5 +140,8 @@ let integerIntrinsics = [
     getWasm,
     consWasm,
     snocWasm,
-    idWasm
+    idWasm,
+    arrayCopyWasm,
+    flattenWasm,
+    reverseWasm
 ]
