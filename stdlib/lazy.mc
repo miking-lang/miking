@@ -130,3 +130,33 @@ let lazyStreamForceAll : all a. LStream a -> [a]
       then work (snoc acc x) s
       else acc
     in work [] s
+
+type IterNode a
+type Iter a = () -> IterNode a
+con INNil : all a. () -> IterNode a
+con INCons : all a. (a, Iter a) -> IterNode a
+
+let iterEmpty : all a. Iter a = lam. INNil ()
+let iterCons : all a. a -> Iter a -> Iter a = lam a. lam it. lam. INCons (a, it)
+let iterSingle : all a. a -> Iter a = lam a. iterCons a iterEmpty
+
+recursive let iterConcat : all a. Iter a -> Iter a -> Iter a
+  = lam a. lam b. lam. switch a ()
+    case INNil _ then b ()
+    case INCons (a, aNext) then INCons (a, iterConcat aNext b)
+    end
+end
+
+recursive let iterMap : all a. all b. (a -> b) -> Iter a -> Iter b
+  = lam f. lam xs. lam. switch xs ()
+    case INNil _ then INNil ()
+    case INCons (x, xs) then INCons (f x, iterMap f xs)
+    end
+end
+
+recursive let iterConcatMap : all a. all b. (a -> Iter b) -> Iter a -> Iter b
+  = lam f. lam xs. lam. switch xs ()
+    case INNil _ then INNil ()
+    case INCons (x, xs) then iterConcat (f x) (iterConcatMap f xs) ()
+    end
+end
