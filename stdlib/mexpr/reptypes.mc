@@ -172,6 +172,12 @@ lang RecLetsRepTypesAnalysis = TypeCheck + RecLetsAst + MetaVarDisableGeneralize
       if forAll (lam b. nonExpansive true b.body) t.bindings
       then any (lam b. containsRepr b.tyBody) t.bindings
       else false in
+    -- TODO(vipa, 2024-02-22): This translation doesn't quite do what
+    -- we want, because each function in the letrec gets generalized,
+    -- whereby any opuses inside have to satisfy a rigid
+    -- typevariable. For now we just don't translate rec lets to
+    -- letops, and we'll have to figure out how to do it later
+    let shouldBeOp = false in
     if not shouldBeOp then TmRecLets (typeCheckRecLets env t) else
     let bindingToBindingPair = lam b.
       ( stringToSid (nameGetStr b.ident)
@@ -179,7 +185,7 @@ lang RecLetsRepTypesAnalysis = TypeCheck + RecLetsAst + MetaVarDisableGeneralize
         { ident = b.ident
         , ty = tyunknown_
         , info = t.info
-        , frozen = true
+        , frozen = false
         }
       ) in
     let opRecord = TmRecord
@@ -187,9 +193,14 @@ lang RecLetsRepTypesAnalysis = TypeCheck + RecLetsAst + MetaVarDisableGeneralize
       , ty = tyunknown_
       , info = t.info
       } in
-    let implEnv = {env with reptypes = {env.reptypes with inImpl = true}} in
+    let newLvl = addi 1 env.currentLvl in
+    let implEnv = {env with currentLvl = newLvl, reptypes = {env.reptypes with inImpl = true}} in
     match withNewReprScope implEnv (lam env. typeCheckRecLets env {t with inexpr = opRecord})
       with (newT, reprScope, delayedReprUnifications) in
+    (if env.disableRecordPolymorphism
+      then disableRecordGeneralize env.currentLvl newT.ty
+      else ());
+    match gen env.currentLvl (mapEmpty nameCmp) newT.ty with (newTy, _) in
     let recordName =
       let ident = (head newT.bindings).ident in
       nameSym (concat (nameGetStr ident) "_etc") in
@@ -199,21 +210,21 @@ lang RecLetsRepTypesAnalysis = TypeCheck + RecLetsAst + MetaVarDisableGeneralize
         env.reptypes.opNamesInScope
         newT.bindings in
       let opNamesInScope = mapInsert recordName (None ()) opNamesInScope in
-      let env = _insertVar recordName newT.ty env in
+      let env = _insertVar recordName newTy env in
       let env = {env with reptypes = {env.reptypes with opNamesInScope = opNamesInScope}} in
       typeCheckExpr env t.inexpr in
     let ty = tyTm inexpr in
     TmOpDecl
     { info = t.info
     , ident = recordName
-    , tyAnnot = newT.ty
+    , tyAnnot = newTy
     , ty = ty
     , inexpr = TmOpImpl
       { ident = recordName
       , implId = negi 1
       , selfCost = 1.0
       , body = TmRecLets newT
-      , specType = newT.ty
+      , specType = newTy
       , delayedReprUnifications = delayedReprUnifications
       , inexpr = inexpr
       , ty = ty
@@ -3475,8 +3486,8 @@ let rtMaterializeHomogeneous : all env. all relevant. all constraint. all var. a
     optionMap mkSol (min (lam a. lam b. cmpf a.cost b.cost) solutions)
 
 type SolForError
-con SFEHere : Info -> SolForError
-con SFEBelow : [{call : Info, below : SolForError}] -> SolForError
+con SFEHere : {here : Info, needed : use Ast in Type, got : use Ast in Type} -> SolForError
+con SFEBelow : {opUses : [{call : Info, name : Name, below : SolForError}], here : Info} -> SolForError
 con SFEOr : [SolForError] -> SolForError
 
 lang NonMemoTreeBuilder = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpers + PrettyPrint + Cmp + Generalize + VarAccessHelpers + LocallyNamelessStuff + WildToMeta
@@ -3534,16 +3545,42 @@ lang NonMemoTreeBuilder = RepTypesShallowSolverInterface + UnifyPure + RepTypesH
     match query with STQContent query in
     switch solFor (setEmpty cmpOpPair) branch opUse
     case (branch, Left err) then
+      recursive let removeAliases = lam ty.
+        match ty with TyAlias x
+        then removeAliases x.content
+        else smap_Type_Type removeAliases ty in
+      recursive let constructTree = lam indent. lam err. switch err
+        case SFEHere x then join
+          [ indent, "- Type mismatch: ", info2str x.here, "\n"
+          , indent, "  (needed ", type2str (removeAliases x.needed), ")\n"
+          , indent, "  (got ", type2str (removeAliases x.got), ")\n"
+          ]
+        case SFEBelow x then
+          let iindent = snoc indent ' ' in
+          let iiindent = snoc iindent ' ' in
+          let showOpUse = lam opUse. join
+            [ iindent, "- ", nameGetStr opUse.name, " ", info2str opUse.call, "\n"
+            , constructTree iiindent opUse.below
+            ] in
+          let msg = join
+            [ indent, "- ", info2str x.here, ":\n"
+            , join (map showOpUse x.opUses)
+            ] in
+          msg
+        case SFEOr errs then
+          join (map (constructTree indent) errs)
+        end in
       recursive let constructTrace = lam acc. lam err. switch err
-        case SFEHere info then snoc acc (info, "Type does not fit.")
-        case SFEBelow [first] ++ _ then
+        case SFEHere x then snoc acc (x.here, "Type does not fit.")
+        case SFEBelow {opUses = [first] ++ _} then
           constructTrace (snoc acc (first.call, "Because of this operation:")) first.below
         case SFEOr [x] then
           constructTrace acc x
         case SFEOr [] then
           snoc acc (NoInfo (), "No implementations available.")
         case SFEOr _ then
-          snoc acc (NoInfo (), "Multiple implementations available, but none were valid.")
+          let msg = join ["Multiple implementations available, but none were valid.\n", constructTree "" err] in
+          snoc acc (NoInfo (), msg)
         end
       in errorMulti (constructTrace [(opUse.info, "This operation has no implementation")] err) "Could not find implementations, even when ignoring constraints from other operation uses."
     case (branch, Right res) then
@@ -3648,7 +3685,8 @@ lang NonMemoTreeBuilder = RepTypesShallowSolverInterface + UnifyPure + RepTypesH
     match wildToMeta impl.metaLevel (setEmpty nameCmp) ty with (newMetas, ty) in
     match instAndSubst (infoTy specType) impl.metaLevel specType
       with (specType, instSubst) in
-    match unifyPure uni (removeReprSubsts specType) ty with Some uni then
+    let specNoSubst = removeReprSubsts specType in
+    match unifyPure uni specNoSubst ty with Some uni then
       -- NOTE(vipa, 2024-01-21): Figure out which vars can be made
       -- equal simply via substitution (`simplSubst`) rather than
       -- keeping an entry in the `uni`, under the assumption that only
@@ -3680,7 +3718,7 @@ lang NonMemoTreeBuilder = RepTypesShallowSolverInterface + UnifyPure + RepTypesH
           (pufEmpty _symCmp)
           uni.reprs in
         let approx = foldl _intersectApproxFromBelow approx subTrees in
-        if _approxHasEmptyDomain approx then (branch, Left (SFEHere impl.info)) else -- Early exit
+        if _approxHasEmptyDomain approx then (branch, Left (SFEHere {here = impl.info, needed = ty, got = specNoSubst})) else -- Early exit
 
         -- NOTE(vipa, 2024-01-21): A var is relevant here if it's
         -- relevant below (i.e., in `relevantAbove` of a child) or
@@ -3735,9 +3773,11 @@ lang NonMemoTreeBuilder = RepTypesShallowSolverInterface + UnifyPure + RepTypesH
           } in
         (branch, Right res)
       else
-        let f = lam opUse. lam either. optionMap (lam x. {call = opUse.info, below = x}) (eitherGetLeft either) in
-        (branch, Left (SFEBelow (mapOption (lam x. x) (zipWith f opUses subTrees))))
-    else (branch, Left (SFEHere impl.info))
+        let f = lam opUse. lam either. optionMap
+          (lam x. {call = opUse.info, below = x, name = opUse.ident})
+          (eitherGetLeft either) in
+        (branch, Left (SFEBelow {opUses = mapOption (lam x. x) (zipWith f opUses subTrees), here = impl.info}))
+    else (branch, Left (SFEHere {here = impl.info, needed = ty, got = specNoSubst}))
 
   -- NOTE(vipa, 2023-11-07): This typically assumes that the types
   -- have a representation that is equal if the two types are
