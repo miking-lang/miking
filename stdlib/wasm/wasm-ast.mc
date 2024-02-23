@@ -36,6 +36,12 @@ lang WasmAST
         field: Name,
         value: Instr
     }
+    | StructSet {
+        structIdent: Name,
+        field: Name,
+        structValue: Instr,
+        fieldValue : Instr
+    }
     | StructNew {
         structIdent: Name,
         values: [Instr]
@@ -123,6 +129,7 @@ lang WasmAST
     | Anyref ()
     | Ref Name
     | I31Ref ()
+    | Mut WasmType
 
     syn WasmMemory = 
     | Table {size: Int, typeString: String}

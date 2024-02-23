@@ -19,3 +19,5 @@ tags
 test/js/*.js
 *.wasm
 out/*
+
+test/wasm/*

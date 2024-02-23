@@ -16,6 +16,7 @@ lang WasmPPrint = WasmAST
 
     sem pprintWasmType: WasmType -> String
     sem pprintWasmType = 
+    | Mut t -> join ["(mut ", pprintWasmType t, ")"]
     | Tyi32 () -> "i32"
     | Tyi64 () -> "i64"
     | Tyf32 () -> "f32"
@@ -101,6 +102,10 @@ lang WasmPPrint = WasmAST
     | StructGet r -> 
         let s = pprintInstr (addi indent 1) r.value in 
         join [indent2str indent, "(struct.get $", pprintName r.structIdent, " $", pprintName r.field, "\n", s, ")"]
+    | StructSet r -> 
+        let s1 = pprintInstr (addi indent 1) r.structValue in 
+        let s2 = pprintInstr (addi indent 1) r.fieldValue in 
+        join [indent2str indent, "(struct.set $", pprintName r.structIdent, " $", pprintName r.field, "\n", s1, "\n", s2, ")"]
     | StructNew r -> 
         let s = match r.values with []
             then ""

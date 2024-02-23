@@ -178,9 +178,12 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
     | CLength _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "length")
     | CGet _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "get")
     | CReverse _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "reverse")
-    
-    -- | CCons _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "set")
-    -- | CNull _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "set")
+    -- Refererence Operations
+    | CRef _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "ref")
+    | CDeRef _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "deref")
+    -- Modref is currently broken because let x = ... is breaks when the body has
+    -- side effects.
+    | CModRef _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "modref")
 
     sem compileExpr : WasmCompileContext -> WasmExprContext -> Expr -> WasmExprContext
     sem compileExpr globalCtx exprCtx = 
@@ -515,7 +518,7 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
         let ctx = foldl ctxWithFuncDef ctx stdlibDefs in 
 
         -- Add list stdlib definitions
-        let ctx = foldl ctxWithFuncDef ctx [anyrefArrDef, leafDef, sliceDef, concatDef] in 
+        let ctx = foldl ctxWithFuncDef ctx [anyrefArrDef, leafDef, sliceDef, concatDef, anyrefBoxDef] in 
 
         -- Compile Types
         let typeCtx = compileTypes typeEnv in 

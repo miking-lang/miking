@@ -114,6 +114,80 @@ let idWasm =
         instructions = [LocalGet arg]
     }
 
+let anyrefBoxDef = 
+    use WasmAST in 
+    StructTypeDef {
+        ident = nameNoSym "anyref-box",
+        fields = [
+            {ident = nameNoSym "value", ty = Mut (Anyref ())}
+        ]
+    }
+
+let refWasm = 
+    let arg = nameSym "arg" in 
+    use WasmAST in 
+    FunctionDef {
+        ident = nameNoSym "ref",
+        args = [
+            {ident = arg, ty = Anyref ()}
+        ],
+        locals = [],
+        resultTy = Anyref (),
+        instructions = [
+            StructNew {
+                structIdent = nameNoSym "anyref-box",
+                values = [LocalGet arg]
+            }
+        ]
+    }
+
+let derefWasm = 
+    let arg = nameSym "arg" in 
+    use WasmAST in 
+    FunctionDef {
+        ident = nameNoSym "deref",
+        args = [
+            {ident = arg, ty = Anyref ()}
+        ],
+        locals = [],
+        resultTy = Anyref (),
+        instructions = [
+            StructGet {
+                structIdent = nameNoSym "anyref-box",
+                field = nameNoSym "value",
+                value = RefCast {
+                    ty = Ref (nameNoSym "anyref-box"),
+                    value = LocalGet arg
+                }
+            }
+        ]
+    }
+
+let modrefWasm = 
+    let box = nameSym "box" in 
+    let val = nameSym "val" in 
+    use WasmAST in 
+    FunctionDef {
+        ident = nameNoSym "modref",
+        args = [
+            {ident = box, ty = Anyref ()},
+            {ident = val, ty = Anyref ()}
+        ],
+        locals = [],
+        resultTy = Anyref (),
+        instructions = [
+            StructSet {
+                structIdent = nameNoSym "anyref-box",
+                field = nameNoSym "value",
+                structValue = RefCast {
+                    ty = Ref (nameNoSym "anyref-box"),
+                    value = LocalGet box
+                },
+                fieldValue = LocalGet val
+            },
+            LocalGet box
+        ]
+    }
 
 let integerIntrinsics = [
     addiWasm,
@@ -131,6 +205,9 @@ let integerIntrinsics = [
     gtiWasm,
     leqiWasm,
     geqiWasm,
+    refWasm,
+    derefWasm,
+    modrefWasm,
     -- ,
     headWasm,
     tailWasm,
