@@ -21,6 +21,9 @@ lang WasmAST
     | LocalGet Name
     | LocalSet (Name, Instr)
     | GlobalGet Name
+    | GlobalSet (Name, Instr)
+    | RefNull String
+    | Drop Instr
     | Call (Name, [Instr])
     | Unreachable ()
     | Loop {

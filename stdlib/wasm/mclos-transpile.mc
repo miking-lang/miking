@@ -10,12 +10,21 @@ include "mclos-pprint.mc"
 include "common.mc"
 include "string.mc"
 include "name.mc"
+include "option.mc"
 
 type SigType = {
     ident: Name,
     tyAnnot: (use MClosAst in Type),
     ty: (use MClosAst in Type),
     info: Info
+}
+
+type TranspileContext = {
+    mainExpr: Option (use MClosAst in Expr),
+    functionDefs: [(use MClosAst in Expr)],
+    globals: [
+        {ident: Name, value: (use MClosAst in Expr)}
+    ]
 }
 
 lang MClosTranspiler = MClosAst
@@ -26,14 +35,6 @@ lang MClosTranspiler = MClosAst
         let newArgsAcc = (snoc argsAcc {ident = newArg, ty = lamRec.tyParam}) in 
         extractFuncDef newArgsAcc sig lamRec.body
     | other ->  
-        -- This is top level let expression that is not a function definition
-        -- E.g. let meaningOfLife = 42 in 100 + meaningOfLife.
-        -- For now, we deal with this by creating a nullary function.
-        -- Any usage of this variable is simply a call to this function
-        -- It might be better to treat this as a global variable with 
-        -- initialisation. 
-        -- The current implementation relies on the fact that body of the let
-        -- is pure. For non-pure bodies, this implementation is incorrect.
         TmFuncDef {
             funcIdent = sig.ident,
             tyAnnot = sig.tyAnnot,
@@ -43,18 +44,27 @@ lang MClosTranspiler = MClosAst
             args = argsAcc
         }
 
-    sem transpileAcc : [Expr] -> Expr -> [Expr]
-    sem transpileAcc acc = 
+    sem transpileAcc : TranspileContext -> Expr -> TranspileContext
+    sem transpileAcc ctx = 
     | TmLet r -> 
-        let sig: SigType = {
-            ident = r.ident,
-            tyAnnot = r.tyAnnot,
-            ty = r.ty,
-            info = r.info
-        } in 
-        let funDef = (extractFuncDef [] sig r.body) in 
-        let acc = cons funDef acc in 
-        transpileAcc acc r.inexpr
+        match r.body with TmLam _ 
+            then 
+                let sig: SigType = {
+                    ident = r.ident,
+                    tyAnnot = r.tyAnnot,
+                    ty = r.ty,
+                    info = r.info
+                } in 
+                let newDef = (extractFuncDef [] sig r.body) in 
+                let ctx = {ctx with functionDefs = snoc ctx.functionDefs newDef} in 
+                transpileAcc ctx r.inexpr
+            else 
+                let newGlobal = {
+                    ident = r.ident,
+                    value = r.body
+                } in 
+                let ctx = {ctx with globals = snoc ctx.globals newGlobal} in 
+                transpileAcc ctx r.inexpr
     | TmRecLets {bindings = bindings, inexpr = inexpr} ->
         let work = lam acc. lam r. 
             let sig = {
@@ -63,14 +73,22 @@ lang MClosTranspiler = MClosAst
                 info = r.info, 
                 ty = r.tyBody
             } in 
-            let funDef = (extractFuncDef [] sig r.body) in 
-            cons funDef acc in
-        let acc = foldl work acc bindings in 
-        transpileAcc acc inexpr
-    | other -> cons other acc
+            let newDef = (extractFuncDef [] sig r.body) in 
+            {ctx with functionDefs = snoc ctx.functionDefs newDef}
+        in
+        let ctx = foldl work ctx bindings in 
+        transpileAcc ctx inexpr
+    | other -> 
+        {ctx with mainExpr = Some other}
 
     sem transpile =
-    | expr -> reverse (transpileAcc [] expr)
+    | expr -> 
+        let ctx = {
+            functionDefs = [],
+            globals = [],
+            mainExpr = None ()
+        } in 
+        transpileAcc ctx expr
 end
 
 mexpr

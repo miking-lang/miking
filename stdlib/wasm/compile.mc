@@ -37,7 +37,8 @@ type WasmCompileContext = {
     ident2sig: Map Name FunctionSignature,
     nextFp: Int,
     mainExpr: (use MClosAst in Option Expr),
-    constr2typeid: Map Name Int
+    constr2typeid: Map Name Int,
+    globalInitDefs: [(use WasmAST in Def)]
 }
 
 type WasmExprContext = {
@@ -57,12 +58,21 @@ let accArity = lam acc: Set Int. lam def: (use WasmAST in Def).
 let findSignature = lam ctx : WasmCompileContext. lam ident : Name. 
     mapLookup ident ctx.ident2sig
 
+let isGlobal = lam ctx : WasmCompileContext. lam ident: Name. 
+    use WasmAST in 
+    let globalDefs = filter 
+        (lam d. match d with GlobalDef _ then true else false)
+        ctx.defs in 
+    let globalNames = map (lam d. match d with GlobalDef g in g.ident) globalDefs in 
+    match find (nameEq ident) globalNames with Some _ then true else false
+
 let emptyCompileCtx : WasmCompileContext = {
     defs = [],
     ident2sig = mapEmpty nameCmp,
     nextFp = 0,
     mainExpr = None (),
-    constr2typeid = mapEmpty nameCmp
+    constr2typeid = mapEmpty nameCmp,
+    globalInitDefs = []
 }
 
 let emptyExprCtx : WasmExprContext = {
@@ -194,7 +204,10 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
             then
                 createClosure globalCtx exprCtx ident
             else 
-                ctxLocalResult exprCtx ident
+                if isGlobal globalCtx ident then
+                    ctxInstrResult exprCtx (GlobalGet ident)
+                else 
+                    ctxLocalResult exprCtx ident
     | TmApp {lhs = lhs, rhs = rhs} ->
         let leftCtx = compileExpr globalCtx exprCtx lhs in 
         let rightCtx = compileExpr globalCtx leftCtx rhs in 
@@ -265,27 +278,6 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
                 LocalGet localName
             ]
         })
-        -- ctxInstrResult exprCtx (Unreachable ())
-        -- recursive let work = lam ctx. lam remaining. 
-        --     match remaining with []
-        --         then 
-        --             ctxInstrResult ctx (StructNew {
-        --                 structIdent = nilStructName,
-        --                 values = []
-        --             })
-        --         else 
-        --             let headCtx = compileExpr globalCtx ctx (head remaining) in
-        --             let tailCtx = work headCtx (tail remaining) in
-        --             let structInstr = StructNew {
-        --                 structIdent = consStructName,
-        --                 values = [
-        --                     extractResult headCtx,
-        --                     extractResult tailCtx
-        --                 ]
-        --             } in 
-        --             ctxInstrResult tailCtx structInstr
-        -- in
-        -- work exprCtx tms
     | TmConApp r ->
         let exprCtx = compileExpr globalCtx exprCtx r.body in 
         let structIdent = r.ident in 
@@ -488,6 +480,33 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
             resultTy = Anyref(), 
             instructions = snoc exprCtx.instructions (extractResult exprCtx)
         })
+    | _ -> error "Expected TmFuncDef when compiling function definitions!"
+
+    sem compileInitGlobals: WasmCompileContext -> {ident: Name, value: Expr} -> WasmCompileContext
+    sem compileInitGlobals ctx =
+    | glob -> 
+        match glob with {ident = ident, value = value} in 
+        let globalDef = GlobalDef {
+            ident = ident,
+            ty = Mut (Anyref ()),
+            initValue = RefNull "i31"
+        } in 
+        let initIdent = nameSym (concat "init-" (nameGetStr ident)) in 
+        let bodyCtx = compileExpr ctx emptyExprCtx value in 
+        let setGlobal = GlobalSet (ident, extractResult bodyCtx) in 
+        let initDef = FunctionDef {
+            ident = initIdent,
+            args = [],
+            locals = bodyCtx.locals,
+            resultTy = Anyref (),
+            instructions = concat bodyCtx.instructions [setGlobal, GlobalGet ident]
+        } in 
+        {ctx with
+            defs = cons globalDef ctx.defs,
+            globalInitDefs = snoc ctx.globalInitDefs initDef}
+
+    sem compileMainExpr : WasmCompileContext -> Expr -> WasmCompileContext
+    sem compileMainExpr globalCtx = 
     | mainExpr -> 
         match globalCtx.mainExpr with Some _ 
             then 
@@ -497,20 +516,25 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
                 let resultExpr = I31GetS (RefCast {
                     ty = I31Ref (),
                     value = extractResult exprCtx
-                 }) in
+                }) in
+                let globalDef2call = lam def.
+                    match def with FunctionDef f in 
+                    Drop (Call (f.ident, []))
+                in 
+                let globalInits = map globalDef2call globalCtx.globalInitDefs in 
                 let funcDef = (FunctionDef {
                     ident = nameNoSym "mexpr",
                     args = [],
                     locals = exprCtx.locals,
                     resultTy = Tyi32 (), 
-                    instructions = snoc exprCtx.instructions resultExpr
+                    instructions = concat globalInits (snoc exprCtx.instructions resultExpr)
                 }) in 
                 let globalCtx = ctxWithSignatureWasmDef globalCtx funcDef in 
                 ctxWithFuncDef globalCtx funcDef
 
     -- sem compile : [Expr] -> Mod
     sem compile typeEnv =
-    | exprs -> 
+    | transpileEnv -> 
         -- Add integer stdlib definitions
         let stdlibDefs = integerIntrinsics in 
         let ctx = emptyCompileCtx in
@@ -529,10 +553,18 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
 
         -- Add function signature to ctx *before* compilation
         -- to support (mutual) recursion
-        let ctx = foldl ctxWithSignatureMExprDef ctx exprs in
+        let ctx = foldl ctxWithSignatureMExprDef ctx transpileEnv.functionDefs in
+
+        -- Compile Globals
+        let ctx = foldl compileInitGlobals ctx transpileEnv.globals in
 
         -- Compile functions
-        let ctx = foldl compileFunction ctx exprs in 
+        let ctx = foldl compileFunction ctx transpileEnv.functionDefs in 
+
+        let ctx = (match transpileEnv.mainExpr with Some mainExpr 
+            then compileMainExpr ctx mainExpr
+            else error "Unable to compile a MExpr program without a main expression!")
+        in
 
         -- Add apply, exec and dispatch based on aritites
         let arities = foldl accArity (setEmpty subi) ctx.defs in 
@@ -552,7 +584,7 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
         let sortedNames = map (lam kv. match kv with (k, v) in k) sortedKVs in 
 
         Module {
-            definitions = ctx.defs,
+            definitions = concat ctx.defs ctx.globalInitDefs,
             table = Table {size = mapSize ctx.ident2sig, typeString = "funcref"},
             elem = Elem {offset = I32Const 0, funcNames = sortedNames},
             types = [],
@@ -575,12 +607,12 @@ let compileMCoreToWasm = lam ast.
     -- (use MClosPrettyPrint in printLn (expr2str ast) );
 
     use MClosTranspiler in 
-    let exprs = transpile ast in
+    let transpileCtx = transpile ast in
 
     -- (use MClosPrettyPrint in (iter (lam e. printLn (expr2str e)) exprs));
 
     use WasmCompiler in 
-    let wasmModule = compile env exprs in
+    let wasmModule = compile env transpileCtx in
     use WasmPPrint in 
     printLn (pprintMod wasmModule) ;
     ""

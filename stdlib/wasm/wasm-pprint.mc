@@ -28,8 +28,16 @@ lang WasmPPrint = WasmAST
     sem pprintInstr: Int -> Instr -> String
     sem pprintInstr indent = 
     | I32Const i -> join [indent2str indent, "(i32.const ", (int2string i), ")"]
+    | Drop instr -> 
+        let str = pprintInstr (addi indent 1) instr in
+        join [indent2str indent, "(drop ", str, ")"]
     | LocalGet id -> join [indent2str indent, "(local.get $", pprintName id, ")"]
     | GlobalGet id -> join [indent2str indent, "(global.get $", pprintName id, ")"]
+    | GlobalSet (id, value) -> 
+        let valStr = pprintInstr (addi indent 1) value in
+        join [indent2str indent, "(global.set $", pprintName id, "\n", valStr, ")"]
+    | RefNull s ->
+        join [indent2str indent, "(ref.null ", s, ")"]
     | Unreachable _ -> concat (indent2str indent) "(unreachable)"
     | LocalSet (id, value) -> 
         let valStr = pprintInstr (addi indent 1) value in
