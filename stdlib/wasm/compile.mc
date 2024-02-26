@@ -22,6 +22,7 @@ include "string.mc"
 include "seq.mc"
 include "map.mc"
 include "tuple.mc"
+include "stringid.mc"
 
 let fst = lam pair. match pair with (x, _) in x
 let snd = lam pair. match pair with (_, x) in x
@@ -38,7 +39,8 @@ type WasmCompileContext = {
     nextFp: Int,
     mainExpr: (use MClosAst in Option Expr),
     constr2typeid: Map Name Int,
-    globalInitDefs: [(use WasmAST in Def)]
+    globalInitDefs: [(use WasmAST in Def)],
+    record2fields: Map Name [Name]
 }
 
 type WasmExprContext = {
@@ -72,7 +74,8 @@ let emptyCompileCtx : WasmCompileContext = {
     nextFp = 0,
     mainExpr = None (),
     constr2typeid = mapEmpty nameCmp,
-    globalInitDefs = []
+    globalInitDefs = [],
+    record2fields = mapEmpty nameCmp
 }
 
 let emptyExprCtx : WasmExprContext = {
@@ -248,6 +251,44 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
                     values = map snd acc
                 } in 
                 ctxInstrResult ctx structNewInstr
+    | TmRecordUpdate {rec = r, key = key, value = value, ty = ty} -> 
+        let tyStr = (match ty with TyCon {ident = ident} in ident) in 
+
+        -- We assume that the fields are already sorted by SID
+        let fields = 
+            (match mapLookup tyStr globalCtx.record2fields with Some f in f) in
+        
+        let valueCtx = compileExpr globalCtx exprCtx value in 
+
+        let rIdent = nameSym "r" in
+        let rCtx = compileExpr globalCtx valueCtx r in 
+
+        let field2instr = lam field. 
+            if eqString (nameGetStr field) (sidToString key) then
+                extractResult valueCtx
+            else
+                StructGet {
+                    structIdent = tyStr,
+                    field = field,
+                    value = LocalGet rIdent
+                }
+        in 
+
+        let newStruct = StructNew {
+            structIdent = tyStr,
+            values = map field2instr fields
+        } in 
+        
+        {rCtx with 
+            instructions = snoc
+                rCtx.instructions
+                (LocalSet (rIdent, RefCast {
+                    ty = Ref tyStr,
+                    value = extractResult rCtx
+                })),
+            locals = snoc rCtx.locals {ident = rIdent, ty = Ref tyStr},
+            result = Left newStruct
+        }
     | TmSeq {tms = tms} -> 
         let localName = nameSym "arr" in
         let sizeInstr = I32Const (length tms) in 
@@ -548,6 +589,7 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
         let typeCtx = compileTypes typeEnv in 
         let ctx = 
             {ctx with 
+                record2fields = typeCtx.record2fields,
                 defs = concat ctx.defs typeCtx.defs,
                 constr2typeid = typeCtx.constr2typeid} in 
 

@@ -29,12 +29,16 @@ let snd : all a. all b. (a, b) -> b = lam x. x.1
 
 type WasmTypeContext = {
     constr2typeid: Map Name Int,
-    defs : [(use WasmAST in Def)]
+    defs : [(use WasmAST in Def)],
+    -- We expect the value list to be sorted by the SID of the
+    -- String value of the Name.
+    record2fields: Map Name [Name]
 }
 
 let emptyTypeCtx = {
     defs = [],
-    constr2typeid = mapEmpty nameCmp
+    constr2typeid = mapEmpty nameCmp,
+    record2fields = mapEmpty nameCmp
 }
 
 lang WasmTypeCompiler = MClosAst + WasmAST + MExprPrettyPrint
@@ -69,7 +73,11 @@ lang WasmTypeCompiler = MClosAst + WasmAST + MExprPrettyPrint
         -- the SIDs of the record field identifiers
         let f = sort cmpSID f in 
         let f = map sidToString f in 
-        let str2field = lam s. {ident = nameNoSym s, ty = Anyref ()} in 
+        let f = map nameNoSym f in 
+        let str2field = lam s. {ident = s, ty = Anyref ()} in 
+
+        let ctx = {ctx with record2fields = mapInsert name f ctx.record2fields} in 
+
         {ctx with defs = cons (StructTypeDef {
             ident = name, 
             fields = map str2field f
