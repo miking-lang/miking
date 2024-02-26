@@ -220,5 +220,9 @@ let integerIntrinsics = [
     idWasm,
     arrayCopyWasm,
     flattenWasm,
-    reverseWasm
+    reverseWasm,
+    iteriArrayWasm,
+    iterArrayWasm,
+    iterWasm,
+    iteriWasm
 ]

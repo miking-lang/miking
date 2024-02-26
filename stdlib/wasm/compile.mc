@@ -191,6 +191,8 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
     | CLength _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "length")
     | CGet _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "get")
     | CReverse _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "reverse")
+    | CIter _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "iter")
+    | CIteri _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "iteri")
     -- Refererence Operations
     | CRef _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "ref")
     | CDeRef _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "deref")
@@ -278,7 +280,7 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
             structIdent = tyStr,
             values = map field2instr fields
         } in 
-        
+
         {rCtx with 
             instructions = snoc
                 rCtx.instructions

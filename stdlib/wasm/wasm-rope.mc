@@ -718,3 +718,155 @@ let reverseWasm =
         ]
     }
     
+let iterArrayName = nameSym "iter-array"
+let iteriArrayName = nameSym "iteri-array"
+let iterArrayFactory = lam useIndex: Bool. 
+    use WasmAST in 
+    let arr = nameSym "arr" in 
+    let f = nameSym "f" in 
+    let offset = nameSym "offset" in 
+    let n = nameSym "n" in 
+    let i = nameSym "i" in 
+    let loopIdent = nameSym "loopIdent" in 
+
+    let call = 
+        if useIndex then 
+            Call (nameNoSym "apply", [
+                Call (nameNoSym "apply", [
+                    LocalGet f,
+                    I31Cast (LocalGet i)
+                ]),
+                ArrayGet {
+                    tyIdent = anyrefArrName,
+                    value = LocalGet arr,
+                    index = I32Add(LocalGet i, LocalGet offset)
+                }
+            ])
+        else
+            Call (nameNoSym "apply", [
+                LocalGet f,
+                ArrayGet {
+                    tyIdent = anyrefArrName,
+                    value = LocalGet arr,
+                    index = I32Add(LocalGet i, LocalGet offset)
+                }
+            ])
+    in 
+
+    FunctionDef {
+        ident = if useIndex then iteriArrayName else iterArrayName,
+        locals = [{ident = i, ty = Tyi32 ()}],
+        args = [
+            {ident = arr, ty = Ref anyrefArrName},
+            {ident = f, ty = Anyref ()},
+            {ident = offset, ty = Tyi32 ()},
+            {ident = n, ty = Tyi32 ()}
+        ],
+        resultTy = Tyi32 (),
+        instructions = [
+            Loop {
+                ident = loopIdent,
+                body = [
+                    Drop call,
+                    LocalSet (i, I32Add(LocalGet i, I32Const 1)),
+                    BrIf {
+                        ident = loopIdent,
+                        cond = I32LtS (LocalGet i, LocalGet n)
+                    }
+                ]
+            },
+            I32Const 0
+        ]
+    }
+
+let iterFactoryWasm = lam useIndex: Bool.  
+    use WasmAST in 
+    let rope = nameSym "rope" in 
+    let f = nameSym "f" in 
+
+    let arrayFunctionName = if useIndex then iteriArrayName else iterArrayName in
+    let funcName = if useIndex then nameNoSym "iteri" else nameNoSym "iter" in 
+
+    let onLeaf = lam leaf. [
+        Drop (Call (arrayFunctionName, [
+            StructGet {
+                structIdent = leafName,
+                field = arrName,
+                value = leaf
+            },
+            LocalGet f,
+            I32Const 0,
+            StructGet {
+                structIdent = leafName,
+                field = lenName,
+                value = leaf
+            }
+        ]))]
+    in
+
+    let onSlice = lam slice. [
+        Drop (Call (arrayFunctionName, [
+            StructGet {
+                structIdent = sliceName,
+                field = arrName,
+                value = slice
+            },
+            LocalGet f,
+            StructGet {
+                structIdent = sliceName,
+                field = offName,
+                value = slice
+            },
+            StructGet {
+                structIdent = sliceName,
+                field = lenName,
+                value = slice
+            }
+        ]))]
+    in 
+
+    let onConcat = lam cnct. [
+        Drop (
+            Call (funcName, [
+                LocalGet f,
+                StructGet {
+                    structIdent = concatName,
+                    field = lhsName,
+                    value = cnct
+                }
+            ])
+        ),
+        Drop (
+            Call (funcName, [
+                LocalGet f,
+                StructGet {
+                    structIdent = concatName,
+                    field = rhsName,
+                    value = cnct
+                }
+            ])
+        )
+    ] in 
+
+    FunctionDef {
+        ident = funcName,
+        args = [
+            {ident = f, ty = Anyref ()},
+            {ident = rope, ty = Anyref ()}
+        ],
+        locals = [],
+        resultTy = Anyref (),
+        instructions = [
+            switchOnType
+                (LocalGet rope)
+                onLeaf
+                onSlice
+                onConcat,
+            I31Cast (I32Const 0)
+        ]
+    }
+
+let iteriArrayWasm = iterArrayFactory true
+let iterArrayWasm = iterArrayFactory false
+let iteriWasm = iterFactoryWasm true
+let iterWasm = iterFactoryWasm false
