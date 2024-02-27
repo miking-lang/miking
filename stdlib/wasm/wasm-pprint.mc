@@ -42,6 +42,10 @@ lang WasmPPrint = WasmAST
     | LocalSet (id, value) -> 
         let valStr = pprintInstr (addi indent 1) value in
         join [indent2str indent, "(local.set $", pprintName id, "\n", valStr, ")"]
+    | I32Store {index = index, value = value} -> 
+        let s1 = pprintInstr (addi indent 1) index in
+        let s2 = pprintInstr (addi indent 1) value in 
+        join [indent2str indent, "(i32.store\n", s1, "\n", s2, ")"]
     | I32Add (i1, i2) -> 
         let s1 = pprintInstr (addi indent 1) i1 in
         let s2 = pprintInstr (addi indent 1) i2 in 
@@ -234,27 +238,46 @@ lang WasmPPrint = WasmAST
         let funcNames = map pprintName e.funcNames in 
         let funcNamesStr = strJoin " " (map (concat "$") funcNames) in
         join [indent2str indent, "(elem ", offsetStr, " ", funcNamesStr, ")"]
+    | Memory {n = n} ->
+        join [indent2str indent, "(memory ", int2string n, ")"] 
+
+    sem pprintExport indent = 
+    | FunctionExport {ident = ident} ->
+        let s = pprintName ident in 
+        join [indent2str indent, "(export \"", s, "\" (func $", s, "))"]
+    | MemoryExport {ident = ident, n = n} ->
+        join [indent2str indent, "(export \"", pprintName ident, "\" (memory ", int2string n, "))"]
 
     sem pprintMod = 
     | Module m -> 
-        let pprintImport = lam r. join [
-            indent2str 1, 
-            "(import \"",
-            r.jsObjIdent, 
-            "\" \"",
-            r.jsFieldIdent, 
-            "\" (func $",
-            pprintName r.wasmIdent,
-            "))"
-        ] in 
-        let pprintExport = lam n. join ["    (export \"", pprintName n, "\" (func $", pprintName n, "))"] in
+        let pprintImport = lam r. 
+            let paramStr = match r.paramTys with []
+                then ""
+                else
+                    let ty2str = map (lam t. join ["(param ", pprintWasmType t, ")"]) r.paramTys in
+                    strJoin " " (ty2str)
+            in 
+            join [
+                indent2str 1, 
+                "(import \"",
+                r.jsObjIdent, 
+                "\" \"",
+                r.jsFieldIdent, 
+                "\" (func $",
+                pprintName r.wasmIdent,
+                " ",
+                paramStr,
+                "))"
+            ]
+        in 
+        let memoryStr = pprintMemory 1 m.memory in 
         let tableStr = pprintMemory 1 m.table in
         let elemStr = pprintMemory 1 m.elem in 
         let defsStr = strJoin "\n\n" (map (pprintDef 1) m.definitions) in 
-        let exportStr = strJoin "\n" (map pprintExport m.exports) in 
+        let exportStr = strJoin "\n" (map (pprintExport 1) m.exports) in 
         let importStr= strJoin "\n" (map pprintImport m.imports) in 
 
-        join ["(module\n", tableStr, "\n", importStr, "\n\n", defsStr, 
+        join ["(module\n", memoryStr, "\n", tableStr, "\n", importStr, "\n\n", defsStr, 
             "\n\n", elemStr, "\n", exportStr, ")"]
 end
 

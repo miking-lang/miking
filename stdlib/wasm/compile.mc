@@ -196,9 +196,9 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
     -- Refererence Operations
     | CRef _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "ref")
     | CDeRef _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "deref")
-    -- Modref is currently broken because let x = ... is breaks when the body has
-    -- side effects.
     | CModRef _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "modref")
+    -- IOAST 
+    | CPrint _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "print")
 
     sem compileExpr : WasmCompileContext -> WasmExprContext -> Expr -> WasmExprContext
     sem compileExpr globalCtx exprCtx = 
@@ -633,10 +633,30 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
             elem = Elem {offset = I32Const 0, funcNames = sortedNames},
             types = [],
             imports = [
-                {jsObjIdent="imports", jsFieldIdent="utestSuccess", wasmIdent=nameNoSym "utestSucc"},
-                {jsObjIdent="imports", jsFieldIdent="utestFailure", wasmIdent=nameNoSym "utestFail"}
+                {
+                    jsObjIdent="imports", 
+                    jsFieldIdent="utestSuccess", 
+                    wasmIdent=nameNoSym "utestSucc",
+                    paramTys=[]
+                },
+                {
+                    jsObjIdent="imports",
+                    jsFieldIdent="utestFailure",
+                    wasmIdent=nameNoSym "utestFail",
+                    paramTys=[]
+                },
+                {
+                    jsObjIdent="imports",
+                    jsFieldIdent="callPrintJS",
+                    wasmIdent=nameNoSym "callPrintJS",
+                    paramTys=[Tyi32 ()]
+                }
             ],
-            exports = [nameNoSym "mexpr"]
+            memory = Memory {n = 1},
+            exports = [
+                FunctionExport {ident = nameNoSym "mexpr"},
+                MemoryExport {ident = nameNoSym "printmemory", n = 0}
+            ]
         }
 end
 

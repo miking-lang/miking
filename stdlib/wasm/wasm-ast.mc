@@ -3,6 +3,10 @@ include "name.mc"
 lang WasmAST
     syn Instr =
     | I32Const Int
+    | I32Store {
+        index: Instr,
+        value: Instr
+    }
     | I32Add (Instr, Instr)
     | I32Sub (Instr, Instr)
     | I32Mul (Instr, Instr)
@@ -137,19 +141,26 @@ lang WasmAST
     syn WasmMemory = 
     | Table {size: Int, typeString: String}
     | Elem {offset: Instr, funcNames: [Name]}
+    | Memory {n: Int}
+
+    syn WasmExport = 
+    | FunctionExport {ident: Name}
+    | MemoryExport {ident: Name, n: Int}
 
     syn Mod = 
     | Module {
         definitions: [Def],
+        memory: WasmMemory,
         table: WasmMemory, 
         elem: WasmMemory, 
         types: [WasmType],
         imports: [{
             jsObjIdent: String,
             jsFieldIdent: String,
-            wasmIdent: Name
+            wasmIdent: Name,
+            paramTys: [WasmType]
         }],
-        exports: [Name]
+        exports: [WasmExport]
     }
 end
 

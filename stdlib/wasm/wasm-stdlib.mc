@@ -189,6 +189,53 @@ let modrefWasm =
         ]
     }
 
+let printWasm = 
+    let str = nameSym "str" in 
+    let i = nameSym "i" in
+    let n = nameSym "n" in 
+    let loopIdent = nameSym "loop-ident" in 
+    use WasmAST in 
+        FunctionDef {
+        ident = nameNoSym "print",
+        args = [
+            {ident = str, ty = Anyref ()}
+        ],
+        locals = [
+            {ident = i, ty = Tyi32 ()},
+            {ident = n, ty = Tyi32 ()}
+        ],
+        resultTy = Anyref (),
+        instructions = [
+            LocalSet (n, I31GetU (
+                RefCast {
+                    ty = I31Ref (),
+                    value = (Call (nameNoSym "length", [LocalGet str]))
+                }
+            )),
+            Loop {
+                ident = loopIdent,
+                body = [
+                    I32Store {
+                        index = LocalGet i,
+                        value = I31GetU (
+                            RefCast {
+                                ty = I31Ref (),
+                                value = (Call (nameNoSym "get", [LocalGet str, I31Cast (LocalGet i)]))
+                            }
+                        )
+                    },
+                    LocalSet (i, I32Add(LocalGet i, I32Const 1)),
+                    BrIf {
+                        ident = loopIdent,
+                        cond = I32LtS (LocalGet i, LocalGet n)
+                    }
+                ]
+            },
+            Call (nameNoSym "callPrintJS", [LocalGet n]),
+            I31Cast (LocalGet i)
+        ]
+    }
+
 let integerIntrinsics = [
     addiWasm,
     subiWasm,
@@ -224,5 +271,6 @@ let integerIntrinsics = [
     iteriArrayWasm,
     iterArrayWasm,
     iterWasm,
-    iteriWasm
+    iteriWasm,
+    printWasm
 ]
