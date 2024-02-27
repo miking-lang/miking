@@ -272,9 +272,9 @@ let integerIntrinsics = [
     iterArrayWasm,
     iterWasm,
     iteriWasm,
-    foldliArrayWasm,
     foldlArrayWasm,
+    foldrArrayWasm,
     foldlWasm,
-    foldliWasm,
+    foldrWasm,
     printWasm
 ]

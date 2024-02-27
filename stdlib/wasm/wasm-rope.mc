@@ -867,8 +867,8 @@ let iterFactoryWasm = lam useIndex: Bool.
     }
 
 let foldlArrayName = nameSym "foldl-array"
-let foldliArrayName = nameSym "foldli-array"
-let foldlArrayFactory = lam useIndex: Bool. 
+let foldrArrayName = nameSym "foldr-array"
+let foldlArrayFactory = lam left: Bool. 
     use WasmAST in 
     let arr = nameSym "arr" in 
     let f = nameSym "f" in 
@@ -879,41 +879,31 @@ let foldlArrayFactory = lam useIndex: Bool.
     let loopIdent = nameSym "loopIdent" in 
 
     let work = 
-        if useIndex then 
-            LocalSet (
-                acc, 
-                Call (nameNoSym "apply", [
-                    Call (nameNoSym "apply", [
-                            Call (nameNoSym "apply", [
-                            LocalGet f,
-                            I31Cast (LocalGet i)
-                        ]),
-                        LocalGet acc
-                    ]),
-                    ArrayGet {
-                        tyIdent = anyrefArrName,
-                        value = LocalGet arr,
-                        index = I32Add(LocalGet i, LocalGet offset)
-                    }
-                ])
-            )
-        else
-            LocalSet (acc, Call (nameNoSym "apply", [
-                Call (nameNoSym "apply", [
-                    LocalGet f,
-                    LocalGet acc
-                ]),
-                ArrayGet {
-                    tyIdent = anyrefArrName,
-                    value = LocalGet arr,
-                    index = I32Add(LocalGet i, LocalGet offset)
-                }
-            ]))
-            
+        LocalSet (acc, Call (nameNoSym "apply", [
+            Call (nameNoSym "apply", [
+                LocalGet f,
+                LocalGet acc
+            ]),
+            ArrayGet {
+                tyIdent = anyrefArrName,
+                value = LocalGet arr,
+                index = I32Add(LocalGet i, LocalGet offset)
+            }
+        ]))
     in 
 
+    let initI = if left then I32Const 0 else I32Sub (LocalGet n, I32Const 1) in
+    let updateI = if left 
+        then I32Add(LocalGet i, I32Const 1)
+        else I32Sub(LocalGet i, I32Const 1)
+    in
+    let brCond = if left
+        then I32LtS (LocalGet i, LocalGet n)
+        else I32GeS (LocalGet i, I32Const 0)
+    in
+
     FunctionDef {
-        ident = if useIndex then foldliArrayName else foldlArrayName,
+        ident = if left then foldlArrayName else foldrArrayName,
         locals = [{ident = i, ty = Tyi32 ()}],
         args = [
             {ident = arr, ty = Ref anyrefArrName},
@@ -924,14 +914,15 @@ let foldlArrayFactory = lam useIndex: Bool.
         ],
         resultTy = Anyref (),
         instructions = [
+            LocalSet (i, initI),
             Loop {
                 ident = loopIdent,
                 body = [
                     work,
-                    LocalSet (i, I32Add(LocalGet i, I32Const 1)),
+                    LocalSet (i, updateI),
                     BrIf {
                         ident = loopIdent,
-                        cond = I32LtS (LocalGet i, LocalGet n)
+                        cond = brCond
                     }
                 ]
             },
@@ -939,14 +930,14 @@ let foldlArrayFactory = lam useIndex: Bool.
         ]
     }
 
-let foldlFactoryWasm = lam useIndex: Bool.  
+let foldlFactoryWasm = lam left: Bool.  
     use WasmAST in 
     let rope = nameSym "rope" in 
     let f = nameSym "f" in 
     let acc = nameSym "acc" in 
 
-    let arrayFunctionName = if useIndex then foldliArrayName else foldlArrayName in
-    let funcName = if useIndex then nameNoSym "foldli" else nameNoSym "foldl" in 
+    let arrayFunctionName = if left then foldlArrayName else foldrArrayName in
+    let funcName = if left then nameNoSym "foldl" else nameNoSym "foldr" in 
 
     let onLeaf = lam leaf. [
         LocalSet (acc, (Call (arrayFunctionName, [
@@ -988,6 +979,16 @@ let foldlFactoryWasm = lam useIndex: Bool.
         ])))]
     in 
 
+    let fst = if left
+        then lhsName
+        else rhsName
+    in 
+
+    let snd = if left
+        then rhsName
+        else lhsName
+    in
+
     let onConcat = lam cnct. [
         LocalSet (acc,
             Call (funcName, [
@@ -995,7 +996,7 @@ let foldlFactoryWasm = lam useIndex: Bool.
                 LocalGet acc,
                 StructGet {
                     structIdent = concatName,
-                    field = lhsName,
+                    field = fst,
                     value = cnct
                 }
             ])
@@ -1006,7 +1007,7 @@ let foldlFactoryWasm = lam useIndex: Bool.
                 LocalGet acc,
                 StructGet {
                     structIdent = concatName,
-                    field = rhsName,
+                    field = snd,
                     value = cnct
                 }
             ])
@@ -1037,7 +1038,7 @@ let iterArrayWasm = iterArrayFactory false
 let iteriWasm = iterFactoryWasm true
 let iterWasm = iterFactoryWasm false
 
-let foldliArrayWasm = foldlArrayFactory true
-let foldlArrayWasm = foldlArrayFactory false
-let foldliWasm = foldlFactoryWasm true
-let foldlWasm = foldlFactoryWasm false
+let foldlArrayWasm = foldlArrayFactory true
+let foldrArrayWasm = foldlArrayFactory false
+let foldlWasm = foldlFactoryWasm true
+let foldrWasm = foldlFactoryWasm false

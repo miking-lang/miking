@@ -194,6 +194,7 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
     | CIter _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "iter")
     | CIteri _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "iteri")
     | CFoldl _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "foldl")
+    | CFoldr _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "foldr")
     -- Refererence Operations
     | CRef _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "ref")
     | CDeRef _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "deref")
