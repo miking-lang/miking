@@ -44,7 +44,22 @@ let emptyTypeCtx = {
 lang WasmTypeCompiler = MClosAst + WasmAST + MExprPrettyPrint
     sem compileTypes : (AssocSeq Name Type) -> WasmTypeContext
     sem compileTypes = 
-    | env -> foldl compileType emptyTypeCtx env
+    | env -> 
+        -- We add a pair type split-2-tuple. The intrinsic function splitAt
+        -- returns a pair. This will be type lifted, but we do not know
+        -- the exact Name of this pair type but we will no its exact structure.
+        -- Therefore, we can introduce another type with a fixed, known identifier
+        -- with that exact structure. The Wasm type checker will allow 
+        -- casting structures of this type to the actual result type of
+        -- splitAt. 
+        let ctx = {emptyTypeCtx with defs = [StructTypeDef {
+            ident = nameNoSym "split-2-tuple",
+            fields = [
+                {ident = nameNoSym "0", ty = Anyref ()},
+                {ident = nameNoSym "1", ty = Anyref ()}
+            ]
+        }]} in 
+        foldl compileType ctx env
 
     sem compileType : WasmTypeContext -> (Name, Type) -> WasmTypeContext
     sem compileType ctx =

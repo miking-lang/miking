@@ -298,5 +298,6 @@ let integerIntrinsics = [
     createWasm,
     nullWasm,
     setWasm,
-    subsequenceWasm
+    subsequenceWasm,
+    splitatWasm
 ]

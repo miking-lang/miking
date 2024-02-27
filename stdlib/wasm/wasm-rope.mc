@@ -1606,3 +1606,67 @@ let subsequenceWasm =
             }
         ]
     }
+
+let splitatWasm = 
+    use WasmAST in 
+    
+    let arg = nameSym "arg" in 
+    let flat = nameSym "flat" in 
+    let i_uncast = nameSym "i-uncast" in 
+    let i = nameSym "i" in 
+    let n = nameSym "n" in 
+
+    FunctionDef {
+        ident = nameNoSym "splitat",
+        args = [
+            {ident = arg, ty = Anyref ()},
+            {ident = i_uncast, ty = Anyref ()}
+        ],
+        locals = [
+            {ident = flat, ty = Ref leafName},
+            {ident = i, ty = Tyi32 ()},
+            {ident = n, ty = Tyi32 ()}
+        ],
+        resultTy = Anyref (),
+        instructions = [
+            LocalSet (i, anyref2i32 (LocalGet i_uncast)),
+            LocalSet (flat, RefCast {
+                ty = Ref leafName,
+                value = Call (nameNoSym "_flatten-rope", [LocalGet arg])
+            }),
+            LocalSet (n, StructGet {
+                structIdent = leafName,
+                field = lenName,
+                value = LocalGet flat
+            }),
+            StructNew {
+                structIdent = nameNoSym "split-2-tuple",
+                values = [
+                    StructNew {
+                        structIdent = sliceName,
+                        values = [
+                            LocalGet i,
+                            I32Const 0,
+                            StructGet {
+                                structIdent = leafName,
+                                field = arrName,
+                                value = LocalGet flat
+                            }
+                        ]
+                    },
+                    StructNew {
+                        structIdent = sliceName,
+                        values = [
+                            I32Sub (LocalGet n, LocalGet i),
+                            LocalGet i,
+                            StructGet {
+                                structIdent = leafName,
+                                field = arrName,
+                                value = LocalGet flat
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }

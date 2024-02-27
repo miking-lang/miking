@@ -201,6 +201,7 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
     | CMapi _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "mapi")
     | CFoldl _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "foldl")
     | CFoldr _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "foldr")
+    | CSplitAt _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "splitat")
     -- Since we only have ropes, we can not create lists. Therefore we 
     -- simply say that ropes are also lists. Creating a rope or list is then
     -- just the identity operation.
