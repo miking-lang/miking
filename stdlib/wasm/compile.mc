@@ -191,6 +191,8 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
     | CLength _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "length")
     | CGet _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "get")
     | CReverse _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "reverse")
+    | CCreate _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "create")
+    | CNull _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "null")
     | CIter _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "iter")
     | CIteri _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "iteri")
     | CMap _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "map")

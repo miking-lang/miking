@@ -1244,3 +1244,92 @@ let mapiArrayWasm = mapArrayFactory true
 let mapArrayWasm = mapArrayFactory false
 let mapiWasm = mapFactoryWasm true
 let mapWasm = mapFactoryWasm false
+
+let createWasm = 
+    use WasmAST in
+
+    let n = nameSym "n" in
+    let n_anyref = nameSym "n_anyref" in
+    let prod = nameSym "prod" in 
+    let resArr = nameSym "res-arr" in
+    let i = nameSym "i" in 
+    let loopIdent = nameSym "loopIdent" in 
+
+    FunctionDef {
+        ident = nameNoSym "create",
+        args = [
+            {ident = n_anyref, ty = Anyref ()},
+            {ident = prod, ty = Anyref ()}
+        ],
+        locals = [
+            {ident = n, ty = Tyi32 ()},
+            {ident = resArr, ty = Ref anyrefArrName},
+            {ident = i, ty = Tyi32 ()}    
+        ],
+        resultTy = Anyref (),
+        instructions = [
+            LocalSet (n, I31GetS (
+                RefCast {
+                    ty = I31Ref (),
+                    value = LocalGet n_anyref
+                }
+            )),
+            LocalSet (resArr, ArrayNew {
+                tyIdent = anyrefArrName,
+                initValue = RefNull "i31",
+                size = LocalGet n
+            }),
+            Loop {
+                ident = loopIdent,
+                body = [
+                    ArraySet {
+                        tyIdent = anyrefArrName,
+                        value = LocalGet resArr,
+                        index = LocalGet i,
+                        value2 = Call (nameNoSym "apply", [
+                            LocalGet prod,
+                            I31Cast (LocalGet i)
+                        ])
+                    },
+                    LocalSet (i, I32Add (LocalGet i, I32Const 1)),
+                    BrIf {
+                        ident = loopIdent,
+                        cond = I32LtS (LocalGet i, LocalGet n)
+                    }
+                ]
+            },
+            StructNew {
+                structIdent = leafName,
+                values = [
+                    LocalGet n,
+                    LocalGet resArr
+                ]
+            }
+        ]
+    }
+
+let nullWasm = 
+    use WasmAST in 
+     use WasmAST in
+
+    let rope = nameSym "rope" in
+
+    FunctionDef {
+        ident = nameNoSym "null",
+        args = [
+            {ident = rope, ty = Anyref ()}
+        ],
+        locals = [],
+        resultTy = Anyref (),
+        instructions = [
+            I31Cast (
+                I32Eq (
+                    I31GetS (RefCast {
+                        ty = I31Ref (),
+                        value = Call (nameNoSym "length", [LocalGet rope])
+                    }),
+                    I32Const 0
+                )
+            )
+        ]
+    }
