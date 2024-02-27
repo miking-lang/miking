@@ -193,6 +193,8 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
     | CReverse _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "reverse")
     | CIter _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "iter")
     | CIteri _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "iteri")
+    | CMap _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "map")
+    | CMapi _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "mapi")
     | CFoldl _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "foldl")
     | CFoldr _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "foldr")
     -- Refererence Operations

@@ -1033,6 +1033,203 @@ let foldlFactoryWasm = lam left: Bool.
         ]
     }
 
+let mapArrayName = nameSym "map-array"
+let mapiArrayName = nameSym "mapi-array"
+let mapArrayFactory = lam useIndex: Bool. 
+    use WasmAST in 
+    let arr = nameSym "arr" in 
+    let f = nameSym "f" in 
+    let offset = nameSym "offset" in 
+    let n = nameSym "n" in 
+    let i = nameSym "i" in 
+    let res = nameSym "res" in
+    let loopIdent = nameSym "loopIdent" in 
+
+    let work = 
+        if useIndex then 
+            Call (nameNoSym "apply", [
+                Call (nameNoSym "apply", [
+                    LocalGet f,
+                    I31Cast (LocalGet i)
+                ]),
+                ArrayGet {
+                    tyIdent = anyrefArrName,
+                    value = LocalGet arr,
+                    index = I32Add(LocalGet i, LocalGet offset)
+                }
+            ])
+        else
+            Call (nameNoSym "apply", [
+                LocalGet f,
+                ArrayGet {
+                    tyIdent = anyrefArrName,
+                    value = LocalGet arr,
+                    index = I32Add(LocalGet i, LocalGet offset)
+                }
+            ])
+    in 
+
+    FunctionDef {
+        ident = if useIndex then mapiArrayName else mapArrayName,
+        locals = [
+            {ident = i, ty = Tyi32 ()},
+            {ident = res, ty = Ref anyrefArrName}
+        ],
+        args = [
+            {ident = arr, ty = Ref anyrefArrName},
+            {ident = f, ty = Anyref ()},
+            {ident = offset, ty = Tyi32 ()},
+            {ident = n, ty = Tyi32 ()}
+        ],
+        resultTy = Anyref (),
+        instructions = [
+            LocalSet (res, ArrayNew {
+                tyIdent= anyrefArrName,
+                initValue = RefNull "i31",
+                size = LocalGet n
+            }),
+            Loop {
+                ident = loopIdent,
+                body = [
+                    ArraySet {
+                        tyIdent = anyrefArrName,
+                        value = LocalGet res,
+                        index = LocalGet i,
+                        value2 = work
+                    },
+                    LocalSet (i, I32Add(LocalGet i, I32Const 1)),
+                    BrIf {
+                        ident = loopIdent,
+                        cond = I32LtS (LocalGet i, LocalGet n)
+                    }
+                ]
+            },
+            LocalGet res
+        ]
+    }
+
+let mapFactoryWasm = lam useIndex: Bool.  
+    use WasmAST in 
+    let rope = nameSym "rope" in 
+    let f = nameSym "f" in 
+
+    let res = nameSym "res" in 
+
+    let arrayFunctionName = if useIndex then mapiArrayName else mapArrayName in
+    let funcName = if useIndex then nameNoSym "mapi" else nameNoSym "map" in 
+
+    let onLeaf = lam leaf. [
+        LocalSet (res, StructNew {
+            structIdent = leafName,
+            values = [
+                StructGet {
+                    structIdent = leafName,
+                    field = lenName,
+                    value = leaf
+                },
+                RefCast {
+                    ty = Ref anyrefArrName,
+                    value = Call (arrayFunctionName, [
+                        StructGet {
+                            structIdent = leafName,
+                            field = arrName,
+                            value = leaf
+                        },
+                        LocalGet f,
+                        I32Const 0,
+                        StructGet {
+                            structIdent = leafName,
+                            field = lenName,
+                            value = leaf
+                        }
+                    ])
+                }
+            ]
+        })]
+    in
+
+    let onSlice = lam slice. [
+        LocalSet (res, StructNew {
+            structIdent = leafName,
+            values = [
+                StructGet {
+                    structIdent = sliceName,
+                    field = lenName,
+                    value = slice
+                },
+                RefCast {
+                    ty = Ref anyrefArrName,
+                    value = Call (arrayFunctionName, [
+                        StructGet {
+                            structIdent = sliceName,
+                            field = arrName,
+                            value = slice
+                        },
+                        LocalGet f,
+                        StructGet {
+                            structIdent = sliceName,
+                            field = offName,
+                            value = slice
+                        },
+                        StructGet {
+                            structIdent = sliceName,
+                            field = lenName,
+                            value = slice
+                        }
+                    ])
+                }
+            ]
+        })
+    ]
+    in 
+
+    let onConcat = lam cnct. [
+        LocalSet (res, StructNew {
+            structIdent = concatName,
+            values = [
+                StructGet {
+                    structIdent = concatName,
+                    field = lenName,
+                    value = cnct
+                },
+                Call (funcName, [
+                    LocalGet f,
+                    StructGet {
+                        structIdent = concatName,
+                        field = lhsName,
+                        value = cnct
+                    }
+                ]),
+                Call (funcName, [
+                    LocalGet f,
+                    StructGet {
+                        structIdent = concatName,
+                        field = lhsName,
+                        value = cnct
+                    }
+                ])
+            ]
+        })]
+    in 
+
+    FunctionDef {
+        ident = funcName,
+        args = [
+            {ident = f, ty = Anyref ()},
+            {ident = rope, ty = Anyref ()}
+        ],
+        locals = [{ident = res, ty = Anyref ()}],
+        resultTy = Anyref (),
+        instructions = [
+            switchOnType
+                (LocalGet rope)
+                onLeaf
+                onSlice
+                onConcat,
+            LocalGet res
+        ]
+    }
+
 let iteriArrayWasm = iterArrayFactory true
 let iterArrayWasm = iterArrayFactory false
 let iteriWasm = iterFactoryWasm true
@@ -1042,3 +1239,8 @@ let foldlArrayWasm = foldlArrayFactory true
 let foldrArrayWasm = foldlArrayFactory false
 let foldlWasm = foldlFactoryWasm true
 let foldrWasm = foldlFactoryWasm false
+
+let mapiArrayWasm = mapArrayFactory true
+let mapArrayWasm = mapArrayFactory false
+let mapiWasm = mapFactoryWasm true
+let mapWasm = mapFactoryWasm false

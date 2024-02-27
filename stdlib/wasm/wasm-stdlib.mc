@@ -276,5 +276,9 @@ let integerIntrinsics = [
     foldrArrayWasm,
     foldlWasm,
     foldrWasm,
-    printWasm
+    printWasm,
+    mapiArrayWasm,
+    mapArrayWasm,
+    mapWasm,
+    mapiWasm
 ]
