@@ -114,6 +114,19 @@ let idWasm =
         instructions = [LocalGet arg]
     }
 
+let constTrueWasm = 
+    use WasmAST in 
+    let arg = nameSym "arg" in 
+    FunctionDef {
+        ident = nameNoSym "const-true",
+        args = [
+            {ident = arg, ty = Anyref ()}
+        ],
+        locals = [],
+        resultTy = Anyref (),
+        instructions = [I31Cast (I32Const 1)]
+    }
+
 let anyrefBoxDef = 
     use WasmAST in 
     StructTypeDef {
@@ -265,6 +278,7 @@ let integerIntrinsics = [
     consWasm,
     snocWasm,
     idWasm,
+    constTrueWasm,
     arrayCopyWasm,
     flattenWasm,
     reverseWasm,

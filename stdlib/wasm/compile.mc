@@ -201,6 +201,14 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
     | CMapi _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "mapi")
     | CFoldl _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "foldl")
     | CFoldr _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "foldr")
+    -- Since we only have ropes, we can not create lists. Therefore we 
+    -- simply say that ropes are also lists. Creating a rope or list is then
+    -- just the identity operation.
+    | CCreateRope _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "id")
+    | CCreateList _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "id")
+    | CIsList _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "const-true")
+    | CIsRope _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "const-true")
+
     -- Refererence Operations
     | CRef _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "ref")
     | CDeRef _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "deref")
