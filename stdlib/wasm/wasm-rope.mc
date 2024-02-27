@@ -866,7 +866,178 @@ let iterFactoryWasm = lam useIndex: Bool.
         ]
     }
 
+let foldlArrayName = nameSym "foldl-array"
+let foldliArrayName = nameSym "foldli-array"
+let foldlArrayFactory = lam useIndex: Bool. 
+    use WasmAST in 
+    let arr = nameSym "arr" in 
+    let f = nameSym "f" in 
+    let acc = nameSym "acc" in 
+    let offset = nameSym "offset" in 
+    let n = nameSym "n" in 
+    let i = nameSym "i" in 
+    let loopIdent = nameSym "loopIdent" in 
+
+    let work = 
+        if useIndex then 
+            LocalSet (
+                acc, 
+                Call (nameNoSym "apply", [
+                    Call (nameNoSym "apply", [
+                            Call (nameNoSym "apply", [
+                            LocalGet f,
+                            I31Cast (LocalGet i)
+                        ]),
+                        LocalGet acc
+                    ]),
+                    ArrayGet {
+                        tyIdent = anyrefArrName,
+                        value = LocalGet arr,
+                        index = I32Add(LocalGet i, LocalGet offset)
+                    }
+                ])
+            )
+        else
+            LocalSet (acc, Call (nameNoSym "apply", [
+                Call (nameNoSym "apply", [
+                    LocalGet f,
+                    LocalGet acc
+                ]),
+                ArrayGet {
+                    tyIdent = anyrefArrName,
+                    value = LocalGet arr,
+                    index = I32Add(LocalGet i, LocalGet offset)
+                }
+            ]))
+            
+    in 
+
+    FunctionDef {
+        ident = if useIndex then foldliArrayName else foldlArrayName,
+        locals = [{ident = i, ty = Tyi32 ()}],
+        args = [
+            {ident = arr, ty = Ref anyrefArrName},
+            {ident = f, ty = Anyref ()},
+            {ident = acc, ty = Anyref ()},
+            {ident = offset, ty = Tyi32 ()},
+            {ident = n, ty = Tyi32 ()}
+        ],
+        resultTy = Anyref (),
+        instructions = [
+            Loop {
+                ident = loopIdent,
+                body = [
+                    work,
+                    LocalSet (i, I32Add(LocalGet i, I32Const 1)),
+                    BrIf {
+                        ident = loopIdent,
+                        cond = I32LtS (LocalGet i, LocalGet n)
+                    }
+                ]
+            },
+            LocalGet acc
+        ]
+    }
+
+let foldlFactoryWasm = lam useIndex: Bool.  
+    use WasmAST in 
+    let rope = nameSym "rope" in 
+    let f = nameSym "f" in 
+    let acc = nameSym "acc" in 
+
+    let arrayFunctionName = if useIndex then foldliArrayName else foldlArrayName in
+    let funcName = if useIndex then nameNoSym "foldli" else nameNoSym "foldl" in 
+
+    let onLeaf = lam leaf. [
+        LocalSet (acc, (Call (arrayFunctionName, [
+            StructGet {
+                structIdent = leafName,
+                field = arrName,
+                value = leaf
+            },
+            LocalGet f,
+            LocalGet acc,
+            I32Const 0,
+            StructGet {
+                structIdent = leafName,
+                field = lenName,
+                value = leaf
+            }
+        ])))]
+    in
+
+    let onSlice = lam slice. [
+        LocalSet (acc, (Call (arrayFunctionName, [
+            StructGet {
+                structIdent = sliceName,
+                field = arrName,
+                value = slice
+            },
+            LocalGet f,
+            LocalGet acc,
+            StructGet {
+                structIdent = sliceName,
+                field = offName,
+                value = slice
+            },
+            StructGet {
+                structIdent = sliceName,
+                field = lenName,
+                value = slice
+            }
+        ])))]
+    in 
+
+    let onConcat = lam cnct. [
+        LocalSet (acc,
+            Call (funcName, [
+                LocalGet f,
+                LocalGet acc,
+                StructGet {
+                    structIdent = concatName,
+                    field = lhsName,
+                    value = cnct
+                }
+            ])
+        ),
+        LocalSet (acc,
+            Call (funcName, [
+                LocalGet f,
+                LocalGet acc,
+                StructGet {
+                    structIdent = concatName,
+                    field = rhsName,
+                    value = cnct
+                }
+            ])
+        )
+    ] in 
+
+    FunctionDef {
+        ident = funcName,
+        args = [
+            {ident = f, ty = Anyref ()},
+            {ident = acc, ty = Anyref ()},
+            {ident = rope, ty = Anyref ()}
+        ],
+        locals = [],
+        resultTy = Anyref (),
+        instructions = [
+            switchOnType
+                (LocalGet rope)
+                onLeaf
+                onSlice
+                onConcat,
+            LocalGet acc
+        ]
+    }
+
 let iteriArrayWasm = iterArrayFactory true
 let iterArrayWasm = iterArrayFactory false
 let iteriWasm = iterFactoryWasm true
 let iterWasm = iterFactoryWasm false
+
+let foldliArrayWasm = foldlArrayFactory true
+let foldlArrayWasm = foldlArrayFactory false
+let foldliWasm = foldlFactoryWasm true
+let foldlWasm = foldlFactoryWasm false
