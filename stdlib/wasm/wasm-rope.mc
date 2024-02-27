@@ -1333,3 +1333,231 @@ let nullWasm =
             )
         ]
     }
+
+let setWasm = 
+    use WasmAST in 
+    let rope = nameSym "rope" in 
+    let i_uncast = nameSym "i-uncast" in 
+    let i = nameSym "i" in 
+    let j = nameSym "j" in 
+    let n = nameSym "n" in 
+    let value = nameSym "value" in 
+    let arr = nameSym "arr" in 
+    let res = nameSym "res" in 
+    let loopIdent = nameSym "loopIdent" in 
+
+    let onLeaf = lam leaf. [
+        LocalSet (n, StructGet {
+            structIdent = leafName,
+            field = lenName,
+            value = leaf
+        }),
+        LocalSet (arr, ArrayNew {
+            tyIdent = anyrefArrName,
+            initValue = RefNull "i31",
+            size = LocalGet n
+        }),
+        Loop {
+            ident = loopIdent,
+            body = [
+                IfThenElse {
+                    cond = I32Eq (LocalGet i, LocalGet j),
+                    thn = [ArraySet {
+                        tyIdent = anyrefArrName,
+                        value = LocalGet arr,
+                        index = LocalGet j,
+                        value2 = LocalGet value
+                    }],
+                    els = [
+                        ArraySet {
+                            tyIdent = anyrefArrName,
+                            value = LocalGet arr,
+                            index = LocalGet j,
+                            value2 = ArrayGet {
+                                tyIdent = anyrefArrName,
+                                value = StructGet {
+                                    structIdent = leafName,
+                                    field = arrName,
+                                    value = leaf
+                                },
+                                index = LocalGet j
+                            }
+                        }   
+                    ]
+                },
+                LocalSet (j, I32Add (LocalGet j, I32Const 1)),
+                BrIf {
+                    ident = loopIdent,
+                    cond = I32LtS (LocalGet j, LocalGet n)
+                }
+            ]
+        },
+        LocalSet (res, StructNew {
+            structIdent = leafName,
+            values = [
+                LocalGet n,
+                LocalGet arr
+            ]
+        })
+    ] in 
+
+    let onSlice = lam slice. [
+        LocalSet (n, StructGet {
+            structIdent = sliceName,
+            field = lenName,
+            value = slice
+        }),
+        LocalSet (arr, ArrayNew {
+            tyIdent = anyrefArrName,
+            initValue = RefNull "i31",
+            size = LocalGet n
+        }),
+        Loop {
+            ident = loopIdent,
+            body = [
+                IfThenElse {
+                    cond = I32Eq (LocalGet i, LocalGet j),
+                    thn = [ArraySet {
+                        tyIdent = anyrefArrName,
+                        value = LocalGet arr,
+                        index = LocalGet j,
+                        value2 = LocalGet value
+                    }],
+                    els = [
+                        ArraySet {
+                            tyIdent = anyrefArrName,
+                            value = LocalGet arr,
+                            index = I32Add (
+                                LocalGet j,
+                                StructGet {
+                                    structIdent = sliceName,
+                                    field = offName,
+                                    value = slice
+                                }
+                            ),
+                            value2 = ArrayGet {
+                                tyIdent = anyrefArrName,
+                                value = StructGet {
+                                    structIdent = sliceName,
+                                    field = arrName,
+                                    value = slice
+                                },
+                                index = LocalGet j
+                            }
+                        }   
+                    ]
+                },
+                LocalSet (j, I32Add (LocalGet j, I32Const 1)),
+                BrIf {
+                    ident = loopIdent,
+                    cond = I32LtS (LocalGet j, LocalGet n)
+                }
+            ]
+        },
+        LocalSet (res, StructNew {
+            structIdent = leafName,
+            values = [
+                LocalGet n,
+                LocalGet arr
+            ]
+        })
+    ] in 
+
+    let onConcat = lam cnct. [
+        LocalSet (n, I31GetU (
+            RefCast {
+                ty = I31Ref (),
+                value = Call (nameNoSym "length", [
+                    StructGet {
+                        structIdent = concatName,
+                        field = lhsName,
+                        value = cnct
+                    }
+                ])
+            }
+        )),
+        IfThenElse {
+            cond = I32LtS (LocalGet i, LocalGet n),
+            thn = [LocalSet (res, StructNew {
+                structIdent = concatName,
+                values = [
+                    StructGet {
+                        structIdent = concatName,
+                        field = lenName,
+                        value = cnct
+                    },
+                    Call (nameNoSym "set", [
+                        StructGet {
+                            structIdent = concatName,
+                            field = lhsName,
+                            value = cnct
+                        },
+                        I31Cast (LocalGet i),
+                        LocalGet value
+                    ]),
+                    StructGet {
+                        structIdent = concatName,
+                        field = rhsName,
+                        value = cnct
+                    }
+                ]
+            })],
+            els = [LocalSet (res, StructNew {
+                structIdent = concatName,
+                values = [
+                    StructGet {
+                        structIdent = concatName,
+                        field = lenName,
+                        value = cnct
+                    },
+                    StructGet {
+                        structIdent = concatName,
+                        field = lhsName,
+                        value = cnct
+                    },
+                    Call (nameNoSym "set", [
+                        StructGet {
+                            structIdent = concatName,
+                            field = rhsName,
+                            value = cnct
+                        },
+                        I31Cast (
+                            I32Sub (LocalGet i, LocalGet n)
+                        ),
+                        LocalGet value
+                    ])
+                ]
+            })]
+        }
+    ] in 
+
+    FunctionDef {
+        ident = nameNoSym "set",
+        args = [
+            {ident = rope, ty = Anyref ()},
+            {ident = i_uncast, ty = Anyref ()},
+            {ident = value, ty = Anyref ()}
+        ],
+        locals = [
+            {ident = arr, ty = Ref anyrefArrName},
+            {ident = res, ty = Anyref ()},
+            {ident = i, ty = Tyi32 ()},
+            {ident = j, ty = Tyi32 ()},
+            {ident = n, ty = Tyi32 ()}
+        ],
+        resultTy = Anyref (),
+        instructions = [
+            LocalSet (i, I31GetU (
+                RefCast {
+                    ty = I31Ref (),
+                    value = LocalGet i_uncast
+                }
+            )),
+            switchOnType 
+                (LocalGet rope)
+                onLeaf
+                onSlice
+                onConcat,
+            LocalGet res
+        ]
+    }

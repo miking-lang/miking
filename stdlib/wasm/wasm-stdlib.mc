@@ -282,5 +282,6 @@ let integerIntrinsics = [
     mapWasm,
     mapiWasm,
     createWasm,
-    nullWasm
+    nullWasm,
+    setWasm
 ]
