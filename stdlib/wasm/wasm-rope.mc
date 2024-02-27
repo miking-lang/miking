@@ -1561,3 +1561,48 @@ let setWasm =
             LocalGet res
         ]
     }
+
+let subsequenceWasm = 
+    use WasmAST in 
+    
+    let arg = nameSym "arg" in 
+    let flat = nameSym "flat" in 
+    let i_uncast = nameSym "i-uncast" in 
+    let i = nameSym "i" in 
+    let j_uncast = nameSym "j-uncast" in 
+    let j = nameSym "j" in 
+
+    FunctionDef {
+        ident = nameNoSym "subsequence",
+        args = [
+            {ident = arg, ty = Anyref ()},
+            {ident = i_uncast, ty = Anyref ()},
+            {ident = j_uncast, ty = Anyref ()}
+        ],
+        locals = [
+            {ident = flat, ty = Ref leafName},
+            {ident = i, ty = Tyi32 ()},
+            {ident = j, ty = Tyi32 ()}
+        ],
+        resultTy = Anyref (),
+        instructions = [
+            LocalSet (i, anyref2i32 (LocalGet i_uncast)),
+            LocalSet (j, anyref2i32 (LocalGet j_uncast)),
+            LocalSet (flat, RefCast {
+                ty = Ref leafName,
+                value = Call (nameNoSym "_flatten-rope", [LocalGet arg])
+            }),
+            StructNew {
+                structIdent = sliceName,
+                values = [
+                    I32Sub (LocalGet j, LocalGet i),
+                    LocalGet i,
+                    StructGet {
+                        structIdent = leafName,
+                        field = arrName,
+                        value = LocalGet flat
+                    }
+                ]
+            }
+        ]
+    }

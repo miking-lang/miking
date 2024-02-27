@@ -283,5 +283,6 @@ let integerIntrinsics = [
     mapiWasm,
     createWasm,
     nullWasm,
-    setWasm
+    setWasm,
+    subsequenceWasm
 ]
