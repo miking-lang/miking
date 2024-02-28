@@ -526,6 +526,51 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
             locals = concat ctx.locals locals,
             instructions = concat ctx.instructions localSetters} in 
         ctxInstrResult ctx (I32Const 1)
+    | PatSeqTot {pats = pats} ->
+        let n = nameSym "n" in 
+        let result = nameSym "result" in 
+
+        let pat2ident = lam pat. 
+            match pat with PatNamed {ident = PName (ident)}
+                then Some (ident)
+                else None ()
+        in
+        let localIdents = mapOption pat2ident pats in 
+        let locals = concat
+            [{ident = n, ty = Tyi32 ()}, {ident = result, ty = Tyi32()}]
+            (map (lam ident. {ident = ident, ty = Anyref ()}) localIdents) 
+        in 
+
+        let pat2localSetter = lam setters. lam i. lam pat. 
+            match pat with PatNamed {ident = PName (ident)}
+                then cons 
+                    (LocalSet (ident, Call (nameNoSym "get", [targetInstr, I31Cast (I32Const i)])))
+                    setters
+                else setters
+        in
+        let localSetters = foldli pat2localSetter [] pats in 
+
+        let ctx = {ctx with
+            locals = concat ctx.locals locals,
+            instructions = [
+                LocalSet (n, I31GetU (
+                    RefCast {
+                        ty = I31Ref (),
+                        value = Call (nameNoSym "length", [targetInstr])
+                    }
+                )),
+                IfThenElse {
+                    cond = I32Eq (
+                        LocalGet n,
+                        I32Const (length pats)
+                    ),
+                    thn = cons (LocalSet (result, I32Const 1))localSetters,
+                    els = [LocalSet (result, I32Const 0)]
+                }
+
+            ]
+        } in 
+        ctxLocalResult ctx result
     | _ -> error "Missing pattern"
 
     sem compileFunction : WasmCompileContext -> Expr -> WasmCompileContext
