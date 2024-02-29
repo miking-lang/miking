@@ -401,8 +401,8 @@ lang SeqNormPat = NPatImpl + SeqTotPat + SeqEdgePat
         (concat pre post)
     in
     let shortTotPats =
-        create (addi preLen postLen)
-          (lam n. SNPat (NPatSeqTot (make n (wildpat ()))))
+      create (addi preLen postLen)
+        (lam n. SNPat (NPatSeqTot (make n (wildpat ()))))
     in
     let disTotPats =
       map (lam n. SNPat (NPatSeqTot (make n (wildpat ())))) (setToSeq dis)
@@ -468,8 +468,8 @@ lang SeqNormPat = NPatImpl + SeqTotPat + SeqEdgePat
               else
                 seqMapM (lam x. x)
                   (zipWith (lam p1. lam p2. npatIntersect (p1, p2))
-                           (concat prePost (make (addi (maxi 0 (negi k)) i) (wildpat ())))
-                           (concat (make (addi (maxi 0 k) i) (wildpat ())) postPre))))
+                     (concat prePost (make (addi (maxi 0 (negi k)) i) (wildpat ())))
+                     (concat (make (addi (maxi 0 k) i) (wildpat ())) postPre))))
         in
         seqLiftA3 (lam prePre. lam mid. lam postPost.
           SNPat (NPatSeqTot (join [prePre, mid, postPost])))

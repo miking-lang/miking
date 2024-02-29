@@ -18,6 +18,7 @@ include "mexpr/eq.mc"
 include "mexpr/eval.mc"
 include "mexpr/pprint.mc"
 include "mexpr/symbolize.mc"
+include "mexpr/type.mc"
 include "mexpr/type-check.mc"
 
 lang Monomorphize = MExprAst + MExprCmp
@@ -65,14 +66,6 @@ lang Monomorphize = MExprAst + MExprCmp
   sem monoError infos =
   | msg ->
     errorSingle infos (concat "Monomorphization error: " msg)
-
-  -- Collects the type parameters
-  sem collectTypeAppParams : [Type] -> Type -> (Type, [Type])
-  sem collectTypeAppParams acc =
-  | TyApp t ->
-    collectTypeAppParams (cons t.rhs acc) t.lhs
-  | ty ->
-    (ty, acc)
 end
 
 lang MonomorphizeValidate = MExprAst
@@ -329,7 +322,7 @@ lang MonomorphizeResymbolize = Monomorphize
 end
 
 lang MonomorphizeCollect =
-  MonomorphizeValidate + MonomorphizeInstantiate + MExprCallGraph
+  MonomorphizeValidate + MonomorphizeInstantiate + MExprCallGraph + AppTypeUtils
 
   -- Collects the monomorphic instantiations of polymorphic constructs of the
   -- provided AST. This is performed in two passes:
@@ -584,7 +577,7 @@ lang MonomorphizeCollect =
     -- NOTE(larshum, 2023-08-03): We collect instantiations of polymorphic
     -- aliases through occurrences of the type, as their use in expressions or
     -- patterns are implicit.
-    match collectTypeAppParams [] t.display with (TyCon {ident = id}, ![]) then
+    match getTypeArgs t.display with (TyCon {ident = id}, ![]) then
       match mapLookup id env.typeEnv with Some instEntry then
         let updatedInstMap =
           setFold
@@ -616,7 +609,7 @@ lang MonomorphizeCollect =
   | ty -> monoError [infoTy ty] "Constructor type does not refer to a known variant type"
 end
 
-lang MonomorphizeApply = MonomorphizeInstantiate + MonomorphizeResymbolize
+lang MonomorphizeApply = MonomorphizeInstantiate + MonomorphizeResymbolize + AppTypeUtils
   -- Replaces polymorphic constructs with their monomorphic bindings
   -- based on the provided monomorphization environment (bottom-up).
   sem applyMonomorphization : MonoEnv -> Expr -> Expr
@@ -760,13 +753,16 @@ lang MonomorphizeApply = MonomorphizeInstantiate + MonomorphizeResymbolize
   sem applyMonomorphizationTypeH : MonoEnv -> Bool -> Type -> Type
   sem applyMonomorphizationTypeH env replaceUnknown =
   | (TyApp _) & ty ->
-    match collectTypeAppParams [] ty with (TyCon t, ![]) then
+    match getTypeArgs ty with (TyCon t, ![]) then
       match mapLookup t.ident env.typeEnv with Some instEntry then
         let typeInst = findTypeInstantiation instEntry.polyType ty in
+        dprint typeInst;
         match mapLookup typeInst instEntry.map with Some newId then
           TyCon {t with ident = newId, info = infoTy ty}
         else
-          monoError [t.info] "Invalid type constructor instantiation"
+          monoError [t.info]
+            (concat "Invalid type constructor instantiation for constructor "
+               (nameGetStr t.ident))
       else
         monoError [t.info] "Polymorphic constructor not found"
     else

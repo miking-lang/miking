@@ -1308,7 +1308,7 @@ lang MatchTypeCheck = TypeCheck + PatTypeCheck + MatchAst + NormPatMatch
             , pat = pat}
 end
 
-lang ConstTypeCheck = TypeCheck + MExprConstType + ResolveType
+lang ConstTypeCheck = TypeCheck + MExprConstType
   sem typeCheckExpr env =
   | TmConst t ->
     let constTy = tyConstBase env.disableConstructorTypes t.val in
@@ -1351,7 +1351,8 @@ lang TypeTypeCheck = TypeCheck + TypeAst + VariantTypeAst + ResolveType
     let newTyConEnv = mapInsert t.ident (newLvl, t.params, tyIdent) env.tyConEnv in
     let inexpr =
       typeCheckExpr {env with currentLvl = addi 1 env.currentLvl,
-                              tyConEnv = newTyConEnv} t.inexpr in
+                              tyConEnv = newTyConEnv,
+                              reptypes = env.reptypes} t.inexpr in
     unify env [t.info, infoTm inexpr] (newpolyvar env.currentLvl t.info) (tyTm inexpr);
     TmType {t with tyIdent = tyIdent, inexpr = inexpr, ty = tyTm inexpr}
 end
@@ -1578,7 +1579,7 @@ lang NamedPatTypeCheck = PatTypeCheck + NamedPat
       (patEnv, PatNamed {t with ty = newpolyvar env.currentLvl t.info})
 end
 
-lang SeqTotPatTypeCheck = PatTypeCheck + SeqTotPat + SubstituteNewReprs
+lang SeqTotPatTypeCheck = PatTypeCheck + SeqTotPat
   sem typeCheckPat env patEnv =
   | PatSeqTot t ->
     let elemTy = newvar env.currentLvl t.info in
@@ -1587,7 +1588,7 @@ lang SeqTotPatTypeCheck = PatTypeCheck + SeqTotPat + SubstituteNewReprs
     (patEnv, PatSeqTot {t with pats = pats, ty = ityseq_ t.info elemTy})
 end
 
-lang SeqEdgePatTypeCheck = PatTypeCheck + SeqEdgePat + SubstituteNewReprs
+lang SeqEdgePatTypeCheck = PatTypeCheck + SeqEdgePat
   sem typeCheckPat env patEnv =
   | PatSeqEdge t ->
     let elemTy = newpolyvar env.currentLvl t.info in
@@ -1952,8 +1953,8 @@ let runTest =
   lam test : TypeTest.
     -- Make sure to print the test name if the test fails.
     let eqTypeTest = lam a : Type. lam b : Type.
-      if eqType a b then true
-      else print (join ["\n ** Type test FAILED: ", test.name, " **"]); false
+    if eqType a b then true
+    else print (join ["\n ** Type test FAILED: ", test.name, " **"]); false
     in
     utest typeOf test with test.ty using eqTypeTest in ()
 in
@@ -2072,12 +2073,12 @@ let tests = [
      ureclets_ [
        ("even", ulam_ "n"
                   (if_ (eqi_ (var_ "n") (int_ 0))
-                       true_
-                       (app_ (var_ "odd") (subi_ (var_ "n") (int_ 1))))),
+                     true_
+                     (app_ (var_ "odd") (subi_ (var_ "n") (int_ 1))))),
        ("odd", ulam_ "n"
                  (if_ (eqi_ (var_ "n") (int_ 0))
-                      false_
-                      (app_ (var_ "even") (subi_ (var_ "n") (int_ 1)))))
+                    false_
+                    (app_ (var_ "even") (subi_ (var_ "n") (int_ 1)))))
      ],
      var_ "even"
    ],
@@ -2199,8 +2200,8 @@ let tests = [
           (freeze_ (var_ "f")),
    ty =
      let fields =  mapInsert (stringToSid "x") wa
-                             (mapInsert (stringToSid "y") wb
-                                        (mapEmpty cmpSID))
+                     (mapInsert (stringToSid "y") wb
+                        (mapEmpty cmpSID))
      in
      let r = newrecvar fields 0 (NoInfo ()) in
      tyarrows_ [r, wa, wb, r],
@@ -2252,7 +2253,7 @@ let tests = [
   {name = "Unknown1",
    tm = bind_
           (let_ "f" (tyarrow_ tyunknown_ tyunknown_)
-                (ulam_ "x" (var_ "x")))
+             (ulam_ "x" (var_ "x")))
           (freeze_ (var_ "f")),
    ty = tyall_ "a" (tyarrow_ (tyvar_ "a") (tyvar_ "a")),
    env = []},
@@ -2260,7 +2261,7 @@ let tests = [
   {name = "Unknown2",
    tm = bind_
           (let_ "f" (tyarrow_ tyint_ tyunknown_)
-                (ulam_ "x" (var_ "x")))
+             (ulam_ "x" (var_ "x")))
           (freeze_ (var_ "f")),
    ty = tyarrow_ tyint_ tyint_,
    env = []}
