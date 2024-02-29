@@ -74,7 +74,13 @@ let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
     let ast = symbolize ast in
     endPhaseStats log "symbolize" ast;
 
-    let ast = typeCheck ast in
+    let ast =
+      removeMetaVarExpr
+        (typeCheckExpr
+           {typcheckEnvDefault with
+            disableConstructorTypes = not options.enableConstructorTypes}
+           ast)
+    in
     endPhaseStats log "type-check" ast;
     (if options.debugTypeCheck then
        printLn (use TyAnnotFull in annotateMExpr ast);
