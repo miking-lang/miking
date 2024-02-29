@@ -756,7 +756,6 @@ lang MonomorphizeApply = MonomorphizeInstantiate + MonomorphizeResymbolize + App
     match getTypeArgs ty with (TyCon t, ![]) then
       match mapLookup t.ident env.typeEnv with Some instEntry then
         let typeInst = findTypeInstantiation instEntry.polyType ty in
-        dprint typeInst;
         match mapLookup typeInst instEntry.map with Some newId then
           TyCon {t with ident = newId, info = infoTy ty}
         else
