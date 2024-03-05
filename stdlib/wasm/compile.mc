@@ -19,6 +19,7 @@ include "mclos-ast.mc"
 include "mclos-transpile.mc"
 
 include "string.mc"
+include "bool.mc"
 include "seq.mc"
 include "map.mc"
 include "tuple.mc"
@@ -153,7 +154,7 @@ let createArithOpClosure = lam globalCtx. lam exprCtx. lam opIdent.
     use WasmAST in 
     createClosure globalCtx exprCtx opIdent
 
-lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
+lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint + MClosPrettyPrint
     sem compileConst : WasmCompileContext -> WasmExprContext -> Const -> WasmExprContext
     sem compileConst globalCtx exprCtx = 
     | CInt {val = i} -> ctxInstrResult exprCtx (I31Cast (I32Const i))
@@ -499,15 +500,21 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
             instructions = cons ite ctx.instructions} in  
 
         ctxLocalResult ctx resultLocal
-    | PatRecord {bindings = bindings, ty = ty} ->
+    | PatRecord {bindings = bindings, ty = ty} & x->
         let bindingPairs = mapToSeq bindings in 
-        let tyStr = (match ty with TyCon {ident = ident} in ident) in 
 
         let pair2localIdent = lam index. lam pair. 
             match pair with (_, pat) in 
             match pat with PatNamed {ident = PName innerName} in
             {ident = innerName, ty = Anyref ()} in 
         let locals = mapi pair2localIdent bindingPairs in 
+        -- This is a bit of a hack needed for pattern matching
+        -- This uses split-at which created a 2-tuple which
+        -- is not caught by the type lifting!
+        let tyStr = (match ty with TyCon {ident = ident} 
+            then ident
+            else nameNoSym "split-2-tuple") in 
+
         let pair2setIntruction = lam index. lam pair.
             match pair with (sid, pat) in 
             match pat with PatNamed {ident = PName innerName} in 
@@ -571,6 +578,36 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
             ]
         } in 
         ctxLocalResult ctx result
+    | PatSeqEdge {prefix = prefix, middle = middle, postfix = postfix} ->
+        -- After the 'shallow-pattern' transformation there are 2 possible patterns
+        -- of this type:
+        -- 1) If the pattern was already shallow (so every sub-pattern is a PatNamed),
+        --    the transformation leads the pattern untouched.
+        -- 2) If the pattern was not shallow, it is transformed into a 
+        --    nested structure. The PatSeqEdge will always be in the form of:
+        --    [_, ..., _] ++ _ ++ [] and therefore be replaced by a simple
+        --    check: length(target) >= len(prefix) 
+
+        let patNameIsWildCard = lam pn .
+            match pn with PWildcard _ then true else false
+        in
+
+        let patIsWildCard = lam pat. 
+            match pat with PatNamed {ident = PWildcard _} then true else false
+        in
+
+        if and (and (forAll patIsWildCard prefix) (null postfix)) (patNameIsWildCard middle) then
+            ctxInstrResult ctx (I32GeS (
+                I32Const (length prefix),
+                I31GetU (
+                    RefCast {
+                        ty = I31Ref (),
+                        value = Call (nameNoSym "length", [targetInstr])
+                    }
+                ))
+            )
+        else
+            error "Missing support for shallow edge patterns!"
     | _ -> error "Missing pattern"
 
     sem compileFunction : WasmCompileContext -> Expr -> WasmCompileContext
@@ -723,18 +760,28 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint
 end
 
 let compileMCoreToWasm = lam ast.
-    use MExprLowerNestedPatterns in 
-    let ast = lowerAll ast in 
+    -- use MExprLowerNestedPatterns in 
+    -- let ast = lowerAll ast in 
+
+    -- printLn "=== PATTERNS LOWERED ===" ;
+    -- (use MClosPrettyPrint in printLn (expr2str ast) );
+
     use MExprLambdaLift in
     let ast = liftLambdas ast in
+
+    -- printLn "=== LAMBDA LIFTED ===" ;
+    -- (use MClosPrettyPrint in printLn (expr2str ast) );
+
     use MExprTypeLift in 
     match typeLift ast with (env, ast) in
 
+    -- printLn "=== TYPE LIFTED ===" ;
     -- (use MClosPrettyPrint in printLn (expr2str ast) );
 
     use MClosTranspiler in 
     let transpileCtx = transpile ast in
 
+    -- printLn "=== TRANSPILED ===" ;
     -- (use MClosPrettyPrint in (iter (lam e. printLn (expr2str e)) exprs));
 
     use WasmCompiler in 
