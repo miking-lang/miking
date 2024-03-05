@@ -79,7 +79,7 @@ let parseProgram : String -> Expr =
     let parseArgs =
       {defaultBootParserParseMExprStringArg with allowFree = true}
     in
-    let ast = parseMExprString parseArgs str in
+    let ast = parseMExprStringExn parseArgs str in
     symbolizeExpr {symEnvEmpty with allowFree = true} ast
 in
 

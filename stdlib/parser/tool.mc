@@ -1867,7 +1867,7 @@ let runParserGenerator : {synFile : String, outFile : String} -> () = lam args.
       use LetDeclAst in
       use UseAst in
       use BootParser in
-      let parse = parseMExprString {_defaultBootParserParseMExprStringArg () with allowFree = true} in
+      let parse = parseMExprStringExn {_defaultBootParserParseMExprStringArg () with allowFree = true} in
       let body = parse
         (strJoin "\n"
           [ "  let config = {errors = ref [], content = content} in"

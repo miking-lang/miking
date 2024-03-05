@@ -550,7 +550,7 @@ let debug = false in
 let timeSensitive = false in
 
 let parse = lam str.
-  let ast = parseMExprStringKeywords holeKeywords str in
+  let ast = parseMExprStringKeywordsExn holeKeywords str in
   let ast = makeKeywords ast in
   symbolize ast
 in

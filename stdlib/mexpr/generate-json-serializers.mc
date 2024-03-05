@@ -398,7 +398,7 @@ end
 mexpr
 use Test in
 
-let parseTest = parseMExprString {
+let parseTest = parseMExprStringExn {
   defaultBootParserParseMExprStringArg with
     allowFree = true
 } in

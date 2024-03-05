@@ -41,7 +41,7 @@ end
 mexpr
 use Test in
 
-let parse = parseMExprString
+let parse = parseMExprStringExn
   { defaultBootParserParseMExprStringArg with allowFree = true } in
 let ast1 = parse "
   external a: Int -> Int in

@@ -191,7 +191,7 @@ let getProfilerReportCode = lam.
   match deref _profilerReportCodeRef with Some t then t
   else
     use BootParser in
-    let code = parseMExprStringKeywords ["functionProfileData"] _profilerReportStr in
+    let code = parseMExprStringKeywordsExn ["functionProfileData"] _profilerReportStr in
     modref _profilerReportCodeRef (Some code);
     code
 
@@ -252,7 +252,7 @@ lang MExprProfileInstrument = MExprAst + BootParser
     let emptyEnv = mapEmpty nameCmp in
     let env = collectToplevelFunctions emptyEnv t in
     bindall_ [
-      parseMExprStringKeywords [] (_profilerInitStr env),
+      parseMExprStringKeywordsExn [] (_profilerInitStr env),
       ulet_ "" (instrumentProfilingH env t),
       getProfilerReportCode ()]
 end
