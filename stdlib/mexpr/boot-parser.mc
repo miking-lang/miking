@@ -925,13 +925,13 @@ with r_info 1 6 1 9 in
 -- TyCon with literal constructor list
 let s = "let y:Foo[F1 F2] = lam x.x in y" in
 utest lsideClosed s with rside s in
-utest match parseMExprStringKeywords [] s with TmLet l then infoTy l.tyAnnot else NoInfo ()
+utest match parseMExprStringKeywordsExn [] s with TmLet l then infoTy l.tyAnnot else NoInfo ()
 with r_info 1 6 1 16 in
 
 -- TyCon with variable constructor list
 let s = "let y:all d::{Foo[> F1 F2]}. Foo{d} = lam x.x in y" in
 utest lsideClosed s with rside s in
-utest match parseMExprStringKeywords [] s with TmLet l then infoTy l.tyAnnot else NoInfo ()
+utest match parseMExprStringKeywordsExn [] s with TmLet l then infoTy l.tyAnnot else NoInfo ()
 with r_info 1 6 1 35 in
 
 -- TyApp
