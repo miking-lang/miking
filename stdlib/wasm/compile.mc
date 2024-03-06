@@ -86,6 +86,20 @@ let emptyExprCtx : WasmExprContext = {
     nextLocal = 0
 }
 
+let mapiOption
+  : all a. all b.
+     (Int -> a -> Option b)
+  -> [a]
+  -> [b]
+  = lam f.
+    recursive let work = lam i. lam as.
+      match as with [a] ++ as then
+        match f i a with Some b
+        then cons b (work (addi 1 i) as)
+        else work (addi 1 i) as
+      else []
+    in work 0
+
 let extractResult = lam ctx : WasmExprContext.
     use WasmAST in 
     match ctx.result with Left instr
@@ -596,18 +610,91 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint + MClosPr
             match pat with PatNamed {ident = PWildcard _} then true else false
         in
 
+        let lenInstr = I31GetU (
+            RefCast {
+                ty = I31Ref (),
+                value = Call (nameNoSym "length", [targetInstr])
+            }
+        ) in 
+
         if and (and (forAll patIsWildCard prefix) (null postfix)) (patNameIsWildCard middle) then
-            ctxInstrResult ctx (I32GeS (
-                I32Const (length prefix),
-                I31GetU (
-                    RefCast {
-                        ty = I31Ref (),
-                        value = Call (nameNoSym "length", [targetInstr])
-                    }
-                ))
-            )
+            -- The pattern was not already shallow so it has now been transformed
+            -- by the 'lowerAll' transformation to a pattern in the form of
+            -- [_, ..., _] ++ _ ++ []
+            ctxInstrResult ctx (I32LeS (I32Const (length prefix), lenInstr))
         else
-            error "Missing support for shallow edge patterns!"
+            let flatIdent = nameSym "flat" in 
+            let flatLocal = {ident = flatIdent, ty = Anyref ()} in 
+            let setFlat = LocalSet (flatIdent, Call(nameNoSym "_flatten-rope", [targetInstr])) in 
+
+            let resultIdent = nameSym "res" in 
+            let resultLocal = {ident = resultIdent, ty = Tyi32 ()} in 
+
+            let pat2local = lam pat. 
+                match pat with PatNamed {ident = PName ident} 
+                    then Some {ident = ident, ty = Anyref ()}
+                    else None ()
+            in 
+            let patternLocals = mapOption pat2local (concat prefix postfix) in
+
+            let pat2prefixSetter = lam i. lam pat.
+                match pat with PatNamed {ident = PName ident} 
+                    then Some (LocalSet (ident, Call (nameNoSym "get", [
+                        LocalGet flatIdent,
+                        I31Cast (I32Const i)
+                    ])))
+                    else None ()
+            in
+            let prefixSetters = mapiOption pat2prefixSetter prefix in 
+            let pat2postFixSetter = lam i. lam pat.
+                match pat with PatNamed {ident = PName ident} 
+                    then Some (LocalSet (ident, Call (nameNoSym "get", [
+                        LocalGet flatIdent,
+                        I31Cast (I32Sub(lenInstr, I32Const (addi i 1)))
+                    ])))
+                    else None ()
+            in
+            let postfixSetters = mapiOption pat2postFixSetter postfix in 
+
+            let midLocals = match middle with PName ident then [{ident = ident, ty = Anyref ()}] else [] in 
+            let newLocals = join [
+                patternLocals,
+                midLocals,
+                [resultLocal, flatLocal]
+            ] in 
+
+            let midSetters = match middle with PName ident 
+                then [LocalSet (ident, Call (nameNoSym "subsequence", [
+                    LocalGet flatIdent,
+                    I31Cast (I32Const (length prefix)),
+                    I31Cast (I32Sub (
+                        lenInstr,
+                        I32Const (length postfix)
+                    ))]))]
+                else []
+            in
+
+
+            let ite = IfThenElse {
+                cond = I32LeS (I32Const (addi (length prefix) (length postfix)), lenInstr),
+                thn = join [
+                    [
+                        LocalSet (resultIdent, I32Const 1),
+                        setFlat
+                    ],
+                    prefixSetters,
+                    midSetters,
+                    postfixSetters
+                ],
+                els = [
+                    LocalSet (resultIdent, I32Const 0)
+                ]
+            } in 
+
+            {ctx with 
+                instructions = snoc ctx.instructions ite,
+                locals = concat newLocals ctx.locals,
+                result = Right resultIdent}
     | _ -> error "Missing pattern"
 
     sem compileFunction : WasmCompileContext -> Expr -> WasmCompileContext
