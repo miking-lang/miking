@@ -272,6 +272,7 @@ lang BootParser = MExprAst + ConstTransformer
            ty = TyUnknown { info = ginfo t 0 },
            inexpr = gterm t 0,
            info = ginfo t 0}
+  | _ -> error "Unknown expression"
 
   -- Get type help function
   sem gtype(t:Unknown) =
@@ -308,8 +309,23 @@ lang BootParser = MExprAst + ConstTransformer
                  constrs = mapEmpty nameCmp}
     else error "Parsing of non-empty variant types not yet supported"
   | 209 /-TyCon-/ ->
+    let data =
+      let makeData = lam positive.
+        let cons = setOfSeq nameCmp (map (gname t) (range 1 (glistlen t 0) 1)) in
+        TyData { info = ginfo t 0, universe = mapEmpty nameCmp,
+                 positive = positive, cons = cons }
+      in
+      switch gint t 0
+      case 0 then TyUnknown { info = ginfo t 0 }
+      case 1 then makeData true
+      case 2 then makeData false
+      case 3 then TyVar { info = ginfo t 0, ident = gname t 1 }
+      case _ then error "BootParser.matchTerm: Invalid data specifier for TyCon"
+      end
+    in
     TyCon {info = ginfo t 0,
-           ident = gname t 0}
+           ident = gname t 0,
+           data = data}
   | 210 /-TyVar-/ ->
     TyVar {info = ginfo t 0,
            ident = gname t 0}
@@ -321,10 +337,42 @@ lang BootParser = MExprAst + ConstTransformer
     TyTensor {info = ginfo t 0,
               ty = gtype t 0}
   | 213 /-TyAll-/ ->
+    let kind =
+      switch gint t 0
+      case 0 then Poly ()
+      case 1 then
+        let dlen = glistlen t 0 in
+        let data =
+          unfoldr
+            (lam idx.
+              if lti idx.0 dlen then
+                let tname = gname t idx.1 in
+                let totlen = glistlen t idx.0 in
+                let upperidx = glistlen t (addi 1 idx.0) in
+                let minidx = addi 1 idx.1 in
+                let maxidx = addi totlen minidx in
+                let cons = map (gname t) (range minidx maxidx 1) in
+                let ks =
+                  if eqi upperidx (negi 1) then
+                    {lower = setOfSeq nameCmp cons, upper = None ()}
+                  else
+                    match splitAt cons upperidx with (lower, upper) in
+                    {lower = setOfSeq nameCmp lower,
+                     upper = Some (setOfSeq nameCmp upper)}
+                in
+                Some ((tname, ks), (addi 2 idx.0, maxidx))
+              else None ())
+            (1, 1)
+        in
+        Data {types = mapFromSeq nameCmp data}
+      case _ then error "BootParser.matchTerm: Invalid data specifier for TyAll!"
+      end
+    in
     TyAll {info = ginfo t 0,
            ident = gname t 0,
            ty = gtype t 0,
-           kind = Poly ()}
+           kind = kind}
+  | _ -> error "Unknown type"
 
 
   -- Get constant help function
@@ -340,6 +388,7 @@ lang BootParser = MExprAst + ConstTransformer
   | 303 /-CChar-/   -> CChar {val = int2char (gint t 0)}
   | 304 /-Cdprint-/ -> CDPrint {}
   | 305 /-Cerror-/  -> CError {}
+  | _               -> error "Unknown constant"
 
   -- Get pattern help function
   sem gpat (t:Unknown) =
@@ -401,6 +450,7 @@ lang BootParser = MExprAst + ConstTransformer
      PatNot {subpat = gpat t 0,
              info = ginfo t 0,
              ty = tyunknown_}
+  | _ -> error "Unknown pattern"
 
   -- Get info help function
   sem ginfo (t:Unknown) =
@@ -417,6 +467,7 @@ lang BootParser = MExprAst + ConstTransformer
             col2 = gint t 3}
   | 501 /-NoInfo-/ ->
       NoInfo {}
+  | _ -> error "Unknown info"
 
 
   sem strToPatName =
@@ -596,18 +647,18 @@ utest
   match parseMExprStringKeywordsExn ["x"] s with TmMatch r
   then infoPat r.pat else NoInfo ()
 with r_info 1 14 1 33 in
-let s = "match x with \"\" ++ x ++ [y] then x else x" in
+let s = "match x with x ++ [y] then x else x" in
 utest lside ["x"] s with rside s in
 utest
   match parseMExprStringKeywordsExn ["x"] s with TmMatch r
   then infoPat r.pat else NoInfo ()
-with r_info 1 13 1 27 in
-let s = "match x with [z] ++ x ++ \"\" then z else 2" in
+with r_info 1 13 1 21 in
+let s = "match x with [z] ++ x then z else 2" in
 utest lside ["x"] s with rside s in
 utest
   match parseMExprStringKeywordsExn ["x"] s with TmMatch r
   then infoPat r.pat else NoInfo ()
-with r_info 1 13 1 27 in
+with r_info 1 13 1 21 in
 
 --TmMatch, PatRecord
 let s = "match x with {} then x else 2" in
@@ -673,12 +724,12 @@ utest
   match parseMExprStringKeywordsExn ["x"] s with TmMatch r
   then infoPat r.pat else NoInfo ()
 with r_info 1 13 1 15 in
-let s = "match 1 with (a & b) | (!c) then x else x" in
+let s = "match 1 with a & b | !c then x else x" in
 utest lside ["x"] s with rside s in
 utest
   match parseMExprStringKeywordsExn ["x"] s with TmMatch r
   then infoPat r.pat else NoInfo ()
-with r_info 1 14 1 26 in
+with r_info 1 13 1 23 in
 
 -- TmUtest
 let s = "utest lam x.x with 4 in 0" in
@@ -833,13 +884,11 @@ utest
 with r_info 1 6 1 54 in
 
 -- TyVariant
-let s = "let y:<> = lam x.x in y" in
 -- NOTE(caylak,2021-03-17): Parsing of TyVariant is not supported yet
---utest lsideClosed s with rside s in
-utest
-  match parseMExprStringKeywordsExn [] s with TmLet l
-  then infoTy l.tyAnnot else NoInfo ()
-with r_info 1 6 1 8 in
+-- let s = "let y:<> = lam x.x in y" in
+-- --utest lsideClosed s with rside s in
+-- utest match parseMExprStringKeywordsExn [] s with TmLet l then infoTy l.tyAnnot else NoInfo ()
+-- with r_info 1 6 1 8 in
 
 -- TyVar
 let s = "let y:_asd = lam x.x in y" in
@@ -872,6 +921,18 @@ utest
   match parseMExprStringKeywordsExn [] s with TmLet l
   then infoTy l.tyAnnot else NoInfo ()
 with r_info 1 6 1 9 in
+
+-- TyCon with literal constructor list
+let s = "let y:Foo[F1 F2] = lam x.x in y" in
+utest lsideClosed s with rside s in
+utest match parseMExprStringKeywordsExn [] s with TmLet l then infoTy l.tyAnnot else NoInfo ()
+with r_info 1 6 1 16 in
+
+-- TyCon with variable constructor list
+let s = "let y:all d::{Foo[> F1 F2]}. Foo{d} = lam x.x in y" in
+utest lsideClosed s with rside s in
+utest match parseMExprStringKeywordsExn [] s with TmLet l then infoTy l.tyAnnot else NoInfo ()
+with r_info 1 6 1 35 in
 
 -- TyApp
 let s = "let y:(Int->Int)Int = lam x.x in y" in

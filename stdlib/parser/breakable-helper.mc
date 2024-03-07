@@ -1,27 +1,27 @@
 include "breakable.mc"
 
 type AllowSet id
-con AllowSet : Map id () -> AllowSet id
-con DisallowSet : Map id () -> AllowSet id
+con AllowSet : all id. Map id () -> AllowSet id
+con DisallowSet : all id. Map id () -> AllowSet id
 
 let _isWhitelist
   : AllowSet id -> Bool
   = lam a. match a with AllowSet _ then true else false
 
 type BreakableProduction prodLabel
-con BreakableAtom :
+con BreakableAtom : all prodLabel.
   { label : prodLabel
   } -> BreakableProduction prodLabel
-con BreakableInfix :
+con BreakableInfix : all prodLabel.
   { label : prodLabel
   , leftAllow : AllowSet prodLabel
   , rightAllow : AllowSet prodLabel
   } -> BreakableProduction prodLabel
-con BreakablePrefix :
+con BreakablePrefix : all prodLabel.
   { label : prodLabel
   , rightAllow : AllowSet prodLabel
   } -> BreakableProduction prodLabel
-con BreakablePostfix :
+con BreakablePostfix : all prodLabel.
   { label : prodLabel
   , leftAllow : AllowSet prodLabel
   } -> BreakableProduction prodLabel
@@ -77,7 +77,7 @@ let _firstOpId : OpId = 0
 let _nextOpId : OpId -> OpId = addi 1
 
 let _opIdI
-  : BrekableInput lstyle rstyle
+  : all lstyle. all rstyle. BrekableInput lstyle rstyle
   -> OpId
   = lam input.
     switch input

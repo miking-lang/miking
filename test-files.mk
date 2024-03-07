@@ -47,6 +47,30 @@ typecheck_files_exclude += test/mlang/nestedpatterns.mc
 typecheck_files_exclude += test/mlang/mlang.mc
 typecheck_files_exclude += test/mlang/catchall.mc
 
+# Programs that we currently cannot typecheck with constructor type
+# checking enabled. These are programs written before the typechecker
+# was extended with exhaustiveness checks. It is forbidden to add to
+# this list of programs but removing from it is very welcome.
+constrtype_files_exclude =\
+	test/mlang/subsumption.mc\
+	stdlib/effect.mc\
+	$(wildcard stdlib/c/*.mc)\
+	$(wildcard stdlib/cp/*.mc)\
+	$(wildcard stdlib/cuda/*.mc)\
+	$(wildcard stdlib/ext/*.mc)\
+	$(wildcard stdlib/futhark/*.mc)\
+	$(wildcard stdlib/ipopt/*.mc)\
+	$(wildcard stdlib/javascript/*.mc)\
+	$(wildcard stdlib/jvm/*.mc)\
+	$(wildcard stdlib/mexpr/*.mc)\
+	$(wildcard stdlib/mlang/*.mc)\
+	$(wildcard stdlib/multicore/*.mc)\
+	$(wildcard stdlib/ocaml/*.mc)\
+	$(wildcard stdlib/parser/*.mc)\
+	$(wildcard stdlib/peval/*.mc)\
+	$(wildcard stdlib/pmexpr/*.mc)\
+	$(wildcard stdlib/sundials/*.mc)\
+	$(wildcard stdlib/tuning/*.mc)
 
 # Programs that we currently cannot compile/test. These are programs written
 # before the compiler was implemented. It is forbidden to add to this list of
@@ -70,16 +94,15 @@ run_files_exclude += test/mlang/mlang.mc
 
 # Programs that we should be able to compile/test if we prune utests.
 compile_files_prune =\
-	$(filter-out $(python_files) $(compile_files_exclude), $(src_files_all))
+	$(filter-out $(python_files) $(typecheck_files_exclude) $(compile_files_exclude), $(src_files_all))
 
 # Programs that we should be able to compile/test, even without utest pruning,
 # if all, except the special, external dependencies are met.
 compile_files =\
-	$(filter-out $(special_dependencies_files) $(typecheck_files_exclude),\
+	$(filter-out $(special_dependencies_files),\
 		$(compile_files_prune))
 
-
-# Programs the we should be able to interpret/test with the interpreter.
+# Programs that we should be able to interpret/test with the interpreter.
 run_files =\
 	$(filter-out $(python_files) $(run_files_exclude) $(typecheck_files_exclude),\
 		$(src_files_all))

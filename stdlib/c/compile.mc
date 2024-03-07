@@ -17,6 +17,7 @@ include "mexpr/symbolize.mc"
 include "mexpr/type-check.mc"
 include "mexpr/remove-ascription.mc"
 include "mexpr/type-lift.mc"
+include "mexpr/record.mc"
 include "mexpr/builtin.mc"
 include "mexpr/boot-parser.mc"
 
@@ -409,7 +410,7 @@ end
 -- MEXPR -> C COMPILER FRAGMENT --
 ----------------------------------
 
-lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile
+lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile + RecordTypeUtils
 
   -- Used in compileStmt and compileStmts for deciding what action to take in
   -- tail position

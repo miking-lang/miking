@@ -19,7 +19,7 @@ let constructorKey = "__constructor__"
 let dataKey = "__data__"
 
 lang GenerateJsonSerializers =
-  MExprAst + BootParser + MExprSym + MExprCmp + MExprFindSym + ConDefTypeUtils
+  MExprAst + BootParser + MExprSym + MExprCmp + MExprFindSym + AppTypeUtils
   + MExprEliminateDuplicateCode
 
   type GJSSerializer = {

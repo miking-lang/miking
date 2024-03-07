@@ -28,21 +28,11 @@ con LeftSide : () -> Side
 con RightSide : () -> Side
 con Both : () -> Side
 
--- Combines two options by choosing Some over None. Should both options be
--- Some, they are combined according to the given function.
-let combineOptions : all a. (a -> a -> Option a) -> Option a -> Option a -> Option a =
-  lam f. lam o1. lam o2.
-  let t = (o1, o2) in
-  match t with (None (), rhs) then rhs
-  else match t with (lhs, None ()) then lhs
-  else match t with (Some a, Some b) then f a b
-  else never
-
 -- Finds a compatible side which agrees with both given side values. The value
 -- None represents neither side (the minimal element), while Some (BothSides ())
 -- represents either side (the maximal element).
 let compatibleSide : Option Side -> Option Side -> Option Side =
-  combineOptions
+  optionCombine
     (lam l. lam r.
       let o = (l, r) in
       match o with (Both (), rhs) then Some rhs
@@ -106,7 +96,7 @@ lang PMExprTailRecursion = PMExprAst + PMExprFunctionProperties +
     let compatibleBinop : Option Expr -> Option TailPosInfo -> Option Expr =
       lam acc. lam info.
       let binop = optionMap (lam info : TailPosInfo. info.binop) info in
-      combineOptions
+      optionCombine
         (lam l. lam r.
           if eqExpr l r then Some l else None ())
         acc binop in

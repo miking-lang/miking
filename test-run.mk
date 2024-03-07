@@ -6,5 +6,8 @@ all: $(src_files_all)
 
 selected: $(run_files)
 
-$(src_files_all):
+$(constrtype_files_exclude):
 	@./make.sh run-test $@ "build/mi run --test --disable-prune-warning"
+
+$(filter-out $(constrtype_files_exclude), $(src_files_all)):
+	@./make.sh run-test $@ "build/mi run --test --disable-prune-warning --enable-constructor-types"

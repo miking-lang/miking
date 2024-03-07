@@ -220,8 +220,28 @@ let getData = function
       (idTyChar, [fi], [], [], [], [], [], [], [], [])
   | PTreeTy (TyArrow (fi, ty1, ty2)) ->
       (idTyArrow, [fi], [], [ty1; ty2], [], [], [], [], [], [])
-  | PTreeTy (TyAll (fi, var, ty)) ->
-      (idTyAll, [fi], [], [ty], [], [var], [], [], [], [])
+  | PTreeTy (TyAll (fi, var, None, ty)) ->
+      (idTyAll, [fi], [], [ty], [], [var], [0], [], [], [])
+  | PTreeTy (TyAll (fi, var, Some data, ty)) ->
+      let klens =
+        List.concat_map
+          (fun (_, lower, upper) ->
+            let llen = List.length lower in
+            Option.fold ~none:[llen; -1]
+              ~some:(fun u ->
+                let ulen = List.length u in
+                [llen + ulen; llen] )
+              upper )
+          data
+      in
+      let ks =
+        List.concat_map
+          (fun (t, lower, upper) ->
+            t :: (lower @ Option.value ~default:[] upper) )
+          data
+      in
+      let dlen = List.length klens + 1 in
+      (idTyAll, [fi], dlen :: klens, [ty], [], var :: ks, [1], [], [], [])
   | PTreeTy (TySeq (fi, ty)) ->
       (idTySeq, [fi], [], [ty], [], [], [], [], [], [])
   | PTreeTy (TyTensor (fi, ty)) ->
@@ -233,8 +253,20 @@ let getData = function
   | PTreeTy (TyVariant (fi, strs)) ->
       let len = List.length strs in
       (idTyVariant, [fi], [len], [], [], strs, [], [], [], [])
-  | PTreeTy (TyCon (fi, x)) ->
-      (idTyCon, [fi], [], [], [], [x], [], [], [], [])
+  | PTreeTy (TyCon (fi, x, None)) ->
+      (idTyCon, [fi], [], [], [], [x], [0], [], [], [])
+  | PTreeTy (TyCon (fi, x, Some cons)) ->
+      let typ, strs =
+        match cons with
+        | DCons cs ->
+            (1, cs)
+        | DNCons cs ->
+            (2, cs)
+        | DVar v ->
+            (3, [v])
+      in
+      let len = List.length strs + 1 in
+      (idTyCon, [fi], [len], [], [], x :: strs, [typ], [], [], [])
   | PTreeTy (TyVar (fi, x)) ->
       (idTyVar, [fi], [], [], [], [x], [], [], [], [])
   | PTreeTy (TyApp (fi, ty1, ty2)) ->
@@ -990,7 +1022,7 @@ let parseMExprString allow_free keywords str =
     in
     Symbolize.allow_free := allow_free_prev ;
     r
-  with (Lexer.Lex_error _ | Msg.Error _ | Parsing.Parse_error) as e ->
+  with (Lexer.Lex_error _ | Msg.Error _ | Parser.Error) as e ->
     PTreeError
       [ ( match Parserutils.error_to_error_message e with
         | Some (id, _, info, _) ->
@@ -1076,7 +1108,7 @@ let rec parseMCoreFile
     in
     Symbolize.allow_free := allow_free_prev ;
     r
-  with (Lexer.Lex_error _ | Msg.Error _ | Parsing.Parse_error) as e ->
+  with (Lexer.Lex_error _ | Msg.Error _ | Parser.Error) as e ->
     reportErrorAndExit e
 
 (* Evaluates a constant application. This is the standard delta function

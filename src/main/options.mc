@@ -21,6 +21,7 @@ let optionsDefault : Options = {
   runtimeChecks = false,
   disableOptimizations = false,
   enableConstantFold = false,
+  enableConstructorTypes = false,
   useTuned = false,
   compileAfterTune = false,
   accelerate = false,

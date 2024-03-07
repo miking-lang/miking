@@ -4,15 +4,32 @@
 include "ast.mc"
 include "ast-builder.mc"
 
-let tysym_ = tycon_ "Symbol"
-let tyref_ = lam a. tyapp_ (tycon_ "Ref") a
-let tymap_ = lam k. lam v. tyapp_ (tyapp_ (tycon_ "Map") k) v
-let tybootparsetree_ = tycon_ "BootParseTree"
+let mktyall_ = lam s. lam f. tyall_ s (f (tyvar_ s))
+let mkstyall_ = lam s. lam k. lam f. styall_ s k (f (tyvar_ s))
 
-let tyvarseq_ = lam id. tyseq_ (tyvar_ id)
+let mktybuiltin_ = lam s. lam d. lam disable. lam f.
+  let ident = nameNoSym s in
+  if disable then f (nsitycon_ ident tyunknown_ (NoInfo ()))
+  else
+    mkstyall_ d
+      (kidata_ [(ident,
+                 {lower = setEmpty nameCmp,
+                  upper = Some (setEmpty nameCmp)})])
+      (lam x. f (nsitycon_ ident x (NoInfo ())))
+
+
+let mktysym_ = mktybuiltin_ "Symbol" "d"
+let mktyref_ = mktybuiltin_ "Ref" "d"
+let mktybootparsetree_ = mktybuiltin_ "BootParseTree" "d"
 
 lang TyConst = ConstAst
+  sem tyConst : Const -> Type
   sem tyConst =
+  | c -> tyConstBase false c
+
+  -- tyConstBase takes a parameter deciding whether to disable constructor sets
+  -- for builtin types (Symbol, Ref, BootParseTree)
+  sem tyConstBase : Bool -> Const -> Type
 
   sem mkConst : Info -> Const -> Expr
   sem mkConst info = | c -> TmConst
@@ -23,12 +40,12 @@ lang TyConst = ConstAst
 end
 
 lang UnsafeCoerceTypeAst = TyConst + UnsafeCoerceAst
-  sem tyConst =
-  | CUnsafeCoerce _ -> tyall_ "a" (tyall_ "b" (tyarrow_ (tyvar_ "a") (tyvar_ "b")))
+  sem tyConstBase d =
+  | CUnsafeCoerce _ -> mktyall_ "a" (lam a. mktyall_ "b" (lam b. tyarrow_ a b))
 end
 
 lang LiteralTypeAst = TyConst + IntAst + FloatAst + BoolAst + CharAst
-  sem tyConst =
+  sem tyConstBase d =
   | CInt _ -> tyint_
   | CFloat _ -> tyfloat_
   | CBool _ -> tybool_
@@ -36,7 +53,7 @@ lang LiteralTypeAst = TyConst + IntAst + FloatAst + BoolAst + CharAst
 end
 
 lang ArithIntTypeAst = TyConst + ArithIntAst
-  sem tyConst =
+  sem tyConstBase d =
   | CAddi _ -> tyarrows_ [tyint_, tyint_, tyint_]
   | CSubi _ -> tyarrows_ [tyint_, tyint_, tyint_]
   | CMuli _ -> tyarrows_ [tyint_, tyint_, tyint_]
@@ -46,14 +63,14 @@ lang ArithIntTypeAst = TyConst + ArithIntAst
 end
 
 lang ShiftIntTypeAst = TyConst + ShiftIntAst
-  sem tyConst =
+  sem tyConstBase d =
   | CSlli _ -> tyarrows_ [tyint_, tyint_, tyint_]
   | CSrli _ -> tyarrows_ [tyint_, tyint_, tyint_]
   | CSrai _ -> tyarrows_ [tyint_, tyint_, tyint_]
 end
 
 lang ArithFloatTypeAst = TyConst + ArithFloatAst
-  sem tyConst =
+  sem tyConstBase d =
   | CAddf _ -> tyarrows_ [tyfloat_, tyfloat_, tyfloat_]
   | CSubf _ -> tyarrows_ [tyfloat_, tyfloat_, tyfloat_]
   | CMulf _ -> tyarrows_ [tyfloat_, tyfloat_, tyfloat_]
@@ -62,7 +79,7 @@ lang ArithFloatTypeAst = TyConst + ArithFloatAst
 end
 
 lang FloatIntConversionTypeAst = TyConst + FloatIntConversionAst
-  sem tyConst =
+  sem tyConstBase d =
   | CFloorfi _ -> tyarrow_ tyfloat_ tyint_
   | CCeilfi _ -> tyarrow_ tyfloat_ tyint_
   | CRoundfi _ -> tyarrow_ tyfloat_ tyint_
@@ -70,7 +87,7 @@ lang FloatIntConversionTypeAst = TyConst + FloatIntConversionAst
 end
 
 lang CmpIntTypeAst = TyConst + CmpIntAst
-  sem tyConst =
+  sem tyConstBase d =
   | CEqi _ -> tyarrows_ [tyint_, tyint_, tybool_]
   | CNeqi _ -> tyarrows_ [tyint_, tyint_, tybool_]
   | CLti _ -> tyarrows_ [tyint_, tyint_, tybool_]
@@ -80,7 +97,7 @@ lang CmpIntTypeAst = TyConst + CmpIntAst
 end
 
 lang CmpFloatTypeAst = TyConst + CmpFloatAst
-  sem tyConst =
+  sem tyConstBase d =
   | CEqf _ -> tyarrows_ [tyfloat_, tyfloat_, tybool_]
   | CLtf _ -> tyarrows_ [tyfloat_, tyfloat_, tybool_]
   | CLeqf _ -> tyarrows_ [tyfloat_, tyfloat_, tybool_]
@@ -90,84 +107,81 @@ lang CmpFloatTypeAst = TyConst + CmpFloatAst
 end
 
 lang CmpCharTypeAst = TyConst + CmpCharAst
-  sem tyConst =
+  sem tyConstBase d =
   | CEqc _ -> tyarrows_ [tychar_, tychar_, tybool_]
 end
 
 lang IntCharConversionTypeAst = TyConst + IntCharConversionAst
-  sem tyConst =
+  sem tyConstBase d =
   | CInt2Char _ -> tyarrow_ tyint_ tychar_
   | CChar2Int _ -> tyarrow_ tychar_ tyint_
 end
 
 lang FloatStringConversionTypeAst = TyConst + FloatStringConversionAst
-  sem tyConst =
+  sem tyConstBase d =
   | CStringIsFloat _ -> tyarrow_ tystr_ tybool_
   | CString2float _ -> tyarrow_ tystr_ tyfloat_
   | CFloat2string _ -> tyarrow_ tyfloat_ tystr_
 end
 
 lang SymbTypeAst = TyConst + SymbAst
-  sem tyConst =
-  | CSymb _ -> tysym_
-  | CGensym _ -> tyarrow_ tyunit_ tysym_
-  | CSym2hash _ -> tyarrow_ tysym_ tyint_
+  sem tyConstBase d =
+  | CSymb _ -> mktysym_ d (lam s. s)
+  | CGensym _ -> mktysym_ d (lam s. tyarrow_ tyunit_ s)
+  | CSym2hash _ -> mktysym_ d (lam s. tyarrow_ s tyint_)
 end
 
 lang CmpSymbTypeAst = TyConst + CmpSymbAst
-  sem tyConst =
-  | CEqsym _ -> tyarrows_ [tysym_, tysym_, tybool_]
+  sem tyConstBase d =
+  | CEqsym _ -> mktysym_ d (lam s. tyarrows_ [s, s, tybool_])
 end
 
 lang SeqOpTypeAst = TyConst + SeqOpAst
-  sem tyConst =
-  | CSet _ ->
-    tyall_ "a" (tyarrows_ [ tyvarseq_ "a", tyint_, tyvar_ "a", tyvarseq_ "a"])
-  | CGet _ -> tyall_ "a" (tyarrows_ [tyvarseq_ "a", tyint_, tyvar_ "a"])
-  | CCons _ -> tyall_ "a" (tyarrows_ [tyvar_ "a", tyvarseq_ "a", tyvarseq_ "a"])
-  | CSnoc _ -> tyall_ "a" (tyarrows_ [tyvarseq_ "a", tyvar_ "a", tyvarseq_ "a"])
-  | CConcat _ -> tyall_ "a" (tyarrows_ [tyvarseq_ "a", tyvarseq_ "a", tyvarseq_ "a"])
-  | CLength _ -> tyall_ "a" (tyarrow_ (tyvarseq_ "a") tyint_)
-  | CReverse _ -> tyall_ "a" (tyarrow_ (tyvarseq_ "a") (tyvarseq_ "a"))
-  | CHead _ -> tyall_ "a" (tyarrow_ (tyvarseq_ "a") (tyvar_ "a"))
-  | CTail _ -> tyall_ "a" (tyarrow_ (tyvarseq_ "a") (tyvarseq_ "a"))
-  | CNull _ -> tyall_ "a" (tyarrow_ (tyvarseq_ "a") tybool_)
+  sem tyConstBase d =
+  | CSet _ -> mktyall_ "a" (lam a. tyarrows_ [tyseq_ a, tyint_, a, tyseq_ a])
+  | CGet _ -> mktyall_ "a" (lam a. tyarrows_ [tyseq_ a, tyint_, a])
+  | CCons _ -> mktyall_ "a" (lam a. tyarrows_ [a, tyseq_ a, tyseq_ a])
+  | CSnoc _ -> mktyall_ "a" (lam a. tyarrows_ [tyseq_ a, a, tyseq_ a])
+  | CConcat _ -> mktyall_ "a" (lam a. tyarrows_ [tyseq_ a, tyseq_ a, tyseq_ a])
+  | CLength _ -> mktyall_ "a" (lam a. tyarrow_ (tyseq_ a) tyint_)
+  | CReverse _ -> mktyall_ "a" (lam a. tyarrow_ (tyseq_ a) (tyseq_ a))
+  | CHead _ -> mktyall_ "a" (lam a. tyarrow_ (tyseq_ a) a)
+  | CTail _ -> mktyall_ "a" (lam a. tyarrow_ (tyseq_ a) (tyseq_ a))
+  | CNull _ -> mktyall_ "a" (lam a. tyarrow_ (tyseq_ a) tybool_)
   | CMap _ ->
-    tyalls_ ["a", "b"] (tyarrows_ [ tyarrow_ (tyvar_ "a") (tyvar_ "b"),
-                                    tyvarseq_ "a", tyvarseq_ "b" ])
+    mktyall_ "a" (lam a. mktyall_ "b" (lam b.
+      tyarrows_ [ tyarrow_ a b, tyseq_ a, tyseq_ b ]))
   | CMapi _ ->
-    tyalls_ ["a", "b"] (tyarrows_ [ tyarrows_ [tyint_, tyvar_ "a", tyvar_ "b"],
-                                               tyvarseq_ "a", tyvarseq_ "b" ])
+    mktyall_ "a" (lam a. mktyall_ "b" (lam b.
+      tyarrows_ [ tyarrows_ [tyint_, a, b], tyseq_ a, tyseq_ b ]))
   | CIter _ ->
-    tyall_ "a" (tyarrows_ [tyarrow_ (tyvar_ "a") tyunit_, tyvarseq_ "a", tyunit_])
+    mktyall_ "a" (lam a. tyarrows_ [tyarrow_ a tyunit_, tyseq_ a, tyunit_])
   | CIteri _ ->
-    tyall_ "a" (tyarrows_ [ tyarrows_ [tyint_, tyvar_ "a", tyunit_],
-                            tyvarseq_ "a", tyunit_ ])
+    mktyall_ "a" (lam a. tyarrows_ [ tyarrows_ [tyint_, a, tyunit_],
+                                     tyseq_ a, tyunit_ ])
   | CFoldl _ ->
-    tyalls_ ["a", "b"]
-            (tyarrows_ [ tyarrows_ [tyvar_ "a", tyvar_ "b", tyvar_ "a"],
-                         tyvar_ "a", tyvarseq_ "b", tyvar_ "a" ])
+    mktyall_ "a" (lam a. mktyall_ "b" (lam b.
+      tyarrows_ [tyarrows_ [a, b, a], a, tyseq_ b, a ]))
   | CFoldr _ ->
-    tyalls_ ["a", "b"]
-            (tyarrows_ [ tyarrows_ [tyvar_ "b", tyvar_ "a", tyvar_ "a"],
-                         tyvar_ "a", tyvarseq_ "b", tyvar_ "a" ])
+    mktyall_ "a" (lam a. mktyall_ "b" (lam b.
+      tyarrows_ [tyarrows_ [b, a, a], a, tyseq_ b, a ]))
   | CCreate _ ->
-    tyall_ "a" (tyarrows_ [tyint_, tyarrow_ tyint_ (tyvar_ "a"), tyvarseq_ "a"])
+    mktyall_ "a" (lam a. tyarrows_ [tyint_, tyarrow_ tyint_ a, tyseq_ a])
   | CCreateList _ ->
-    tyall_ "a" (tyarrows_ [tyint_, tyarrow_ tyint_ (tyvar_ "a"), tyvarseq_ "a"])
+    mktyall_ "a" (lam a. tyarrows_ [tyint_, tyarrow_ tyint_ a, tyseq_ a])
   | CCreateRope _ ->
-    tyall_ "a" (tyarrows_ [tyint_, tyarrow_ tyint_ (tyvar_ "a"), tyvarseq_ "a"])
-  | CIsList _ -> tyall_ "a" (tyarrow_ (tyvarseq_ "a") tybool_)
-  | CIsRope _ -> tyall_ "a" (tyarrow_ (tyvarseq_ "a") tybool_)
+    mktyall_ "a" (lam a. tyarrows_ [tyint_, tyarrow_ tyint_ a, tyseq_ a])
+  | CIsList _ -> mktyall_ "a" (lam a. tyarrow_ (tyseq_ a) tybool_)
+  | CIsRope _ -> mktyall_ "a" (lam a. tyarrow_ (tyseq_ a) tybool_)
   | CSplitAt _ ->
-    tyall_ "a" (tyarrows_ [ tyvarseq_ "a", tyint_,
-                            tytuple_ [tyvarseq_ "a", tyvarseq_ "a"]])
+    mktyall_ "a" (lam a. tyarrows_ [ tyseq_ a, tyint_,
+                                     tytuple_ [tyseq_ a, tyseq_ a]])
   | CSubsequence _ ->
-    tyall_ "a" (tyarrows_ [ tyvarseq_ "a", tyint_, tyint_, tyvarseq_ "a"])
+    mktyall_ "a" (lam a. tyarrows_ [ tyseq_ a, tyint_, tyint_, tyseq_ a])
 end
 
 lang FileOpTypeAst = TyConst + FileOpAst
-  sem tyConst =
+  sem tyConstBase d =
   | CFileRead _ -> tyarrow_ tystr_ tystr_
   | CFileWrite _ -> tyarrows_ [tystr_, tystr_, tyunit_]
   | CFileExists _ -> tyarrow_ tystr_ tybool_
@@ -175,10 +189,10 @@ lang FileOpTypeAst = TyConst + FileOpAst
 end
 
 lang IOTypeAst = TyConst + IOAst
-  sem tyConst =
+  sem tyConstBase d =
   | CPrint _ -> tyarrow_ tystr_ tyunit_
   | CPrintError _ -> tyarrow_ tystr_ tyunit_
-  | CDPrint _ -> tyall_ "a" (tyarrow_ (tyvar_ "a") tyunit_)
+  | CDPrint _ -> mktyall_ "a" (lam a. tyarrow_ a tyunit_)
   | CFlushStdout _ -> tyarrow_ tyunit_ tyunit_
   | CFlushStderr _ -> tyarrow_ tyunit_ tyunit_
   | CReadLine _ -> tyarrow_ tyunit_ tystr_
@@ -186,84 +200,88 @@ lang IOTypeAst = TyConst + IOAst
 end
 
 lang RandomNumberGeneratorTypeAst = TyConst + RandomNumberGeneratorAst
-  sem tyConst =
+  sem tyConstBase d =
   | CRandIntU _ -> tyarrows_ [tyint_, tyint_, tyint_]
   | CRandSetSeed _ -> tyarrow_ tyint_ tyunit_
 end
 
 lang SysTypeAst = TyConst + SysAst
-  sem tyConst =
-  | CExit _ -> tyall_ "a" (tyarrow_ tyint_ (tyvar_ "a"))
-  | CError _ -> tyall_ "a" (tyarrow_ tystr_ (tyvar_ "a"))
+  sem tyConstBase d =
+  | CExit _ -> mktyall_ "a" (lam a. tyarrow_ tyint_ a)
+  | CError _ -> mktyall_ "a" (lam a. tyarrow_ tystr_ a)
   | CArgv _ -> tyseq_ tystr_
   | CCommand _ -> tyarrow_ tystr_ tyint_
 end
 
 lang TimeTypeAst = TyConst + TimeAst
-  sem tyConst =
+  sem tyConstBase d =
   | CWallTimeMs _ -> tyarrow_ tyunit_ tyfloat_
   | CSleepMs _ -> tyarrow_ tyint_ tyunit_
 end
 
 lang RefOpTypeAst = TyConst + RefOpAst
-  sem tyConst =
-  | CRef _ -> tyall_ "a" (tyarrow_ (tyvar_ "a") (tyref_ (tyvar_ "a")))
-  | CModRef _ -> tyall_ "a" (tyarrows_ [tyref_ (tyvar_ "a"), tyvar_ "a", tyunit_])
-  | CDeRef _ -> tyall_ "a" (tyarrow_ (tyref_ (tyvar_ "a")) (tyvar_ "a"))
+  sem tyConstBase d =
+  | CRef _ -> mktyall_ "a" (lam a. mktyref_ d (lam r. tyarrow_ a (tyapp_ r a)))
+  | CModRef _ -> mktyall_ "a" (lam a. mktyref_ d (lam r. tyarrows_ [tyapp_ r a, a, tyunit_]))
+  | CDeRef _ -> mktyall_ "a" (lam a. mktyref_ d (lam r. tyarrow_ (tyapp_ r a) a))
 end
 
 lang ConTagTypeAst = TyConst + ConTagAst
-  sem tyConst =
-  | CConstructorTag _ -> tyall_ "a" (tyarrow_ (tyvar_ "a") tyint_)
+  sem tyConstBase d =
+  | CConstructorTag _ -> mktyall_ "a" (lam a. tyarrow_ a tyint_)
 end
 
 lang TensorOpTypeAst = TyConst + TensorOpAst
-  sem tyConst =
+  sem tyConstBase d =
   | CTensorCreateUninitInt _ -> tytensorcreateuninitint_
   | CTensorCreateUninitFloat _ -> tytensorcreateuninitfloat_
   | CTensorCreateInt _ -> tytensorcreateint_
   | CTensorCreateFloat _ -> tytensorcreatefloat_
-  | CTensorCreate _ -> tyall_ "a" (tytensorcreate_ (tyvar_ "a"))
-  | CTensorGetExn _ -> tyall_ "a" (tytensorgetexn_ (tyvar_ "a"))
-  | CTensorSetExn _ -> tyall_ "a" (tytensorsetexn_ (tyvar_ "a"))
-  | CTensorLinearGetExn _ -> tyall_ "a" (tytensorlineargetexn_ (tyvar_ "a"))
-  | CTensorLinearSetExn _ -> tyall_ "a" (tytensorlinearsetexn_ (tyvar_ "a"))
-  | CTensorRank _ -> tyall_ "a" (tytensorrank_ (tyvar_ "a"))
-  | CTensorShape _ -> tyall_ "a" (tytensorshape_ (tyvar_ "a"))
-  | CTensorReshapeExn _ -> tyall_ "a" (tytensorreshapeexn_ (tyvar_ "a"))
-  | CTensorCopy _ -> tyall_ "a" (tytensorcopy_ (tyvar_ "a"))
-  | CTensorTransposeExn _ -> tyall_ "a" (tytensortransposeexn_ (tyvar_ "a"))
-  | CTensorSliceExn _ -> tyall_ "a" (tytensorsliceexn_ (tyvar_ "a"))
-  | CTensorSubExn _ -> tyall_ "a" (tytensorsubexn_ (tyvar_ "a"))
-  | CTensorIterSlice _ -> tyall_ "a" (tytensoriteri_ (tyvar_ "a"))
-  | CTensorEq _ -> tyalls_ ["a", "b"] (tytensoreq_ (tyvar_ "a") (tyvar_ "b"))
-  | CTensorToString _ -> tyall_ "a" (tytensortostring_ (tyvar_ "a"))
+  | CTensorCreate _ -> mktyall_ "a" (lam a. tytensorcreate_ a)
+  | CTensorGetExn _ -> mktyall_ "a" (lam a. tytensorgetexn_ a)
+  | CTensorSetExn _ -> mktyall_ "a" (lam a. tytensorsetexn_ a)
+  | CTensorLinearGetExn _ -> mktyall_ "a" (lam a. tytensorlineargetexn_ a)
+  | CTensorLinearSetExn _ -> mktyall_ "a" (lam a. tytensorlinearsetexn_ a)
+  | CTensorRank _ -> mktyall_ "a" (lam a. tytensorrank_ a)
+  | CTensorShape _ -> mktyall_ "a" (lam a. tytensorshape_ a)
+  | CTensorReshapeExn _ -> mktyall_ "a" (lam a. tytensorreshapeexn_ a)
+  | CTensorCopy _ -> mktyall_ "a" (lam a. tytensorcopy_ a)
+  | CTensorTransposeExn _ -> mktyall_ "a" (lam a. tytensortransposeexn_ a)
+  | CTensorSliceExn _ -> mktyall_ "a" (lam a. tytensorsliceexn_ a)
+  | CTensorSubExn _ -> mktyall_ "a" (lam a. tytensorsubexn_ a)
+  | CTensorIterSlice _ -> mktyall_ "a" (lam a. tytensoriteri_ a)
+  | CTensorEq _ -> mktyall_ "a" (lam a. mktyall_ "b" (lam b. tytensoreq_ a b))
+  | CTensorToString _ -> mktyall_ "a" (lam a. tytensortostring_ a)
 end
 
 lang BootParserTypeAst = TyConst + BootParserAst
-  sem tyConst =
-  | CBootParserParseMExprString _ -> tyarrows_ [
-      tytuple_ [tybool_],
-      tyseq_ tystr_,
-      tystr_,
-      tybootparsetree_
-    ]
-  | CBootParserParseMCoreFile _ -> tyarrows_ [
-      tytuple_ [tybool_, tybool_ ,tyseq_ tystr_, tybool_, tybool_, tybool_],
-      tyseq_ tystr_,
-      tystr_,
-      tybootparsetree_
-    ]
-  | CBootParserGetId _ -> tyarrow_ tybootparsetree_ tyint_
-  | CBootParserGetTerm _ -> tyarrows_ [tybootparsetree_, tyint_, tybootparsetree_]
-  | CBootParserGetType _ -> tyarrows_ [tybootparsetree_, tyint_, tybootparsetree_]
-  | CBootParserGetString _ -> tyarrows_ [tybootparsetree_, tyint_, tystr_]
-  | CBootParserGetInt _ -> tyarrows_ [tybootparsetree_, tyint_, tyint_]
-  | CBootParserGetFloat _ -> tyarrows_ [tybootparsetree_, tyint_, tyfloat_]
-  | CBootParserGetListLength _ -> tyarrows_ [tybootparsetree_, tyint_, tyint_]
-  | CBootParserGetConst _ -> tyarrows_ [tybootparsetree_, tyint_, tybootparsetree_]
-  | CBootParserGetPat _ -> tyarrows_ [tybootparsetree_, tyint_, tybootparsetree_]
-  | CBootParserGetInfo _ -> tyarrows_ [tybootparsetree_, tyint_, tybootparsetree_]
+  sem tyConstBase d =
+  | CBootParserParseMExprString _ ->
+    mktybootparsetree_ d (lam b.
+      tyarrows_ [
+        tytuple_ [tybool_],
+        tyseq_ tystr_,
+        tystr_,
+        b
+      ])
+  | CBootParserParseMCoreFile _ ->
+    mktybootparsetree_ d (lam b.
+      tyarrows_ [
+        tytuple_ [tybool_, tybool_ ,tyseq_ tystr_, tybool_, tybool_, tybool_],
+        tyseq_ tystr_,
+        tystr_,
+        b
+      ])
+  | CBootParserGetId _ -> mktybootparsetree_ d (lam b. tyarrow_ b tyint_)
+  | CBootParserGetTerm _ -> mktybootparsetree_ d (lam b. tyarrows_ [b, tyint_, b])
+  | CBootParserGetType _ -> mktybootparsetree_ d (lam b. tyarrows_ [b, tyint_, b])
+  | CBootParserGetString _ -> mktybootparsetree_ d (lam b. tyarrows_ [b, tyint_, tystr_])
+  | CBootParserGetInt _ -> mktybootparsetree_ d (lam b. tyarrows_ [b, tyint_, tyint_])
+  | CBootParserGetFloat _ -> mktybootparsetree_ d (lam b. tyarrows_ [b, tyint_, tyfloat_])
+  | CBootParserGetListLength _ -> mktybootparsetree_ d (lam b. tyarrows_ [b, tyint_, tyint_])
+  | CBootParserGetConst _ -> mktybootparsetree_ d (lam b. tyarrows_ [b, tyint_, b])
+  | CBootParserGetPat _ -> mktybootparsetree_ d (lam b. tyarrows_ [b, tyint_, b])
+  | CBootParserGetInfo _ -> mktybootparsetree_ d (lam b. tyarrows_ [b, tyint_, b])
 end
 
 lang MExprConstType =

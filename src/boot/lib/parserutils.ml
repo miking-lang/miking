@@ -11,7 +11,7 @@ let tablength = 8
 let error_to_error_message = function
   | Lexer.Lex_error m | Error m ->
       Some m
-  | Parsing.Parse_error ->
+  | Parser.Error ->
       Some (Lexer.parse_error_message ())
   | _ ->
       None
@@ -307,8 +307,9 @@ let local_parse_mcore_file filename =
   let fs1 = open_in filename in
   let p =
     Lexer.init (us filename) tablength ;
-    fs1 |> Ustring.lexing_from_channel |> Parser.main Lexer.main
-    |> debug_after_parse
+    let lexbuf = Ustring.lexing_from_channel fs1 in
+    try Parser.main Lexer.main lexbuf |> debug_after_parse
+    with Parser.Error -> raise_error !Lexer.last_info "Parse error"
   in
   close_in fs1 ;
   parsed_files := filename :: !parsed_files ;

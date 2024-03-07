@@ -52,6 +52,7 @@ lang AVLTreeImpl
     avlCreate rlt.key rlt.value
       (avlCreate k v l rlt.l)
       (avlCreate rt.key rt.value rlt.r rr)
+  | Node _ -> error "avlRotateRightLeft: invalid shape of tree"
   | Leaf _ -> error "avlRotateRightLeft: empty tree"
 
   sem avlRotateRight : all k. all v. k -> v -> AVL k v -> AVL k v -> AVL k v
@@ -66,6 +67,7 @@ lang AVLTreeImpl
     avlCreate lrt.key lrt.value
       (avlCreate lt.key lt.value ll lrt.l)
       (avlCreate k v lrt.r r)
+  | Node _ -> error "avlRotateLeftRight: invalid shape of tree"
   | Leaf _ -> error "avlRotateLeftRight: empty tree"
 
   -- NOTE(larshum, 2023-03-04): Joins two AVL trees where the provided key is
