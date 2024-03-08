@@ -1595,7 +1595,7 @@ let subsequenceWasm =
             StructNew {
                 structIdent = sliceName,
                 values = [
-                    I32Sub (LocalGet j, LocalGet i),
+                    LocalGet j,
                     LocalGet i,
                     StructGet {
                         structIdent = leafName,
