@@ -27,8 +27,47 @@ lang WasmPPrint = WasmAST
     | I31Ref () -> "i31ref"
     | Ref ident -> join ["(ref $", pprintName ident, ")"]
 
+    sem pprintFloatBinOp = 
+    | FloatAdd {} -> "add"
+    | FloatSub {} -> "sub"
+    | FloatMul {} -> "mul"
+    | FloatDiv {} -> "div"
+    | FloatEq {} -> "eq"
+    | FloatNe {} -> "ne"
+    | FloatGt {} -> "gt"
+    | FloatLt {} -> "lt"
+    | FloatGe {} -> "ge"
+    | FloatLe {} -> "le"
+
+    sem pprintFloatUnOp = 
+    | FloatNeg {} -> "neg"
+    | FloatFloor {} -> "floor"
+    | FloatCeil {} -> "ceil"
+    | FloatConvertI32 {} -> "convert_i32_s"
+    | FloatNearest {} -> "nearest"
+
     sem pprintInstr: Int -> Instr -> String
     sem pprintInstr indent = 
+    | F64Const f -> join [indent2str indent, "(f64.const ", (float2string f), ")"]
+    | F64UnOp (op, i) -> join [
+        indent2str indent, 
+        "(f64.",
+        pprintFloatUnOp op,
+        " ",
+        (pprintInstr (addi 1 indent) i), 
+        ")"
+    ]
+    sem pprintInstr indent = 
+    | F64BinOp (op, l, r) -> join [
+        indent2str indent, 
+        "(f64.",
+        pprintFloatBinOp op,
+        "\n",
+        (pprintInstr (addi 1 indent) l), 
+        "\n",
+        (pprintInstr (addi 1 indent) r),
+        ")"
+    ]
     | I32Const i -> join [indent2str indent, "(i32.const ", (int2string i), ")"]
     | Drop instr -> 
         let str = pprintInstr (addi indent 1) instr in
@@ -87,7 +126,10 @@ lang WasmPPrint = WasmAST
     | I32And (i1, i2) -> 
         let s1 = pprintInstr (addi indent 1) i1 in
         let s2 = pprintInstr (addi indent 1) i2 in 
-        join [indent2str indent, "(i32.and\n", s1, "\n", s2, ")"]      
+        join [indent2str indent, "(i32.and\n", s1, "\n", s2, ")"]    
+    | I32TruncF64S i -> 
+        let s1 = pprintInstr (addi indent 1) i in
+        join [indent2str indent, "(i32.trunc_f64_s\n", s1, ")"]   
     | I32DivS (i1, i2) -> 
         let s1 = pprintInstr (addi indent 1) i1 in
         let s2 = pprintInstr (addi indent 1) i2 in 
@@ -107,11 +149,7 @@ lang WasmPPrint = WasmAST
     | I32ShrU (i1, i2) -> 
         let s1 = pprintInstr (addi indent 1) i1 in
         let s2 = pprintInstr (addi indent 1) i2 in 
-        join [indent2str indent, "(i32.shr_u\n", s1, "\n", s2, ")"]   
-    | F64Eq (f1, f2) -> 
-        let s1 = pprintInstr (addi indent 1) f1 in
-        let s2 = pprintInstr (addi indent 1) f2 in 
-        join [indent2str indent, "(f64.eq\n", s1, "\n", s2, ")"]            
+        join [indent2str indent, "(i32.shr_u\n", s1, "\n", s2, ")"]        
     | Call (fname, instructions) -> 
         let s = match instructions with [] 
             then ""

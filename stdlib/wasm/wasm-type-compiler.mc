@@ -110,7 +110,8 @@ lang WasmTypeCompiler = MClosAst + WasmAST + MExprPrettyPrint
         error "TyArrow" ;
         ctx
     | (name,  TyCon {ident = ident}) -> 
-        error "TyCon"
+        ctx
+        -- error (join ["TyCon found: ident=", nameGetStr ident, ",. name=", nameGetStr name])
     | (name,  TyApp _) -> 
         error "TyApp" ;
         ctx

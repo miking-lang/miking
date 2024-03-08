@@ -1,6 +1,7 @@
 include "wasm-ast.mc"
 include "wasm-pprint.mc"
 include "wasm-rope.mc"
+include "wasm-float.mc"
 
 -- Integer Operations
 let createIntBinop = lam ident. lam instrProducer.
@@ -249,10 +250,6 @@ let printWasm =
         ]
     }
 
--- Todo fix this
-let eqfWasm = 
-    use WasmAST in
-    createIntBinop "eqf" (lam l. lam r. I32Eq (l, r))
 
 let integerIntrinsics = [
     addiWasm,
@@ -305,5 +302,18 @@ let integerIntrinsics = [
     setWasm,
     subsequenceWasm,
     splitatWasm,
-    eqfWasm
+    eqfWasm,
+    addfWasm,
+    subfWasm,
+    mulfWasm, 
+    divfWasm,
+    neqfWasm,
+    gtfWasm,
+    ltfWasm,
+    geqfWasm,
+    leqfWasm,
+    negfWasm,
+    floorfiWasm
+    -- ceilfiWasm
+    -- roundfiWasm
 ]

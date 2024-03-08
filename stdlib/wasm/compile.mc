@@ -176,6 +176,7 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint + MClosPr
     sem compileConst : WasmCompileContext -> WasmExprContext -> Const -> WasmExprContext
     sem compileConst globalCtx exprCtx = 
     | CInt {val = i} -> ctxInstrResult exprCtx (I31Cast (I32Const i))
+    | CFloat {val = f} -> ctxInstrResult exprCtx (float2box (F64Const f))
     | CBool {val = true} -> ctxInstrResult exprCtx (I31Cast (I32Const 1))
     | CBool {val = false} -> ctxInstrResult exprCtx (I31Cast (I32Const 0))
     | CChar {val = c} -> ctxInstrResult exprCtx (I31Cast (I32Const (char2int c)))
@@ -197,7 +198,20 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint + MClosPr
     | CLeqi _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "leqi")
     | CGeqi _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "geqi")
     -- Floating Point Comparison Operators (WIP)
+    | CAddf _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "addf")
+    | CSubf _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "subf")
+    | CMulf _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "mulf")
+    | CDivf _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "divf")
     | CEqf _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "eqf")
+    | CNeqf _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "neqf")
+    | CGtf _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "gtf")
+    | CLtf _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "ltf")
+    | CGeqf _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "geqf")
+    | CLeqf _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "leqf")
+    | CNegf _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "negf")
+    -- | CRoundfi  _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "roundfi")
+    | CFloorfi _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "floorfi")
+    -- | CCeilfi _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "ceilfi")
     | CFloat2string _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "id")
     -- Character Operations
     -- Since characters are represented as i31, we simply re-use the integer ops
@@ -792,7 +806,7 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint + MClosPr
         let ctx = foldl ctxWithFuncDef ctx stdlibDefs in 
 
         -- Add list stdlib definitions
-        let ctx = foldl ctxWithFuncDef ctx [anyrefArrDef, leafDef, sliceDef, concatDef, anyrefBoxDef] in 
+        let ctx = foldl ctxWithFuncDef ctx [anyrefArrDef, leafDef, sliceDef, concatDef, anyrefBoxDef, floatBoxDef] in 
 
         -- Compile Types
         let typeCtx = compileTypes typeEnv in 

@@ -1,12 +1,34 @@
 include "name.mc"
 
 lang WasmAST
+    syn FloatBinOp = 
+    | FloatAdd {}
+    | FloatSub {}
+    | FloatMul {}
+    | FloatDiv {}
+    | FloatEq {}
+    | FloatNe {}
+    | FloatGt {}
+    | FloatLt {} 
+    | FloatGe {}
+    | FloatLe {}
+
+    syn FloatUnOp = 
+    | FloatNeg {} 
+    | FloatFloor {}
+    | FloatCeil {}
+    | FloatConvertI32 {}
+    | FloatNearest
+
     syn Instr =
     | I32Const Int
     | I32Store {
         index: Instr,
         value: Instr
     }
+    | F64UnOp (FloatUnOp, Instr)
+    | F64BinOp (FloatBinOp, Instr, Instr)
+    | F64Const Float
     | I32Add (Instr, Instr)
     | I32Sub (Instr, Instr)
     | I32Mul (Instr, Instr)
@@ -16,13 +38,13 @@ lang WasmAST
     | I32LtS (Instr, Instr)
     | I32GeS (Instr, Instr)
     | I32LeS (Instr, Instr)
+    | I32TruncF64S Instr
     | I32Ne (Instr, Instr)
     | I32DivS (Instr, Instr)
     | I32RemS (Instr, Instr)
     | I32Shl (Instr, Instr)
     | I32ShrS (Instr, Instr)
     | I32ShrU (Instr, Instr)
-    | F64Eq (Instr, Instr)
     | LocalGet Name
     | LocalSet (Name, Instr)
     | GlobalGet Name
