@@ -27,7 +27,7 @@ type TranspileContext = {
     ]
 }
 
-lang MClosTranspiler = MClosAst
+lang MClosTranspiler = MClosAst + MClosPrettyPrint
     sem extractFuncDef: [{ident: Name, ty: Type}] -> SigType -> Expr -> Expr
     sem extractFuncDef argsAcc sig = 
     | TmLam lamRec -> 
@@ -74,12 +74,14 @@ lang MClosTranspiler = MClosAst
                 ty = r.tyBody
             } in 
             let newDef = (extractFuncDef [] sig r.body) in 
-            {ctx with functionDefs = snoc ctx.functionDefs newDef}
+            {acc with functionDefs = snoc acc.functionDefs newDef}
         in
         let ctx = foldl work ctx bindings in 
         transpileAcc ctx inexpr
     | other -> 
-        {ctx with mainExpr = Some other}
+        match ctx.mainExpr with Some _ 
+            then error "Main expression is already set!"
+            else {ctx with mainExpr = Some other}
 
     sem transpile =
     | expr -> 

@@ -3,6 +3,13 @@ include "mclos-ast.mc"
 include "name.mc"
 include "mexpr/ast-builder.mc"
 
+let pprintName = lam name. 
+    match nameGetSym name with Some s
+    then concat (nameGetStr name) (int2string (sym2hash s))
+    else match nameGetStr name with ""
+        then "FALLBACK"
+        else nameGetStr name
+
 lang MClosPrettyPrint = MExprPrettyPrint + MClosAst
     sem pprintCode indent env =
     | TmFuncDef f -> 
@@ -10,7 +17,7 @@ lang MClosPrettyPrint = MExprPrettyPrint + MClosAst
         let args = strJoin ", " (map (lam r. nameGetStr r.ident) f.args) in
         (env, join [
             "funcdef ",
-            nameGetStr f.funcIdent,
+            pprintName f.funcIdent,
             " = lam ",
             args,
             ".\n",

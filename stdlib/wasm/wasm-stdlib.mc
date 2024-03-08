@@ -249,6 +249,11 @@ let printWasm =
         ]
     }
 
+-- Todo fix this
+let eqfWasm = 
+    use WasmAST in
+    createIntBinop "eqf" (lam l. lam r. I32Eq (l, r))
+
 let integerIntrinsics = [
     addiWasm,
     subiWasm,
@@ -299,5 +304,6 @@ let integerIntrinsics = [
     nullWasm,
     setWasm,
     subsequenceWasm,
-    splitatWasm
+    splitatWasm,
+    eqfWasm
 ]

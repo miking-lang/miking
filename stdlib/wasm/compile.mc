@@ -61,6 +61,10 @@ let accArity = lam acc: Set Int. lam def: (use WasmAST in Def).
 let findSignature = lam ctx : WasmCompileContext. lam ident : Name. 
     mapLookup ident ctx.ident2sig
 
+let isLocal = lam ctx : WasmExprContext. lam ident : Name. 
+    let idents = map (lam local. local.ident) ctx.locals in 
+    match find (nameEq ident) idents with Some _ then true else false
+
 let isGlobal = lam ctx : WasmCompileContext. lam ident: Name. 
     use WasmAST in 
     let globalDefs = filter 
@@ -192,6 +196,9 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint + MClosPr
     | CGti _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "gti")
     | CLeqi _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "leqi")
     | CGeqi _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "geqi")
+    -- Floating Point Comparison Operators (WIP)
+    | CEqf _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "eqf")
+    | CFloat2string _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "id")
     -- Character Operations
     -- Since characters are represented as i31, we simply re-use the integer ops
     | CEqc _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "eqi")
@@ -231,7 +238,9 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint + MClosPr
     | CModRef _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "modref")
     -- IOAST 
     | CPrint _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "print")
-
+    | CExit _ -> ctxInstrResult exprCtx (Unreachable ())
+    -- Fallback
+    | other -> ctxInstrResult exprCtx (Unreachable ())
     sem compileExpr : WasmCompileContext -> WasmExprContext -> Expr -> WasmExprContext
     sem compileExpr globalCtx exprCtx = 
     | TmConst {val = c} -> 
@@ -244,7 +253,15 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint + MClosPr
                 if isGlobal globalCtx ident then
                     ctxInstrResult exprCtx (GlobalGet ident)
                 else 
-                    ctxLocalResult exprCtx ident
+                    -- if isLocal exprCtx ident then 
+                        ctxLocalResult exprCtx ident
+                    -- else 
+                    --     let nameStr = pprintName ident in 
+                    --     error (join [
+                    --         "TmVar '",
+                    --         nameStr,
+                    --         "' is not a signature, global or local!"
+                    --     ])
     | TmApp {lhs = lhs, rhs = rhs} ->
         let leftCtx = compileExpr globalCtx exprCtx lhs in 
         let rightCtx = compileExpr globalCtx leftCtx rhs in 
@@ -869,7 +886,7 @@ let compileMCoreToWasm = lam ast.
     let transpileCtx = transpile ast in
 
     -- printLn "=== TRANSPILED ===" ;
-    -- (use MClosPrettyPrint in (iter (lam e. printLn (expr2str e)) exprs));
+    -- (use MClosPrettyPrint in (iter (lam e. printLn (expr2str e)) transpileCtx.functionDefs));
 
     use WasmCompiler in 
     let wasmModule = compile env transpileCtx in

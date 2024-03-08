@@ -12,7 +12,9 @@ lang WasmPPrint = WasmAST
     | name -> 
         match nameGetSym name with Some s
         then concat (nameGetStr name) (int2string (sym2hash s))
-        else nameGetStr name
+        else match nameGetStr name with ""
+            then "FALLBACK"
+            else nameGetStr name
 
     sem pprintWasmType: WasmType -> String
     sem pprintWasmType = 
@@ -30,7 +32,7 @@ lang WasmPPrint = WasmAST
     | I32Const i -> join [indent2str indent, "(i32.const ", (int2string i), ")"]
     | Drop instr -> 
         let str = pprintInstr (addi indent 1) instr in
-        join [indent2str indent, "(drop ", str, ")"]
+        join [indent2str indent, "(drop\n", str, ")"]
     | LocalGet id -> join [indent2str indent, "(local.get $", pprintName id, ")"]
     | GlobalGet id -> join [indent2str indent, "(global.get $", pprintName id, ")"]
     | GlobalSet (id, value) -> 
@@ -105,7 +107,11 @@ lang WasmPPrint = WasmAST
     | I32ShrU (i1, i2) -> 
         let s1 = pprintInstr (addi indent 1) i1 in
         let s2 = pprintInstr (addi indent 1) i2 in 
-        join [indent2str indent, "(i32.shr_u\n", s1, "\n", s2, ")"]               
+        join [indent2str indent, "(i32.shr_u\n", s1, "\n", s2, ")"]   
+    | F64Eq (f1, f2) -> 
+        let s1 = pprintInstr (addi indent 1) f1 in
+        let s2 = pprintInstr (addi indent 1) f2 in 
+        join [indent2str indent, "(f64.eq\n", s1, "\n", s2, ")"]            
     | Call (fname, instructions) -> 
         let s = match instructions with [] 
             then ""

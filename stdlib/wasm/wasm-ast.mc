@@ -22,6 +22,7 @@ lang WasmAST
     | I32Shl (Instr, Instr)
     | I32ShrS (Instr, Instr)
     | I32ShrU (Instr, Instr)
+    | F64Eq (Instr, Instr)
     | LocalGet Name
     | LocalSet (Name, Instr)
     | GlobalGet Name
