@@ -747,8 +747,12 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint + MClosPr
             resultTy = Anyref (),
             instructions = concat bodyCtx.instructions [setGlobal, GlobalGet ident]
         } in 
+        let newDefs = 
+            if isGlobal ctx ident then ctx.defs
+            else cons globalDef ctx.defs
+        in 
         {ctx with
-            defs = cons globalDef ctx.defs,
+            defs = newDefs,
             globalInitDefs = snoc ctx.globalInitDefs initDef}
 
     sem compileMainExpr : WasmCompileContext -> Expr -> WasmCompileContext
