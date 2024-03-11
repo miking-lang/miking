@@ -210,7 +210,7 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint + MClosPr
     | CLeqf _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "leqf")
     | CNegf _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "negf")
     -- | CRoundfi  _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "roundfi")
-    | CFloorfi _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "floorfi")
+    -- | CFloorfi _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "floorfi")
     -- | CCeilfi _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "ceilfi")
     | CFloat2string _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "id")
     -- Character Operations

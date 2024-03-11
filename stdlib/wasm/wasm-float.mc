@@ -147,9 +147,9 @@ let negfWasm =
         ]
     }
 
-let floorfiWasm = 
-    use WasmAST in 
-    createIntUnOp "floorfi" (FloatFloor {}) 
+-- let floorfiWasm = 
+--     use WasmAST in 
+--     createIntUnOp "floorfi" (FloatFloor {}) 
 
 -- let ceilfiWasm = 
 --     use WasmAST in 

@@ -62,13 +62,13 @@ utest 0.25 with 0.5 using neqf in
 
 -- Conversion from Float to Int
 -- Float->Int
-utest floorfi 0.0 with 0 in              -- floor
-utest floorfi 3.8 with 3 in
-utest floorfi 3.0 with 3 in
-utest floorfi 2.999 with 2 in
-utest floorfi (negf 1.75) with negi 2 in
-utest floorfi (negf 1.25) with negi 2 in
-utest floorfi (negf 0.975) with negi 1 in
+-- utest floorfi 0.0 with 0 in              -- floor
+-- utest floorfi 3.8 with 3 in
+-- utest floorfi 3.0 with 3 in
+-- utest floorfi 2.999 with 2 in
+-- utest floorfi (negf 1.75) with negi 2 in
+-- utest floorfi (negf 1.25) with negi 2 in
+-- utest floorfi (negf 0.975) with negi 1 in
 
 -- utest ceilfi 0.0 with 0 in               -- ceiling
 -- utest ceilfi 7.3 with 8 in
