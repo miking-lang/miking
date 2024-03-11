@@ -147,14 +147,37 @@ let negfWasm =
         ]
     }
 
--- let floorfiWasm = 
---     use WasmAST in 
---     createIntUnOp "floorfi" (FloatFloor {}) 
+let floorfiWasm = 
+    use WasmAST in 
+    createIntUnOp "floorfi" (FloatFloor {}) 
 
--- let ceilfiWasm = 
---     use WasmAST in 
---     createIntUnOp "ceilfi" (FloatCeil {}) 
+let ceilfiWasm = 
+    use WasmAST in 
+    createIntUnOp "ceilfi" (FloatCeil {}) 
 
--- let roundfiWasm = 
---     use WasmAST in 
---     createIntUnOp "roundfi" (FloatNearest {}) 
+let roundfiWasm = 
+    use WasmAST in 
+    createIntUnOp "roundfi" (FloatNearest {}) 
+
+let int2floatWasm = 
+    use WasmAST in 
+    let l = nameSym "l" in 
+    FunctionDef {
+        ident = nameNoSym "int2float",
+        args = [
+            {ident = l, ty = Anyref ()}
+        ],
+        locals = [],
+        resultTy = Anyref (),
+        instructions = [
+            float2box (
+                F64UnOp (
+                    (FloatConvertI32 {}),
+                    I31GetS (RefCast {
+                        ty = I31Ref (),
+                        value = LocalGet l
+                    })
+                )
+            )
+        ]
+    }

@@ -312,8 +312,9 @@ let integerIntrinsics = [
     ltfWasm,
     geqfWasm,
     leqfWasm,
-    negfWasm
-    -- floorfiWasm
-    -- ceilfiWasm
-    -- roundfiWasm
+    negfWasm,
+    floorfiWasm,
+    ceilfiWasm,
+    roundfiWasm,
+    int2floatWasm
 ]

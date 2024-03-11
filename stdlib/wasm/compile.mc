@@ -209,9 +209,10 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint + MClosPr
     | CGeqf _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "geqf")
     | CLeqf _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "leqf")
     | CNegf _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "negf")
-    -- | CRoundfi  _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "roundfi")
-    -- | CFloorfi _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "floorfi")
-    -- | CCeilfi _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "ceilfi")
+    | CRoundfi  _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "roundfi")
+    | CFloorfi _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "floorfi")
+    | CCeilfi _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "ceilfi")
+    | CInt2float _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "int2float")
     | CFloat2string _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "id")
     -- Character Operations
     -- Since characters are represented as i31, we simply re-use the integer ops
@@ -455,13 +456,24 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint + MClosPr
         -- print "PatNamed PWildcard";
         ctxInstrResult ctx (I32Const 1)
     | PatNamed {ident = PName name} ->
-        let ident = nameGetStr name in 
-        -- print "PatNamed PName" ;
-        -- printLn ident ;
-        ctxInstrResult ctx (I32Const 1)
+        let local = {ident = name, ty = Anyref ()} in 
+        let setLocal = LocalSet (name, targetInstr) in 
+        let newCtx = {ctx with
+            locals = cons local ctx.locals,
+            instructions = snoc ctx.instructions setLocal} in 
+        ctxInstrResult newCtx (I32Const 1)
     | PatInt {val = val} ->
         let eqInstr = I32Eq (
             I32Const val,
+            I31GetS (RefCast {
+                ty = I31Ref (),
+                value = targetInstr
+            })
+        ) in
+        ctxInstrResult ctx eqInstr
+    | PatChar {val = val} ->
+        let eqInstr = I32Eq (
+            I32Const (char2int val),
             I31GetS (RefCast {
                 ty = I31Ref (),
                 value = targetInstr
@@ -520,7 +532,8 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint + MClosPr
             }
         ) in 
 
-        let resultLocal = nameNoSym (concat "patcon" (int2string ctx.nextLocal)) in 
+        -- let resultLocal = nameNoSym (concat "patcon" (int2string ctx.nextLocal)) in 
+        let resultLocal = nameSym "patcon" in 
 
         let setResultLocal = lam i. LocalSet (resultLocal, I32Const i) in 
 
@@ -548,11 +561,13 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint + MClosPr
     | PatRecord {bindings = bindings, ty = ty} & x->
         let bindingPairs = mapToSeq bindings in 
 
-        let pair2localIdent = lam index. lam pair. 
+        let pair2localIdent = lam pair. 
             match pair with (_, pat) in 
-            match pat with PatNamed {ident = PName innerName} in
-            {ident = innerName, ty = Anyref ()} in 
-        let locals = mapi pair2localIdent bindingPairs in 
+            match pat with PatNamed {ident = PName innerName} 
+                then Some {ident = innerName, ty = Anyref ()}
+                else None ()
+        in 
+        let locals = mapOption pair2localIdent bindingPairs in 
         -- This is a bit of a hack needed for pattern matching
         -- This uses split-at which created a 2-tuple which
         -- is not caught by the type lifting!
@@ -560,20 +575,22 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint + MClosPr
             then ident
             else nameNoSym "split-2-tuple") in 
 
-        let pair2setIntruction = lam index. lam pair.
+        let pair2setIntruction = lam pair.
             match pair with (sid, pat) in 
-            match pat with PatNamed {ident = PName innerName} in 
-            let structFieldIdent = nameNoSym (sidToString sid) in 
-            let localIdent = innerName in 
-            LocalSet (localIdent, StructGet {
-                structIdent = tyStr,
-                field = structFieldIdent, 
-                value = RefCast {
-                    ty = Ref tyStr,
-                    value = targetInstr
-                } 
-            }) in 
-        let localSetters = mapi pair2setIntruction bindingPairs in 
+            match pat with PatNamed {ident = PName innerName} then 
+                let structFieldIdent = nameNoSym (sidToString sid) in 
+                let localIdent = innerName in 
+                Some (LocalSet (localIdent, StructGet {
+                    structIdent = tyStr,
+                    field = structFieldIdent, 
+                    value = RefCast {
+                        ty = Ref tyStr,
+                        value = targetInstr
+                    } 
+                }))
+                else None () 
+            in 
+        let localSetters = mapOption pair2setIntruction bindingPairs in 
         let ctx = {ctx with 
             locals = concat ctx.locals locals,
             instructions = concat ctx.instructions localSetters} in 

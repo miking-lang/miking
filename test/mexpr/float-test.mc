@@ -62,38 +62,41 @@ utest 0.25 with 0.5 using neqf in
 
 -- Conversion from Float to Int
 -- Float->Int
--- utest floorfi 0.0 with 0 in              -- floor
--- utest floorfi 3.8 with 3 in
--- utest floorfi 3.0 with 3 in
--- utest floorfi 2.999 with 2 in
--- utest floorfi (negf 1.75) with negi 2 in
--- utest floorfi (negf 1.25) with negi 2 in
--- utest floorfi (negf 0.975) with negi 1 in
+utest floorfi 0.0 with 0 in              -- floor
+utest floorfi 3.8 with 3 in
+utest floorfi 3.0 with 3 in
+utest floorfi 2.999 with 2 in
+utest floorfi (negf 1.75) with negi 2 in
+utest floorfi (negf 1.25) with negi 2 in
+utest floorfi (negf 0.975) with negi 1 in
 
--- utest ceilfi 0.0 with 0 in               -- ceiling
--- utest ceilfi 7.3 with 8 in
--- utest ceilfi 7.75 with 8 in
--- utest ceilfi 8.0 with 8 in
--- utest ceilfi 8.001 with 9 in
--- utest ceilfi (negf 5.0) with negi 5 in
--- utest ceilfi (negf 5.75) with negi 5 in
--- utest ceilfi (negf 6.25) with negi 6 in
+utest ceilfi 0.0 with 0 in               -- ceiling
+utest ceilfi 7.3 with 8 in
+utest ceilfi 7.75 with 8 in
+utest ceilfi 8.0 with 8 in
+utest ceilfi 8.001 with 9 in
+utest ceilfi (negf 5.0) with negi 5 in
+utest ceilfi (negf 5.75) with negi 5 in
+utest ceilfi (negf 6.25) with negi 6 in
 
--- utest roundfi 0.0 with 0 in              -- round
--- utest roundfi 1.0 with 1 in
--- utest roundfi 1.25 with 1 in
--- utest roundfi 1.5 with 2 in
--- utest roundfi 0.75 with 1 in
--- utest roundfi (negf 2.4) with negi 2 in
--- utest roundfi (negf 2.0) with negi 2 in
--- utest roundfi (negf 2.5) with negi 3 in
+utest roundfi 0.0 with 0 in              -- round
+utest roundfi 1.0 with 1 in
+utest roundfi 1.25 with 1 in
+utest roundfi 1.5 with 2 in
+utest roundfi 0.75 with 1 in
+utest roundfi (negf 2.4) with negi 2 in
+utest roundfi (negf 2.0) with negi 2 in
+utest roundfi (negf 1.5) with negi 2 in
+
+-- utest negi (roundfi 2.5) with negi 3 in
+-- `utest roundfi 2.5 with 3 in 
 
 -- -- Conversion from Float to Int
 -- -- Int-> Float
--- utest int2float 0 with 0.0 using eqf in
--- utest int2float 1 with 1.0 using eqf in
--- utest int2float 17 with 17.0 using eqf in
--- utest int2float (negi 10) with negf 10.0 using eqf in
+utest int2float 0 with 0.0 using eqf in
+utest int2float 1 with 1.0 using eqf in
+utest int2float 17 with 17.0 using eqf in
+utest int2float (negi 10) with negf 10.0 using eqf in
 
 -- -- Conversion from String to Float
 -- utest stringIsFloat "42" with true in
@@ -116,9 +119,9 @@ utest 0.25 with 0.5 using neqf in
 
 -- -- Test: computing with floats
 -- -- powf3 x = x^3
--- let powf3 = lam x. mulf x (mulf x x) in
--- let taxicab2_1 = addf (powf3 1.0) (powf3 12.0) in
--- let taxicab2_2 = addf (powf3 9.0) (powf3 10.0) in
--- utest taxicab2_1 with taxicab2_2 using eqf in
+let powf3 = lam x. mulf x (mulf x x) in
+let taxicab2_1 = addf (powf3 1.0) (powf3 12.0) in
+let taxicab2_2 = addf (powf3 9.0) (powf3 10.0) in
+utest taxicab2_1 with taxicab2_2 using eqf in
 
 ()
