@@ -56,7 +56,7 @@ let fun = lam body. FDeclFun {
   body = body, info = NoInfo ()
 } in
 let pat = futPrecord_ [("x", nFutPvar_ x), ("y", nFutPvar_ y)] in
-let loop =
+let loopExpr =
   futForEach_
     (pat, nFutVar_ z) i (nFutVar_ s)
     (futRecord_ [
@@ -64,7 +64,7 @@ let loop =
       ("y", futAdd_ (nFutVar_ y) (nFutVar_ i))])
 in
 let zRec = futRecord_ [("x", futInt_ 0), ("y", futInt_ 0)] in
-let body = futBindall_ [ nuFutLet_ z zRec, loop ] in
+let body = futBindall_ [ nuFutLet_ z zRec, loopExpr ] in
 let inlinedBody =
   futForEach_ (pat, zRec) i (nFutVar_ s)
     (futRecord_ [

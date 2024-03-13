@@ -15,7 +15,7 @@ include "pmexpr/utils.mc"
 
 lang PMExprReplaceAccelerate =
   PMExprAst + PMExprExtractAccelerate + OCamlDataConversionMExpr + OCamlTopAst +
-  OCamlPrettyPrint + RecordTypeUtils
+  RecordTypeUtils
 
   sem _tensorToOCamlType =
   | TyTensor {ty = ty & (TyInt _ | TyFloat _), info = info} ->
@@ -59,7 +59,10 @@ lang PMExprReplaceAccelerate =
             -- NOTE(larshum, 2022-03-17): We explicitly use the label escaping
             -- of the OCaml pretty-printer to ensure the labels of the fields
             -- match.
-            let asStr = pprintLabelString sid in
+            let asStr =
+              use OCamlPrettyPrint in
+              pprintLabelString sid
+            in
             let str = sidToString sid in
             (acc, {label = asStr, asLabel = str, ty = ty}))
           acc (tyRecordOrderedLabels ty)
