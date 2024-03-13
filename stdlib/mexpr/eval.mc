@@ -68,6 +68,8 @@ lang Eval = Ast
   sem evalCtxEmpty =| _ -> { env = evalEnvEmpty () }
 
   sem eval : EvalCtx -> Expr -> Expr
+  sem eval ctx =| _ ->
+    error "Unsupported Expr in eval!"
 end
 
 -----------
@@ -92,7 +94,7 @@ lang AppEval = Eval + AppAst
   | TmApp r -> apply ctx r.info (eval ctx r.lhs, eval ctx r.rhs)
 end
 
-lang ClosAst = Ast + Eval + PrettyPrint
+lang ClosAst = Ast + Eval + PrettyPrint + Eq
   type Lazy a = () -> a
 
   syn Expr =
@@ -107,7 +109,7 @@ lang ClosAst = Ast + Eval + PrettyPrint
   sem withInfo info =
   | TmClos r -> TmClos { r with info = info }
 
-  sem pprintCode (indent : Int) (env: PprintEnv) =
+  sem pprintCode (indent : Int) (env : PprintEnv) =
   | TmClos r ->
     match pprintVarName env r.ident with (env,ident) in
     match pprintCode (pprintIncr indent) env r.body with (env,body) in
@@ -117,6 +119,9 @@ lang ClosAst = Ast + Eval + PrettyPrint
       pprintNewline (pprintIncr indent), body,
       "}"
     ])
+
+  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  | TmClos _ -> error "eqExpr not implemented for TmClos!"
 end
 
 lang LamEval = Eval + LamAst + ClosAst + AppEval
@@ -173,7 +178,7 @@ lang RecLetsEval =
     eval {ctx with env = envPrime ()} t.inexpr
 end
 
-lang ConstAppAst = ConstAst + PrettyPrint
+lang ConstAppAst = ConstAst + PrettyPrint + Eq
   syn Expr =
   | TmConstApp {
     const : Const,
@@ -190,7 +195,10 @@ lang ConstAppAst = ConstAst + PrettyPrint
   sem isAtomic =
   | TmConstApp _ -> true
 
-  sem pprintCode (indent : Int) (env: PprintEnv) =
+  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  | TmConstApp _ -> error "eqExpr not implemented for TmConstApp!"
+
+  sem pprintCode (indent : Int) (env : PprintEnv) =
   | TmConstApp r ->
     pprintCode indent env (appSeq_ (uconst_ r.const) r.args)
 end
@@ -293,12 +301,24 @@ lang NeverEval = Eval + NeverAst
 end
 
 -- TODO (oerikss, 2020-03-26): Eventually, this should be a rank 0 tensor.
-lang RefEval = Eval
+lang RefEval = Eval + PrettyPrint + Eq
   syn Expr =
   | TmRef {ref : Ref Expr}
 
   sem eval ctx =
   | TmRef r -> TmRef r
+
+  sem infoTm =
+  | TmRef _ -> NoInfo ()
+
+  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  | TmRef _ -> error "eqExpr not implemented for TmRef!"
+
+  sem isAtomic =
+  | TmRef _ -> error "isAtomic not implemented for TmRef!"
+
+  sem pprintCode (indent : Int) (env : PprintEnv) =
+  | TmRef _ -> error "pprintCode not implemented for TmRef!"
 end
 
 type T
@@ -313,10 +333,13 @@ lang TensorEval = Eval + Eq + PrettyPrint
   sem eval ctx =
   | TmTensor t -> TmTensor t
 
+  sem infoTm =
+  | TmTensor _ -> NoInfo ()
+
   sem isAtomic =
   | TmTensor _ -> true
 
-  sem pprintCode (indent : Int) (env: PprintEnv) =
+  sem pprintCode (indent : Int) (env : PprintEnv) =
   | TmTensor r ->
     switch r.val
       case TInt t then (env, tensor2string int2string t)
@@ -733,28 +756,29 @@ lang TensorOpEval =
   | (CTensorGetExn _, [TmTensor t, idx]) ->
     let idx = _ofTmSeq info idx in
     switch t.val
-      case TInt t then
+    case TInt t then
       let val = tensorGetExn t idx in
       int_ val
-      case TFloat t then
+    case TFloat t then
       let val = tensorGetExn t idx in
       float_ val
-      case TExpr t then
+    case TExpr t then
       let val = tensorGetExn t idx in
       val
     end
   | (CTensorSetExn _, [TmTensor t, idx, val]) ->
     let idx = _ofTmSeq info idx in
     switch (t.val, val)
-      case (TInt t, TmConst {val = CInt v}) then
+    case (TInt t, TmConst {val = CInt v}) then
       tensorSetExn t idx v.val;
       uunit_
-      case (TFloat t, TmConst {val = CFloat v}) then
+    case (TFloat t, TmConst {val = CFloat v}) then
       tensorSetExn t idx v.val;
       uunit_
-      case (TExpr t, v) then
+    case (TExpr t, v) then
       tensorSetExn t idx v;
       uunit_
+    case _ then error "Impossible case in delta!"
     end
   | (CTensorLinearGetExn _, [TmTensor t, TmConst {val = CInt n}]) ->
     switch t.val
@@ -770,15 +794,16 @@ lang TensorOpEval =
     end
   | (CTensorLinearSetExn _, [TmTensor t, TmConst {val = CInt n}, val]) ->
     switch (t.val, val)
-      case (TInt t, TmConst {val = CInt {val = v}}) then
+    case (TInt t, TmConst {val = CInt {val = v}}) then
       tensorLinearSetExn t n.val v;
       uunit_
-      case (TFloat t, TmConst {val = CFloat {val = v}}) then
+    case (TFloat t, TmConst {val = CFloat {val = v}}) then
       tensorLinearSetExn t n.val v;
       uunit_
-      case (TExpr t, v) then
+    case (TExpr t, v) then
       tensorLinearSetExn t n.val v;
       uunit_
+    case _ then error "Impossible case in delta!"
     end
   | (CTensorRank _, [TmTensor t]) ->
     switch t.val
@@ -795,25 +820,25 @@ lang TensorOpEval =
   | (CTensorReshapeExn _, [TmTensor t, idx]) ->
     let idx = _ofTmSeq info idx in
     switch t.val
-      case TInt t then
+    case TInt t then
       let view = tensorReshapeExn t idx in
       TmTensor {val = TInt view}
-      case TFloat t then
+    case TFloat t then
       let view = tensorReshapeExn t idx in
       TmTensor {val = TFloat view}
-      case TExpr t then
+    case TExpr t then
       let view = tensorReshapeExn t idx in
       TmTensor {val = TExpr view}
     end
   | (CTensorCopy _, [TmTensor t]) ->
     switch t.val
-      case TInt t then
+    case TInt t then
       let tt = tensorCopy t in
       TmTensor {val = TInt tt}
-      case TFloat t then
+    case TFloat t then
       let tt = tensorCopy t in
       TmTensor {val = TFloat tt}
-      case TExpr t then
+    case TExpr t then
       let tt = tensorCopy t in
       TmTensor {val = TExpr tt}
     end
@@ -834,13 +859,13 @@ lang TensorOpEval =
   | (CTensorSliceExn _, [TmTensor t, idx]) ->
     let idx = _ofTmSeq info idx in
     switch t.val
-      case TInt t then
+    case TInt t then
       let view = tensorSliceExn t idx in
       TmTensor {val = TInt view}
-      case TFloat t then
+    case TFloat t then
       let view = tensorSliceExn t idx in
       TmTensor {val = TFloat view}
-      case TExpr t then
+    case TExpr t then
       let view = tensorSliceExn t idx in
       TmTensor {val = TExpr view}
     end
@@ -867,15 +892,15 @@ lang TensorOpEval =
       ()
     in
     switch t.val
-      case TInt t then
+    case TInt t then
       let g = mkg (lam t. TInt t) in
       tensorIterSlice g t;
       uunit_
-      case TFloat t then
+    case TFloat t then
       let g = mkg (lam t. TFloat t) in
       tensorIterSlice g t;
       uunit_
-      case TExpr t then
+    case TExpr t then
       let g = mkg (lam t. TExpr t) in
       tensorIterSlice g t;
       uunit_
@@ -897,23 +922,23 @@ lang TensorOpEval =
     in
     let result =
       switch t1.val
-        case TInt t1 then
+      case TInt t1 then
         switch t2.val
-          case TInt t2 then mkeq int_ int_ t1 t2
-          case TFloat t2 then mkeq int_ float_ t1 t2
-          case TExpr t2 then mkeq int_ (lam x. x) t1 t2
+        case TInt t2 then mkeq int_ int_ t1 t2
+        case TFloat t2 then mkeq int_ float_ t1 t2
+        case TExpr t2 then mkeq int_ (lam x. x) t1 t2
         end
-        case TFloat t1 then
+      case TFloat t1 then
         switch t2.val
-          case TInt t2 then mkeq float_ int_ t1 t2
-          case TFloat t2 then mkeq float_ float_ t1 t2
-          case TExpr t2 then mkeq float_ (lam x. x) t1 t2
+        case TInt t2 then mkeq float_ int_ t1 t2
+        case TFloat t2 then mkeq float_ float_ t1 t2
+        case TExpr t2 then mkeq float_ (lam x. x) t1 t2
         end
-        case TExpr t1 then
+      case TExpr t1 then
         switch t2.val
-          case TInt t2 then mkeq (lam x. x) int_ t1 t2
-          case TFloat t2 then mkeq (lam x. x) float_ t1 t2
-          case TExpr t2 then mkeq (lam x. x) (lam x. x) t1 t2
+        case TInt t2 then mkeq (lam x. x) int_ t1 t2
+        case TFloat t2 then mkeq (lam x. x) float_ t1 t2
+        case TExpr t2 then mkeq (lam x. x) (lam x. x) t1 t2
         end
       end
     in
@@ -926,9 +951,9 @@ lang TensorOpEval =
     in
     let str =
       switch t.val
-        case TInt t then tensor2string (lam x. el2str (int_ x)) t
-        case TFloat t then tensor2string (lam x. el2str (float_ x)) t
-        case TExpr t then tensor2string el2str t
+      case TInt t then tensor2string (lam x. el2str (int_ x)) t
+      case TFloat t then tensor2string (lam x. el2str (float_ x)) t
+      case TExpr t then tensor2string el2str t
       end
     in
     seq_ (_evalStringToSeqOfChars str)
@@ -937,10 +962,17 @@ end
 lang BootParserEval =
   ConstDelta + BootParserAst + UnknownTypeAst + IntAst + IntTypeAst + FloatAst +
   FloatTypeAst + CharAst + CharTypeAst + SeqAst + SeqTypeAst + BoolAst +
-  RecordAst + BootParserArity
+  RecordAst + BootParserArity + ConstPrettyPrint
 
   syn Const =
   | CBootParserTree {val : BootParseTree}
+
+  sem getConstStringCode (indent : Int) =
+  | CBootParserTree _ ->
+    error "getConstStringCode not implemented for CBootParserTree!"
+
+  sem constArity =
+  | CBootParserTree _ -> 0
 
   sem delta info =
   | (CBootParserParseMExprString _, [
@@ -1215,7 +1247,7 @@ end
 lang OrPatEval = MatchEvalBase + OrPat
   sem tryMatch (env : EvalEnv) (t : Expr) =
   | PatOr {lpat = l, rpat = r} ->
-    optionOrElse (lam. tryMatch env t r) (tryMatch env t l)
+    optionMapOrElse (lam. tryMatch env t r) (lam x. Some x) (tryMatch env t l)
 end
 
 lang NotPatEval = MatchEvalBase + NotPat
@@ -1235,21 +1267,22 @@ lang MExprEval =
   -- Terms
   VarEval + AppEval + LamEval + RecordEval + RecLetsEval +
   ConstEval + TypeEval + DataEval + MatchEval + UtestEval + SeqEval +
-  NeverEval + RefEval + ExtEval
+  NeverEval + RefEval + ExtEval +
 
   -- Constants
-  + ArithIntEval + ShiftIntEval + ArithFloatEval + CmpIntEval + CmpFloatEval +
+  IntArity + FloatArity + BoolArity + CharArity + SymbArity + BootParserArity +
+  ArithIntEval + ShiftIntEval + ArithFloatEval + CmpIntEval + CmpFloatEval +
   SymbEval + CmpSymbEval + SeqOpEval + FileOpEval + IOEval + SysEval +
   RandomNumberGeneratorEval + FloatIntConversionEval + CmpCharEval +
   IntCharConversionEval + FloatStringConversionEval + TimeEval + RefOpEval +
-  ConTagEval + TensorOpEval + BootParserEval + UnsafeCoerceEval
+  ConTagEval + TensorOpEval + BootParserEval + UnsafeCoerceEval +
 
   -- Patterns
-  + NamedPatEval + SeqTotPatEval + SeqEdgePatEval + RecordPatEval + DataPatEval +
-  IntPatEval + CharPatEval + BoolPatEval + AndPatEval + OrPatEval + NotPatEval
+  NamedPatEval + SeqTotPatEval + SeqEdgePatEval + RecordPatEval + DataPatEval +
+  IntPatEval + CharPatEval + BoolPatEval + AndPatEval + OrPatEval + NotPatEval +
 
   -- Pretty Printing
-  + MExprPrettyPrint
+  MExprPrettyPrint
 end
 
 

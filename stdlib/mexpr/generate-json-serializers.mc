@@ -19,7 +19,7 @@ let constructorKey = "__constructor__"
 let dataKey = "__data__"
 
 lang GenerateJsonSerializers =
-  MExprAst + BootParser + MExprSym + MExprCmp + MExprFindSym + ConDefTypeUtils
+  MExprAst + BootParser + MExprSym + MExprCmp + MExprFindSym + AppTypeUtils
   + MExprEliminateDuplicateCode
 
   type GJSSerializer = {
@@ -398,7 +398,7 @@ end
 mexpr
 use Test in
 
-let parseTest = parseMExprString {
+let parseTest = parseMExprStringExn {
   defaultBootParserParseMExprStringArg with
     allowFree = true
 } in

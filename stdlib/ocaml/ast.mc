@@ -19,6 +19,17 @@ lang OCamlTopAst = Ast
   | OTopTryWith { try : Expr, arms : [(Pat, Expr)] }
 end
 
+lang OCamlDefaultError = Ast
+  sem infoTm =
+  | _ -> error "infoTm not implemented for OCaml terms!"
+
+  sem tyTm =
+  | _ -> error "tyTm not implemented for OCaml terms!"
+
+  sem withType ty =
+  | _ -> error "withType not implemented for OCaml terms!"
+end
+
 lang OCamlRecord = Ast
   syn Expr =
   | OTmRecord {bindings : [(String, Expr)], tyident : Type}
@@ -340,7 +351,7 @@ lang OCamlAst =
   CmpIntAst + CmpFloatAst + CharAst + CmpCharAst +
 
   -- Other
-  OCamlExternal +
+  OCamlDefaultError + OCamlExternal +
 
   -- Types
   OCamlTypeAst

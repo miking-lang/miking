@@ -9,6 +9,7 @@ mexpr
 -- Ingerger literals
 utest 1 with 1 in
 utest 35 with 35 in
+utest -35 with -35 in
 
 -- Integer operations: add sub mul div mod
 -- int -> int -> int
@@ -21,7 +22,8 @@ utest 1 with modi 9 2 in              -- modulo
 -- Integer negations
 -- int -> int
 utest 15 with addi 20 (negi 5) in
-utest negi 1 with negi 1 in
+utest negi 1 with -1 in
+utest negi -1 with 1 in
 -- Integer comparison operators
 -- int -> int -> bool
 let neg = lam f. lam x. lam y. not (f x y) in

@@ -32,7 +32,7 @@ let evalprog filename =
       |> Mexpr.scan builtin_sym2term
       |> Mexpr.eval builtin_sym2term pe_init
       |> fun _ -> ()
-    with (Lexer.Lex_error _ | Error _ | Parsing.Parse_error) as e ->
+    with (Lexer.Lex_error _ | Error _ | Parser.Error) as e ->
       let error_string = Ustring.to_utf8 (error_to_ustring e) in
       if !utest then (
         printf "\n%s" error_string ;

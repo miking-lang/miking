@@ -121,6 +121,11 @@ lang Eq
   sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
   -- Intentionally left blank
 
+  sem eqKind (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) =
+  | (lhs, rhs) ->
+    if eqi (constructorTag lhs) (constructorTag rhs) then Some free
+    else None ()
+
   sem eqExpr (e1: Expr) =
   | e2 ->
     let empty = {varEnv = biEmpty, conEnv = biEmpty} in
@@ -238,6 +243,11 @@ lang ConstEq = Eq + ConstAst
     match lhs with TmConst {val = v1} then
       if eqConst v1 v2 then Some free else None ()
     else None ()
+end
+
+lang TypeEq = Eq + TypeAst
+  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  | TmType _ -> error "eqExpr not implemented for TmType!"
 end
 
 lang DataEq = Eq + DataAst
@@ -632,7 +642,17 @@ lang ConTypeEq = Eq + ConTypeAst
   sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
   | rhs & TyCon r ->
     match unwrapType lhs with TyCon l then
-      if nameEq l.ident r.ident then Some free else None ()
+      if nameEq l.ident r.ident then eqTypeH typeEnv free l.data r.data
+      else None ()
+    else None ()
+end
+
+lang DataTypeEq = Eq + DataTypeAst
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
+  | rhs & TyData r ->
+    match unwrapType lhs with TyData l then
+      if mapEq setEq (computeData l) (computeData r) then Some free
+      else None ()
     else None ()
 end
 
@@ -646,23 +666,7 @@ lang VarTypeEq = Eq + VarTypeAst
     else None ()
 end
 
-lang KindEq = Eq + KindAst
-  sem eqKind (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) =
-  | (Row l, Row r) ->
-      if eqi (mapSize l.fields) (mapSize r.fields) then
-        mapFoldlOption
-          (lam free. lam k1. lam v1.
-            match mapLookup k1 r.fields with Some v2 then
-              eqTypeH typeEnv free v1 v2
-            else None ())
-          free l.fields
-      else None ()
-  | (lhs, rhs) ->
-    if eqi (constructorTag lhs) (constructorTag rhs) then Some free
-    else None ()
-end
-
-lang AllTypeEq = KindEq + AllTypeAst
+lang AllTypeEq = Eq + AllTypeAst
   sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
   | TyAll r ->
     match unwrapType lhs with TyAll l then
@@ -689,6 +693,31 @@ lang AliasTypeEq = Eq + AliasTypeAst
   | TyAlias t -> eqTypeH typeEnv free lhs t.content
 end
 
+lang RecordKindEq = Eq + RecordKindAst
+  sem eqKind (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) =
+  | (Record l, Record r) ->
+      if eqi (mapSize l.fields) (mapSize r.fields) then
+        mapFoldlOption
+          (lam free. lam k1. lam v1.
+            match mapLookup k1 r.fields with Some v2 then
+              eqTypeH typeEnv free v1 v2
+            else None ())
+          free l.fields
+      else None ()
+end
+
+lang DataKindEq = Eq + DataKindAst
+  sem eqKind (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) =
+  | (Data l, Data r) ->
+    let recEq = lam r1. lam r2.
+      if setEq r1.lower r2.lower then optionEq setEq r1.upper r2.upper
+      else false
+    in
+    if mapEq recEq l.types r.types then Some free
+    else None ()
+end
+
+
 -----------------------------
 -- MEXPR ALPHA EQUIVALENCE --
 -----------------------------
@@ -699,7 +728,7 @@ lang MExprEq =
 
   -- Terms
   + VarEq + AppEq + LamEq + RecordEq + LetEq + RecLetsEq + ConstEq + DataEq +
-  MatchEq + UtestEq + SeqEq + NeverEq + ExtEq
+  TypeEq + MatchEq + UtestEq + SeqEq + NeverEq + ExtEq
 
   -- Constants
   + IntEq + FloatEq + BoolEq + CharEq + SymbEq
@@ -710,8 +739,11 @@ lang MExprEq =
 
   -- Types
   + UnknownTypeEq + BoolTypeEq + IntTypeEq + FloatTypeEq + CharTypeEq +
-  FunTypeEq + SeqTypeEq + RecordTypeEq + VariantTypeEq + ConTypeEq + VarTypeEq +
-  AllTypeEq + AppTypeEq + TensorTypeEq + AliasTypeEq
+  FunTypeEq + SeqTypeEq + RecordTypeEq + VariantTypeEq + ConTypeEq + DataTypeEq +
+  VarTypeEq + AllTypeEq + AppTypeEq + TensorTypeEq + AliasTypeEq +
+
+  -- Kinds
+  RecordKindEq + DataKindEq
 end
 
 -----------

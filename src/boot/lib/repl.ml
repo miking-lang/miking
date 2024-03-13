@@ -37,7 +37,7 @@ let parse_mcore_string filename parse_fun str =
   Lexer.init (us filename) repl_tablength ;
   let lexbuf = Lexing.from_string str in
   try Ok (parse_fun Lexer.main lexbuf)
-  with Parsing.Parse_error -> Error (Lexing.lexeme lexbuf)
+  with Parser.Error -> Error (Lexing.lexeme lexbuf)
 
 let parse_prog_or_mexpr filename lines =
   match parse_mcore_string filename Parser.main lines with
@@ -48,7 +48,7 @@ let parse_prog_or_mexpr filename lines =
     | Ok ast ->
         ast
     | Error _ ->
-        raise Parsing.Parse_error )
+        raise Parser.Error )
 
 let read_input prompt =
   if !no_line_edit then (print_string prompt ; read_line ())
@@ -98,8 +98,7 @@ let rec read_until_complete is_mexpr input =
   | Error "" ->
       read_until_complete is_mexpr (new_acc ())
   | Error _ ->
-      if is_mexpr then raise Parsing.Parse_error
-      else read_until_complete true input
+      if is_mexpr then raise Parser.Error else read_until_complete true input
 
 (* Read and parse a multiline expression (:{\n ..lines.. \n:}).
    Returns None if the first line is not ":{" *)

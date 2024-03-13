@@ -151,6 +151,20 @@ let geometricLogPmf : Float -> Int -> Float = lam p. lam x.
 let geometricPmf : Float -> Int -> Float = lam p. lam x.
   exp (geometricLogPmf p x)
 
+-- Lomax
+external externalLomaxLogPdf : Float -> Float -> Float -> Float
+external externalLomaxSample ! : Float -> Float -> Float
+let lomaxSample = lam scale: Float. lam shape: Float.
+  externalLomaxSample shape scale
+let lomaxLogPdf:Float -> Float -> Float -> Float = lam scale. lam shape. lam x.
+  if ltf x 0. then negf inf else
+  let lhs = subf (log shape) (log scale)  in
+  let rhs = mulf (log (addf (divf x scale) 1.)) (addf shape 1.) in
+  subf lhs rhs
+  --externalLomaxLogPdf x shape scale
+let lomaxPdf = lam scale: Float. lam shape: Float. lam x:Float.
+  exp (lomaxLogPdf scale shape x)
+
 -- Seed
 external externalSetSeed ! : Int -> ()
 let setSeed : Int -> () = lam seed.

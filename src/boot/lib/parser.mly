@@ -27,6 +27,10 @@
   let set_con_params params = function
     | CDecl (fi, _, name, ty) -> CDecl (fi, params, name, ty)
 
+  let ty_from_either = function
+    | Either.Right ty -> ty
+    | Either.Left (fi, _) ->
+       raise_error fi "This looks like a constructor type restriction, but appears in an invalid location"
 
 %}
 
@@ -43,8 +47,8 @@
 %token <Ustring.ustring Ast.tokendata> LC_IDENT  /* An identifier that starts with "_" or a lower-case letter */
 %token <Ustring.ustring Ast.tokendata> STRING
 %token <Ustring.ustring Ast.tokendata> CHAR
-%token <int Ast.tokendata> UINT
-%token <float Ast.tokendata> UFLOAT
+%token <int Ast.tokendata> INT
+%token <float Ast.tokendata> FLOAT
 
 
 /* Keywords */
@@ -101,6 +105,7 @@
 %token <unit Ast.tokendata> LBRACKET      /* "{"   */
 %token <unit Ast.tokendata> RBRACKET      /* "}"   */
 %token <unit Ast.tokendata> COLON         /* ":"   */
+%token <unit Ast.tokendata> DCOLON        /* "::"  */
 %token <unit Ast.tokendata> COMMA         /* ","   */
 %token <unit Ast.tokendata> SEMI          /* ";"   */
 %token <unit Ast.tokendata> DOT           /* "."   */
@@ -109,6 +114,8 @@
 %token <unit Ast.tokendata> NOT           /* "!"   */
 %token <unit Ast.tokendata> UNDERSCORE    /* "_"   */
 %token <unit Ast.tokendata> CONCAT        /* "++"  */
+%token <unit Ast.tokendata> GREATER       /* ">"   */
+%token <unit Ast.tokendata> LESS          /* "<"   */
 
 %start main
 %start main_mexpr
@@ -432,8 +439,8 @@ atom:
   | var_ident            { TmVar($1.i,$1.v,Symb.Helpers.nosym, false, false) }
   | frozen_ident         { TmVar($1.i,$1.v,Symb.Helpers.nosym, false, true) }
   | CHAR                 { TmConst($1.i, CChar(List.hd (ustring2list $1.v))) }
-  | UINT                 { TmConst($1.i,CInt($1.v)) }
-  | UFLOAT               { TmConst($1.i,CFloat($1.v)) }
+  | INT                  { TmConst($1.i,CInt($1.v)) }
+  | FLOAT                { TmConst($1.i,CFloat($1.v)) }
   | TRUE                 { TmConst($1.i,CBool(true)) }
   | FALSE                { TmConst($1.i,CBool(false)) }
   | NEVER                { TmNever($1.i) }
@@ -451,7 +458,7 @@ atom:
         ) $2 $4}
 
 proj_label:
-  | UINT
+  | INT
     { ($1.i, ustring_of_int $1.v) }
   | label_ident
     { ($1.i,$1.v) }
@@ -541,7 +548,7 @@ pat_atom:
   | LBRACKET pat_labels RBRACKET
       { PatRecord(mkinfo $1.i $3.i, $2 |> List.fold_left
                   (fun acc (k,v) -> Record.add k v acc) Record.empty) }
-  | UINT /* TODO(?,?): enable matching against negative ints */
+  | INT
       { PatInt($1.i, $1.v) }
   | CHAR
       { PatChar($1.i, List.hd (ustring2list $1.v)) }
@@ -574,19 +581,32 @@ ty:
         TyArrow(fi,$1,$3) }
   | ALL var_ident DOT ty
       { let fi = mkinfo $1.i (ty_info $4) in
-        TyAll(fi, $2.v, $4) }
+        TyAll(fi, $2.v, None, $4) }
+  | ALL var_ident DCOLON data_kind DOT ty
+      { let fi = mkinfo $1.i (ty_info $6) in
+        TyAll(fi, $2.v, Some $4, $6) }
   | USE ident IN ty
       { let fi = mkinfo $1.i $3.i in
         TyUse(fi, $2.v, $4) }
 
 ty_left:
-  | ty_atom
-    { $1 }
-  | ty_left ty_atom
-    { let fi = mkinfo (ty_info $1) (ty_info $2) in
-      TyApp(fi,$1,$2) }
+  | ty_ish_atom
+    { ty_from_either $1 }
+  | f=ty_left a=ty_ish_atom
+    { match a with
+      | Either.Right ty -> TyApp(mkinfo (ty_info f) (ty_info ty), f, ty)
+      | Either.Left (fi, data) ->
+         match f with
+         | TyCon (lfi, name, None) -> TyCon (mkinfo lfi fi, name, Some data)
+         | _ -> raise_error fi "This looks like a constructor type restriction, but appears in an invalid location" }
 
-ty_atom:
+ty_ish_atom:
+  | ty_atom
+    { Either.Right $1 }
+  | ty_data
+    { Either.Left $1 }
+
+%inline ty_atom:
   | LPAREN RPAREN
     { ty_unit (mkinfo $1.i $2.i) }
   | LPAREN ty RPAREN
@@ -620,17 +640,45 @@ ty_atom:
   | TSTRING
     { TySeq($1.i,TyChar $1.i) }
   | type_ident
-    { TyCon($1.i,$1.v) }
+    { TyCon($1.i,$1.v,None) }
   | var_ident
     { TyVar($1.i,$1.v) }
   | UNDERSCORE
     { TyVar($1.i, us"_") }
+
+%inline ty_data:
+  | LBRACKET var_ident RBRACKET
+    { (mkinfo $1.i $3.i, DVar $2.v) }
+  | LBRACKET con_ident con_list RBRACKET
+    { (mkinfo $1.i $4.i, DCons ($2.v :: $3)) }
+  | LBRACKET NOT con_list RBRACKET
+    { (mkinfo $1.i $4.i, DNCons $3) }
 
 ty_list:
   | ty COMMA ty_list
     { $1 :: $3 }
   | ty
     { [$1] }
+
+data_kind:
+  | LBRACKET separated_list(COMMA, type_with_cons) RBRACKET
+    { $2 }
+
+type_with_cons:
+  | type_ident LSQUARE GREATER con_list RSQUARE
+    { ($1.v, $4, None) }
+  | type_ident LSQUARE BAR con_list RSQUARE
+    { ($1.v, $4, Some []) }
+  | type_ident LSQUARE LESS con_list RSQUARE
+    { ($1.v, [], Some $4) }
+  | type_ident LSQUARE LESS con_list BAR con_list RSQUARE
+    { ($1.v, $6, Some $4) }
+
+con_list:
+  | con_ident con_list
+    { $1.v :: $2 }
+  |
+    { [] }
 
 label_tys:
   | label_ident COLON ty

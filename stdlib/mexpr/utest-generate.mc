@@ -81,9 +81,9 @@ let _stringTy = _seqTy _charTy
 let _tensorTy = lam ty.
   use MExprAst in
   TyTensor {ty = ty, info = _utestInfo}
-let _conTy = lam id.
+let _conTy = lam id. lam d.
   use MExprAst in
-  TyCon {ident = id, info = _utestInfo}
+  TyCon {ident = id, data = d, info = _utestInfo}
 let _varTy = lam id.
   use MExprAst in
   TyVar {ident = id, info = _utestInfo}
@@ -218,7 +218,8 @@ let _concat =
 lang UtestBase =
   UnknownTypeCmp + BoolTypeCmp + IntTypeCmp + FloatTypeCmp + CharTypeCmp +
   FunTypeCmp + RecordTypeCmp + VariantTypeCmp + ConTypeCmp + VarTypeCmp +
-  AppTypeCmp + AllTypeCmp + SeqTypeAst + TensorTypeAst + TypeCheck
+  AppTypeCmp + AllTypeCmp + SeqTypeAst + TensorTypeAst + TypeCheck +
+  DataKindAst
 
   -- NOTE(larshum, 2022-12-26): We customize the comparison of types such that
   -- all sequence and tensor types are considered equal. This is because we
@@ -360,7 +361,9 @@ lang UtestBase =
   sem specializeConstructorArgumentH : Map Name Type -> ([Type], Type) -> Type
   sem specializeConstructorArgumentH subMap =
   | ([], TyArrow {from = argTy, info = info}) -> substituteVars info subMap argTy
-  | ([tyArg] ++ tyArgs, TyAll {ident = ident, ty = ty}) ->
+  | (tyArgs, TyAll {kind = Data _, ty = ty}) ->
+    specializeConstructorArgumentH subMap (tyArgs, ty)
+  | ([tyArg] ++ tyArgs, TyAll {ident = ident, ty = ty, kind = !Data _}) ->
     specializeConstructorArgumentH
       (mapInsert ident tyArg subMap) (tyArgs, ty)
   | (_, ty) -> errorSingle [infoTy ty] "Invalid constructor application"

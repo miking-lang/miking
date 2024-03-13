@@ -146,4 +146,4 @@ let tuneFileReadTable : String -> LookupTable = lam file.
   let n = string2int (head rows) in
   let strVals = subsequence rows 1 n in
   let strVals = map (lam x. get (strSplit ": " x) 1) strVals in
-  map (parseMExprStringKeywords []) strVals
+  map (parseMExprStringKeywordsExn []) strVals

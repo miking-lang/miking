@@ -15,12 +15,12 @@ type Level = Int
 
 -- Unification meta variables.  These variables represent some
 -- specific but as-of-yet undetermined type.
-lang MetaVarTypeAst = KindAst + Ast
+lang MetaVarTypeAst = Ast
   type MetaVarRec = {ident  : Name,
                      level  : Level,
-    -- The level indicates at what depth of let-binding the variable
-    -- was introduced, which is used to determine which variables can
-    -- be generalized and to check that variables stay in their scope.
+                     -- The level indicates at what depth of let-binding the variable
+                     -- was introduced, which is used to determine which variables can
+                     -- be generalized and to check that variables stay in their scope.
                      kind   : Kind}
 
   syn MetaVar =
@@ -79,11 +79,12 @@ lang MetaVarTypeCmp = Cmp + MetaVarTypeAst
   | (TyMetaVar l, TyMetaVar r) ->
     -- NOTE(vipa, 2023-04-19): Any non-link TyMetaVar should have been
     -- unwrapped already, thus we can assume `Unbound` here.
-    match (deref l.contents, deref r.contents) with (Unbound l, Unbound r) in
-    nameCmp l.ident r.ident
+    match (deref l.contents, deref r.contents) with (Unbound l, Unbound r) then
+      nameCmp l.ident r.ident
+    else error "cmpTypeH reached non-unwrapped MetaVar!"
 end
 
-lang MetaVarTypePrettyPrint = IdentifierPrettyPrint + KindPrettyPrint + MetaVarTypeAst
+lang MetaVarTypePrettyPrint = PrettyPrint + MetaVarTypeAst
   sem typePrecedence =
   | TyMetaVar t ->
     switch deref t.contents
@@ -95,27 +96,22 @@ lang MetaVarTypePrettyPrint = IdentifierPrettyPrint + KindPrettyPrint + MetaVarT
   sem getTypeStringCode (indent : Int) (env : PprintEnv) =
   | TyMetaVar t ->
     switch deref t.contents
-    case Unbound t then
-      match pprintVarName env t.ident with (env, idstr) in
-      match getKindStringCode indent env idstr t.kind with (env, str) in
-      let monoPrefix =
-        match t.kind with Mono _ then "_" else "" in
-      (env, concat monoPrefix str)
-    case Link ty then
-      getTypeStringCode indent env ty
+    case Unbound t then pprintVarName env t.ident
+    case Link ty then getTypeStringCode indent env ty
     end
 end
 
-lang MetaVarTypeEq = KindEq + MetaVarTypeAst
+lang MetaVarTypeEq = Eq + MetaVarTypeAst
   sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
   | TyMetaVar _ & rhs ->
     switch (unwrapType lhs, unwrapType rhs)
     case (TyMetaVar l, TyMetaVar r) then
-      match (deref l.contents, deref r.contents) with (Unbound n1, Unbound n2) in
-      optionBind
-        (_eqCheck n1.ident n2.ident biEmpty free.freeTyFlex)
-        (lam freeTyFlex.
-          eqKind typeEnv {free with freeTyFlex = freeTyFlex} (n1.kind, n2.kind))
+      match (deref l.contents, deref r.contents) with (Unbound n1, Unbound n2) then
+        optionBind
+          (_eqCheck n1.ident n2.ident biEmpty free.freeTyFlex)
+          (lam freeTyFlex.
+            eqKind typeEnv {free with freeTyFlex = freeTyFlex} (n1.kind, n2.kind))
+      else error "Unwrapped MetaVar was not Unbound!"
     case (! TyMetaVar _, ! TyMetaVar _) then
       eqTypeH typeEnv free lhs rhs
     case _ then None ()
@@ -133,12 +129,13 @@ let newnmetavar =
    }
 let newmetavar = newnmetavar "a"
 
-let newmonovar = use KindAst in
-  newmetavar (Mono ())
-let newpolyvar = use KindAst in
-  newmetavar (Poly ())
-let newrowvar = use KindAst in
-  lam fields. newmetavar (Row {fields = fields})
+let newmonovar =
+  use MonoKindAst in newmetavar (Mono ())
+let newpolyvar =
+  use PolyKindAst in newmetavar (Poly ())
+let newrecvar =
+  use RecordKindAst in lam fields.
+    newmetavar (Record {fields = fields})
 
 let newvar = newpolyvar
 
@@ -164,27 +161,29 @@ lang VarTypeSubstitute = VarTypeAst + MetaVarTypeAst
     smap_Type_Type (substituteMetaVars subst) ty
 end
 
--- Returns the argument list in a type application
-lang AppTypeGetArgs = AppTypeAst
+lang AppTypeUtils = AppTypeAst + FunTypeAst
+  -- Return the argument list in a type application
   sem getTypeArgs =
-  | TyApp t ->
-    match getTypeArgs t.lhs with (tycon, args) in
-    (tycon, snoc args t.rhs)
   | ty ->
-    (ty, [])
-end
+    match getTypeArgsBase [] ty with (args, tycon) in
+    (tycon, args)
 
--- Return the type (TyCon) which a constructor (TmConDef) belongs to.
-lang ConDefTypeUtils = MExprAst
+  sem getTypeArgsBase (args : [Type]) =
+  | TyApp t -> getTypeArgsBase (cons t.rhs args) t.lhs
+  | ty -> rappAccumL_Type_Type getTypeArgsBase args ty
+
+  -- Construct a type application from a type and an argument list
+  sem mkTypeApp ty =
+  | args ->
+    foldl (lam ty1. lam ty2.
+      TyApp {info = mergeInfo (infoTy ty1) (infoTy ty2), lhs = ty1, rhs = ty2})
+          ty args
+
+  -- Return the type (TyCon) which a constructor (TmConDef) belongs to.
   sem getConDefType: Type -> Type
   sem getConDefType =
   | ty ->
-    let ty = (stripTyAll ty).1 in
-    match ty with TyArrow t then
-      recursive let getTyLhs = lam ty.
-        match ty with TyApp t then getTyLhs t.lhs
-        else ty
-      in getTyLhs t.to
+    match inspectType ty with TyArrow t then (getTypeArgs t.to).0
     else error "Invalid type in getConDefType"
 end
 
@@ -204,7 +203,7 @@ let isHigherOrderFunType = use MExprAst in lam ty.
   in
   rec false false ty
 
-lang Test = MExprAst + MExprConstType + ConDefTypeUtils end
+lang Test = MExprAst + MExprConstType + AppTypeUtils end
 
 mexpr
 use Test in
@@ -215,8 +214,9 @@ utest isHigherOrderFunType (tyConst (CAddi ())) with false in
 utest isHigherOrderFunType (tyConst (CMap ())) with true in
 utest isHigherOrderFunType (tyConst (CIter ())) with true in
 
-utest match getConDefType (tyall_ "a" (tyall_ "b"
-        (tyarrow_ (tyint_) (tyapp_ (tycon_ "Con") (tyvar_ "a")))))
+utest match getConDefType
+              (tyall_ "a" (tyall_ "b"
+                             (tyarrow_ (tyint_) (tyapp_ (tycon_ "Con") (tyvar_ "a")))))
       with TyCon t then t.ident else error "Impossible"
 with nameNoSym "Con" in
 

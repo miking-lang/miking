@@ -1803,7 +1803,7 @@ mexpr
 use KTest in
 
 -- Test functions --
-let _parse = parseMExprStringKeywords [] in
+let _parse = parseMExprStringKeywordsExn [] in
 let _testBase: Option PprintEnv -> Int -> Expr -> (Option PprintEnv, CFAGraph) =
   lam env: Option PprintEnv. lam k. lam t: Expr.
     match env with Some env then

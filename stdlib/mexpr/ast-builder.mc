@@ -93,9 +93,15 @@ let tyalias_ = use AliasTypeAst in
   lam display. lam content.
   TyAlias {display = display, content = content}
 
-let ntycon_ = use ConTypeAst in
-  lam n.
-  TyCon {ident = n, info = NoInfo ()}
+let nsitycon_ = use ConTypeAst in
+  lam n. lam d. lam i.
+  TyCon {ident = n, data = d, info = i}
+
+let nitycon_ = lam n. lam i.
+  nsitycon_ n tyunknown_ i
+
+let ntycon_ = lam n.
+  nitycon_ n (NoInfo ())
 
 let tycon_ = lam s.
   ntycon_ (nameNoSym s)
@@ -114,11 +120,11 @@ let nstyall_ = use AllTypeAst in
 
 let styall_ = lam s. nstyall_ (nameNoSym s)
 
-let ntyall_ : Name -> use Ast in Type -> Type  = use KindAst in
+let ntyall_ : Name -> use Ast in Type -> Type  = use PolyKindAst in
   lam n.
   nstyall_ n (Poly ())
 
-let tyall_ = use KindAst in
+let tyall_ = use PolyKindAst in
   lam s.
   styall_ s (Poly ())
 
@@ -222,6 +228,12 @@ let tytensortostring_ = lam ty.
   tyarrows_ [ tyarrow_ ty tystr_
             , tytensor_ ty
             , tystr_ ]
+
+-- Kinds --
+
+let kidata_ =
+  use DataKindAst in
+  lam s. Data {types = mapFromSeq nameCmp s}
 
 -- Patterns --
 

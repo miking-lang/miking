@@ -137,7 +137,7 @@ use TestLang in
 let debug = false in
 
 let parse = lam str.
-  let ast = parseMExprStringKeywords [] str in
+  let ast = parseMExprStringKeywordsExn [] str in
   symbolize ast
 in
 

@@ -301,17 +301,9 @@ lang RecLetsPEval = PEval + RecLetsAst + ClosPAst + LamAst
     }
 
   sem pevalEval ctx k =
-  | TmRecLets r ->
-    let bindings =
-      map
-        (lam bind. { bind with body = pevalBind ctx (lam x. x) bind.body })
-        r.bindings
-    in
-    TmRecLets {
-      r with
-      bindings = bindings,
-      inexpr = pevalBind ctx k r.inexpr
-    }
+  | TmRecLets _ ->
+    error
+      "Partial evaluation of non-top-level recursive let bindings is not safe"
 
   sem pevalReadbackH ctx =
   | TmRecLets r ->
@@ -787,7 +779,7 @@ in
 let _toString = utestDefaultToString expr2str expr2str in
 
 let _parse =
-  parseMExprString
+  parseMExprStringExn
     { _defaultBootParserParseMExprStringArg () with allowFree = true }
 in
 
@@ -1475,27 +1467,29 @@ lam n.
   using eqExpr else _toString
 in
 
-let prog = _parse "
-let pow =
-  recursive let recur = lam n. lam x.
-    if eqi n 0 then 1.
-    else
-      if eqi n 1 then x
-      else mulf (recur (subi n 1) x) x
-  in recur
-in lam x. (pow 10 x, pow 9 x)
-  "
-in
-utest pevalInlineLets (_test prog) with _parse "
-recursive let recur = lam n. lam x.
-  if eqi n 0 then 1.
-  else
-    if eqi n 1 then x
-    else mulf (recur (subi n 1) x) x
-in lam x. (recur 10 x, recur 9 x)
-  "
-  using eqExpr else _toString
-in
+-- -- Give error since the a non-top-level recursive binding can escape its
+-- -- scope
+-- let prog = _parse "
+-- let pow =
+--   recursive let recur = lam n. lam x.
+--     if eqi n 0 then 1.
+--     else
+--       if eqi n 1 then x
+--       else mulf (recur (subi n 1) x) x
+--   in recur
+-- in lam x. (pow 10 x, pow 9 x)
+--   "
+-- in
+-- utest pevalInlineLets (_test prog) with _parse "
+-- recursive let recur = lam n. lam x.
+--   if eqi n 0 then 1.
+--   else
+--     if eqi n 1 then x
+--     else mulf (recur (subi n 1) x) x
+-- in lam x. (recur 10 x, recur 9 x)
+--   "
+--   using eqExpr else _toString
+-- in
 
 let prog = _parse "
 recursive let pow = lam n. lam x.

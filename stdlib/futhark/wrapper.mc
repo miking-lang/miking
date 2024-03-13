@@ -6,6 +6,7 @@ include "futhark/pprint.mc"
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/pprint.mc"
+include "mexpr/record.mc"
 include "pmexpr/extract.mc"
 include "pmexpr/wrapper.mc"
 
@@ -13,7 +14,7 @@ let getFutharkSeqTypeString : String -> Int -> String =
   lam futharkElementTypeString. lam numDims.
   join [futharkElementTypeString, "_", int2string numDims, "d"]
 
-lang FutharkCWrapperBase = PMExprCWrapper
+lang FutharkCWrapperBase = PMExprCWrapper + RecordTypeUtils
   -- Definition of the intermediate representation definitions for the Futhark
   -- backend. Note that nested sequences are treated as one 'FutharkSeqRepr',
   -- and that sequences can only contain base types.

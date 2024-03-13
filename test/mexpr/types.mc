@@ -77,5 +77,32 @@ utest t.0 with Leaf(5) in
 -- Type alias
 type Tree2 = Tree in
 
+-- Constructor types
+let f : all a :: {Tree[> ]}. Tree{a} -> Int =
+  lam x. match x with Leaf l then l else 0
+in
+utest f (Leaf 5) with 5 in
+
+let f : all a :: {Tree[< Node Leaf]}. Tree{a} -> Int =
+  lam x. match x with Leaf l then l else
+           match x with Node _ then 0 else never
+in
+utest f (Leaf 5) with 5 in
+
+let f : all a :: {Tree[| Node Leaf]}. Tree{a} -> Tree{a} =
+  lam x. match x with Leaf l then Leaf l else
+           match x with Node t then Node t else never
+in
+utest f (Node (Leaf 5, Leaf 10)) with (Node (Leaf 5, Leaf 10)) in
+
+type Wood in
+con TreeWood : Tree -> Wood in
+
+con WoodTree : Wood -> Tree in
+
+let t : all a :: {Wood[> TreeWood], Tree[> Node Leaf WoodTree]}. Tree{a} =
+  Node (WoodTree (TreeWood (Leaf 5)), Leaf 10)
+in
+utest match t with Node (WoodTree (TreeWood (Leaf l)), _) then l else error "" with 5 in
 
 ()

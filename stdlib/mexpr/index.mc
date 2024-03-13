@@ -154,7 +154,7 @@ mexpr
 use Test in
 
 let test: String -> IndexMap = lam s.
-  let t = parseMExprStringKeywords [] s in
+  let t = parseMExprStringKeywordsExn [] s in
   indexGen t
 in
 

@@ -10,6 +10,7 @@ mexpr
 
 -- Floating-point number literals
 utest 32.1 with 32.1 using eqf in
+utest -32.1 with -32.1 using eqf in
 utest 0.01 with 1e-2 using eqf in
 utest 0.032 with 3.2e-2 using eqf in
 utest 320.0 with 3.2e+2 using eqf in
@@ -32,7 +33,8 @@ utest divf 6.0 3.0 with 2.0 using eqf in
 
 -- Negation
 -- Float -> Float
-utest negf 2.2 with negf 2.2 using eqf in
+utest negf 2.2 with -2.2 using eqf in
+utest negf -2.2 with 2.2 using eqf in
 
 -- Floating-point operations
 -- Float -> Float -> Bool
