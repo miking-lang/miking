@@ -1991,6 +1991,28 @@ let rtMapRelevantHere : all a. all constraint. all var. all val. all relevant.
     case RTAnd x then RTAnd {x with relevantHere = f x.relevantHere}
     case RTOr x then RTOr {x with relevantHere = f x.relevantHere}
     end
+let rtBoundedSize : all a. all constraint. all var. all val. all relevant.
+  Int
+  -> RepTree relevant constraint var val a
+  -> Option Int
+  = lam bound. lam tree.
+    if leqi bound 1 then None () else
+    recursive let work = lam tree. switch tree
+      case RTSingle _ then Some 1
+      case RTAnd x then
+        let checkedMult = lam a. lam b.
+          let res = muli a b in
+          if lti res bound then Some res else None () in
+        let childSizes = optionMapM work (map (lam x. x.val) x.children) in
+        optionBind childSizes (optionFoldlM checkedMult 1)
+      case RTOr x then
+        let checkedAdd = lam a. lam b.
+          let res = addi a b in
+          if lti res bound then Some res else None () in
+        let childSizes = optionMapM work x.others in
+        optionBind childSizes (optionFoldlM checkedAdd (length x.singles))
+      end
+    in work tree
 
 let _approxAnd : all k. all v.
   PureUnionFind k (Set v)
@@ -2024,7 +2046,7 @@ let rtDebugJson : all a. all constraint. all var. all val. all relevant. all env
   -> env
   -> RepTree relevant constraint var val a
   -> (env, JsonValue)
-  = lam fs.
+  = lam fs. lam env. lam tree.
     let mkHistory : RTHistory -> JsonValue = lam hist.
       recursive let work = lam acc. lam hist. switch hist
         case HStart x then JsonArray (cons (JsonString x) acc)
@@ -2083,28 +2105,50 @@ let rtDebugJson : all a. all constraint. all var. all val. all relevant. all env
         let res = JsonObject (mapFromSeq cmpString (concat common
           [ ("type", JsonString "single")
           ])) in
-        (env, res)
+        (env, ((1, "1"), res))
       case RTAnd x then
         match common env x.selfCost x.constraint x.approx x.relevantAbove x.relevantHere x.history with (env, common) in
         match mapAccumL work env (map (lam x. x.val) x.children) with (env, children) in
+        match unzip children with (sizes, children) in
+        match unzip sizes with (sizes, strSizes) in
+        let size = foldl muli 1 sizes in
+        let strSize = switch strSizes
+          case [] then "1"
+          case [strSize] then strSize
+          case strSizes then join ["(", strJoin "*" strSizes, ")"]
+          end in
         let res = JsonObject (mapFromSeq cmpString (concat common
           [ ("type", JsonString "and")
           , ("dep", JsonString (match x.dep with Dep _ then "dep" else "indep"))
           , ("children", JsonArray children)
+          , ("size", JsonInt size)
+          , ("strSize", JsonString strSize)
           ])) in
-        (env, res)
+        (env, ((size, strSize), res))
       case RTOr x then
         match common env x.selfCost x.constraint x.approx x.relevantAbove x.relevantHere x.history with (env, common) in
         match mapAccumL work env x.others with (env, others) in
         match mapAccumL (lam acc. lam sing. work acc (RTSingle sing)) env x.singles with (env, singles) in
+        match unzip others with (sizes, others) in
+        match unzip sizes with (sizes, strSizes) in
+        let singles = map (lam x. x.1) singles in
+        let strSizes = if null singles then strSizes else cons (int2string (length singles)) strSizes in
+        let strSize = switch strSizes
+          case [] then "0"
+          case [strSize] then strSize
+          case strSizes then join ["(", strJoin " + " strSizes, ")"]
+          end in
+        let size = foldl addi (length x.singles) sizes in
         let res = JsonObject (mapFromSeq cmpString (concat common
           [ ("type", JsonString "or")
           , ("others", JsonArray others)
           , ("singles", JsonArray singles)
+          , ("strSize", JsonString strSize)
+          , ("size", JsonInt size)
           ])) in
-        (env, res)
+        (env, ((size, strSize), res))
       end
-    in work
+    in match work env tree with (env, (_, json)) in (env, json)
 
 let rtConstrainShallow : all a. all constraint. all var. all val. all relevant.
   { constraintAnd : constraint -> constraint -> Option {lChanged : Bool, rChanged : Bool, res : constraint}
@@ -4638,6 +4682,19 @@ lang TreeSolverPartIndep = TreeSolverBase
       match min (lam a. lam b. cmpf a.cost b.cost) (mapOption inner fs)
       with Some sing then StepDone sing
       else StepFail () in
+    let sizeBranches : all a. [(Int, Step a)] -> Step a -> Step a = lam smaller. lam default.
+      let smaller = sort (lam a. lam b. subi a.0 b.0) smaller in
+      match smaller with _ ++ [(upper, _)] then
+        let f = lam tree.
+          let size = rtBoundedSize upper tree in
+          let pair = optionBind size (lam size. find (lam pair. lti size pair.0) smaller) in
+          optionMapOrElse (lam. default tree) (lam pair. pair.1 tree) pair
+        in f
+      else default in
+    let sizeBranch : all a. {threshold : Int, small : Step a, big : Step a} -> Step a = lam opts. lam tree.
+      if optionIsSome (rtBoundedSize opts.threshold tree)
+      then opts.small tree
+      else opts.big tree in
 
     let checkDone : all a. Step a = lam tree. match tree with RTSingle sing
       then StepDone sing
@@ -4700,7 +4757,11 @@ lang TreeSolverPartIndep = TreeSolverBase
     let inner = lam tree. chain
       [ debug "pre-homogeneous"
       -- , oneHomogeneous
-      , onTopHomogeneousAlts (bestDoneOf [oneHomogeneous, consistent])
+      , onTopHomogeneousAlts (sizeBranches
+        [ (1000000, fix (chain [collapseLeaves, propagate, checkDone]))
+        ]
+        -- (bestDoneOf [oneHomogeneous, consistent]))
+        oneHomogeneous)
       , debug "post-homogeneous"
       , propagate
       , debug "post-inner-propagate"
