@@ -342,7 +342,7 @@ end
 lang RepTypesFragments = ReprTypeAst + ReprSubstAst + ReprTypeUnify + OpDeclAst + OpDeclSym + OpDeclTypeCheck + TyWildAst + TyWildUnify + RepTypesPrettyPrint
 end
 
-lang RepTypesShallowSolverInterface = OpVarAst + OpImplAst + UnifyPure
+lang RepTypesShallowSolverInterface = OpVarAst + OpImplAst + UnifyPure + AliasTypeAst
   -- NOTE(vipa, 2023-07-05): Potential global state shared between
   -- individual solving processes
   syn SolverGlobal a =
@@ -408,6 +408,33 @@ lang RepTypesShallowSolverInterface = OpVarAst + OpImplAst + UnifyPure
 
   -- NOTE(vipa, 2023-10-25): An arbitrary ordering over solutions
   sem cmpSolution : all a. SolverSolution a -> SolverSolution a -> Int
+
+  sem opImplDebugJson : all a. OpImpl a -> JsonValue
+  sem opImplDebugJson = | impl ->
+    recursive let removeAliases = lam ty.
+      match ty with TyAlias x
+      then removeAliases x.content
+      else smap_Type_Type removeAliases ty in
+    let env = pprintEnvEmpty in
+    match pprintVarName env impl.op with (env, name) in
+    match getTypeStringCode 0 env (removeAliases impl.specType) with (env, specType) in
+    let convertOpUse = lam env. lam opUse.
+      match pprintVarName env opUse.ident with (env, ident) in
+      match getTypeStringCode 0 env (removeAliases opUse.ty) with (env, ty) in
+      let json = JsonObject (mapFromSeq cmpString
+        [ ("op", JsonString ident)
+        , ("ty", JsonString ty)
+        ]) in
+      (env, json) in
+    match mapAccumL convertOpUse env impl.opUses with (env, opUses) in
+    match unificationToDebug "" env impl.uni with (env, uni) in
+    let json = JsonObject (mapFromSeq cmpString
+      [ ("name", JsonString name)
+      , ("specType", JsonString specType)
+      , ("opUses", JsonArray opUses)
+      , ("uni", JsonArray (map (lam x. JsonString x) (strSplit "\n" uni)))
+      ]) in
+    json
 end
 
 type VarMap v = {reprs : Map Symbol v, metas : Map Name v}
@@ -662,6 +689,7 @@ type ReprSolverOptions =
   , debugFinalSolution : SolutionDebugTarget
   , debugSolveProcess : Bool
   , debugSolveTiming : Bool
+  , debugImpls : Bool
   , solveAll : Bool
   }
 
@@ -670,6 +698,7 @@ let defaultReprSolverOptions : ReprSolverOptions =
   , debugFinalSolution = SDTNone ()
   , debugSolveProcess = false
   , debugSolveTiming = false
+  , debugImpls = false
   , solveAll = false
   }
 
@@ -781,6 +810,9 @@ lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + 
       , info = x.info
       , token = x.body
       } in
+    (if state.options.debugImpls then
+      printLn (json2string (opImplDebugJson opImpl))
+     else ());
     let newBranch = addImpl global state.branch opImpl in
     match collectForReprSolve global {state with branch = newBranch} x.inexpr
       with (newState, inexpr) in
@@ -4674,7 +4706,8 @@ lang TreeSolverPartIndep = TreeSolverBase
       , debug "post-inner-propagate"
       ] tree in
     let solve = chain
-      [ propagate
+      [ debug "start"
+      , propagate
       , debug "post-propagate"
       , flattenAnds
       , partitionIndep
