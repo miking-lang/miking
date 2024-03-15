@@ -1783,6 +1783,7 @@ con HStart : String -> RTHistory
 con HStep : {label : String, prev : RTHistory} -> RTHistory
 con HAndConstruct : {label : String, children : [RTHistory], prev : RTHistory} -> RTHistory
 con HOrConstruct : {label : String, parent : RTHistory, prev : RTHistory} -> RTHistory
+con HFlatten : {label : String, parent : RTHistory, children : [RTHistory]} -> RTHistory
 
 -- relevant: a set of variables relevant to *the parent* of each
 --   node. Can be used to filter `constraint` and `approx`, but also
@@ -2001,6 +2002,12 @@ let rtDebugJson : all a. all constraint. all var. all val. all relevant. all env
             , ("children", JsonArray (map (work []) x.children))
             ]) in
           work (cons item acc) x.prev
+        case HFlatten x then
+          let item = JsonObject (mapFromSeq cmpString
+            [ ("and-flatten", JsonString x.label)
+            , ("children", JsonArray (map (work []) x.children))
+            ]) in
+          work (cons item acc) x.parent
         case HOrConstruct x then
           let item = JsonObject (mapFromSeq cmpString
             [ ("or-construct", JsonString x.label)
@@ -2282,18 +2289,18 @@ let _approxHasEmptyDomain : all k. all v. PureUnionFind k (Set v) -> Bool
     false
     puf
 
-let _computeAltApprox : all relevant. all constraint. all var. all val. all a.
+let _computeAltApproxDirect : all var. all val.
   PureUnionFind var (Set val)
-  -> [RepTree relevant constraint var val a]
+  -> [PureUnionFind var (Set val)]
   -> Option (PureUnionFind var (Set val))
   = lam restr. lam below.
     let count = length below in
     let puf =
-      let findOccurs = lam acc. lam tree. pufFold
+      let findOccurs = lam acc. lam approx. pufFold
         (lam a. lam. lam. a)
         (lam a. lam k. lam out. mapInsertWith (lam a. lam b. (a.0, addi a.1 b.1, setUnion a.2 b.2)) k.0 (k.1, 1, out) a)
         acc
-        (rtGetApprox tree) in
+        approx in
       let x = foldl findOccurs (mapEmpty (mapGetCmpFun restr)) below in
       let addIfConstrained = lam acc. lam k. lam v.
         if eqi v.1 count
@@ -2302,6 +2309,13 @@ let _computeAltApprox : all relevant. all constraint. all var. all val. all a.
       let puf = pufEmpty (mapGetCmpFun restr) in
       mapFoldWithKey addIfConstrained puf x in
     optionMap (lam x. x.res) (_approxAnd restr puf)
+
+let _computeAltApprox : all relevant. all constraint. all var. all val. all a.
+  PureUnionFind var (Set val)
+  -> [RepTree relevant constraint var val a]
+  -> Option (PureUnionFind var (Set val))
+  = lam restr. lam below.
+    _computeAltApproxDirect restr (map rtGetApprox below)
 
 let _pruneListElement : all l. all r. (l -> r -> {lUseful : Bool, rUseful : Bool}) -> [l] -> r -> ([l], Bool)
   = lam check. lam previous. lam new.
@@ -2469,7 +2483,7 @@ type RTMaterializeConsistentInterface env relevant constraint var val =
 let rtMaterializeConsistent : all env. all relevant. all constraint. all var. all val. all a.
   RTMaterializeConsistentInterface env relevant constraint var val
   -> RepTree relevant constraint var val a
-  -> Option {value : a, cost : Float}
+  -> Option (RTSingleRec a constraint var val relevant)
   = lam fs. lam tree.
     type Never in
     type Approx = PureUnionFind var (Set val) in
@@ -2614,7 +2628,7 @@ let rtMaterializeConsistent : all env. all relevant. all constraint. all var. al
             optionMap (lam ret. (ret, query)) ret
           else None ()
         end
-    in optionMap (lam pair. {value = pair.0 .value, cost = pair.0 .cost}) (work tree)
+    in optionMap (lam pair. pair.0) (work tree)
 
 
 type RTMaterializeLazyInterface env relevant constraint var val =
@@ -2711,9 +2725,121 @@ let rtMaterializeLazyRecursive : all env. all relevant. all constraint. all var.
         end
     in lazyStreamMap (lam x. x.value) (work tree)
 
+type RTMaterializeStatelessInterface env relevant constraint var val =
+  { constraintAnd : constraint -> constraint -> Option constraint
+  , filterConstraint : relevant -> constraint -> constraint
+  , filterApprox : relevant -> var -> Bool
+  , constraintEq : constraint -> constraint -> Bool
+  , unionRelevant : relevant -> relevant -> relevant
+  , constraintEmpty : constraint
+  , debugInterface : RTDebugInterface env relevant constraint var val
+  , debugEnv : env
+  }
+let rtMaterializeStateless : all env. all relevant. all constraint. all var. all val. all a.
+  RTMaterializeStatelessInterface env relevant constraint var val
+  -> RepTree relevant constraint var val a
+  -> LStream {value : a, cost : Float}
+  = lam fs. lam tree.
+    type Never in
+    type Approx = PureUnionFind var (Set val) in
+    type Single a = RTSingleRec a constraint var val relevant in
+    type Tree a = RepTree relevant constraint var val a in
+    type FilteredStepper a = constraint -> Approx -> Iter a in
+    let cmpf = lam a. lam b. if ltf a b then negi 1 else if gtf a b then 1 else 0 in
+    let filterApprox = lam relevant. lam puf.
+      pufFilterFunction (lam pair. fs.filterApprox relevant pair.0) puf in
+    let constrain
+      : relevant
+      -> {here : (constraint, Approx), elsewhere : (constraint, Approx)}
+      -> Option (constraint, Approx)
+      = lam relevant. lam args.
+        let constraint = fs.filterConstraint relevant args.elsewhere.0 in
+        match fs.constraintAnd constraint args.here.0 with Some constraint then
+          let approx = filterApprox relevant args.elsewhere.1 in
+          match _approxAnd approx args.here.1 with Some {res = approx}
+          then Some (constraint, approx)
+          else None ()
+        else None () in
+    let fsOr : all a. FilteredStepper (Single a) -> FilteredStepper (Single a) -> FilteredStepper (Single a)
+      = lam aStep. lam bStep. lam constraint. lam approx. lam.
+        iterConcat (aStep constraint approx) (bStep constraint approx) () in
+    let fsEmptyOr : all x. FilteredStepper x = lam. lam. iterEmpty in
+    let fsAnd : all a. relevant -> FilteredStepper (Single a) -> FilteredStepper [Single a] -> FilteredStepper [Single a]
+      = lam relevant. lam a. lam b. lam constraint. lam approx. lam.
+        let givenASingle = lam aSingle.
+          let arg = {here = (constraint, approx), elsewhere = (aSingle.constraint, aSingle.approx)} in
+          match constrain relevant arg with Some (constraint, approx) then
+            iterMap (lam bSingles. cons aSingle bSingles) (b constraint approx)
+          else iterEmpty in
+        iterConcatMap givenASingle (a constraint approx) () in
+    let fsEmptyAnd : all x. FilteredStepper [x] = lam. lam. iterSingle [] in
+    let andFs =
+      { constraintAnd = fs.constraintAnd
+      , filterConstraint = fs.filterConstraint
+      , filterApprox = fs.filterApprox
+      , preComputedConstraint = None ()
+      , preComputedApprox = None ()
+      , historyLabel = "stateless-child"
+      , constraintEq = fs.constraintEq
+      , debugInterface = fs.debugInterface
+      , debugEnv = fs.debugEnv
+      } in
+    let orFs =
+      { constraintAnd = fs.constraintAnd
+      , filterConstraint = fs.filterConstraint
+      , filterApprox = fs.filterApprox
+      , unionRelevant = fs.unionRelevant
+      , preComputedConstraint = None ()
+      , preComputedApprox = None ()
+      , historyLabel = "stateless-or"
+      } in
+    recursive let work : all a. Tree a -> FilteredStepper (Single a) = lam tree. switch tree
+      case RTSingle x then
+        lam constraint. lam approx.
+          let arg = {here = (x.constraint, x.approx), elsewhere = (constraint, approx)} in
+          match constrain x.relevantHere arg with Some _
+          then iterSingle x
+          else iterEmpty
+      case RTOr x then
+        let x : RTOrRec Never a constraint var val relevant = x in
+        let alternatives = concat
+          (map (lam x. RTSingle x) (sort (lam a. lam b. cmpf a.cost b.cost) x.singles))
+          x.others in
+        let innerSpec = foldr fsOr fsEmptyOr (map work alternatives) in
+        lam constraint. lam approx.
+          let arg = {here = (x.constraint, x.approx), elsewhere = (constraint, approx)} in
+          match constrain x.relevantHere arg with Some (constraint, approx) then
+            let iter = innerSpec constraint approx in
+            let mk = lam single. match rtConstructOr orFs x single with Some single
+              then single
+              else error "Compiler error: failed to rtConstructOr in materialize stateless" in
+            iterMap mk iter
+          else iterEmpty
+      case RTAnd x then
+        let x : RTAndRec Never a constraint var val relevant = x in
+        let innerSpec = foldr (fsAnd x.relevantHere) fsEmptyAnd (map (lam x. work x.val) x.children) in
+        lam constraint. lam approx.
+          let arg = {here = (x.constraint, x.approx), elsewhere = (constraint, approx)} in
+          match constrain x.relevantHere arg with Some (constraint, approx) then
+            let iter = innerSpec constraint approx in
+            let mk = lam singles. match rtConstructAnd andFs x singles with Some single
+              then single
+              else error "Compiler error: failed to rtConstructAnd in materialize stateless" in
+            iterMap mk iter
+          else iterEmpty
+      end in
+    let bigIter = work tree fs.constraintEmpty (pufEmpty (mapGetCmpFun (rtGetApprox tree))) in
+    printLn "Starting materialize";
+    let lazyStep : all a. Iter a -> Option (Iter a, a)  = lam iter. switch iter ()
+      case INNil _ then None ()
+      case INCons (x, xs) then Some (xs, x)
+      end in
+    lazyStreamMap (lam x. {cost = x.cost, value = x.value}) (lazyStream lazyStep bigIter)
+
 type RTPartitionInternalInterface relevant constraint var val =
   { varsToRelevant : [var] -> relevant
   , fixedInConstraint : constraint -> relevant
+  , normalizeRelevantToConstraint : constraint -> relevant -> relevant
   , unionRelevant : relevant -> relevant -> relevant
   , intersectRelevant : relevant -> relevant -> relevant
   , subtractRelevant : relevant -> relevant -> relevant
@@ -2807,6 +2933,182 @@ let rtPartitionInternalComponents : all relevant. all constraint. all var. all v
           end
         end
     in work tree
+
+let rtPartitionIndependent : all relevant. all constraint. all var. all val. all a.
+  RTPartitionInternalInterface relevant constraint var val
+  -> RepTree relevant constraint var val a
+  -> RepTree relevant constraint var val a
+  = lam fs. lam tree.
+    type Never in
+    type Approx = PureUnionFind var (Set val) in
+    let filterApprox = lam relevant. lam puf.
+      pufFilterFunction (lam pair. fs.filterApprox relevant pair.0) puf in
+    recursive let work : all a. RepTree relevant constraint var val a -> RepTree relevant constraint var val a
+      = lam tree. switch tree
+        case RTSingle _ then tree
+        case RTOr x then
+          let x : RTOrRec Never a constraint var val relevant = x in
+          let others = map work x.others in
+          RTOr {x with others = others}
+        case RTAnd x then
+          let x : RTAndRec Never a constraint var val relevant = x in
+          let children = map (lam child. {child with val = work child.val}) x.children in
+          match (children, x.dep) with ([] | [_], _) | (_, InDep _) then
+            RTAnd {x with children = children}
+          else  -- Early exit
+
+          let ignorable = fs.fixedInConstraint x.constraint in
+          let ignorable =
+            let fixedInApprox = pufFold
+              (lam acc. lam. lam. acc)
+              (lam acc. lam k. lam out.
+                if eqi 1 (setSize out)
+                then snoc acc k.0
+                else acc)
+              []
+              x.approx in
+            fs.unionRelevant ignorable (fs.varsToRelevant fixedInApprox) in
+          let juggle = lam i. lam child.
+            ( (i, child)
+            , fs.normalizeRelevantToConstraint x.constraint (fs.subtractRelevant (rtGetRelevantAbove child.val) ignorable)
+            ) in
+          let partitions = fs.partitionRelevant (mapi juggle children) in
+          -- NOTE(vipa, 2024-01-16): Splitting out partitions
+          -- containing a single child doesn't actually provide any
+          -- benefit over just leaving them together, thus we put all
+          -- singleton partitions and make a new partition out of
+          -- them.
+          switch partitions
+          case [_] then RTAnd {x with children = children}
+          case [_] ++ _ then
+            let mkPartition = lam partition.
+              match unzip partition with (idxes, children) in
+              let relevantHere = foldl fs.unionRelevant fs.emptyRelevant
+                (map (lam child. rtGetRelevantAbove child.val) children) in
+              let relevantAbove = fs.intersectRelevant x.relevantHere relevantHere in
+              let subtree = RTAnd
+                { children = children
+                , selfCost = 0.0
+                , dep = x.dep
+                , construct = lam. zipWith (lam idx. lam a. (idx, a)) idxes
+                , constraint = fs.filterConstraint relevantHere x.constraint
+                , approx = filterApprox relevantHere x.approx
+                , relevantHere = relevantHere
+                , relevantAbove = relevantAbove
+                , history = HStep {label = "partition-indep-child", prev = x.history}
+                } in
+              {scale = 1.0, val = subtree} in
+            RTAnd
+            { children = map mkPartition partitions
+            , construct = lam constraint. lam pairs.
+              let pairs = join pairs in
+              let pairs = sort (lam a. lam b. subi a.0 b.0) pairs in
+              x.construct constraint (map (lam x. x.1) pairs)
+            , selfCost = x.selfCost
+            , dep = InDep ()
+            , constraint = x.constraint
+            , approx = x.approx
+            , relevantHere = x.relevantHere
+            , relevantAbove = x.relevantAbove
+            , history = HStep {label = "partition-indep-parent", prev = x.history}
+            }
+          case [] then
+            error "Compiler error: empty list returned from partitionRelevant"
+          end
+        end
+    in work tree
+
+type RTFlattenInterface env relevant constraint var val =
+  { constraintAnd : constraint -> constraint -> Option constraint
+  , filterConstraint : relevant -> constraint -> constraint
+  , filterApprox : relevant -> var -> Bool
+  , unionRelevant : relevant -> relevant -> relevant
+  , debugInterface : RTDebugInterface env relevant constraint var val
+  , debugEnv : env
+  }
+let rtFlatten : all env. all relevant. all constraint. all var. all val. all a.
+  RTFlattenInterface env relevant constraint var val
+  -> RepTree relevant constraint var val a
+  -> RepTree relevant constraint var val a
+  = lam fs. lam tree.
+    type Never in
+    type Approx = PureUnionFind var (Set val) in
+    type Single a = RTSingleRec a constraint var val relevant in
+    -- NOTE(vipa, 2024-03-08): I don't know a way to make this fully
+    -- type-safe, since each child could theoretically have a
+    -- different hidden inner type. The implementation will make sure
+    -- to only use the correct construct function for each child, but
+    -- that's very much not something that the type-system ensures for
+    -- us.
+    type And a = RTAndRec Never a constraint var val relevant in
+    type Tree a = RepTree relevant constraint var val a in
+    recursive let work : all a. Tree a -> (Option (And a), Tree a) = lam tree. switch tree
+      case RTSingle _ then (None (), tree)
+      case RTOr x then
+        let x : RTOrRec Never a constraint var val relevant = x in
+        (None (), RTOr {x with others = map (lam child. (work child).1) x.others})
+      case RTAnd x then
+        let x : RTAndRec Never a constraint var val relevant = x in
+        let children = map (lam child. {scale = child.scale, val = work child.val}) x.children in
+        if any (lam child. optionIsSome child.val.0) children then
+          let emptyMergeSpec =
+            { children = []
+            , constructs = []
+            , constraint = Some x.constraint
+            , approx = Some x.approx
+            , relevantHere = x.relevantHere
+            , extraCost = 0.0
+            , histories = []
+            } in
+          let addChild = lam acc. lam child. switch child.val
+            case (Some and, _) then
+              { children = concat acc.children (map (lam c. {c with scale = mulf c.scale child.scale}) and.children)
+              , constructs = snoc acc.constructs {construct = and.construct, relevantHere = and.relevantHere, length = length and.children}
+              , constraint = optionBind acc.constraint (fs.constraintAnd and.constraint)
+              , approx = optionMap (lam x. x.res) (optionBind acc.approx (_approxAnd and.approx))
+              , relevantHere = fs.unionRelevant acc.relevantHere and.relevantHere
+              , extraCost = addf acc.extraCost (mulf child.scale and.selfCost)
+              , histories = snoc acc.histories and.history
+              }
+            case (None _, tree) then
+              { acc with children = snoc acc.children {scale = child.scale, val = tree}
+              , constructs = snoc acc.constructs {construct = lam. lam xs. head xs, relevantHere = x.relevantHere, length = 1}
+              }
+            end in
+          match foldl addChild emptyMergeSpec children with spec & {constraint = Some constraint, approx = Some approx} then
+            let constructs = spec.constructs in
+            let x =
+              { children = spec.children
+              , selfCost = addf x.selfCost spec.extraCost
+              , dep = Dep ()
+              , construct = lam constraint. lam children.
+                recursive let work = lam acc. lam constructs. lam children.
+                  match constructs with [c] ++ constructs then
+                    match splitAt children c.length with (here, children) in
+                    let acc = snoc acc (c.construct (fs.filterConstraint c.relevantHere constraint) here) in
+                    work acc constructs children
+                  else if null children
+                  then acc
+                  else error "Compiler error: got more children in construct than flatten" in
+                x.construct constraint (work [] constructs children)
+              , constraint = constraint
+              , approx = approx
+              , relevantHere = spec.relevantHere
+              , relevantAbove = x.relevantAbove
+              , history = HFlatten
+                { label = "and-flatten"
+                , parent = x.history
+                , children = spec.histories
+                }
+              } in
+            (Some x, RTAnd x)
+          else error "Compiler error: flatten applied to inconsistent tree"
+        else
+          let children = map (lam child. {scale = child.scale, val = child.val.1}) children in
+          let x = {x with children = children} in
+          (Some x, RTAnd x)
+      end
+    in (work tree).1
 
 let rtCartProd : all a. all constraint. all var. all val. all relevant.
   (constraint -> constraint -> Option constraint)
@@ -3072,6 +3374,10 @@ let rtEq : all relevant. all constraint. all var. all val. all a.
         if not (eqString a.label b.label) then false else
         if not (eqSeq historyEq a.children b.children) then false else
         historyEq a.prev b.prev
+      case (HFlatten a, HFlatten b) then
+        if not (eqString a.label b.label) then false else
+        if not (eqSeq historyEq a.children b.children) then false else
+        historyEq a.parent b.parent
       case (HOrConstruct a, HOrConstruct b) then
         if not (eqString a.label b.label) then false else
         if not (historyEq a.parent b.parent) then false else
@@ -3390,7 +3696,7 @@ type RTMaterializeHomogeneousInterface env relevant constraint var val =
 let rtMaterializeHomogeneous : all env. all relevant. all constraint. all var. all val. all a.
   RTMaterializeHomogeneousInterface env relevant constraint var val
   -> RepTree relevant constraint var val a
-  -> Option {value : a, cost : Float}
+  -> Option (RTSingleRec a constraint var val relevant)
   = lam fs. lam tree.
     type Never in
     type Approx = PureUnionFind var (Set val) in
@@ -3482,8 +3788,49 @@ let rtMaterializeHomogeneous : all env. all relevant. all constraint. all var. a
         else []
     in
     let solutions = descend tree in
-    let mkSol = lam sol. {value = sol.value, cost = sol.cost} in
-    optionMap mkSol (min (lam a. lam b. cmpf a.cost b.cost) solutions)
+    min (lam a. lam b. cmpf a.cost b.cost) solutions
+
+let rtFilterReprs : all env. all relevant. all constraint. all var. all val. all a.
+  RepTree relevant constraint var val a
+  -> RepTree relevant constraint var val a
+  = lam tree.
+    type Never in
+    type Approx = PureUnionFind var (Set val) in
+    type Tree a = RepTree relevant constraint var val a in
+    type Single a = RTSingleRec a constraint var val relevant in
+    recursive let work
+      : all a. Tree a -> (Option Approx, Tree a)
+      = lam tree. switch tree
+        case RTSingle x then
+          (Some x.approx, tree)
+        case RTOr x then
+          let others = map (lam x. (work x).1) x.others in
+          if null x.others then
+            match x.singles with [sing] ++ sings then
+              let f = lam acc. lam sing.
+                if ltf acc.cost sing.cost then acc else
+                if gtf acc.cost sing.cost then {cost = sing.cost, cheapest = [sing.approx]} else
+                {acc with cheapest = snoc acc.cheapest sing.approx} in
+              let cheapest = (foldl f {cost = sing.cost, cheapest = [sing.approx]} sings).cheapest in
+              match _computeAltApproxDirect x.approx cheapest with Some approx
+              then (Some approx, tree)
+              else (Some x.approx, tree)
+            else (None (), tree)
+          else (None (), RTOr {x with others = others})
+        case RTAnd x then
+          let updateChild = lam child.
+            match work child.val with (approx, val) in
+            (approx, {child with val = val}) in
+          match unzip (map updateChild x.children) with (approxes, children) in
+          match optionMapM (lam x. x) approxes with Some approxes then
+            let approx = _computeAltApproxDirect x.approx approxes in
+            let approx = match approx with Some approx then approx
+              else warnSingle [] "AltApprox in FilterReprs failed"; x.approx in
+            (None (), RTAnd {x with children = children, approx = approx})
+          else (None (), RTAnd {x with children = children})
+        end
+    in (work tree).1
+
 
 type SolForError
 con SFEHere : {here : Info, needed : use Ast in Type, got : use Ast in Type} -> SolForError
@@ -3791,8 +4138,11 @@ lang NonMemoTreeBuilder = RepTypesShallowSolverInterface + UnifyPure + RepTypesH
 end
 
 lang TreeSolverBase = NonMemoTreeBuilder
-  sem solveWork : all a. Bool -> RepTree Relevant Constraint Var Val [SolverSolution a] -> [SolverSolution a]
-  sem solveWorkAll : all a. Bool -> RepTree Relevant Constraint Var Val [SolverSolution a] -> [[SolverSolution a]]
+  type TSTree a = RepTree Relevant Constraint Var Val a
+  type TSSingle a = RTSingleRec a Constraint Var Val Relevant
+
+  sem solveWork : all a. Bool -> TSTree [SolverSolution a] -> [SolverSolution a]
+  sem solveWorkAll : all a. Bool -> TSTree [SolverSolution a] -> [[SolverSolution a]]
 
   sem topSolve debug global = | STQContent query ->
     let top = RTAnd
@@ -3899,11 +4249,39 @@ lang TreeSolverBase = NonMemoTreeBuilder
     , debugInterface = mkDebugInterface ()
     }
 
+  sem mkFlattenInterface : () -> RTFlattenInterface PprintEnv Relevant Constraint Var Val
+  sem mkFlattenInterface = | _ ->
+    { constraintAnd = mergeUnifications
+    , unionRelevant = varMapUnion
+    , filterApprox = lam varmap. lam sym. varMapHasRepr sym varmap
+    , filterConstraint = lam varmap. lam uni. filterUnificationFunction
+      (lam pair. varMapHasRepr pair.0 varmap)
+      (lam pair. varMapHasMeta pair.0 varmap)
+      uni
+    , debugEnv = pprintEnvEmpty
+    , debugInterface = mkDebugInterface ()
+    }
+
   sem mkMaterializeHomogeneousInterface : () -> RTMaterializeHomogeneousInterface PprintEnv Relevant Constraint Var Val
   sem mkMaterializeHomogeneousInterface = | _ ->
     { constraintAnd = mergeUnifications
     , cmpVal = nameCmp
     , propagateInterface = mkPropagateInterface ()
+    }
+
+  sem mkMaterializeStatelessInterface : () -> RTMaterializeStatelessInterface PprintEnv Relevant Constraint Var Val
+  sem mkMaterializeStatelessInterface = | _ ->
+    { constraintAnd = mergeUnifications
+    , constraintEq = lam a. lam b. if uniImplies a b then uniImplies b a else false
+    , filterApprox = lam varmap. lam sym. varMapHasRepr sym varmap
+    , filterConstraint = lam varmap. lam uni. filterUnificationFunction
+      (lam pair. varMapHasRepr pair.0 varmap)
+      (lam pair. varMapHasMeta pair.0 varmap)
+      uni
+    , unionRelevant = varMapUnion
+    , constraintEmpty = emptyUnification ()
+    , debugEnv = pprintEnvEmpty
+    , debugInterface = mkDebugInterface ()
     }
 
   sem mkMaterializeLazyInterface : () -> RTMaterializeLazyInterface PprintEnv Relevant Constraint Var Val
@@ -3977,6 +4355,20 @@ lang TreeSolverBase = NonMemoTreeBuilder
     , emptyRelevant = varMapEmpty
     , subtractRelevant = varMapDifference
     , intersectRelevant = varMapIntersect
+    , normalizeRelevantToConstraint = lam uni. lam varmap.
+      { reprs = mapFoldWithKey
+        (lam acc. lam r. lam i.
+          match pufUnwrapN uni.reprs (r, i) with (r, i) in
+          mapInsert r i acc)
+        (mapEmpty _symCmp)
+        varmap.reprs
+      , metas = mapFoldWithKey
+        (lam acc. lam m. lam i.
+          match pufUnwrapN uni.types (m, i) with (m, i) in
+          mapInsert m i acc)
+        (mapEmpty nameCmp)
+        varmap.metas
+      }
     , filterConstraint = lam varmap. lam uni. filterUnificationFunction
       (lam pair. varMapHasRepr pair.0 varmap)
       (lam pair. varMapHasMeta pair.0 varmap)
@@ -4141,6 +4533,222 @@ lang TreeSolverGuided = TreeSolverBase
     else errorSingle [] "Could not find a consistent assignment of impls across the program"
 end
 
+lang TreeSolverStateless = TreeSolverBase
+  sem solveWork debug = | top ->
+    let propagateInterface = mkPropagateInterface () in
+    let materializeStatelessInterface = mkMaterializeStatelessInterface () in
+    match rtPropagate propagateInterface top with Some top then
+      let stream = rtMaterializeStateless materializeStatelessInterface top in
+      recursive let explore : Float -> Option {cost : Float, value : Unknown} -> LStream {cost : Float, value : Unknown} -> Option {cost : Float, value : Unknown}
+        = lam startTime. lam best. lam stream.
+          match lazyStreamUncons stream with Some (res, stream) then
+            let endTime = wallTimeMs () in
+            let resIsBetter = match best with Some best
+              then ltf res.cost best.cost
+              else true in
+            if resIsBetter then
+              print (join ["(", float2string (subf endTime startTime), "ms) Better cost: ", float2string res.cost]);
+              flushStdout ();
+              explore (wallTimeMs ()) (Some res) stream
+            else
+              print ".";
+              flushStdout ();
+              explore startTime best stream
+          else best in
+      match explore (wallTimeMs ()) (None ()) stream with Some res
+      then res.value
+      else errorSingle [] "Could not find a consistent assignment of impls across the program"
+    else errorSingle [] "Could not find a consistent assignment of impls across the program"
+  sem solveWorkAll debug = | top ->
+    let propagateInterface = mkPropagateInterface () in
+    let materializeStatelessInterface = mkMaterializeStatelessInterface () in
+    match rtPropagate propagateInterface top with Some top then
+      lazyStreamForceAll (lazyStreamMap (lam x. x.value) (rtMaterializeStateless materializeStatelessInterface top))
+    else errorSingle [] "Could not find a consistent assignment of impls across the program"
+end
+
+lang TreeSolverPartIndep = TreeSolverBase
+  sem solveWork debug = | top ->
+    let cmpf = lam a. lam b. if ltf a b then negi 1 else if gtf a b then 1 else 0 in
+    let propagateInterface = mkPropagateInterface () in
+    let debugInterface = mkDebugInterface () in
+    let collapseLeavesInterface = mkCollapseLeavesInterface () in
+    let partitionInternalInterface = mkPartitionInternalInterface () in
+    let flattenInterface = mkFlattenInterface () in
+    let materializeHomogeneousInterface = mkMaterializeHomogeneousInterface () in
+    let materializeConsistentInterface = mkMaterializeConsistentInterface () in
+
+    type StepStatus a in
+    con StepDone : all a. TSSingle a -> StepStatus a in
+    con StepStep : all a. TSTree a -> StepStatus a in
+    con StepFail : all a. () -> StepStatus a in
+    type Step a = TSTree a -> StepStatus a in
+
+    let fix : all a. Step a -> Step a = lam step.
+      recursive let f : Step a = lam tree.
+        let res = step tree in
+        match res with StepStep tree then f tree else res in
+      f in
+    let seq : all a. Step a -> Step a -> Step a = lam l. lam r.
+      let f : Step a = lam tree. switch l tree
+        case res & (StepDone _ | StepFail _) then res
+        case StepStep tree then r tree
+        end in
+      f in
+    let chain : all a. [Step a] -> Step a = lam fs.
+      match fs with fs ++ [last]
+      then foldr seq last fs
+      else error "Compiler error: empty list in chain" in
+    let bestDoneOf : all a. [Step a] -> Step a = lam fs. lam tree.
+      let inner = lam f. match f tree with StepDone sing
+        then Some sing
+        else None () in
+      match min (lam a. lam b. cmpf a.cost b.cost) (mapOption inner fs)
+      with Some sing then StepDone sing
+      else StepFail () in
+
+    let checkDone : all a. Step a = lam tree. match tree with RTSingle sing
+      then StepDone sing
+      else StepStep tree in
+    let perIndep : all a. (all x. Step x) -> Step a = lam f. lam tree.
+      match tree with RTAnd (x & {dep = InDep _}) then
+        let runInner = lam child. switch f child.val
+          case StepDone sing then Some {child with val = RTSingle sing}
+          case StepStep tree then Some {child with val = tree}
+          case StepFail _ then None ()
+          end in
+        match optionMapM runInner x.children with Some children
+        then StepStep (RTAnd {x with children = children})
+        else StepFail ()
+      else f tree in
+
+    let propagate : all a. Step a = lam tree.
+      match rtPropagate propagateInterface tree with Some tree
+      then StepStep tree
+      else StepFail () in
+    let debug : all a. String -> Step a = lam label. lam tree.
+      (if debug then
+        printLn (json2string (JsonString label));
+        printLn (json2string (rtDebugJson debugInterface pprintEnvEmpty tree).1)
+       else ());
+      StepStep tree in
+    let collapseLeaves : all a. Step a = lam tree.
+      StepStep (rtCollapseLeaves collapseLeavesInterface tree) in
+    let partitionIndep : all a. Step a = lam tree.
+      StepStep (rtPartitionIndependent partitionInternalInterface tree) in
+    let flattenAnds : all a. Step a = lam tree.
+      StepStep (rtFlatten flattenInterface tree) in
+    let oneHomogeneous : all a. Step a = lam tree.
+      match rtMaterializeHomogeneous materializeHomogeneousInterface tree
+      with Some sing then StepDone sing
+      else StepFail () in
+    let onTopHomogeneousAlts : all a. Step a -> Step a = lam step. lam tree.
+      let res = rtHomogenizeTop nameCmp tree in
+      let res = mapOption (rtPropagate propagateInterface) res in
+      let res = mapOption (lam x. match step x with StepDone sing then Some sing else None ()) res in
+      match min (lam a. lam b. cmpf a.cost b.cost) res
+      with Some sing then StepDone sing
+      else StepFail () in
+    let consistent : all a. Step a = lam tree.
+      match rtMaterializeConsistent materializeConsistentInterface tree
+      with Some sing then StepDone sing
+      else StepFail () in
+    let fail : all a. Bool -> Step a = lam complete. lam.
+      if complete
+      then errorSingle [] "Could not find a consistent assignment of impls across the program"
+      else errorSingle [] "Could not find a consistent assignment of impls across the program (though it may have been missed)" in
+
+    let inner = lam tree. fix (chain
+      [ collapseLeaves
+      , debug "post-collapse"
+      , propagate
+      , debug "post-propagate"
+      , checkDone
+      ]) tree in
+    let inner = lam tree. chain
+      [ debug "pre-homogeneous"
+      -- , oneHomogeneous
+      , onTopHomogeneousAlts (bestDoneOf [oneHomogeneous, consistent])
+      , debug "post-homogeneous"
+      , propagate
+      , debug "post-inner-propagate"
+      ] tree in
+    let solve = chain
+      [ propagate
+      , debug "post-propagate"
+      , flattenAnds
+      , partitionIndep
+      , debug "post-partition-indep"
+      , perIndep #frozen"inner"
+      -- , perIndep #frozen"oneHomogeneous"
+      , debug "post-per-indep"
+      , propagate
+      , debug "post-final-propagate"
+      , checkDone
+      , fail false
+      ] in
+    switch solve top
+    case StepDone x then x.value
+    case StepStep _ then
+      error "Compiler error: left solve with a StepStep."
+    case StepFail _ then
+      error "Compiler error: left solve with a StepFail."
+    end
+end
+
+lang TreeSolverFilterByBest = TreeSolverBase
+  sem solveWork debug = | top ->
+    let propagateInterface = mkPropagateInterface () in
+    let debugInterface = mkDebugInterface () in
+    let collapseLeavesInterface = mkCollapseLeavesInterface () in
+
+    type StepStatus in
+    con StepDone : [SolverSolution a] -> StepStatus in
+    con StepStep : TSTree [SolverSolution a] -> StepStatus in
+    con StepFail : () -> StepStatus in
+    type Step = TSTree [SolverSolution a] -> StepStatus in
+
+    let fix : Step -> Step = lam step.
+      recursive let f : Step = lam tree.
+        let res = step tree in
+        match res with StepStep tree then f tree else res in
+      f in
+    let seq : Step -> Step -> Step = lam l. lam r.
+      let f : Step = lam tree. switch l tree
+        case res & (StepDone _ | StepFail _) then res
+        case StepStep tree then r tree
+        end in
+      f in
+    let chain : [Step] -> Step = lam fs.
+      match fs with fs ++ [last]
+      then foldr seq last fs
+      else error "Compiler error: empty list in chain" in
+
+    let checkDone : Step = lam tree. match tree with RTSingle sing
+      then StepDone sing.value
+      else StepStep tree in
+    let propagate : Step = lam tree.
+      match rtPropagate propagateInterface tree with Some tree
+      then StepStep tree
+      else StepFail () in
+    let debug : Step = lam tree.
+      (if debug then
+        printLn (json2string (rtDebugJson debugInterface pprintEnvEmpty tree).1)
+       else ());
+      StepStep tree in
+    let collapseLeaves : Step = lam tree.
+      StepStep (rtCollapseLeaves collapseLeavesInterface tree) in
+    let filterBestReprs : Step = lam tree.
+      StepStep (rtFilterReprs tree) in
+
+    let solve = fix (chain [propagate, debug, checkDone, filterBestReprs, debug, collapseLeaves]) in
+    switch solve top
+    case StepDone x then x
+    case StepFail () then errorSingle [] "Could not find a consistent assignment of impls across the program (though it may have been missed)"
+    case StepStep _ then error "Compiler error: got a StepStep out of `repeat`."
+    end
+end
+
 lang TreeSolverHomogeneous = TreeSolverBase
   sem solveWork debug = | top ->
     let propagateInterface = mkPropagateInterface () in
@@ -4166,7 +4774,7 @@ lang TreeSolverMixed = TreeSolverBase
     let debugInterface = mkDebugInterface () in
     let cmpf = lam a. lam b. if ltf a b then negi 1 else if gtf a b then 1 else 0 in
     type Tree = RepTree Relevant Constraint Var Val [SolverSolution a] in
-    type Res = {value : [SolverSolution a], cost : OpCost} in
+    type Res = RTSingleRec [SolverSolution a] Constraint Var Val Relevant in
 
     (if debug then
       match rtDebugJson debugInterface pprintEnvEmpty top with (env, debug) in
