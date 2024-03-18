@@ -2074,18 +2074,24 @@ let rtDebugJson : all a. all constraint. all var. all val. all relevant. all env
         end
       in work [] hist in
     let common = lam env. lam cost. lam constraint. lam approx. lam relevantAbove. lam relevantHere. lam history.
-      let approx =
-        pufFoldRaw
-          (lam acc. lam lIn. lam rIn.
-            match fs.varJson acc.env lIn.0 with (env, l) in
-            match fs.varJson env rIn.0 with (env, r) in
-            {env = env, parts = snoc acc.parts (JsonArray [JsonString "eq", JsonArray [l, JsonInt lIn.1], JsonArray [r, JsonInt rIn.1]])})
-          (lam acc. lam lIn. lam out.
-            match fs.varJson acc.env lIn.0 with (env, l) in
-            match mapAccumL fs.valJson env (setToSeq out) with (env, outs) in
-            {env = env, parts = snoc acc.parts (JsonArray [JsonString "out", JsonArray [l, JsonInt lIn.1], JsonArray outs])})
-          {env = env, parts = []}
+      let reprs =
+        let mSet = pufFoldRaw
+          (lam a. lam. lam. a)
+          (lam acc. lam. lam out. Some (optionMapOr out (setUnion out) acc))
+          (None ())
           approx in
+        mapAccumL fs.valJson env (optionMapOr [] setToSeq mSet) in
+      let approx = pufFoldRaw
+        (lam acc. lam lIn. lam rIn.
+          match fs.varJson acc.env lIn.0 with (env, l) in
+          match fs.varJson env rIn.0 with (env, r) in
+          {env = env, parts = snoc acc.parts (JsonArray [JsonString "eq", JsonArray [l, JsonInt lIn.1], JsonArray [r, JsonInt rIn.1]])})
+        (lam acc. lam lIn. lam out.
+          match fs.varJson acc.env lIn.0 with (env, l) in
+          match mapAccumL fs.valJson env (setToSeq out) with (env, outs) in
+          {env = env, parts = snoc acc.parts (JsonArray [JsonString "out", JsonArray [l, JsonInt lIn.1], JsonArray outs])})
+        {env = reprs.0, parts = []}
+        approx in
       match fs.constraintJson approx.env constraint with (env, constraint) in
       match fs.relevantJson env relevantHere with (env, relevantHere) in
       match fs.relevantJson env relevantAbove with (env, relevantAbove) in
@@ -2094,6 +2100,7 @@ let rtDebugJson : all a. all constraint. all var. all val. all relevant. all env
         , ("relevantHere", relevantHere)
         , ("relevantAbove", relevantAbove)
         , ("approx", JsonArray approx.parts)
+        , ("approx reprs", JsonArray reprs.1)
         , ("cost", JsonFloat cost)
         , ("history", mkHistory history)
         ] in
@@ -4761,7 +4768,7 @@ lang TreeSolverPartIndep = TreeSolverBase
         [ (1000000, fix (chain [collapseLeaves, propagate, checkDone]))
         ]
         -- (bestDoneOf [oneHomogeneous, consistent]))
-        oneHomogeneous)
+        (seq (debug "homogeneous top") oneHomogeneous))
       , debug "post-homogeneous"
       , propagate
       , debug "post-inner-propagate"
