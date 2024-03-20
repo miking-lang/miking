@@ -96,6 +96,32 @@ lang SynDeclPrettyPrint = DeclPrettyPrint + SynDeclAst + DataPrettyPrint
                   (cons (join ["syn ", typeNameStr, params, " ="]) defStrings))
 end
 
+lang SynProdExtDeclAstPrettyPrint = DeclPrettyPrint + SynProdExtDeclAst
+  sem 
+  pprintDeclCode (indent : Int) (env : PprintEnv) = 
+  | DeclSynProdExt r -> 
+    match pprintTypeName env r.synIdent with (env, typeNameStr) in
+    match pprintTypeName env r.extIdent with (env, aliasStr) in
+    match getTypeStringCode (pprintIncr indent) env r.globalExt with (env, tyStr) in 
+    match
+      mapAccumL (lam env. lam syndef.
+        match pprintConName env syndef.ident with (env, str) in
+        match getTypeStringCode (pprintIncr indent) env syndef.tyIdent
+        with (env, ty) in
+        (env, join ["| extend ", str, " with ", ty])
+      ) env r.specificExt
+    with (env, defStrings) in
+    (env, concat (join [
+      pprintNewline indent,
+      "extend syn ",
+      typeNameStr,
+      " as ",
+      aliasStr,
+      " with ",
+      tyStr,
+      pprintNewline indent
+    ]) (strJoin (pprintNewline indent) defStrings))
+end
 
 lang SemDeclPrettyPrint = DeclPrettyPrint + SemDeclAst + UnknownTypeAst
   sem pprintDeclCode (indent : Int) (env : PprintEnv) =
@@ -223,7 +249,7 @@ lang MLangPrettyPrint = MExprPrettyPrint +
   DeclPrettyPrint + LangDeclPrettyPrint + SynDeclPrettyPrint +
   SemDeclPrettyPrint + LetDeclPrettyPrint + TypeDeclPrettyPrint +
   RecLetsDeclPrettyPrint + DataDeclPrettyPrint + UtestDeclPrettyPrint +
-  ExtDeclPrettyPrint + IncludeDeclPrettyPrint +
+  ExtDeclPrettyPrint + IncludeDeclPrettyPrint + SynProdExtDeclAstPrettyPrint + 
 
   -- Top-level pretty printer
   MLangTopLevelPrettyPrint
@@ -284,7 +310,63 @@ let prog: MLangProgram = {
                 (appf2_ (var_ "foo") (int_ 10) (float_ 0.5))
 } in
 
---print (mlang2str prog); print "\n";
+-- print (mlang2str prog); print "\n";
 utest length (mlang2str prog) with 0 using geqi in
+
+let prog2: MLangProgram = {
+  decls = [
+    decl_include_ "common.mc",
+    decl_include_ "string.mc",
+    decl_langi_ "Test1" [] [],
+    decl_langi_ "test2" ["Test1"] [],
+    decl_langi_ "The 3rd Test" ["Test1", "test2"] [],
+    decl_ext_ "my_external" false (tyarrow_ tyfloat_ tystr_),
+    decl_ext_ "my_external2" true (tyarrow_ tyint_ tystr_),
+    decl_lang_ "Foo" [
+      decl_syn_ "Bar" [
+        ("Apple", tyint_),
+        ("Pear", tyseq_ tyfloat_)
+      ],
+      decl_syn_prod_ext_ 
+        "Bar"
+        "AExtension"
+        (tyrecord_ [("a", tyint_)])
+        [{ident = nameNoSym "Apple", tyIdent = (tyrecord_ [("b", tybool_)])}],
+      decl_usem_ "getFruit" ["x"] [
+        (pcon_ "Apple" (pvar_ "i"), appf1_ (var_ "int2string") (var_ "i")),
+        (pcon_ "Pear" (pvar_ "fs"),
+         bindall_ [
+           ulet_ "strJoin" (unit_),
+           appf2_ (var_ "strJoin")
+                  (var_ "x")
+                  (appf2_ (var_ "map") (var_ "float2string") (var_ "fs"))
+         ])
+      ]
+    ],
+    decl_type_ "MyType" ["x"] tyunknown_,
+    decl_condef_ "MyCon" (tyall_ "x" (tyarrows_ [tyseq_ (tyvar_ "x"), tyapp_ (tycon_ "MyType") (tyvar_ "x")])),
+    decl_ureclets_ [
+      ("rec_foo", ulams_ ["x"] (appf1_ (var_ "printLn") (var_ "x"))),
+      ("rec_bar", ulams_ ["y"] (appf2_ (var_ "concat") (var_ "y") (var_ "y")))
+    ],
+    decl_ureclets_ [
+      ("rec_babar", ulams_ ["z"] (seq_ [var_ "z"]))
+    ],
+    decl_ureclets_ [],
+    decl_utest_ (appf1_ (var_ "rec_babar") (int_ 5)) (seq_ [int_ 5]),
+    decl_ulet_ "foo" (
+      ulams_ ["x", "y"] (bindall_ [
+        use_ "Foo",
+        concat_ (appf1_ (var_ "getFruit")
+                        (conapp_ "Apple" (var_ "x")))
+                (appf1_ (var_ "float2string") (var_ "y"))
+      ])
+    )
+  ],
+  expr = appf1_ (var_ "printLn")
+                (appf2_ (var_ "foo") (int_ 10) (float_ 0.5))
+} in
+
+print (mlang2str prog2); print "\n";
 
 ()
