@@ -213,7 +213,7 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint + MClosPr
     | CFloorfi _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "floorfi")
     | CCeilfi _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "ceilfi")
     | CInt2float _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "int2float")
-    | CFloat2string _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "id")
+    | CFloat2string _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "float2string")
     -- Character Operations
     -- Since characters are represented as i31, we simply re-use the integer ops
     | CEqc _ -> createArithOpClosure globalCtx exprCtx (nameNoSym "eqi")
@@ -875,19 +875,29 @@ lang WasmCompiler = MClosAst + WasmAST + WasmTypeCompiler + WasmPPrint + MClosPr
                     jsObjIdent="imports", 
                     jsFieldIdent="utestSuccess", 
                     wasmIdent=nameNoSym "utestSucc",
-                    paramTys=[]
+                    paramTys=[],
+                    resultTy = None()
                 },
                 {
                     jsObjIdent="imports",
                     jsFieldIdent="utestFailure",
                     wasmIdent=nameNoSym "utestFail",
-                    paramTys=[]
+                    paramTys=[],
+                    resultTy = None()
                 },
                 {
                     jsObjIdent="imports",
                     jsFieldIdent="callPrintJS",
                     wasmIdent=nameNoSym "callPrintJS",
-                    paramTys=[Tyi32 ()]
+                    paramTys=[Tyi32 ()],
+                    resultTy = None()
+                },
+                {
+                    jsObjIdent="imports",
+                    jsFieldIdent="floatToString",
+                    wasmIdent=nameNoSym "jsFloat2String",
+                    paramTys=[Tyf64 ()],
+                    resultTy = Some (Tyi32 ())
                 }
             ],
             memory = Memory {n = 1},

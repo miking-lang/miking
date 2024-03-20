@@ -26,6 +26,7 @@ lang WasmAST
         index: Instr,
         value: Instr
     }
+    | I32Load Instr
     | F64UnOp (FloatUnOp, Instr)
     | F64BinOp (FloatBinOp, Instr, Instr)
     | F64Const Float
@@ -181,7 +182,8 @@ lang WasmAST
             jsObjIdent: String,
             jsFieldIdent: String,
             wasmIdent: Name,
-            paramTys: [WasmType]
+            paramTys: [WasmType],
+            resultTy: Option WasmType
         }],
         exports: [WasmExport]
     }

@@ -250,6 +250,67 @@ let printWasm =
         ]
     }
 
+let float2stringWasm = 
+    use WasmAST in 
+    let f = nameSym "f" in 
+    let n = nameSym "n" in 
+    let i = nameSym "i" in
+    let loopIdent = nameSym "loopIdent" in 
+
+    let arr = nameSym "arr" in 
+    FunctionDef {
+        ident = nameNoSym "float2string",
+        args = [
+            {ident = f, ty = Anyref ()}
+        ],
+        locals = [
+            {ident = arr, ty = Ref anyrefArrName},
+            {ident = i, ty = Tyi32 ()},
+            {ident = n, ty = Tyi32 ()}
+        ],
+        resultTy = Anyref (),
+        instructions = [
+            LocalSet (
+                n,
+                Call (
+                    nameNoSym "jsFloat2String",
+                    [anyref2float (LocalGet f)]    
+                )
+            ),
+            LocalSet (
+                arr,
+                ArrayNew {
+                    tyIdent = anyrefArrName,
+                    initValue = RefNull "i31",
+                    size = LocalGet n
+                }    
+            ),
+            Loop {
+                ident = loopIdent,
+                body = [
+                    ArraySet {
+                        tyIdent = anyrefArrName,
+                        value = LocalGet arr,
+                        index = LocalGet i,
+                        value2 = I31Cast (I32Load (LocalGet i))
+                    },
+                    LocalSet (i, I32Add (LocalGet i, I32Const 1)),
+                    BrIf {
+                        ident = loopIdent,
+                        cond = I32LtS (LocalGet i, LocalGet n)
+                    }
+                ]
+            },
+            StructNew {
+                structIdent = leafName,
+                values = [
+                    LocalGet n,
+                    LocalGet arr
+                ]
+            }
+        ]
+    }
+
 
 let integerIntrinsics = [
     addiWasm,
@@ -316,5 +377,6 @@ let integerIntrinsics = [
     floorfiWasm,
     ceilfiWasm,
     roundfiWasm,
-    int2floatWasm
+    int2floatWasm,
+    float2stringWasm
 ]

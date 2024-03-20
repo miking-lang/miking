@@ -87,6 +87,10 @@ lang WasmPPrint = WasmAST
         let s1 = pprintInstr (addi indent 1) index in
         let s2 = pprintInstr (addi indent 1) value in 
         join [indent2str indent, "(i32.store\n", s1, "\n", s2, ")"]
+    | I32Load index -> 
+        let s1 = pprintInstr (addi indent 1) index in
+        join [indent2str indent, "(i32.load\n", s1, ")"]
+
     | I32Add (i1, i2) -> 
         let s1 = pprintInstr (addi indent 1) i1 in
         let s2 = pprintInstr (addi indent 1) i2 in 
@@ -301,6 +305,10 @@ lang WasmPPrint = WasmAST
                     let ty2str = map (lam t. join ["(param ", pprintWasmType t, ")"]) r.paramTys in
                     strJoin " " (ty2str)
             in 
+            let resultStr = match r.resultTy with Some ty 
+                then join ["(result ", pprintWasmType ty, ")"]
+                else ""
+            in
             join [
                 indent2str 1, 
                 "(import \"",
@@ -311,6 +319,7 @@ lang WasmPPrint = WasmAST
                 pprintName r.wasmIdent,
                 " ",
                 paramStr,
+                resultStr,
                 "))"
             ]
         in 

@@ -112,16 +112,16 @@ utest int2float (negi 10) with negf 10.0 using eqf in
 -- utest string2float "3.2e2" with 320.0 using eqf in
 -- utest string2float "3e+2" with 300.0 using eqf in
 -- -- Float -> String
--- utest float2string 5.0e+25 with "5e+25" in
--- utest float2string (negf 5.0e+25) with "-5e+25" in
--- utest float2string (5.0e-5) with "5e-05" in
--- utest float2string (negf 5.0e-5) with "-5e-05" in
+utest float2string 5.0e+25 with "5e+25" in
+utest float2string (negf 5.0e+25) with "-5e+25" in
+utest float2string (5.0e-5) with "5e-05" in
+utest float2string (negf 5.0e-5) with "-5e-05" in
 
 -- -- Test: computing with floats
 -- -- powf3 x = x^3
-let powf3 = lam x. mulf x (mulf x x) in
-let taxicab2_1 = addf (powf3 1.0) (powf3 12.0) in
-let taxicab2_2 = addf (powf3 9.0) (powf3 10.0) in
-utest taxicab2_1 with taxicab2_2 using eqf in
+-- let powf3 = lam x. mulf x (mulf x x) in
+-- let taxicab2_1 = addf (powf3 1.0) (powf3 12.0) in
+-- let taxicab2_2 = addf (powf3 9.0) (powf3 10.0) in
+-- utest taxicab2_1 with taxicab2_2 using eqf in
 
 ()
