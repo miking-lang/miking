@@ -124,6 +124,16 @@ let mapUpdate : all k. all v. k -> (Option v -> Option v) -> Map k v -> Map k v
     end
 
 
+-- ┌───────────┐
+-- │ Singleton │
+-- └───────────┘
+
+-- `mapSingleton cmp k v` creates a singleton map with key-value `k, v` and
+-- comparision function `cmp`.
+let mapSingleton : all k. all v. (k -> k -> Int) -> k -> v -> Map k v
+  = lam cmp. lam k. lam v. mapInsert k v (mapEmpty cmp)
+
+
 -- ┌────────┐
 -- │ Choose │
 -- └────────┘
@@ -513,5 +523,9 @@ utest mapFindLower 1. m with Some (1., 1) in
 utest mapFindLower 0.5 m with Some (0., 0) in
 utest mapFindLower 0. m with Some (0., 0) in
 utest mapFindLower -1. m with None () in
+
+let m = mapSingleton subi 1 1 in
+utest mapSize m with 1 in
+utest mapLookup 1 m with Some 1 in
 
 ()
