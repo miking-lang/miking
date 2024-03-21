@@ -247,6 +247,18 @@ let mapFilterWithKey : all k. all v. (k -> v -> Bool) -> Map k v -> Map k v
 let mapFilter : all k. all v. (v -> Bool) -> Map k v -> Map k v
   = lam p. mapFilterWithKey (lam. p)
 
+-- `mapFindUpper k m` returns the value in the map `m` associated with k',
+-- where k' is the minimum key in `m` and k≤k'. Returns `None ()` if no such key
+-- k' exists in `m`.
+let mapFindUpper : all k. all v. k -> Map k v -> Option (k, v)
+  = lam k. lam m. use AVLTreeImpl in avlFindUpper m.cmp k m.root
+
+-- `mapFindLower k m` returns the value in the map `m` associated with k',
+-- where k' is the maximum key in `m` and k≥k'. Returns `None ()` if no such key
+-- k' exists in `m`.
+let mapFindLower : all k. all v. k -> Map k v -> Option (k, v)
+  = lam k. lam m. use AVLTreeImpl in avlFindLower m.cmp k m.root
+
 mexpr
 
 let m = mapEmpty subi in
@@ -402,5 +414,29 @@ utest
   mapBindings (mapFilter (lam v. or (eqString v "1") (eqString v "3")) m)
   with [(1, "1"), (3, "3")]
 in
+
+let cmp = lam a. lam b. if ltf a b then -1 else if gtf a b then 1 else 0 in
+let m = mapFromSeq cmp [(0., 0), (1., 1), (2., 2), (3., 3), (4., 4)] in
+utest mapFindUpper 4.5 m with None () in
+utest mapFindUpper 4. m with Some (4., 4) in
+utest mapFindUpper 3.5 m with Some (4., 4) in
+utest mapFindUpper 3. m with Some (3., 3) in
+utest mapFindUpper 2.5 m with Some (3., 3) in
+utest mapFindUpper 2. m with Some (2., 2) in
+utest mapFindUpper 1.5 m with Some (2., 2) in
+utest mapFindUpper 1. m with Some (1., 1) in
+utest mapFindUpper 0.5 m with Some (1., 1) in
+utest mapFindUpper 0. m with Some (0., 0) in
+utest mapFindLower 4.5 m with Some (4., 4) in
+utest mapFindLower 4. m with Some (4., 4) in
+utest mapFindLower 3.5 m with Some (3., 3) in
+utest mapFindLower 3. m with Some (3., 3) in
+utest mapFindLower 2.5 m with Some (2., 2) in
+utest mapFindLower 2. m with Some (2., 2) in
+utest mapFindLower 1.5 m with Some (1., 1) in
+utest mapFindLower 1. m with Some (1., 1) in
+utest mapFindLower 0.5 m with Some (0., 0) in
+utest mapFindLower 0. m with Some (0., 0) in
+utest mapFindLower -1. m with None () in
 
 ()
