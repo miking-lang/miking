@@ -106,6 +106,22 @@ lang MLangSym = MLangAst + MExprSym
         let isTypeDecl = lam d. match d with DeclType _ then true else false in 
         let typeDecls = filter isTypeDecl t.decls in 
 
+        let symbIncludes = lam langEnvs : [LangEnv]. lam n : Name. 
+            match mapLookup (nameGetStr n) env.langEnv with Some langEnv then 
+                ((cons langEnv langEnvs), langEnv.ident)
+            else 
+                symLookupError 
+                    {kind = "language", info = [t.info], allowFree = false}
+                    t.ident
+        in
+        match mapAccumL symbIncludes [] t.includes with (includedLangEnvs, includes) in 
+
+        let findSemIncludes : Name -> [Name] = lam n. 
+            let varEnvs = map (lam langEnv. langEnv.extensibleNames.varEnv) includedLangEnvs in 
+            mapOption (mapLookup (nameGetStr n)) varEnvs
+        in
+        -- let includedLangEnvs : [LangEnv] = 
+
         -- 1. Symbolize ident and params of SynDecls
         let symSynIdentParams = lam langEnv : LangEnv. lam synDecl.
             let env = {env with currentEnv = mergeNameEnv env.currentEnv langEnv.allNames} in 
@@ -186,10 +202,17 @@ lang MLangSym = MLangAst + MExprSym
             let tyAnnot = symbolizeType env s.tyAnnot in 
             let tyBody = symbolizeType env s.tyBody in 
 
+            let includes : [Name] = findSemIncludes ident in
+
             let s = {s with ident = ident,
                             tyAnnot = tyAnnot,
                             tyBody = tyBody} in 
             
+            -- let s = {s with ident = ident,
+            --                 tyAnnot = tyAnnot,
+            --                 tyBody = tyBody,
+            --                 includes = includes} in 
+
             (langEnv, DeclSem s)
         in 
         match mapAccumL symbSem langEnv semDecls with (langEnv, semDecls) in 
