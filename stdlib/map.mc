@@ -82,13 +82,13 @@ let mapLookupOr : all k. all v. v -> k -> Map k v -> v =
   lam dv. lam k. lam m.
   mapLookupOrElse (lam. dv) k m
 
--- `mapFindUpper k m` returns the value-value pair (k', v) in the map `m`,
+-- `mapFindUpper k m` returns the key-value pair (k', v) in the map `m`,
 -- where k' is the minimum key in `m` and k≤k'. Returns `None ()` if no such key
 -- k' exists in `m`. Time complexity is O(log n).
 let mapFindUpper : all k. all v. k -> Map k v -> Option (k, v)
   = lam k. lam m. use AVLTreeImpl in avlFindUpper m.cmp k m.root
 
--- `mapFindLower k m` returns the value-value pair (k', v) in the map `m`,
+-- `mapFindLower k m` returns the key-value pair (k', v) in the map `m`,
 -- where k' is the maximum key in `m` and k≥k'. Returns `None ()` if no such key
 -- k' exists in `m`. Time complexity is O(log n).
 let mapFindLower : all k. all v. k -> Map k v -> Option (k, v)
