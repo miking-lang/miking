@@ -13,19 +13,39 @@ include "string.mc"
 -- AVL tree implementation.
 type Map k v = use AVLTreeImpl in {cmp : k -> k -> Int, root : AVL k v}
 
+
+-- ┌────────────┐
+-- │ Empty/Size │
+-- └────────────┘
+
 let mapEmpty : all k. all v. (k -> k -> Int) -> Map k v = lam cmp.
   use AVLTreeImpl in
   {cmp = cmp, root = avlEmpty ()}
 
-let mapInsert : all k. all v. k -> v -> Map k v -> Map k v =
-  lam k. lam v. lam m.
+let mapSize : all k. all v. Map k v -> Int = lam m.
   use AVLTreeImpl in
-  {m with root = avlInsert m.cmp k v m.root}
+  avlSize m.root
+
+let mapLength : all k. all v. Map k v -> Int = lam m. mapSize m
+
+let mapIsEmpty : all k. all v. Map k v -> Bool = lam m.
+  use AVLTreeImpl in
+  avlIsEmpty m.root
+
+
+-- ┌────────┐
+-- │ Remove │
+-- └────────┘
 
 let mapRemove : all k. all v. k -> Map k v -> Map k v =
   lam k. lam m.
   use AVLTreeImpl in
   {m with root = avlRemove m.cmp k m.root}
+
+
+-- ┌─────────────┐
+-- │ Find/Lookup │
+-- └─────────────┘
 
 let mapFindExn : all k. all v. k -> Map k v -> v =
   lam k. lam m.
@@ -45,9 +65,74 @@ let mapFindApplyOrElse : all k. all v1. all v2.
   use AVLTreeImpl in
   optionMapOrElse fnEls fnThn (avlLookup m.cmp k m.root)
 
-let mapBindings : all k. all v. Map k v -> [(k, v)] = lam m.
+let mapLookup : all k. all v. k -> Map k v -> Option v =
+  lam k. lam m.
   use AVLTreeImpl in
-  avlToSeq [] m.root
+  avlLookup m.cmp k m.root
+
+let mapLookupOrElse : all k. all v. (() -> v) -> k -> Map k v -> v =
+  lam f. lam k. lam m.
+  mapFindOrElse f k m
+let mapLookupApplyOrElse : all k. all v1. all v2.
+  (v1 -> v2) -> (() -> v2) -> k -> Map k v1 -> v2 =
+  lam f1. lam f2. lam k. lam m.
+  mapFindApplyOrElse f1 f2 k m
+
+let mapLookupOr : all k. all v. v -> k -> Map k v -> v =
+  lam dv. lam k. lam m.
+  mapLookupOrElse (lam. dv) k m
+
+-- `mapFindUpper k m` returns the value-value pair (k', v) in the map `m`,
+-- where k' is the minimum key in `m` and k≤k'. Returns `None ()` if no such key
+-- k' exists in `m`.
+let mapFindUpper : all k. all v. k -> Map k v -> Option (k, v)
+  = lam k. lam m. use AVLTreeImpl in avlFindUpper m.cmp k m.root
+
+-- `mapFindLower k m` returns the value-value pair (k', v) in the map `m`,
+-- where k' is the maximum key in `m` and k≥k'. Returns `None ()` if no such key
+-- k' exists in `m`.
+let mapFindLower : all k. all v. k -> Map k v -> Option (k, v)
+  = lam k. lam m. use AVLTreeImpl in avlFindLower m.cmp k m.root
+
+
+-- ┌───────────────┐
+-- │ Insert/Update │
+-- └───────────────┘
+
+let mapInsert : all k. all v. k -> v -> Map k v -> Map k v =
+  lam k. lam v. lam m.
+  use AVLTreeImpl in
+  {m with root = avlInsert m.cmp k v m.root}
+
+let mapInsertWith : all k. all v. (v -> v -> v) -> k -> v -> Map k v -> Map k v =
+  lam f. lam k. lam v. lam m.
+    match mapLookup k m with Some prev then
+      mapInsert k (f prev v) m
+    else mapInsert k v m
+
+-- `mapUpdate k f m` looks up `k` in `m` and applies `f` to the result of this
+-- lookup. If the result of this application is `Some v`, the binding `k` in `m`
+-- is updated to bind to `v`. Otherwise, if the result is `None _`, the binding
+-- `k` is removed from `m`.
+-- OPT(oerikss, 2023-04-27): We might be able to reduce this to one map access
+-- if we operate directly on the AVLTree.
+let mapUpdate : all k. all v. k -> (Option v -> Option v) -> Map k v -> Map k v
+  = lam k. lam f. lam m.
+    switch f (mapLookup k m)
+    case Some v then mapInsert k v m
+    case None _ then mapRemove k m
+    end
+
+
+-- ┌────────┐
+-- │ Choose │
+-- └────────┘
+
+-- `mapChoose m` chooses one binding from `m`, giving `None ()` if `m` is
+-- empty.
+let mapChoose : all k. all v. Map k v -> Option (k, v) = lam m.
+  use AVLTreeImpl in
+  avlChoose m.root
 
 let mapChooseExn : all k. all v. Map k v -> (k, v) = lam m.
   use AVLTreeImpl in
@@ -58,35 +143,19 @@ let mapChooseOrElse : all k. all v. (() -> (k, v)) -> Map k v -> (k, v) =
   use AVLTreeImpl in
   optionGetOrElse f (avlChoose m.root)
 
-let mapSize : all k. all v. Map k v -> Int = lam m.
-  use AVLTreeImpl in
-  avlSize m.root
+
+-- ┌────────┐
+-- │ Member │
+-- └────────┘
 
 let mapMem : all k. all v. k -> Map k v -> Bool = lam k. lam m.
   use AVLTreeImpl in
   optionIsSome (avlLookup m.cmp k m.root)
 
-let mapAny : all k. all v. (k -> v -> Bool) -> Map k v -> Bool =
-  lam f. lam m.
-  use AVLTreeImpl in
-  let anyFn = lam acc. lam k. lam v.
-    if acc then acc else f k v
-  in
-  avlFold anyFn false m.root
 
-let mapMapWithKey : all k. all v1. all v2. (k -> v1 -> v2) -> Map k v1 -> Map k v2 =
-  lam f. lam m.
-  use AVLTreeImpl in
-  {cmp = m.cmp, root = avlMap f m.root}
-
-let mapMap : all k. all v1. all v2. (v1 -> v2) -> Map k v1 -> Map k v2 =
-  lam f. lam m.
-  mapMapWithKey (lam. lam v. f v) m
-
-let mapFoldWithKey : all k. all v. all a. (a -> k -> v -> a) -> a -> Map k v -> a =
-  lam f. lam acc. lam m.
-  use AVLTreeImpl in
-  avlFold f acc m.root
+-- ┌────────┐
+-- │ Eq/Cmp │
+-- └────────┘
 
 let mapEq : all k. all v. (v -> v -> Bool) -> Map k v -> Map k v -> Bool =
   lam eqv. lam m1. lam m2.
@@ -100,81 +169,41 @@ let mapCmp : all k. all v. (v -> v -> Int) -> Map k v -> Map k v -> Int =
 
 let mapGetCmpFun : all k. all v. Map k v -> (k -> k -> Int) = lam m. m.cmp
 
--- Aliases
-let mapLength : all k. all v. Map k v -> Int = lam m. mapSize m
-let mapLookupOrElse : all k. all v. (() -> v) -> k -> Map k v -> v =
-  lam f. lam k. lam m.
-  mapFindOrElse f k m
-let mapLookupApplyOrElse : all k. all v1. all v2.
-  (v1 -> v2) -> (() -> v2) -> k -> Map k v1 -> v2 =
-  lam f1. lam f2. lam k. lam m.
-  mapFindApplyOrElse f1 f2 k m
 
-let mapLookupOr : all k. all v. v -> k -> Map k v -> v =
-  lam dv. lam k. lam m.
-  mapLookupOrElse (lam. dv) k m
+-- ┌──────────────────┐
+-- │ To/From Sequence │
+-- └──────────────────┘
 
-let mapIsEmpty : all k. all v. Map k v -> Bool = lam m.
+let mapBindings : all k. all v. Map k v -> [(k, v)] = lam m.
   use AVLTreeImpl in
-  avlIsEmpty m.root
+  avlToSeq [] m.root
 
-let mapLookup : all k. all v. k -> Map k v -> Option v =
-  lam k. lam m.
-  use AVLTreeImpl in
-  avlLookup m.cmp k m.root
-
-let mapInsertWith : all k. all v. (v -> v -> v) -> k -> v -> Map k v -> Map k v =
-  lam f. lam k. lam v. lam m.
-    match mapLookup k m with Some prev then
-      mapInsert k (f prev v) m
-    else mapInsert k v m
-
-let mapMerge : all k. all a. all b. all c.
-  (Option a -> Option b -> Option c) -> Map k a -> Map k b -> Map k c =
-  lam f. lam l. lam r.
-  use AVLTreeImpl in
-  {cmp = l.cmp, root = avlMerge l.cmp f l.root r.root}
-
-let mapUnion : all k. all v. Map k v -> Map k v -> Map k v = lam l. lam r.
-  use AVLTreeImpl in
-  {l with root = avlUnionWith l.cmp (lam. lam rv. rv) l.root r.root}
-
-let mapUnionWith : all k. all v. (v -> v -> v) -> Map k v -> Map k v -> Map k v = lam f. lam l. lam r.
-  use AVLTreeImpl in
-  {l with root = avlUnionWith l.cmp f l.root r.root}
-
-let mapIntersectWith : all k. all a. all b. all c. (a -> b -> c) -> Map k a -> Map k b -> Map k c =
-  lam f. lam l. lam r.
-  use AVLTreeImpl in
-  {cmp = l.cmp, root = avlIntersectWith l.cmp f l.root r.root}
-
-let mapDifference : all k. all v. all v2. Map k v -> Map k v2 -> Map k v =
-  lam l. lam r.
-  use AVLTreeImpl in
-  {l with root = avlDifference l.cmp l.root r.root}
+let mapToSeq : all k. all v. Map k v -> [(k,v)] = lam m.
+  mapBindings m
 
 let mapFromSeq : all k. all v. (k -> k -> Int) -> [(k, v)] -> Map k v =
   lam cmp. lam bindings.
   use AVLTreeImpl in
   {cmp = cmp, root = avlFromSeq cmp bindings}
 
-let mapKeys : all k. all v. Map k v -> [k] = lam m.
-  mapFoldWithKey (lam ks. lam k. lam. snoc ks k) [] m
 
-let mapValues : all k. all v. Map k v -> [v] = lam m.
-  mapFoldWithKey (lam vs. lam. lam v. snoc vs v) [] m
+-- ┌──────────┐
+-- │ Fold/Map │
+-- └──────────┘
 
-let mapToSeq : all k. all v. Map k v -> [(k,v)] = lam m.
-  mapBindings m
-
-let mapMapAccum : all k. all v1. all v2. all acc.
-  (acc -> k -> v1 -> (acc, v2)) -> acc -> Map k v1 -> (acc, Map k v2) =
+let mapFoldWithKey : all k. all v. all a. (a -> k -> v -> a) -> a -> Map k v -> a =
   lam f. lam acc. lam m.
-    mapFoldWithKey
-      (lam tacc : (acc, Map k v2). lam k. lam v1.
-         let fval : (acc, v2) = f tacc.0 k v1 in
-         match fval with (acc, v2) then (acc, mapInsert k v2 tacc.1) else never)
-      (acc, mapEmpty (mapGetCmpFun m)) m
+  use AVLTreeImpl in
+  avlFold f acc m.root
+
+let mapMapWithKey : all k. all v1. all v2. (k -> v1 -> v2) -> Map k v1 -> Map k v2 =
+  lam f. lam m.
+  use AVLTreeImpl in
+  {cmp = m.cmp, root = avlMap f m.root}
+
+let mapMap : all k. all v1. all v2. (v1 -> v2) -> Map k v1 -> Map k v2 =
+  lam f. lam m.
+  mapMapWithKey (lam. lam v. f v) m
 
 let mapFoldlOption : all k. all v. all acc.
   (acc -> k -> v -> Option acc) -> acc -> Map k v -> Option acc =
@@ -185,14 +214,14 @@ let mapAllWithKey : all k. all v. (k -> v -> Bool) -> Map k v -> Bool =
   lam f. lam m.
   mapFoldWithKey (lam acc. lam k. lam v. and acc (f k v)) true m
 
-let mapAll : all k. all v. (v -> Bool) -> Map k v -> Bool = lam f. lam m.
-  mapFoldWithKey (lam acc. lam. lam v. and acc (f v)) true m
-
--- `mapChoose m` chooses one binding from `m`, giving `None ()` if `m` is
--- empty.
-let mapChoose : all k. all v. Map k v -> Option (k, v) = lam m.
-  use AVLTreeImpl in
-  avlChoose m.root
+let mapMapAccum : all k. all v1. all v2. all acc.
+  (acc -> k -> v1 -> (acc, v2)) -> acc -> Map k v1 -> (acc, Map k v2) =
+  lam f. lam acc. lam m.
+    mapFoldWithKey
+      (lam tacc : (acc, Map k v2). lam k. lam v1.
+         let fval : (acc, v2) = f tacc.0 k v1 in
+         match fval with (acc, v2) then (acc, mapInsert k v2 tacc.1) else never)
+      (acc, mapEmpty (mapGetCmpFun m)) m
 
 -- `mapMapWithKeyK f m k` maps the continuation passing function `f` over the
 -- values of `m`, passing the result of the mapping to the continuation `k`.
@@ -212,18 +241,26 @@ let mapMapK
     (v1 -> (v2 -> a) -> a) -> Map k v1 -> (Map k v2 -> a) -> a
   = lam f. mapMapWithKeyK (lam. f)
 
--- `mapUpdate k f m` looks up `k` in `m` and applies `f` to the result of this
--- lookup. If the result of this application is `Some v`, the binding `k` in `m`
--- is updated to bind to `v`. Otherwise, if the result is `None _`, the binding
--- `k` is removed from `m`.
--- OPT(oerikss, 2023-04-27): We might be able to reduce this to one map access
--- if we operate directly on the AVLTree.
-let mapUpdate : all k. all v. k -> (Option v -> Option v) -> Map k v -> Map k v
-  = lam k. lam f. lam m.
-    switch f (mapLookup k m)
-    case Some v then mapInsert k v m
-    case None _ then mapRemove k m
-    end
+
+-- ┌─────────┐
+-- │ Any/All │
+-- └─────────┘
+
+let mapAny : all k. all v. (k -> v -> Bool) -> Map k v -> Bool =
+  lam f. lam m.
+  use AVLTreeImpl in
+  let anyFn = lam acc. lam k. lam v.
+    if acc then acc else f k v
+  in
+  avlFold anyFn false m.root
+
+let mapAll : all k. all v. (v -> Bool) -> Map k v -> Bool = lam f. lam m.
+  mapFoldWithKey (lam acc. lam. lam v. and acc (f v)) true m
+
+
+-- ┌─────────┐
+-- │ Min/Max │
+-- └─────────┘
 
 -- `mapGetMin m` returns the smallest key-value pair of `m`, or None ()
 -- if the map is empty.
@@ -234,6 +271,56 @@ let mapGetMin : all k. all v. Map k v -> Option (k, v) =
       use AVLTreeImpl in
       match avlSplitFirst m.root with (k, v, _) in
       Some (k, v)
+
+
+-- ┌─────────────┐
+-- │ Keys/Values │
+-- └─────────────┘
+
+let mapKeys : all k. all v. Map k v -> [k] = lam m.
+  mapFoldWithKey (lam ks. lam k. lam. snoc ks k) [] m
+
+let mapValues : all k. all v. Map k v -> [v] = lam m.
+  mapFoldWithKey (lam vs. lam. lam v. snoc vs v) [] m
+
+
+-- ┌─────────────┐
+-- │ Merge/Union │
+-- └─────────────┘
+
+let mapMerge : all k. all a. all b. all c.
+  (Option a -> Option b -> Option c) -> Map k a -> Map k b -> Map k c =
+  lam f. lam l. lam r.
+  use AVLTreeImpl in
+  {cmp = l.cmp, root = avlMerge l.cmp f l.root r.root}
+
+let mapUnion : all k. all v. Map k v -> Map k v -> Map k v = lam l. lam r.
+  use AVLTreeImpl in
+  {l with root = avlUnionWith l.cmp (lam. lam rv. rv) l.root r.root}
+
+let mapUnionWith : all k. all v. (v -> v -> v) -> Map k v -> Map k v -> Map k v = lam f. lam l. lam r.
+  use AVLTreeImpl in
+  {l with root = avlUnionWith l.cmp f l.root r.root}
+
+
+-- ┌──────────────────────┐
+-- │ Intersect/Difference │
+-- └──────────────────────┘
+
+let mapIntersectWith : all k. all a. all b. all c. (a -> b -> c) -> Map k a -> Map k b -> Map k c =
+  lam f. lam l. lam r.
+  use AVLTreeImpl in
+  {cmp = l.cmp, root = avlIntersectWith l.cmp f l.root r.root}
+
+let mapDifference : all k. all v. all v2. Map k v -> Map k v2 -> Map k v =
+  lam l. lam r.
+  use AVLTreeImpl in
+  {l with root = avlDifference l.cmp l.root r.root}
+
+
+-- ┌────────┐
+-- │ Filter │
+-- └────────┘
 
 -- `mapFilterWithKey p m` filters the map `m` with the predicate `p`.
 let mapFilterWithKey : all k. all v. (k -> v -> Bool) -> Map k v -> Map k v
@@ -246,18 +333,6 @@ let mapFilterWithKey : all k. all v. (k -> v -> Bool) -> Map k v -> Map k v
 -- `mapFilter p m` filters the map `m` with the predicate `p`.
 let mapFilter : all k. all v. (v -> Bool) -> Map k v -> Map k v
   = lam p. mapFilterWithKey (lam. p)
-
--- `mapFindUpper k m` returns the value in the map `m` associated with k',
--- where k' is the minimum key in `m` and k≤k'. Returns `None ()` if no such key
--- k' exists in `m`.
-let mapFindUpper : all k. all v. k -> Map k v -> Option (k, v)
-  = lam k. lam m. use AVLTreeImpl in avlFindUpper m.cmp k m.root
-
--- `mapFindLower k m` returns the value in the map `m` associated with k',
--- where k' is the maximum key in `m` and k≥k'. Returns `None ()` if no such key
--- k' exists in `m`.
-let mapFindLower : all k. all v. k -> Map k v -> Option (k, v)
-  = lam k. lam m. use AVLTreeImpl in avlFindLower m.cmp k m.root
 
 mexpr
 
