@@ -78,11 +78,11 @@ lang MExprCudaCompile =
   CudaLanguageFragmentFix
 end
 
-let keywordsSymEnv =
-  {symEnvDefault with varEnv =
-    mapFromSeq
-      cmpString
-      (map (lam s. (s, nameSym s)) mexprExtendedKeywords)}
+let keywordsSymEnv : SymEnv =
+  let newVarEnv = mapFromSeq cmpString 
+    (map (lam s. (s, nameSym s)) mexprExtendedKeywords) in 
+
+  updateVarEnv symEnvDefault newVarEnv
 
 let pprintOCamlTops = use OCamlPrettyPrint in
   lam tops : [Top].
