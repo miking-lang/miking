@@ -1885,6 +1885,14 @@ con RTOr : all a. all b. all constraint. all var. all val. all relevant. all ide
   RTOrRec a b constraint var val relevant ident
   -> RepTree relevant constraint var val ident b
 
+type RepTreeSolution ident
+con RTSNode : all ident.
+  { ident : Option ident
+  , orIdx : Option Int
+  , children : [RepTreeSolution ident]
+  , cost : Float
+  } -> RepTreeSolution ident
+
 let rtGetRelevantAbove : all a. all constraint. all var. all val. all relevant. all ident.
   RepTree relevant constraint var val ident a
   -> relevant
@@ -1893,6 +1901,14 @@ let rtGetRelevantAbove : all a. all constraint. all var. all val. all relevant. 
     case RTOr x then x.relevantAbove
     case RTSingle x then x.relevantAbove
     end
+let rtGetIdent : all a. all constraint. all var. all val. all relevant. all ident.
+  RepTree relevant constraint var val ident a
+  -> Option ident
+  = lam tree. switch tree
+    case RTAnd x then x.ident
+    case RTOr x then x.ident
+    case RTSingle x then x.ident
+    end
 let rtGetApprox : all a. all constraint. all var. all val. all relevant. all ident.
   RepTree relevant constraint var val ident a
   -> PureUnionFind var (Set val)
@@ -1900,6 +1916,14 @@ let rtGetApprox : all a. all constraint. all var. all val. all relevant. all ide
     case RTAnd x then x.approx
     case RTOr x then x.approx
     case RTSingle x then x.approx
+    end
+let rtGetConstraint : all a. all constraint. all var. all val. all relevant. all ident.
+  RepTree relevant constraint var val ident a
+  -> constraint
+  = lam tree. switch tree
+    case RTAnd x then x.constraint
+    case RTOr x then x.constraint
+    case RTSingle x then x.constraint
     end
 let rtSetApprox : all a. all constraint. all var. all val. all relevant. all ident.
   PureUnionFind var (Set val)
@@ -1950,6 +1974,10 @@ let rtMap : all a. all constraint. all var. all val. all relevant. all b. all id
       , history = x.history
       }
     end
+let rtAsSingle : all a. all constraint. all var. all val. all relevant. all ident.
+  RepTree relevant constraint var val ident a
+  -> Option (RTSingleRec a constraint var val relevant ident)
+  = lam tree. match tree with RTSingle x then Some x else None ()
 let rtAsSingle : all a. all constraint. all var. all val. all relevant. all ident.
   RepTree relevant constraint var val ident a
   -> Option (RTSingleRec a constraint var val relevant ident)
@@ -2054,6 +2082,26 @@ type RTDebugInterface env relevant constraint var val ident =
   , valJson : env -> val -> (env, JsonValue)
   , identJson : env -> ident -> (env, JsonValue)
   }
+
+let _rtApproxJson : all a. all constraint. all var. all val. all relevant. all env. all ident.
+  RTDebugInterface env relevant constraint var val ident
+  -> env
+  -> PureUnionFind var (Set val)
+  -> (env, JsonValue)
+  = lam fs. lam env. lam approx.
+    let res = pufFoldRaw
+      (lam acc. lam lIn. lam rIn.
+        match fs.varJson acc.env lIn.0 with (env, l) in
+        match fs.varJson env rIn.0 with (env, r) in
+        {env = env, parts = snoc acc.parts (JsonArray [JsonString "eq", JsonArray [l, JsonInt lIn.1], JsonArray [r, JsonInt rIn.1]])})
+      (lam acc. lam lIn. lam out.
+        match fs.varJson acc.env lIn.0 with (env, l) in
+        match mapAccumL fs.valJson env (setToSeq out) with (env, outs) in
+        {env = env, parts = snoc acc.parts (JsonArray [JsonString "out", JsonArray [l, JsonInt lIn.1], JsonArray outs])})
+      {env = env, parts = []}
+      approx in
+    (res.env, JsonArray res.parts)
+
 let rtDebugJson : all a. all constraint. all var. all val. all relevant. all env. all ident.
   RTDebugInterface env relevant constraint var val ident
   -> env
@@ -2094,18 +2142,8 @@ let rtDebugJson : all a. all constraint. all var. all val. all relevant. all env
           (None ())
           approx in
         mapAccumL fs.valJson env (optionMapOr [] setToSeq mSet) in
-      let approx = pufFoldRaw
-        (lam acc. lam lIn. lam rIn.
-          match fs.varJson acc.env lIn.0 with (env, l) in
-          match fs.varJson env rIn.0 with (env, r) in
-          {env = env, parts = snoc acc.parts (JsonArray [JsonString "eq", JsonArray [l, JsonInt lIn.1], JsonArray [r, JsonInt rIn.1]])})
-        (lam acc. lam lIn. lam out.
-          match fs.varJson acc.env lIn.0 with (env, l) in
-          match mapAccumL fs.valJson env (setToSeq out) with (env, outs) in
-          {env = env, parts = snoc acc.parts (JsonArray [JsonString "out", JsonArray [l, JsonInt lIn.1], JsonArray outs])})
-        {env = reprs.0, parts = []}
-        approx in
-      match fs.constraintJson approx.env constraint with (env, constraint) in
+      match _rtApproxJson fs reprs.0 approx with (env, approx) in
+      match fs.constraintJson env constraint with (env, constraint) in
       match fs.relevantJson env relevantHere with (env, relevantHere) in
       match fs.relevantJson env relevantAbove with (env, relevantAbove) in
       match optionMapAccum fs.identJson env ident with (env, ident) in
@@ -2113,7 +2151,7 @@ let rtDebugJson : all a. all constraint. all var. all val. all relevant. all env
         [ ("constraint", constraint)
         , ("relevantHere", relevantHere)
         , ("relevantAbove", relevantAbove)
-        , ("approx", JsonArray approx.parts)
+        , ("approx", approx)
         , ("approx reprs", JsonArray reprs.1)
         , ("cost", JsonFloat cost)
         , ("ident", optionGetOr (JsonNull ()) ident)
@@ -2193,14 +2231,22 @@ let rtConstrainShallow : all a. all constraint. all var. all val. all relevant.
       else None ()
     else None ()
 
+let rtAndCost_ : all a. all b. all constraint. all var. all val. all relevant. all ident. all x.
+  (x -> Float)
+  -> RTAndRec a b constraint var val relevant ident
+  -> [x]
+  -> Float
+  = lam getChildCost. lam and. lam children.
+    let below = zipWith (lam pre. lam post. mulf pre.scale (getChildCost post)) and.children children in
+    let cost = foldl addf and.selfCost below in
+    cost
+
 let rtAndCost : all a. all b. all constraint. all var. all val. all relevant. all ident.
   RTAndRec a b constraint var val relevant ident
   -> [RTSingleRec a constraint var val relevant ident]
   -> Float
   = lam and. lam children.
-    let below = zipWith (lam pre. lam post. mulf pre.scale post.cost) and.children children in
-    let cost = foldl addf and.selfCost below in
-    cost
+    rtAndCost_ (lam c. c.cost) and children
 
 let rtConstructAnd : all env. all a. all b. all constraint. all var. all val. all relevant. all ident.
   { constraintAnd : constraint -> constraint -> Option constraint
@@ -3569,6 +3615,217 @@ let rtPruneRedundant : all a. all constraint. all var. all val. all relevant. al
       then work pruned rest
       else error "Compiler error: empty list to pruneRedundant in rtPropagate"
 
+let rtRecordSolution : all a. all constraint. all var. all val. all relevant. all ident.
+  RepTree relevant constraint var val ident a
+  -> RepTree relevant constraint var val ident (RepTreeSolution ident, a)
+  = lam tree.
+    type Never in
+    type Single a = RTSingleRec a constraint var val relevant ident in
+    type Tree a = RepTree relevant constraint var val ident a in
+    type RTS = RepTreeSolution ident in
+    let handleSingle : all a. Option Int -> Single a -> Single (RTS, a) = lam idx. lam x.
+      let sol = RTSNode
+        { ident = x.ident
+        , orIdx = idx
+        , children = []
+        , cost = x.cost
+        } in
+      { value = (sol, x.value)
+      , cost = x.cost
+      , relevantHere = x.relevantHere
+      , relevantAbove = x.relevantAbove
+      , constraint = x.constraint
+      , approx = x.approx
+      , ident = x.ident
+      , history = x.history
+      } in
+    recursive let work : all a. Option Int -> Tree a -> Tree (RTS, a) = lam idx. lam tree. switch tree
+      case RTSingle x then RTSingle (handleSingle idx x)
+      case RTOr x then
+        let x : RTOrRec Never a constraint var val relevant ident = x in
+        let singles = mapi (lam i. lam x. handleSingle (Some i) x) x.singles in
+        let others =
+          let nSingles = length singles in
+          mapi (lam i. lam tree. work (Some (addi i nSingles)) tree) x.others in
+        let res = RTOr
+          { singles = singles
+          , others = others
+          , selfCost = x.selfCost
+          , construct = lam c. lam o.
+            (o.0, x.construct c o.1)
+          , constraint = x.constraint
+          , relevantHere = x.relevantHere
+          , relevantAbove = x.relevantAbove
+          , approx = x.approx
+          , ident = x.ident
+          , history = x.history
+          } in
+        res
+      case RTAnd x then
+        let x : RTAndRec Never a constraint var val relevant ident = x in
+        let children = map
+          (lam child. {scale = child.scale, val = work (None ()) child.val})
+          x.children in
+        let res = RTAnd
+          { children = children
+          , selfCost = x.selfCost
+          , dep = x.dep
+          , construct = lam constraint. lam xs.
+            match unzip xs with (sols, xs) in
+            let res = x.construct constraint xs in
+            let sol = RTSNode
+              { ident = x.ident
+              , orIdx = idx
+              , children = sols
+              , cost = rtAndCost_ (lam x. match x with RTSNode x in x.cost) x sols
+              } in
+            (sol, res)
+          , constraint = x.constraint
+          , relevantHere = x.relevantHere
+          , relevantAbove = x.relevantAbove
+          , approx = x.approx
+          , ident = x.ident
+          , history = x.history
+          } in
+        res
+      end
+    in work (None ()) tree
+
+type RTSFilterApproxInterface ident =
+  { cmpIdent : ident -> ident -> Int
+  }
+
+let rtsFilterApprox : all env. all relevant. all constraint. all var. all val. all a. all ident.
+  RTSFilterApproxInterface ident
+  -> RepTreeSolution ident
+  -> RepTree relevant constraint var val ident a
+  -> RepTree relevant constraint var val ident a
+  = lam fs. lam rts. lam tree.
+    type Never in
+    type Tree a = RepTree relevant constraint var val ident a in
+    type And a = RTAndRec Never a constraint var val relevant ident in
+    type Or a = RTOrRec Never a constraint var val relevant ident in
+    type RTS = RepTreeSolution ident in
+    type RMap in
+    type REntry = {pat : Option ident, cont : RMap} in
+    con RMap : Map Symbol REntry -> RMap in
+    let unRMap : RMap -> Map Symbol REntry = lam x. match x with RMap x in x in
+
+    let stepEntriesToMap : [REntry] -> Map Symbol REntry = lam rents.
+      let addEntry = lam acc. lam x. mapUnion acc (unRMap x.cont) in
+      foldl addEntry (mapEmpty _symCmp) rents in
+
+    let dedupREntries : [REntry] -> [REntry] = lam rents.
+      let m = foldl
+        (lam a. lam x. mapInsertWith mapUnion x.pat (unRMap x.cont) a)
+        (mapEmpty (optionCmp fs.cmpIdent))
+        rents in
+      mapFoldWithKey (lam a. lam ident. lam rents. snoc a {pat = ident, cont = RMap rents}) [] m
+    in
+
+    recursive let mkRMap : Map Symbol REntry -> RTS -> [REntry] = lam above. lam rts.
+      let id = gensym () in
+      match rts with RTSNode rts in
+      let here = {pat = rts.ident, cont = RMap above} in
+      if null rts.children
+      then [here]
+      else join (map (mkRMap (mapInsert id here (mapEmpty _symCmp))) rts.children)
+    in
+
+    recursive let filterTree
+      : all a. [REntry] -> Tree a -> (Map Symbol REntry, Tree a)
+      = lam rents. lam tree. switch tree
+        case RTSingle _ then error "Compiler error: used rtsFilterApprox on a tree with singles"
+        case RTOr x then
+          let x : RTOrRec Never a constraint var val relevant ident = x in
+          (if null x.singles then () else
+           error "Compiler error: used rtsFilterApprox on a tree with singles");
+          let others = map (filterTree rents) x.others in
+          match partition (lam x. mapIsEmpty x.0) others with (misses, matches) in
+          match matches with [(m, o)] ++ matches then
+            match unzip matches with (maps, others) in
+            (foldl mapUnion m maps, RTOr {x with others = cons o others})
+          else (mapEmpty _symCmp, RTOr {x with others = map (lam x. x.1) misses})
+        case RTAnd x then
+          let x : RTAndRec Never a constraint var val relevant ident = x in
+          match unzip (map (lam child. filterTree rents child.val) x.children) with (maps, children) in
+          let rents =
+            match maps with [m] ++ maps then
+              let points = foldl (mapIntersectWith (lam a. lam. a)) m maps in
+              mapFoldWithKey (lam a. lam. lam rent. snoc a rent) [] points
+            else rents in
+          let rents = filter (lam r. eqi 0 (optionCmp fs.cmpIdent r.pat x.ident)) rents in
+          let children = zipWith (lam prev. lam new. {prev with val = new}) x.children children in
+          (stepEntriesToMap rents, RTAnd {x with children = children})
+        end
+    in
+
+    (filterTree (dedupREntries (mkRMap (mapEmpty _symCmp) rts)) tree).1
+    -- (filterTree (mkRMap (None ()) rts) tree).1
+
+let rtsToJson : all ident. (env -> ident -> (env, JsonValue)) -> env -> RepTreeSolution ident -> (env, JsonValue)
+  = lam identJson. lam env. lam rts.
+    error "TODO"
+
+let rtsFromJson : all ident. (env -> JsonValue -> Option (env, ident)) -> env -> JsonValue -> Option (env, RepTreeSolution ident)
+  = lam identJson. lam env. lam rts.
+    error "TODO"
+
+type RTPStepKind
+con RTPSOr : () -> RTPStepKind
+con RTPSAnd : () -> RTPStepKind
+
+type RTPosition ident
+con RTPNil : all ident. () -> RTPosition ident
+con RTPIdx : all ident. (RTPosition ident, RTPStepKind, Int) -> RTPosition ident
+con RTPIdent : all ident. (RTPosition ident, Option ident) -> RTPosition ident
+
+type RTFailure constraint var val ident =
+  { pos : RTPosition ident
+  , above : Option (constraint, PureUnionFind var (Set val))
+  , here : (constraint, PureUnionFind var (Set val))
+  }
+
+let rtpToJson : all env. all ident. (env -> ident -> (env, JsonValue)) -> env -> RTPosition ident -> (env, JsonValue)
+  = lam identJson. lam env. lam rtp.
+    recursive let work = lam env. lam rtp. switch rtp
+      case RTPNil _ then (env, [])
+      case RTPIdx (prev, kind, idx) then
+        match work env prev with (env, prev) in
+        let kind = switch kind
+          case RTPSAnd _ then "and "
+          case RTPSOr _ then "or "
+          end in
+        (env, snoc prev (JsonString (concat kind (int2string idx))))
+      case RTPIdent (prev, ident) then
+        match work env prev with (env, prev) in
+        match optionMapOr (env, JsonNull ()) (identJson env) ident with (env, res) in
+        (env, snoc prev res)
+      end in
+    match work env rtp with (env, rtp) in
+    (env, JsonArray rtp)
+
+let rtfToJson : all env. all relevant. all constraint. all var. all val. all ident. RTDebugInterface env relevant constraint var val ident -> env -> RTFailure constraint var val ident -> (env, JsonValue)
+  = lam fs. lam env. lam failure.
+    let optToJson = lam f. lam env. lam x. optionMapOr (env, JsonNull ()) (f env) x in
+    let pairToJson = lam env. lam pair.
+      match fs.constraintJson env pair.0 with (env, constraint) in
+      match _rtApproxJson fs env pair.1 with (env, approx) in
+      let res = JsonObject (mapFromSeq cmpString
+        [ ("constraint", constraint)
+        , ("approx", approx)
+        ]) in
+      (env, res) in
+    match rtpToJson fs.identJson env failure.pos with (env, pos) in
+    match optToJson pairToJson env failure.above with (env, above) in
+    match pairToJson env failure.here with (env, here) in
+    let res = JsonObject (mapFromSeq cmpString
+      [ ("pos", pos)
+      , ("above", above)
+      , ("here", here)
+      ]) in
+    (env, res)
+
 type RTPropagateInterface env relevant constraint var val ident =
   { constraintAnd : constraint -> constraint -> Option {lChanged : Bool, rChanged : Bool, res : constraint}
   , filterApprox : relevant -> var -> Bool
@@ -3577,13 +3834,14 @@ type RTPropagateInterface env relevant constraint var val ident =
   , pruneRedundant : Option ((constraint, Float) -> (constraint, Float) -> {lUseful : Bool, rUseful : Bool})
   , mergeIdent : {parent : Option ident, child : Option ident} -> Option ident
   , constraintEq : constraint -> constraint -> Bool
+  , recordFailures : Bool
   , debugInterface : RTDebugInterface env relevant constraint var val ident
   , debugEnv : env
   }
 let rtPropagate : all env. all relevant. all constraint. all var. all val. all a. all ident.
   RTPropagateInterface env relevant constraint var val ident
   -> RepTree relevant constraint var val ident a
-  -> Option (RepTree relevant constraint var val ident a)
+  -> ([RTFailure constraint var val ident], Option (RepTree relevant constraint var val ident a))
   = lam fs. lam tree.
     type Never in
     type Never2 in
@@ -3607,172 +3865,221 @@ let rtPropagate : all env. all relevant. all constraint. all var. all val. all a
           let res = rtConstrainShallow constrainFs {above = above, here = (hConstraint, hApprox), relevantHere = relevant} in
           match res with Some res then
             Some {changed = res.0, constraint = res.1 .0, approx = res.1 .1}
-          else None ()
+          else
+            let f =
+              { pos = RTPNil ()
+              , above = fromAbove
+              , here = (hConstraint, hApprox)
+              } in
+            None ()
         else Some {changed = false, constraint = hConstraint, approx = hApprox} in
     let pruneRedundant : all a. [[Single a]] -> [Single a] = match fs.pruneRedundant with Some f
       then lam x. rtPruneRedundant f x
       else join in
+    let failures : Ref [RTFailure constraint var val ident] = ref [] in
     let workSingle
-      : all a. Option (constraint, Approx) -> Single a -> Option (Status, Single a)
-      = lam fromAbove. lam x.
+      : all a. RTPosition ident -> Option (constraint, Approx) -> Single a -> Option (Status, Single a)
+      = lam pos. lam fromAbove. lam x.
         match constrain x.relevantHere fromAbove x.constraint x.approx with Some res then
           let status = if res.changed
             then ChangedResolved (res.constraint, res.approx)
             else Unchanged () in
           let res = {x with constraint = res.constraint, approx = res.approx} in
           Some (status, res)
-        else None () in
-    recursive let work : all a.
-      Bool
-      -> Option (constraint, Approx)
-      -> RepTree relevant constraint var val ident a
-      -> Option (Status, RepTree relevant constraint var val ident a)
-      = lam forceDepth. lam fromAbove. lam tree. switch tree
-        case RTSingle x then optionMap (lam x. (x.0, RTSingle x.1)) (workSingle fromAbove x)
-        -- TODO(vipa, 2024-01-14): This is incorrect for some reason,
-        -- and I can't figure out why. It skips constraints somehow,
-        -- so the solution might segfault.
-        -- case RTAnd (x & {children = [child]}) then
-        --   let fixedConstruct : [Never] -> a = x.construct in
-        --   match constrainFromAbove fromAbove (Some x.relevantHere) x.constraint x.approx with Some res then
-        --     let newTree = rtMap (lam c. fixedConstruct [c]) child.val in
-        --     let newTree = rtScale child.scale newTree in
-        --     let newTree = rtMapRelevantHere (fs.unionRelevant x.relevantHere) newTree in
-        --     let newTree = rtSetRelevantAbove x.relevantAbove newTree in
-        --     work forceDepth (Some (res.constraint, res.approx)) newTree
-        --   else None ()
-        case RTAnd x then
-          let x : RTAndRec Never a constraint var val relevant ident = x in
-          let constrain = constrain x.relevantHere in
-          match constrain fromAbove x.constraint x.approx with Some res then
-            let propagateDown = if forceDepth then true else res.changed in
-            recursive let inner
-              : Bool -> {changed : Bool, constraint : constraint, approx : Approx} -> [Unknown] -> Unknown
-              = lam forceDepth. lam acc. lam children.
-                let f = lam acc. lam child.
-                  match work forceDepth (Some (acc.constraint, acc.approx)) child.val with Some (status, val) then
-                    let acc = switch status
-                      case Unchanged _ then Some acc
-                      case ChangedUnresolved a then
-                        match constrain (Some (x.constraint, a)) acc.constraint acc.approx with Some res then
-                          Some {acc with approx = res.approx, constraint = res.constraint, changed = or acc.changed res.changed}
-                        else None ()
-                      case ChangedResolved a then
-                        match constrain (Some a) acc.constraint acc.approx with Some res then
-                          Some
-                          { acc with changed = if acc.changed then true else res.changed
-                          , constraint = res.constraint
-                          , approx = res.approx
-                          }
-                        else None ()
-                      end in
-                    optionMap (lam acc. (acc, {child with val = val})) acc
-                  else None () in
-                match optionMapAccumLM f {acc with changed = false} children with Some (newAcc, children) then
-                  if newAcc.changed
-                  then inner false newAcc children
-                  else Some ({newAcc with changed = acc.changed}, children)
-                else None ()
-            in
-            match
-              if propagateDown then
-                inner forceDepth {changed = res.changed, constraint = res.constraint, approx = res.approx} x.children
-              else Some ({changed = false, constraint = res.constraint, approx = res.approx}, x.children)
-            with Some (acc, children) then
-              match optionMapM (lam child. rtAsSingle child.val) children with Some values then
-                let newFs =
-                  { constraintAnd = lam a. lam b. optionMap (lam x. x.res) (fs.constraintAnd a b)
-                  , filterConstraint = fs.filterConstraint
-                  , filterApprox = fs.filterApprox
-                  , preComputedConstraint = Some acc.constraint
-                  , preComputedApprox = Some acc.approx
-                  , historyLabel = "propagate-trivial-and"
-                  , constraintEq = fs.constraintEq
-                  , debugInterface = fs.debugInterface
-                  , debugEnv = fs.debugEnv
-                  } in
-                let f = lam r.
-                  let status = ChangedResolved (r.constraint, r.approx) in
-                  (status, RTSingle r) in
-                optionMap f (rtConstructAnd newFs x values)
-              else
-                let status = if acc.changed
-                  then ChangedResolved (acc.constraint, acc.approx)
-                  else Unchanged () in
-                let res = RTAnd {x with constraint = acc.constraint, approx = acc.approx, children = children} in
-                Some (status, res)
+        else
+          (if fs.recordFailures then
+            let failure =
+              { pos = RTPIdent (pos, x.ident)
+              , above = fromAbove
+              , here = (x.constraint, x.approx)
+              } in
+            modref failures (snoc (deref failures) failure)
+           else ());
+          None () in
+    recursive
+      let workD : all a.
+        RTPosition ident
+        -> Bool
+        -> Option (constraint, Approx)
+        -> RepTree relevant constraint var val ident a
+        -> Option (Status, RepTree relevant constraint var val ident a)
+        = lam pos. lam forceDepth. lam fromAbove. lam tree.
+          if fs.recordFailures then
+            -- NOTE(vipa, 2024-03-25): This currently records every
+            -- point where we return `None`, even if the `None` is
+            -- trivially because a child was `None`, i.e., the current
+            -- point was not the cause.
+            let pos = RTPIdent (pos, rtGetIdent tree) in
+            let res = work pos forceDepth fromAbove tree in
+            (if optionIsNone res then
+              let failure =
+                { pos = pos
+                , above = fromAbove
+                , here = (rtGetConstraint tree, rtGetApprox tree)
+                } in
+              modref failures (snoc (deref failures) failure)
+             else ());
+            res
+          else work pos forceDepth fromAbove tree
+      let work : all a.
+        RTPosition ident
+        -> Bool
+        -> Option (constraint, Approx)
+        -> RepTree relevant constraint var val ident a
+        -> Option (Status, RepTree relevant constraint var val ident a)
+        = lam pos. lam forceDepth. lam fromAbove. lam tree. switch tree
+          case RTSingle x then optionMap (lam x. (x.0, RTSingle x.1)) (workSingle pos fromAbove x)
+          -- TODO(vipa, 2024-01-14): This is incorrect for some reason,
+          -- and I can't figure out why. It skips constraints somehow,
+          -- so the solution might segfault.
+          -- case RTAnd (x & {children = [child]}) then
+          --   let fixedConstruct : [Never] -> a = x.construct in
+          --   match constrainFromAbove fromAbove (Some x.relevantHere) x.constraint x.approx with Some res then
+          --     let newTree = rtMap (lam c. fixedConstruct [c]) child.val in
+          --     let newTree = rtScale child.scale newTree in
+          --     let newTree = rtMapRelevantHere (fs.unionRelevant x.relevantHere) newTree in
+          --     let newTree = rtSetRelevantAbove x.relevantAbove newTree in
+          --     work forceDepth (Some (res.constraint, res.approx)) newTree
+          --   else None ()
+          case RTAnd x then
+            let x : RTAndRec Never a constraint var val relevant ident = x in
+            let constrain = constrain x.relevantHere in
+            match constrain fromAbove x.constraint x.approx with Some res then
+              let propagateDown = if forceDepth then true else res.changed in
+              recursive let inner
+                : Bool -> {changed : Bool, constraint : constraint, approx : Approx} -> [Unknown] -> Unknown
+                = lam forceDepth. lam acc. lam children.
+                  let f = lam acc. lam childIdx. lam child.
+                    let pos = RTPIdx (pos, RTPSAnd (), childIdx) in
+                    match workD pos forceDepth (Some (acc.constraint, acc.approx)) child.val with Some (status, val) then
+                      let acc = switch status
+                        case Unchanged _ then Some acc
+                        case ChangedUnresolved a then
+                          match constrain (Some (x.constraint, a)) acc.constraint acc.approx with Some res then
+                            Some {acc with approx = res.approx, constraint = res.constraint, changed = or acc.changed res.changed}
+                          else None ()
+                        case ChangedResolved a then
+                          match constrain (Some a) acc.constraint acc.approx with Some res then
+                            Some
+                            { acc with changed = if acc.changed then true else res.changed
+                            , constraint = res.constraint
+                            , approx = res.approx
+                            }
+                          else None ()
+                        end in
+                      optionMap (lam acc. (acc, {child with val = val})) acc
+                    else None () in
+                  match optionMapiAccumLM f {acc with changed = false} children with Some (newAcc, children) then
+                    if newAcc.changed
+                    then inner false newAcc children
+                    else Some ({newAcc with changed = acc.changed}, children)
+                  else None ()
+              in
+              match
+                if propagateDown then
+                  inner forceDepth {changed = res.changed, constraint = res.constraint, approx = res.approx} x.children
+                else Some ({changed = false, constraint = res.constraint, approx = res.approx}, x.children)
+              with Some (acc, children) then
+                match optionMapM (lam child. rtAsSingle child.val) children with Some values then
+                  let newFs =
+                    { constraintAnd = lam a. lam b. optionMap (lam x. x.res) (fs.constraintAnd a b)
+                    , filterConstraint = fs.filterConstraint
+                    , filterApprox = fs.filterApprox
+                    , preComputedConstraint = Some acc.constraint
+                    , preComputedApprox = Some acc.approx
+                    , historyLabel = "propagate-trivial-and"
+                    , constraintEq = fs.constraintEq
+                    , debugInterface = fs.debugInterface
+                    , debugEnv = fs.debugEnv
+                    } in
+                  let f = lam r.
+                    let status = ChangedResolved (r.constraint, r.approx) in
+                    (status, RTSingle r) in
+                  optionMap f (rtConstructAnd newFs x values)
+                else
+                  let status = if acc.changed
+                    then ChangedResolved (acc.constraint, acc.approx)
+                    else Unchanged () in
+                  let res = RTAnd {x with constraint = acc.constraint, approx = acc.approx, children = children} in
+                  Some (status, res)
+              else None ()
             else None ()
-          else None ()
-        case RTOr x then
-          let x : RTOrRec Never a constraint var val relevant ident = x in
-          let constrain = constrain x.relevantHere in
-          let orFs =
-            { constraintAnd = lam a. lam b. optionMap (lam x. x.res) (fs.constraintAnd a b)
-            , filterConstraint = fs.filterConstraint
-            , filterApprox = fs.filterApprox
-            , unionRelevant = fs.unionRelevant
-            , mergeIdent = fs.mergeIdent
-            , preComputedConstraint = None ()
-            , preComputedApprox = None ()
-            , historyLabel = "propagate-trivial-or"
-            } in
-          match constrain fromAbove x.constraint x.approx with Some res then
-            let propagateDown = if forceDepth then true else res.changed in
-            if propagateDown then
-              switch
-                ( mapOption (workSingle (Some (res.constraint, res.approx))) x.singles
-                , mapOption (work forceDepth (Some (res.constraint, res.approx))) x.others
-                )
-              case ([], []) then None ()
-              case ([(status, res)], []) then
-                optionMap (lam x. (status, RTSingle x)) (rtConstructOr orFs x res)
-              case ([], [(status, res)]) then
-                optionMap (lam x. (status, x)) (rtConstructOrTree orFs x res)
-              case (singlePairs, otherPairs) then
-                let changed =
-                  if res.changed then true else
-                  if neqi (addi (length x.others) (length x.singles)) (addi (length otherPairs) (length singlePairs)) then true else
-                  if not (forAll (lam pair. match pair.0 with Unchanged _ then true else false) singlePairs) then true else
-                  not (forAll (lam pair. match pair.0 with Unchanged _ then true else false) otherPairs) in
-                let filterSingle : all x. Single x -> Single x = lam x.
-                  { x with constraint = fs.filterConstraint x.relevantAbove x.constraint
-                  , approx = filterApprox x.relevantAbove x.approx
-                  } in
-                let fixChild = lam pair. switch pair.1
-                  case RTSingle x then This [ filterSingle x ]
-                  case tree & RTOr or then
-                    let or : RTOrRec Never2 Never constraint var val relevant ident = or in
-                    let orFs = {orFs with historyLabel = "propagate-or-flatten"} in
-                    let singles = map filterSingle or.singles in
-                    let singles = if null singles then [] else pruneRedundant (map (lam x. [x]) singles) in
-                    let singles = mapOption (rtConstructOr orFs or) singles in
-                    let others = mapOption (rtConstructOrTree orFs or) or.others in
-                    These (singles, others)
-                  case x then That [x]
-                  end in
-                match thesePartitionHereThere (map fixChild otherPairs) with (newSingles, others) in
-                let others = join others in
-                let singles = pruneRedundant (cons (map (lam x. x.1) singlePairs) newSingles) in
-                match _computeAltApprox res.approx (concat (map (lam x. RTSingle x) singles) others) with Some approx then
-                  -- NOTE(vipa, 2024-01-14): Prune redundant can cause
-                  -- the situation where there's just a single left,
-                  -- even though there were multiple earlier, so we
-                  -- check that here
-                  match (singles, others) with ([sing], []) then
-                    let status = ChangedResolved (sing.constraint, sing.approx) in
-                    optionMap (lam x. (status, RTSingle x)) (rtConstructOr orFs x sing)
-                  else
-                    let status = if changed
-                      then ChangedUnresolved (approx)
-                      else Unchanged () in
-                    let res = RTOr {x with constraint = res.constraint, approx = approx, singles = singles, others = others} in
-                    Some (status, res)
-                else None ()
-              end
-            else Some (Unchanged (), RTOr {x with constraint = res.constraint, approx = res.approx})
-          else None ()
-        end
-    in optionMap (lam x. x.1) (work true (None ()) tree)
+          case RTOr x then
+            let x : RTOrRec Never a constraint var val relevant ident = x in
+            let constrain = constrain x.relevantHere in
+            let orFs =
+              { constraintAnd = lam a. lam b. optionMap (lam x. x.res) (fs.constraintAnd a b)
+              , filterConstraint = fs.filterConstraint
+              , filterApprox = fs.filterApprox
+              , unionRelevant = fs.unionRelevant
+              , mergeIdent = fs.mergeIdent
+              , preComputedConstraint = None ()
+              , preComputedApprox = None ()
+              , historyLabel = "propagate-trivial-or"
+              } in
+            match constrain fromAbove x.constraint x.approx with Some res then
+              let propagateDown = if forceDepth then true else res.changed in
+              if propagateDown then
+                let singles = mapiOption
+                  (lam i. workSingle (RTPIdx (pos, RTPSOr (), i)) (Some (res.constraint, res.approx)))
+                  x.singles in
+                let off = length x.singles in
+                let others = mapiOption
+                  (lam i. workD (RTPIdx (pos, RTPSOr (), addi i off)) forceDepth (Some (res.constraint, res.approx)))
+                  x.others in
+                switch (singles , others)
+                case ([], []) then None ()
+                case ([(status, res)], []) then
+                  optionMap (lam x. (status, RTSingle x)) (rtConstructOr orFs x res)
+                case ([], [(status, res)]) then
+                  optionMap (lam x. (status, x)) (rtConstructOrTree orFs x res)
+                case (singlePairs, otherPairs) then
+                  let changed =
+                    if res.changed then true else
+                    if neqi (addi (length x.others) (length x.singles)) (addi (length otherPairs) (length singlePairs)) then true else
+                    if not (forAll (lam pair. match pair.0 with Unchanged _ then true else false) singlePairs) then true else
+                    not (forAll (lam pair. match pair.0 with Unchanged _ then true else false) otherPairs) in
+                  let filterSingle : all x. Single x -> Single x = lam x.
+                    { x with constraint = fs.filterConstraint x.relevantAbove x.constraint
+                    , approx = filterApprox x.relevantAbove x.approx
+                    } in
+                  let fixChild = lam pair. switch pair.1
+                    case RTSingle x then This [ filterSingle x ]
+                    case tree & RTOr or then
+                      let or : RTOrRec Never2 Never constraint var val relevant ident = or in
+                      let orFs = {orFs with historyLabel = "propagate-or-flatten"} in
+                      let singles = map filterSingle or.singles in
+                      let singles = if null singles then [] else pruneRedundant (map (lam x. [x]) singles) in
+                      let singles = mapOption (rtConstructOr orFs or) singles in
+                      let others = mapOption (rtConstructOrTree orFs or) or.others in
+                      These (singles, others)
+                    case x then That [x]
+                    end in
+                  match thesePartitionHereThere (map fixChild otherPairs) with (newSingles, others) in
+                  let others = join others in
+                  let singles = pruneRedundant (cons (map (lam x. x.1) singlePairs) newSingles) in
+                  match _computeAltApprox res.approx (concat (map (lam x. RTSingle x) singles) others) with Some approx then
+                    -- NOTE(vipa, 2024-01-14): Prune redundant can cause
+                    -- the situation where there's just a single left,
+                    -- even though there were multiple earlier, so we
+                    -- check that here
+                    match (singles, others) with ([sing], []) then
+                      let status = ChangedResolved (sing.constraint, sing.approx) in
+                      optionMap (lam x. (status, RTSingle x)) (rtConstructOr orFs x sing)
+                    else
+                      let status = if changed
+                        then ChangedUnresolved (approx)
+                        else Unchanged () in
+                      let res = RTOr {x with constraint = res.constraint, approx = approx, singles = singles, others = others} in
+                      Some (status, res)
+                  else None ()
+                end
+              else Some (Unchanged (), RTOr {x with constraint = res.constraint, approx = res.approx})
+            else None ()
+          end
+    in
+    let res = optionMap (lam x. x.1) (workD (RTPNil ()) true (None ()) tree) in
+    (deref failures, res)
 
 let rtHomogenizeTop : all env. all relevant. all constraint. all var. all val. all a. all ident.
   (val -> val -> Int)
@@ -3906,7 +4213,7 @@ let rtMaterializeHomogeneous : all env. all relevant. all constraint. all var. a
           pufMapOut pickVal approx in
         let constrainedTree = rtPropagate fs.propagateInterface
           (rtSetApprox homogeneousApprox tree) in
-        match constrainedTree with Some constrainedTree
+        match constrainedTree with (_, Some constrainedTree)
         then descend constrainedTree
         else []
     in
@@ -4350,6 +4657,7 @@ lang TreeSolverBase = NonMemoTreeBuilder
     , debugEnv = pprintEnvEmpty
     , debugInterface = mkDebugInterface ()
     , mergeIdent = lam x. optionOr x.parent x.child
+    , recordFailures = false
     , pruneRedundant =
       let f = lam l. lam r.
         let lFitsWhereRCouldBe = lazy (lam. uniImplies r.0 l.0) in
@@ -4425,6 +4733,17 @@ lang TreeSolverBase = NonMemoTreeBuilder
       uni
     , debugEnv = pprintEnvEmpty
     , debugInterface = mkDebugInterface ()
+    }
+
+  sem mkFilterApproxInterface : () -> RTSFilterApproxInterface NodeIdent
+  sem mkFilterApproxInterface = | _ ->
+    { cmpIdent = lam a. lam b.
+      let res = cmpSID a.name b.name in
+      if neqi res 0 then res else
+      let res = mapCmp subi a.opUses b.opUses in
+      if neqi res 0 then res else
+      let res = seqCmp cmpSID a.reprSubsts b.reprSubsts in
+      res
     }
 
   sem mkMaterializeHomogeneousInterface : () -> RTMaterializeHomogeneousInterface PprintEnv Relevant Constraint Var Val NodeIdent
@@ -4609,7 +4928,7 @@ lang TreeSolverBottomUp = TreeSolverBase
         (if debug then
           printLn (json2string (rtDebugJson debugInterface pprintEnvEmpty top).1)
          else ());
-        match rtPropagate propagateInterface top with Some top then
+        match rtPropagate propagateInterface top with (_, Some top) then
           (if debug then
             printLn (json2string (rtDebugJson debugInterface pprintEnvEmpty top).1)
            else ());
@@ -4617,7 +4936,7 @@ lang TreeSolverBottomUp = TreeSolverBase
           checkDone top
         else None ()
       let propagate = lam top.
-        match rtPropagate propagateInterface top with Some top then
+        match rtPropagate propagateInterface top with (_, Some top) then
           checkDone top
         else None ()
       let checkDone = lam top.
@@ -4644,7 +4963,7 @@ lang TreeSolverBottomUp = TreeSolverBase
         (if debug then
           printLn (json2string (rtDebugJson debugInterface pprintEnvEmpty top).1)
          else ());
-        match rtPropagate propagateInterface top with Some top then
+        match rtPropagate propagateInterface top with (_, Some top) then
           (if debug then
             printLn (json2string (rtDebugJson debugInterface pprintEnvEmpty top).1)
            else ());
@@ -4652,7 +4971,7 @@ lang TreeSolverBottomUp = TreeSolverBase
           checkDone top
         else None ()
       let propagate = lam top.
-        match rtPropagate propagateInterface top with Some top then
+        match rtPropagate propagateInterface top with (_, Some top) then
           checkDone top
         else None ()
       let checkDone = lam top.
@@ -4679,7 +4998,7 @@ lang TreeSolverGreedy = TreeSolverBase
     let debugInterface = mkDebugInterface () in
     let materializeLazyInterface = mkMaterializeLazyInterface () in
     let partitionInternalInterface = mkPartitionInternalInterface () in
-    match rtPropagate propagateInterface top with Some top then
+    match rtPropagate propagateInterface top with (_, Some top) then
       -- let top = rtPartitionInternalComponents partitionInternalInterface top in
       let stream = rtMaterializeLazyRecursive materializeLazyInterface top in
       match lazyStreamUncons stream with Some (res, _) then res else
@@ -4692,9 +5011,9 @@ lang TreeSolverGuided = TreeSolverBase
     let propagateInterface = mkPropagateInterface () in
     let partitionInternalInterface = mkPartitionInternalInterface () in
     let materializeConsistentInterface = mkMaterializeConsistentInterface () in
-    match rtPropagate propagateInterface top with Some top then
+    match rtPropagate propagateInterface top with (_, Some top) then
       let top = rtPartitionInternalComponents partitionInternalInterface top in
-      match rtPropagate propagateInterface top with Some top then
+      match rtPropagate propagateInterface top with (_, Some top) then
         match rtMaterializeConsistent materializeConsistentInterface top with Some res then
           res.value
         else errorSingle [] "Could not find a consistent assignment of impls across the program (though it may have been missed)"
@@ -4706,7 +5025,7 @@ lang TreeSolverStateless = TreeSolverBase
   sem solveWork debug = | top ->
     let propagateInterface = mkPropagateInterface () in
     let materializeStatelessInterface = mkMaterializeStatelessInterface () in
-    match rtPropagate propagateInterface top with Some top then
+    match rtPropagate propagateInterface top with (_, Some top) then
       let stream = rtMaterializeStateless materializeStatelessInterface top in
       recursive let explore : Float -> Option {cost : Float, value : Unknown} -> LStream {cost : Float, value : Unknown} -> Option {cost : Float, value : Unknown}
         = lam startTime. lam best. lam stream.
@@ -4731,7 +5050,7 @@ lang TreeSolverStateless = TreeSolverBase
   sem solveWorkAll debug = | top ->
     let propagateInterface = mkPropagateInterface () in
     let materializeStatelessInterface = mkMaterializeStatelessInterface () in
-    match rtPropagate propagateInterface top with Some top then
+    match rtPropagate propagateInterface top with (_, Some top) then
       lazyStreamForceAll (lazyStreamMap (lam x. x.value) (rtMaterializeStateless materializeStatelessInterface top))
     else errorSingle [] "Could not find a consistent assignment of impls across the program"
 end
@@ -4739,19 +5058,35 @@ end
 lang TreeSolverPartIndep = TreeSolverBase
   sem solveWork debug = | top ->
     let cmpf = lam a. lam b. if ltf a b then negi 1 else if gtf a b then 1 else 0 in
-    let propagateInterface = mkPropagateInterface () in
+    let propagateInterface = {mkPropagateInterface () with recordFailures = debug} in
     let debugInterface = mkDebugInterface () in
     let collapseLeavesInterface = mkCollapseLeavesInterface () in
     let partitionInternalInterface = mkPartitionInternalInterface () in
     let flattenInterface = mkFlattenInterface () in
+    let filterApproxInterface = mkFilterApproxInterface () in
     let materializeHomogeneousInterface = mkMaterializeHomogeneousInterface () in
     let materializeConsistentInterface = mkMaterializeConsistentInterface () in
+
+    let times = ref [] in
+    let lastT = ref (wallTimeMs ()) in
+    let phase = lam label.
+      let t = wallTimeMs () in
+      modref times (snoc (deref times) (join [int2string (length (deref times)), " " , label], JsonFloat (subf t (deref lastT))));
+      modref lastT (wallTimeMs ()) in
+    let newPhases = lam.
+      modref times [];
+      modref lastT (wallTimeMs ()) in
+    let debugPrintTimes = lam.
+      printLn (json2string (JsonObject (mapFromSeq cmpString (deref times)))) in
 
     type StepStatus a in
     con StepDone : all a. TSSingle a -> StepStatus a in
     con StepStep : all a. TSTree a -> StepStatus a in
     con StepFail : all a. () -> StepStatus a in
     type Step a = TSTree a -> StepStatus a in
+
+    let getDone : all a. StepStatus a -> Option (TSSingle a) = lam x.
+      match x with StepDone x then Some x else None () in
 
     let fix : all a. Step a -> Step a = lam step.
       recursive let f : Step a = lam tree.
@@ -4789,6 +5124,11 @@ lang TreeSolverPartIndep = TreeSolverBase
       then opts.small tree
       else opts.big tree in
 
+    let pickBestOr : all a. Step a = lam tree. match tree with RTOr (x & {others = []})
+      then match min (lam a. lam b. cmpf a.cost b.cost) x.singles with Some sing
+        then StepDone sing
+        else StepFail ()
+      else StepStep tree in
     let checkDone : all a. Step a = lam tree. match tree with RTSingle sing
       then StepDone sing
       else StepStep tree in
@@ -4799,15 +5139,34 @@ lang TreeSolverPartIndep = TreeSolverBase
           case StepStep tree then Some {child with val = tree}
           case StepFail _ then None ()
           end in
+        let times = ref [] in
+        let runInner = lam child.
+          let startT = wallTimeMs () in
+          let res = runInner child in
+          let endT = wallTimeMs () in
+          modref times (snoc (deref times) (subf endT startT));
+          res in
+        let debugPrintTimes = lam.
+          let json = JsonObject (mapFromSeq cmpString
+            [ ("tag", JsonString "perIndex")
+            ]) in
+          printLn (json2string (JsonArray (map (lam x. JsonFloat x) (deref times)))) in
         match optionMapM runInner x.children with Some children
-        then StepStep (RTAnd {x with children = children})
-        else StepFail ()
+        then debugPrintTimes(); StepStep (RTAnd {x with children = children})
+        else debugPrintTimes(); StepFail ()
       else f tree in
 
     let propagate : all a. Step a = lam tree.
-      match rtPropagate propagateInterface tree with Some tree
+      match rtPropagate propagateInterface tree with (failures, res) in
+      match res with Some tree
       then StepStep tree
-      else StepFail () in
+      else
+        (if debug then
+          printLn (json2string (JsonString "AUTO: propagate failure"));
+          let failures = mapAccumL (rtfToJson debugInterface) pprintEnvEmpty failures in
+          printLn (json2string (JsonArray failures.1))
+         else ());
+        StepFail () in
     let debug : all a. String -> Step a = lam label. lam tree.
       (if debug then
         printLn (json2string (JsonString label));
@@ -4826,7 +5185,6 @@ lang TreeSolverPartIndep = TreeSolverBase
       else StepFail () in
     let onTopHomogeneousAlts : all a. Step a -> Step a = lam step. lam tree.
       let res = rtHomogenizeTop nameCmp tree in
-      let res = mapOption (rtPropagate propagateInterface) res in
       let res = mapOption (lam x. match step x with StepDone sing then Some sing else None ()) res in
       match min (lam a. lam b. cmpf a.cost b.cost) res
       with Some sing then StepDone sing
@@ -4847,19 +5205,19 @@ lang TreeSolverPartIndep = TreeSolverBase
       , debug "post-propagate"
       , checkDone
       ]) tree in
+    let bottomUp = lam x. fix (chain [collapseLeaves, propagate, debug "bu-step", checkDone, pickBestOr]) x in
     let inner = lam tree. chain
       [ debug "pre-homogeneous"
       -- , oneHomogeneous
-      , onTopHomogeneousAlts (sizeBranches
-        [ (1000000, fix (chain [collapseLeaves, propagate, checkDone]))
+      , onTopHomogeneousAlts (seq propagate (sizeBranches
+        [ (1000000, bottomUp)
         ]
-        -- (bestDoneOf [oneHomogeneous, consistent]))
-        (seq (debug "homogeneous top") oneHomogeneous))
+        (seq (debug "homogeneous top") oneHomogeneous)))
       , debug "post-homogeneous"
       , propagate
       , debug "post-inner-propagate"
       ] tree in
-    let solve = chain
+    let fastSolve = chain
       [ debug "start"
       , propagate
       , debug "post-propagate"
@@ -4867,19 +5225,45 @@ lang TreeSolverPartIndep = TreeSolverBase
       , partitionIndep
       , debug "post-partition-indep"
       , perIndep #frozen"inner"
-      -- , perIndep #frozen"oneHomogeneous"
       , debug "post-per-indep"
       , propagate
       , debug "post-final-propagate"
       , checkDone
       , fail false
       ] in
-    switch solve top
-    case StepDone x then x.value
-    case StepStep _ then
-      error "Compiler error: left solve with a StepStep."
-    case StepFail _ then
-      error "Compiler error: left solve with a StepFail."
+    let completeSolve = chain
+      [ debug "post-filter"
+      , propagate
+      , debug "post-propagate"
+      , flattenAnds
+      , partitionIndep
+      , debug "post-filter-post-part-indep"
+      , perIndep #frozen"bottomUp"
+      , propagate
+      , checkDone
+      , fail false
+      ] in
+    newPhases ();
+    let recordedTop = rtRecordSolution top in
+    phase "record solution";
+    let solution = fastSolve recordedTop in
+    phase "solve first";
+    let solution = getDone solution in
+    let filteredTree = optionMap (lam sing. rtsFilterApprox filterApproxInterface sing.value.0 top) solution in
+    phase "filter tree";
+    let newSol = optionBind filteredTree (lam tree. getDone (completeSolve tree)) in
+    phase "solve second";
+    debugPrintTimes ();
+    switch (solution, newSol)
+    case (Some s1, Some s2) then
+      printLn (json2string (JsonFloat s1.cost));
+      printLn (json2string (JsonFloat s2.cost));
+      if ltf s1.cost s2.cost then s1.value.1 else s2.value
+    case (Some s, _) then
+      printLn (json2string (JsonString "resolve failed"));
+      s.value.1
+    case _ then
+      errorSingle [] "Could not find a consistent assignment of impls across the program (though it may have been missed)"
     end
 end
 
@@ -4915,7 +5299,7 @@ lang TreeSolverFilterByBest = TreeSolverBase
       then StepDone sing.value
       else StepStep tree in
     let propagate : Step = lam tree.
-      match rtPropagate propagateInterface tree with Some tree
+      match rtPropagate propagateInterface tree with (_, Some tree)
       then StepStep tree
       else StepFail () in
     let debug : Step = lam tree.
@@ -4942,9 +5326,9 @@ lang TreeSolverHomogeneous = TreeSolverBase
     let partitionInternalInterface = mkPartitionInternalInterface () in
     let materializeConsistentInterface = mkMaterializeConsistentInterface () in
     let materializeHomogeneousInterface = mkMaterializeHomogeneousInterface () in
-    match rtPropagate propagateInterface top with Some top then
+    match rtPropagate propagateInterface top with (_, Some top) then
       let top = rtPartitionInternalComponents partitionInternalInterface top in
-      match rtPropagate propagateInterface top with Some top then
+      match rtPropagate propagateInterface top with (_, Some top) then
         match rtMaterializeHomogeneous materializeHomogeneousInterface top with Some res then
           res.value
         else errorSingle [] "Could not find a consistent assignment of impls across the program (though it may have been missed)"
@@ -4968,9 +5352,9 @@ lang TreeSolverMixed = TreeSolverBase
       printLn (json2string debug)
      else ());
 
-    match rtPropagate propagateInterface top with Some top then
+    match rtPropagate propagateInterface top with (_, Some top) then
       let top = rtPartitionInternalComponents partitionInternalInterface top in
-      match rtPropagate propagateInterface top with Some top then
+      match rtPropagate propagateInterface top with (_, Some top) then
         let terminatingSolvers : [Tree -> Option Res] =
           [ rtMaterializeHomogeneous materializeHomogeneousInterface
           , rtMaterializeConsistent materializeConsistentInterface
@@ -4978,7 +5362,7 @@ lang TreeSolverMixed = TreeSolverBase
         let steppingSolvers : [Tree -> [Tree]] =
           [ lam top : Tree.
             let res = rtHomogenizeTop nameCmp top in
-            let res = mapOption (rtPropagate propagateInterface) res in
+            let res = mapOption (lam x. (rtPropagate propagateInterface x).1) res in
             res
           ] in
         let sols = mapOption (lam f. f top) terminatingSolvers in
@@ -4999,7 +5383,7 @@ lang TreeSolverExplore = TreeSolverBase
     let collapseLeavesInterface = mkCollapseLeavesInterface () in
     let debugInterface = mkDebugInterface () in
 
-    let propagate = rtPropagate propagateInterface in
+    let propagate = lam x. (rtPropagate propagateInterface x).1 in
     let partitionInternal = rtPartitionInternalComponents partitionInternalInterface in
     let eq = rtEq eqInterface in
     let collapse = rtCollapseLeaves collapseLeavesInterface in
@@ -5438,7 +5822,7 @@ lang TreeSolverZ3 = TreeSolverBase + MExprAst
         , labels = setEmpty cmpSID
         }
       } in
-    match rtPropagate propagateInterface top with Some top then
+    match rtPropagate propagateInterface top with (_, Some top) then
       match rtSolveExternally solveExternallyBaseInterface interface top with (state, query, mk) in
 
       match mapAccumL getTyCon state (setToSeq state.tyCons) with (state, tyCons) in

@@ -18,6 +18,15 @@ utest optionEq eqi (Some 10) (Some 11) with false
 utest optionEq eqi (Some 10) (None ()) with false
 utest optionEq eqi (None ()) (None ()) with true
 
+let optionCmp : all a. (a -> a -> Int) -> Option a -> Option a -> Int =
+  lam cmp. lam o1. lam o2.
+    switch (o1, o2)
+    case (None _, None _) then 0
+    case (None _, Some _) then negi 1
+    case (Some _, None _) then 1
+    case (Some a, Some b) then cmp a b
+    end
+
 -- Applies a function to the contained value (if any).
 let optionMap: all a. all b. (a -> b) -> Option a -> Option b = lam f. lam o.
   match o with Some t then
@@ -173,6 +182,21 @@ let optionMapAccumLM : all a. all b. all acc.
         else None ()
       else Some (acc, prefix)
     in work []
+
+
+let optionMapiAccumLM : all a. all b. all acc.
+  (acc -> Int -> a -> Option (acc, b))
+  -> acc
+  -> [a]
+  -> Option (acc, [b])
+  = lam f.
+    recursive let work = lam prefix. lam idx. lam acc. lam l.
+      match l with [x] ++ l then
+        match f acc idx x with Some (acc, x) then
+          work (snoc prefix x) (addi idx 1) acc l
+        else None ()
+      else Some (acc, prefix)
+    in work [] 0
 
 -- 'optionFoldlM f acc list' folds over 'list' using 'f', starting with the value 'acc'.
 -- This is foldlM in the Option monad, i.e., if 'f' returns 'None' at any point the entire
