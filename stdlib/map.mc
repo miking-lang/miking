@@ -220,10 +220,6 @@ let mapFoldlOption : all k. all v. all acc.
   lam f. lam acc. lam m.
     optionFoldlM (lam acc. lam t : (k, v). f acc t.0 t.1) acc (mapBindings m)
 
-let mapAllWithKey : all k. all v. (k -> v -> Bool) -> Map k v -> Bool =
-  lam f. lam m.
-  mapFoldWithKey (lam acc. lam k. lam v. and acc (f k v)) true m
-
 let mapMapAccum : all k. all v1. all v2. all acc.
   (acc -> k -> v1 -> (acc, v2)) -> acc -> Map k v1 -> (acc, Map k v2) =
   lam f. lam acc. lam m.
@@ -266,6 +262,10 @@ let mapAny : all k. all v. (k -> v -> Bool) -> Map k v -> Bool =
 
 let mapAll : all k. all v. (v -> Bool) -> Map k v -> Bool = lam f. lam m.
   mapFoldWithKey (lam acc. lam. lam v. and acc (f v)) true m
+
+let mapAllWithKey : all k. all v. (k -> v -> Bool) -> Map k v -> Bool =
+  lam f. lam m.
+  mapFoldWithKey (lam acc. lam k. lam v. and acc (f k v)) true m
 
 
 -- ┌─────────┐
