@@ -1,5 +1,6 @@
 include "bool.mc"
 include "map.mc"
+include "set.mc"
 include "name.mc"
 
 include "./pprint.mc"
@@ -92,7 +93,6 @@ lang MLangSym = MLangAst + MExprSym
             let env = updateVarEnv env varEnv in 
             (env, decl)
     | DeclLang t -> 
-        -- Todo: Fix use of nameGetStr
         let ident = nameSym (nameGetStr t.ident) in 
         let langEnv = _langEnvEmpty ident in 
 
@@ -128,24 +128,24 @@ lang MLangSym = MLangAst + MExprSym
             mapOption (mapLookup (nameGetStr n)) varEnvs
         in
 
-        -- Find any varEnvs with (nameGetStr n) that are not extensible!
-        -- let findSemConflicts : Name -> () = lam n. 
-        --     let extensibleWithSameStr = findSemIncludes n in 
+        let findExtensibleConEnvs : Name -> [Name] = lam n.
+            let envs = map (lam langEnv. langEnv.extensibleNames.tyConEnv) includedLangEnvs in 
+            mapOption (mapLookup (nameGetStr n)) envs
+        in
+        let findAllConEnvs : Name -> [Name] = lam n. 
+            let envs = map (lam langEnv. langEnv.allNames.tyConEnv) includedLangEnvs in 
+            mapOption (mapLookup (nameGetStr n)) envs
+        in
 
-        --     let allVarEnvs = map (lam langEnv. langEnv.allNames.varEnv) includedLangEnvs in 
-        --     let allWithSameStr = mapOption (mapLookup (nameGetStr n)) allVarEnvs in 
-
-        --     if neqi (length extensibleWithSameStr) (length allWithSameStr) then
-        --         error (join [
-        --             "There is a name conflict in '",
-        --             nameGetStr ident, 
-        --             "' on the semantic function '",
-        --             nameGetStr n,
-        --             "'!"
-        --         ])
-        --     else 
-        --         ()
-        -- in
+        let raiseNameConflictError : Name -> () = lam n. 
+            error (join [
+                "Name conflict in language '",
+                nameGetStr t.ident,
+                "' on '",
+                nameGetStr n,
+                "'!"
+            ])
+        in
 
         -- 1. Symbolize ident and params of SynDecls
         let symSynIdentParams = lam langEnv : LangEnv. lam synDecl.
@@ -161,6 +161,13 @@ lang MLangSym = MLangAst + MExprSym
             let langEnv : LangEnv = {langEnv with allNames = allNames,
                                                   extensibleNames = extensible} in
 
+            let extensibleNames = findExtensibleConEnvs ident in 
+            let allNames = findAllConEnvs ident in 
+            -- Raise an error if the identifier string is used by type constructors
+            -- that are not extensible
+            let conflicts = setSubtract (setOfSeq nameCmp allNames) (setOfSeq nameCmp extensibleNames) in
+            (if setIsEmpty conflicts then () else raiseNameConflictError ident) ;
+
             match mapAccumL setSymbol env.currentEnv.tyVarEnv s.params with (_, params) in
             let s = {s with params = params,
                             ident = ident} in
@@ -173,9 +180,12 @@ lang MLangSym = MLangAst + MExprSym
         let symbDeclType = lam langEnv : LangEnv. lam typeDecl. 
             let env = {env with currentEnv = mergeNameEnv env.currentEnv langEnv.allNames} in 
             match typeDecl with DeclType t in 
-            
+
             match setSymbol langEnv.allNames.tyConEnv t.ident with (allTyConEnv, ident) in
             match mapAccumL setSymbol env.currentEnv.tyVarEnv t.params with (_, params) in
+
+            let allNames = findAllConEnvs t.ident in 
+            (if null allNames then () else raiseNameConflictError ident) ;
 
             let allNames = {langEnv.allNames with tyConEnv = allTyConEnv} in
             let langEnv = {langEnv with allNames = allNames} in 
@@ -395,6 +405,8 @@ let p : MLangProgram = {
             decl_sem_ "f" [] []
         ],
         decl_langi_ "L2" ["L1"] [
+            -- decl_type_ "Foo" [] tychar_,
+            decl_syn_ "Foo" [],
             decl_sem_ "f" [] []
         ]
     ],
@@ -406,7 +418,7 @@ let l2 = head (tail p.decls) in
 utest isFullySymbolizedDecl l1 () with true in 
 utest isFullySymbolizedDecl l2 () with true in 
 match l2 with DeclLang ld in 
-match head ld.decls with DeclSem f in 
+match head (tail ld.decls) with DeclSem f in 
 utest length f.includes with 1 in 
 utest isFullySymbolized p.expr with true in 
 ()
