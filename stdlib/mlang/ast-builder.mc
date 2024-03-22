@@ -97,7 +97,7 @@ let decl_syn_ = use MLangAst in
 let decl_nsemty_ = use MLangAst in
   lam n. lam ty.
   DeclSem {ident = n, tyAnnot = ty,
-           tyBody = tyunknown_,
+           tyBody = tyunknown_, includes = [],
            args = [], cases = [], info = NoInfo {}}
 
 let decl_semty_ = use MLangAst in
@@ -107,7 +107,7 @@ let decl_semty_ = use MLangAst in
 let decl_nsem_ = use MLangAst in
   lam n. lam nargs: [(Name, Type)]. lam cases: [(Pat, Expr)].
   DeclSem {ident = n, tyAnnot = tyunknown_,
-           tyBody = tyunknown_,
+           tyBody = tyunknown_, includes = [],
            args = map (lam t. {ident = t.0, tyAnnot = t.1}) nargs,
            cases = map (lam t. {pat = t.0, thn = t.1}) cases,
            info = NoInfo {}}

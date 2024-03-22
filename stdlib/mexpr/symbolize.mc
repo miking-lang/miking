@@ -17,6 +17,8 @@ include "error.mc"
 include "pprint.mc"
 include "repr-ast.mc"
 
+-- include "mlang/ast.mc"
+
 ---------------------------
 -- SYMBOLIZE ENVIRONMENT --
 ---------------------------
@@ -65,11 +67,16 @@ type LangEnv = {
   extensibleNames : NameEnv
 }
 
-let _langEnvEmpty = lam n. {
+let _langEnvEmpty : Name -> LangEnv = lam n. {
   ident = n,
   allNames = _nameEnvEmpty,
   extensibleNames = _nameEnvEmpty
 }
+
+let mergeLangEnv = lam l : LangEnv. lam r : LangEnv. {
+  ident = r.ident, 
+  allNames = mergeNameEnv l.allNames r.allNames,
+  extensibleNames = mergeNameEnv l.extensibleNames r.extensibleNames}
 
 type SymEnv = {
   allowFree : Bool, 
@@ -140,6 +147,19 @@ lang SymLookup
       let ident = nameSetNewSym ident in
       (mapInsert (nameGetStr ident) ident env, ident)
 
+  -- Take an identifier that already has a symbol and add it to the env
+  -- without generating a new symbol
+  sem updateSymbol : Map String Name -> Name -> (Map String Name, Name)
+  sem updateSymbol env =| ident ->
+    if nameHasSym ident then
+      (mapInsert (nameGetStr ident) ident env, ident)
+    else 
+      error (join [
+        "When calling 'updateSymbol', the provided identifier MUST have a ",
+        "symbol, but the identifier '", 
+        nameGetStr ident,
+        "' does not!"
+      ])
   -- The general case, where we may have a richer return value than simply name or env.
   sem getSymbolWith
     : all a. all b.

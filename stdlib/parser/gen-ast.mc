@@ -236,6 +236,7 @@ lang CarriedTypeHelpers = CarriedTypeBase + SemDeclAst + PrettyPrint
           , tyAnnot = tyunknown_
           , tyBody = tyunknown_  -- TODO(vipa, 2023-03-09): Provide a proper type here
           , args = [{ident = fName, tyAnnot = tyunknown_}, {ident = accName, tyAnnot = tyunknown_}]
+          , includes = []
           , cases =
             [ { pat = npcon_ constructor.name (npvar_ valName)
               , thn = match_
@@ -263,6 +264,7 @@ lang CarriedTypeHelpers = CarriedTypeBase + SemDeclAst + PrettyPrint
         , tyAnnot = tyunknown_
         , tyBody = tyunknown_  -- TODO(vipa, 2023-03-09): provide a proper type here
         , args = []
+        , includes = []
         , cases =
           [ { pat = npcon_ constructor.name (npvar_ targetName)
             , thn = recordproj_ request.field (nvar_ targetName)
@@ -275,6 +277,7 @@ lang CarriedTypeHelpers = CarriedTypeBase + SemDeclAst + PrettyPrint
         , tyAnnot = tyunknown_
         , tyBody = tyunknown_  -- TODO(vipa, 2023-03-09): provide a proper type here
         , args = [{ident = valName, tyAnnot = tyunknown_}]
+        , includes = []
         , cases =
           [ { pat = npcon_ constructor.name (npvar_ targetName)
             , thn = nconapp_ constructor.name (recordupdate_ (nvar_ targetName) request.field (nvar_ valName))
@@ -303,6 +306,7 @@ lang CarriedTypeHelpers = CarriedTypeBase + SemDeclAst + PrettyPrint
       { ident = request.names.smapAccumL
       , tyAnnot = ty
       , tyBody = ty
+      , includes = []
       , args =
         [ {ident = fName, tyAnnot = tyunknown_}
         , {ident = accName, tyAnnot = tyunknown_}
@@ -322,6 +326,7 @@ lang CarriedTypeHelpers = CarriedTypeBase + SemDeclAst + PrettyPrint
       { ident = request.names.smap
       , tyAnnot = ty
       , tyBody = ty
+      , includes = []
       , args =
         [ {ident = fName, tyAnnot = tyunknown_}
         ]
@@ -347,6 +352,7 @@ lang CarriedTypeHelpers = CarriedTypeBase + SemDeclAst + PrettyPrint
       { ident = request.names.sfold
       , tyAnnot = ty
       , tyBody = ty
+      , includes = []
       , args =
         [ {ident = fName, tyAnnot = tyunknown_}
         , {ident = accName, tyAnnot = tyunknown_}
@@ -383,6 +389,7 @@ let _mkFieldStubs
       , tyBody = ty
       , args = []
       , cases = []
+      , includes = []
       , info = NoInfo ()
       } in
     let getf_ = appf1_ (nvar_ request.names.get) in
@@ -394,6 +401,7 @@ let _mkFieldStubs
       , tyBody = ty
       , args = [{ident = valName, tyAnnot = tyunknown_}]
       , cases = []
+      , includes = []
       , info = NoInfo ()
       } in
     let setf_ = appf2_ (nvar_ request.names.set) in
@@ -407,6 +415,7 @@ let _mkFieldStubs
       in DeclSem
       { ident = request.names.mapAccum
       , tyAnnot = ty
+      , includes = []
       , tyBody = ty
       , args = [{ident = fName, tyAnnot = tyunknown_}, {ident = accName, tyAnnot = tyunknown_}]
       , cases =
@@ -429,6 +438,7 @@ let _mkFieldStubs
       in DeclSem
       { ident = request.names.map
       , tyAnnot = ty
+      , includes = []
       , tyBody = ty
       , args = [{ident = fName, tyAnnot = tyunknown_}]
       , cases =

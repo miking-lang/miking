@@ -1,9 +1,11 @@
-include "ast.mc"
 include "bool.mc"
 include "map.mc"
 include "name.mc"
-include "../mexpr/symbolize.mc"
-include "mlang/pprint.mc"
+
+include "./pprint.mc"
+include "./ast.mc"
+
+include "mexpr/symbolize.mc"
 
 
 lang MLangSym = MLangAst + MExprSym 
@@ -21,9 +23,7 @@ lang MLangSym = MLangAst + MExprSym
         match mapLookup (nameGetStr t.ident) env.langEnv with Some langEnv 
             then 
                 let env = {env with currentEnv = mergeNameEnv env.currentEnv langEnv.allNames} in 
-                let inexpr = symbolizeExpr env t.inexpr in 
-                TmUse {t with ident = langEnv.ident,
-                              inexpr = inexpr}
+                symbolizeExpr env t.inexpr
             else 
                 symLookupError 
                     {kind = "language", info = [t.info], allowFree = false}
@@ -94,7 +94,6 @@ lang MLangSym = MLangAst + MExprSym
     | DeclLang t -> 
         -- Todo: Fix use of nameGetStr
         let ident = nameSym (nameGetStr t.ident) in 
-        let t = {t with ident = ident} in 
         let langEnv = _langEnvEmpty ident in 
 
         let isSynDecl = lam d. match d with DeclSyn _ then true else false in 
@@ -116,11 +115,37 @@ lang MLangSym = MLangAst + MExprSym
         in
         match mapAccumL symbIncludes [] t.includes with (includedLangEnvs, includes) in 
 
+        -- Add included LangEnvs to the current LangEnv.
+        -- If we are extending any of the defined sems or syns, we will
+        -- override them in the lang environment.
+        -- If we later define a type that was already defined in an included
+        -- language, we will throw an error.
+        let langEnv = foldl mergeLangEnv langEnv includedLangEnvs in
+        let langEnv = {langEnv with ident = ident} in 
+
         let findSemIncludes : Name -> [Name] = lam n. 
             let varEnvs = map (lam langEnv. langEnv.extensibleNames.varEnv) includedLangEnvs in 
             mapOption (mapLookup (nameGetStr n)) varEnvs
         in
-        -- let includedLangEnvs : [LangEnv] = 
+
+        -- Find any varEnvs with (nameGetStr n) that are not extensible!
+        -- let findSemConflicts : Name -> () = lam n. 
+        --     let extensibleWithSameStr = findSemIncludes n in 
+
+        --     let allVarEnvs = map (lam langEnv. langEnv.allNames.varEnv) includedLangEnvs in 
+        --     let allWithSameStr = mapOption (mapLookup (nameGetStr n)) allVarEnvs in 
+
+        --     if neqi (length extensibleWithSameStr) (length allWithSameStr) then
+        --         error (join [
+        --             "There is a name conflict in '",
+        --             nameGetStr ident, 
+        --             "' on the semantic function '",
+        --             nameGetStr n,
+        --             "'!"
+        --         ])
+        --     else 
+        --         ()
+        -- in
 
         -- 1. Symbolize ident and params of SynDecls
         let symSynIdentParams = lam langEnv : LangEnv. lam synDecl.
@@ -130,16 +155,15 @@ lang MLangSym = MLangAst + MExprSym
             -- Since syn definitions are extensible, we add information to both
             -- allNames and extensibleNames
             match setSymbol langEnv.allNames.tyConEnv s.ident with (allTyConEnv, ident) in
-            -- We update the ident on 's' so 'setSymbol' does not assign a new symbol.
-            let s = {s with ident = ident} in
-            match setSymbol langEnv.extensibleNames.tyConEnv s.ident with (extensibleTyConEnv, ident) in
+            match updateSymbol langEnv.extensibleNames.tyConEnv ident with (extensibleTyConEnv, ident) in
             let allNames = {langEnv.allNames with tyConEnv = allTyConEnv} in
             let extensible = {langEnv.extensibleNames with tyConEnv = extensibleTyConEnv} in
-            let langEnv = {langEnv with allNames = allNames,
-                                        extensibleNames = extensible} in
+            let langEnv : LangEnv = {langEnv with allNames = allNames,
+                                                  extensibleNames = extensible} in
 
             match mapAccumL setSymbol env.currentEnv.tyVarEnv s.params with (_, params) in
-            let s = {s with params = params} in
+            let s = {s with params = params,
+                            ident = ident} in
 
             (langEnv, DeclSyn s)
         in
@@ -166,7 +190,7 @@ lang MLangSym = MLangAst + MExprSym
         -- 3. Symbolize syntax constructors (add defs to conEnv)
         let symbDef = lam langEnv : LangEnv. lam def : {ident : Name, tyIdent : Type}. 
             match setSymbol langEnv.allNames.conEnv def.ident with (allConEnv, ident) in 
-            match setSymbol langEnv.extensibleNames.conEnv def.ident with (extensibleConEnv, ident) in 
+            match updateSymbol langEnv.extensibleNames.conEnv ident with (extensibleConEnv, ident) in 
 
             let allNames : NameEnv = {langEnv.allNames with conEnv = allConEnv} in
             let extensible : NameEnv = {langEnv.extensibleNames with conEnv = extensibleConEnv} in
@@ -189,8 +213,9 @@ lang MLangSym = MLangAst + MExprSym
         -- 4. Assign names to semantic functions
         let symbSem = lam langEnv : LangEnv. lam declSem. 
             match declSem with DeclSem s in 
+
             match setSymbol langEnv.allNames.varEnv s.ident with (allVarEnv, ident) in 
-            match setSymbol langEnv.extensibleNames.varEnv ident with (extensibleVarEnv, ident) in 
+            match updateSymbol langEnv.extensibleNames.varEnv ident with (extensibleVarEnv, ident) in 
             
             let allNames : NameEnv = {langEnv.allNames with varEnv = allVarEnv} in
             let extensible : NameEnv = {langEnv.extensibleNames with varEnv = extensibleVarEnv} in
@@ -206,12 +231,8 @@ lang MLangSym = MLangAst + MExprSym
 
             let s = {s with ident = ident,
                             tyAnnot = tyAnnot,
-                            tyBody = tyBody} in 
-            
-            -- let s = {s with ident = ident,
-            --                 tyAnnot = tyAnnot,
-            --                 tyBody = tyBody,
-            --                 includes = includes} in 
+                            tyBody = tyBody,
+                            includes = includes} in 
 
             (langEnv, DeclSem s)
         in 
@@ -246,7 +267,9 @@ lang MLangSym = MLangAst + MExprSym
         let semDecls = map (symbSem2 langEnv) semDecls in 
 
         let env = {env with langEnv = mapInsert (nameGetStr t.ident) langEnv env.langEnv} in 
-        let t = {t with decls = join [typeDecls, synDecls, semDecls]} in
+        let t = {t with decls = join [typeDecls, synDecls, semDecls],
+                        includes = includes,
+                        ident = ident} in
         (env, DeclLang t)
 end
 
@@ -256,7 +279,7 @@ end
 lang TestLang = MLangSym + SymCheck + MLangPrettyPrint
     sem isFullySymbolizedExpr = 
     | TmUse t -> 
-        _and (lam. nameHasSym t.ident) (isFullySymbolizedExpr t.inexpr)
+        error "Symbolization should get rid of all occurrences of TmUse!"
 
     sem isFullySymbolizedDecl : Decl -> () -> Bool
     sem isFullySymbolizedDecl =
@@ -363,7 +386,27 @@ match l1 with DeclLang l in
 utest isFullySymbolizedDecl l1 () with true in 
 utest isFullySymbolized p.expr with true in 
 utest nameHasSym l.ident with true in
-iter typeDeclIdentHasSymbolized l.decls ;
-iter synDeclIdentHasSymbolized l.decls ;
-iter semDeclIdentHasSymbolized l.decls ;
+
+let p : MLangProgram = {
+    decls = [
+        decl_lang_ "L1" [
+            decl_syn_ "Foo" [("Baz", tyint_), ("BazBaz", tychar_)],
+            decl_type_ "Bar" [] tyint_,
+            decl_sem_ "f" [] []
+        ],
+        decl_langi_ "L2" ["L1"] [
+            decl_sem_ "f" [] []
+        ]
+    ],
+    expr = bind_ (use_ "L2") (var_ "f")
+} in 
+match symbolizeMLang symEnvDefault p with (_, p) in 
+let l1 = head p.decls in 
+let l2 = head (tail p.decls) in 
+utest isFullySymbolizedDecl l1 () with true in 
+utest isFullySymbolizedDecl l2 () with true in 
+match l2 with DeclLang ld in 
+match head ld.decls with DeclSem f in 
+utest length f.includes with 1 in 
+utest isFullySymbolized p.expr with true in 
 ()

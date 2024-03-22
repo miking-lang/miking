@@ -79,6 +79,7 @@ lang SemDeclAst = DeclAst
              tyBody : Type,
              args : [{ident : Name, tyAnnot : Type}],
              cases : [{pat : Pat, thn : Expr}],
+             includes : [Name],
              info : Info}
 end
 
