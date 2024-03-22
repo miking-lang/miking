@@ -9,6 +9,22 @@ include "./ast.mc"
 include "mexpr/symbolize.mc"
 
 
+let combineEnv : [Map String Name] -> Map String [Name] = lam maps. 
+    let addMap = lam acc : Map String [Name]. lam m : Map String Name. 
+        let pairs = mapToSeq m in 
+        let addPair = lam acc. lam pair : (String, Name).
+            match pair with (s, n) in 
+            let newValue = match mapLookup s acc with Some names then
+                cons n names
+            else 
+                [n]
+            in 
+            mapInsert s newValue acc
+        in 
+        foldl addPair acc pairs
+    in
+    foldl addMap (mapEmpty cmpString) maps
+
 lang MLangSym = MLangAst + MExprSym 
     sem symbolizeMLang : SymEnv -> MLangProgram -> (SymEnv, MLangProgram)
     sem symbolizeMLang env =| prog -> 
@@ -147,7 +163,7 @@ lang MLangSym = MLangAst + MExprSym
             ])
         in
 
-        -- 1. Symbolize ident and params of SynDecls
+        -- 1. Symbolize ident and params of SynDecls in this langauge
         let symSynIdentParams = lam langEnv : LangEnv. lam synDecl.
             let env = {env with currentEnv = mergeNameEnv env.currentEnv langEnv.allNames} in 
             match synDecl with DeclSyn s in
@@ -176,6 +192,49 @@ lang MLangSym = MLangAst + MExprSym
             (langEnv, DeclSyn s)
         in
         match mapAccumL symSynIdentParams langEnv synDecls with (langEnv, synDecls) in 
+
+        -- 1.5 Merge syns which are declared in multiple included languages
+        let allSynEnv = map (lam langEnv. langEnv.extensibleNames.tyConEnv) includedLangEnvs in
+        let includedSyns = combineEnv allSynEnv in 
+
+        -- Filter out Syn names that we explicitly declare in this language fragment.
+        let isDeclaredInLang : (String -> [Name] -> Bool) = lam s. lam v.
+            let hasStringIdent = lam decl. 
+                match decl with DeclSyn d in 
+                if eqString (nameGetStr d.ident) s then true else false
+            in
+            match find hasStringIdent synDecls with Some _ then false else true
+        in 
+        let includedSyns = mapFilterWithKey isDeclaredInLang includedSyns in 
+
+        -- Filter out Syn names that are only included form one language fragment
+        let includedSyns = mapFilter (lam v. gti (length v) 1) includedSyns in 
+
+
+        let includedSynsPairs = mapToSeq includedSyns in 
+        let symbPairs : LangEnv -> (String, [Name]) -> (LangEnv, Decl) = lam langEnv. lam pair. 
+            match pair with (ident, includes) in 
+            let ident = nameNoSym ident in 
+
+            match setSymbol langEnv.allNames.tyConEnv ident with (allTyConEnv, ident) in
+            match updateSymbol langEnv.extensibleNames.tyConEnv ident with (extensibleTyConEnv, ident) in
+
+            let allNames = {langEnv.allNames with tyConEnv = allTyConEnv} in
+            let extensible = {langEnv.extensibleNames with tyConEnv = extensibleTyConEnv} in
+            let langEnv : LangEnv = {langEnv with allNames = allNames,
+                                                  extensibleNames = extensible} in
+
+            let d = {ident = ident,
+                     params = [],
+                     defs = [],
+                     includes = includes,
+                     info = NoInfo ()} in
+        
+            (langEnv, DeclSyn d)
+        in
+
+        match mapAccumL symbPairs langEnv includedSynsPairs with (langEnv, includedSyns) in
+        let synDecls = concat synDecls includedSyns in
 
         -- 2. Symbolize DeclType and params
         let symbDeclType = lam langEnv : LangEnv. lam typeDecl. 
@@ -424,4 +483,29 @@ utest length f.includes with 1 in
 utest isFullySymbolized p.expr with true in 
 match head ld.decls with DeclSyn foo in 
 utest length foo.includes with 1 in
+
+let p : MLangProgram = {
+    decls = [
+        decl_lang_ "L1" [
+            decl_syn_ "Foo" [("Baz", tyint_)]
+        ],
+        decl_lang_ "L2" [
+            -- decl_type_ "Foo" [] tychar_,
+            decl_syn_ "Foo" [("BazBaz", tychar_)]
+        ],
+        decl_langi_ "L12" ["L1", "L2"] []
+    ],
+    expr = bind_ (use_ "L2") (int_ 10)
+} in 
+match symbolizeMLang symEnvDefault p with (_, p) in 
+let l1 = head p.decls in 
+let l2 = get p.decls 1 in 
+let l12 = get p.decls 2 in 
+utest isFullySymbolizedDecl l1 () with true in 
+utest isFullySymbolizedDecl l2 () with true in 
+utest isFullySymbolizedDecl l12 () with true in
+
+match l12 with DeclLang l in
+utest length l.decls with 1 in 
+
 ()
