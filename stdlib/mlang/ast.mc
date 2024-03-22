@@ -55,6 +55,7 @@ lang SynDeclAst = DeclAst
   | DeclSyn {ident : Name,
              params : [Name],
              defs : [{ident : Name, tyIdent : Type}],
+             includes : [Name],
              info : Info}
 end
 

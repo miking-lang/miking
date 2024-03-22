@@ -266,7 +266,7 @@ let _mkBaseFragment
     { ident = desc.baseOpFragmentName
     , includes = [desc.baseFragmentName]
     , decls =
-      [ DeclSyn {ident = synName, params = [nameNoSym "lstyle", nameNoSym "rstyle"], defs = [], info = NoInfo ()}
+      [ DeclSyn {ident = synName, params = [nameNoSym "lstyle", nameNoSym "rstyle"], defs = [], includes = [], info = NoInfo ()}
       , topAllowed, leftAllowed, rightAllowed, groupingsAllowed
       , parenAllowed, getInfo, getTerms, unsplit
       ]
@@ -416,6 +416,7 @@ lang GenOpAstLang = SynDeclAst + SemDeclAst + LangDeclAst
       [ DeclSyn
         { ident = synName
         , params = [nameNoSym "lstyle", nameNoSym "rstyle"]
+        , includes = []
         , defs = [{ident = conName, tyIdent = op.carried}]
         , info = NoInfo ()
         }

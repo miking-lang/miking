@@ -170,7 +170,8 @@ lang MLangSym = MLangAst + MExprSym
 
             match mapAccumL setSymbol env.currentEnv.tyVarEnv s.params with (_, params) in
             let s = {s with params = params,
-                            ident = ident} in
+                            ident = ident,
+                            includes = extensibleNames} in
 
             (langEnv, DeclSyn s)
         in
@@ -421,4 +422,6 @@ match l2 with DeclLang ld in
 match head (tail ld.decls) with DeclSem f in 
 utest length f.includes with 1 in 
 utest isFullySymbolized p.expr with true in 
+match head ld.decls with DeclSyn foo in 
+utest length foo.includes with 1 in
 ()

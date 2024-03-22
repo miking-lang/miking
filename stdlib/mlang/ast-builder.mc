@@ -70,6 +70,7 @@ let decl_nsynn_ = use MLangAst in
   DeclSyn {ident = n,
            defs = map (lam t. {ident = t.0, tyIdent = t.1}) ndefs,
            params = [],
+           includes = [],
            info = NoInfo {}}
 
 let decl_syn_prod_ext_ = use MLangAst in 
