@@ -200,13 +200,9 @@ lang MLangSym = MLangAst + MExprSym
 
             let env : SymEnv = convertNameEnv (convertLangEnv langEnv) in 
             match mapAccumL setSymbol env.currentEnv.tyVarEnv s.params with (_, params) in
+            let included : [Decl] = match mapLookup (nameGetStr ident) includedSyns 
 
-            let included : [Decl] = 
-                match mapLookup (nameGetStr ident) includedSyns with Some xs then
-                    xs
-                else    
-                    [] 
-            in
+                                    with Some xs then xs else [] in  
 
             let includes = join
                 (map (lam d. match d with DeclSyn s in s.defs) included) in
@@ -324,6 +320,8 @@ lang MLangSym = MLangAst + MExprSym
         match mapAccumL symbSem langEnv semDecls with (langEnv, semDecls) in 
 
         -- 5. Assign names to semantic bodies.
+        -- TODO: We must resymbolize the included cases as any recursive calls
+        -- now need to point to the new symbols.
         let symbSem2 = lam langEnv : LangEnv. lam declSem. 
             match declSem with DeclSem s in 
 
