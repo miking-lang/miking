@@ -9,10 +9,58 @@ include "./ast.mc"
 include "mexpr/symbolize.mc"
 
 
-let combineEnv : [Map String Name] -> Map String [Name] = lam maps. 
-    let addMap = lam acc : Map String [Name]. lam m : Map String Name. 
+let sem2ident = lam d.
+    use MLangAst in 
+    match d with DeclSem d in d.ident
+
+let syn2ident = lam d.
+    use MLangAst in  
+    match d with DeclSyn d in d.ident
+
+let type2ident = lam d.
+    use MLangAst in 
+    match d with DeclType d in d.ident 
+
+let name2pair : Name -> (String, Name) = lam n. 
+    (nameGetStr n, n)
+
+let convertLangEnv : LangEnv -> NameEnv = lam langEnv. 
+    use MLangAst in 
+    let semIdents = map sem2ident (mapValues langEnv.sems) in 
+    let semPairs = map name2pair semIdents in 
+    let varEnv = mapFromSeq cmpString semPairs in 
+
+    let synIdents = map syn2ident (mapValues langEnv.syns) in 
+    let synPairs = map name2pair synIdents in 
+    let tyConEnv = mapFromSeq cmpString synPairs in
+
+    -- Todo: Detect duplicates in declared types, defined types and syns!
+    let typeIdents = map 
+        type2ident
+        (mapValues (mapUnion langEnv.includedTypes langEnv.definedTypes))
+    in
+    let typePairs = map name2pair typeIdents in
+    let tyConEnv = mapUnion tyConEnv (mapFromSeq cmpString typePairs) in
+
+    let conIdents = map
+        (lam d. match d with DeclSyn s in map (lam def. def.ident) s.defs)
+        (mapValues langEnv.syns)
+    in 
+    let conPairs = map name2pair (join conIdents) in 
+    let conEnv = mapFromSeq cmpString conPairs in 
+    
+    {_nameEnvEmpty with varEnv = varEnv,
+                        conEnv = conEnv,
+                        tyConEnv = tyConEnv}
+
+let convertNameEnv : NameEnv -> SymEnv = lam env.
+    {_symEnvEmpty with currentEnv = env}
+
+
+let combineMaps : all a. [Map String a] -> Map String [a] = lam maps. 
+    let addMap = lam acc : Map String [a]. lam m : Map String a. 
         let pairs = mapToSeq m in 
-        let addPair = lam acc. lam pair : (String, Name).
+        let addPair = lam acc. lam pair : (String, a).
             match pair with (s, n) in 
             let newValue = match mapLookup s acc with Some names then
                 cons n names
@@ -39,7 +87,8 @@ lang MLangSym = MLangAst + MExprSym
     | TmUse t -> 
         match mapLookup (nameGetStr t.ident) env.langEnv with Some langEnv 
             then 
-                let env = {env with currentEnv = mergeNameEnv env.currentEnv langEnv.allNames} in 
+                let langNameEnv = convertLangEnv langEnv in 
+                let env = {env with currentEnv = mergeNameEnv env.currentEnv langNameEnv} in 
                 symbolizeExpr env t.inexpr
             else 
                 symLookupError 
@@ -131,74 +180,51 @@ lang MLangSym = MLangAst + MExprSym
         in
         match mapAccumL symbIncludes [] t.includes with (includedLangEnvs, includes) in 
 
-        -- Add included LangEnvs to the current LangEnv.
-        -- If we are extending any of the defined sems or syns, we will
-        -- override them in the lang environment.
-        -- If we later define a type that was already defined in an included
-        -- language, we will throw an error.
-        let langEnv = foldl mergeLangEnv langEnv includedLangEnvs in
-        let langEnv = {langEnv with ident = ident} in 
+        let includedSyns = combineMaps (map (lam env. env.syns) includedLangEnvs) in 
+        let includedSems = combineMaps (map (lam env. env.sems) includedLangEnvs) in 
 
-        let findSemIncludes : Name -> [Name] = lam n. 
-            let varEnvs = map (lam langEnv. langEnv.extensibleNames.varEnv) includedLangEnvs in 
-            mapOption (mapLookup (nameGetStr n)) varEnvs
-        in
-
-        let findExtensibleConEnvs : Name -> [Name] = lam n.
-            let envs = map (lam langEnv. langEnv.extensibleNames.tyConEnv) includedLangEnvs in 
-            mapOption (mapLookup (nameGetStr n)) envs
-        in
-        let findAllConEnvs : Name -> [Name] = lam n. 
-            let envs = map (lam langEnv. langEnv.allNames.tyConEnv) includedLangEnvs in 
-            mapOption (mapLookup (nameGetStr n)) envs
-        in
-
-        let raiseNameConflictError : Name -> () = lam n. 
-            error (join [
-                "Name conflict in language '",
-                nameGetStr t.ident,
-                "' on '",
-                nameGetStr n,
-                "'!"
-            ])
-        in
+        -- let raiseNameConflictError : Name -> () = lam n. 
+        --     error (join [
+        --         "Name conflict in language '",
+        --         nameGetStr t.ident,
+        --         "' on '",
+        --         nameGetStr n,
+        --         "'!"
+        --     ])
+        -- in
 
         -- 1. Symbolize ident and params of SynDecls in this langauge
         let symSynIdentParams = lam langEnv : LangEnv. lam synDecl.
-            let env = {env with currentEnv = mergeNameEnv env.currentEnv langEnv.allNames} in 
             match synDecl with DeclSyn s in
+            let ident = nameSym (nameGetStr s.ident) in 
 
-            -- Since syn definitions are extensible, we add information to both
-            -- allNames and extensibleNames
-            match setSymbol langEnv.allNames.tyConEnv s.ident with (allTyConEnv, ident) in
-            match updateSymbol langEnv.extensibleNames.tyConEnv ident with (extensibleTyConEnv, ident) in
-            let allNames = {langEnv.allNames with tyConEnv = allTyConEnv} in
-            let extensible = {langEnv.extensibleNames with tyConEnv = extensibleTyConEnv} in
-            let langEnv : LangEnv = {langEnv with allNames = allNames,
-                                                  extensibleNames = extensible} in
-
-            let extensibleNames = findExtensibleConEnvs ident in 
-            let allNames = findAllConEnvs ident in 
-            -- Raise an error if the identifier string is used by type constructors
-            -- that are not extensible
-            let conflicts = setSubtract (setOfSeq nameCmp allNames) (setOfSeq nameCmp extensibleNames) in
-            (if setIsEmpty conflicts then () else raiseNameConflictError ident) ;
-
+            let env : SymEnv = convertNameEnv (convertLangEnv langEnv) in 
             match mapAccumL setSymbol env.currentEnv.tyVarEnv s.params with (_, params) in
-            let s = {s with params = params,
-                            ident = ident,
-                            includes = extensibleNames} in
 
-            (langEnv, DeclSyn s)
+            let included : [Decl] = 
+                match mapLookup (nameGetStr ident) includedSyns with Some xs then
+                    xs
+                else    
+                    [] 
+            in
+
+            let includes = join
+                (map (lam d. match d with DeclSyn s in s.defs) included) in
+
+            let synn = DeclSyn {s with params = params,
+                                ident = ident,
+                                includes = includes} in 
+
+            let langEnv = {langEnv with 
+                syns = mapInsert (nameGetStr ident) synn langEnv.syns} in
+
+            (langEnv, synn)
         in
         match mapAccumL symSynIdentParams langEnv synDecls with (langEnv, synDecls) in 
 
-        -- 1.5 Merge syns which are declared in multiple included languages
-        let allSynEnv = map (lam langEnv. langEnv.extensibleNames.tyConEnv) includedLangEnvs in
-        let includedSyns = combineEnv allSynEnv in 
-
-        -- Filter out Syn names that we explicitly declare in this language fragment.
-        let isDeclaredInLang : (String -> [Name] -> Bool) = lam s. lam v.
+        -- 1.5 Merge syns from included languages that have not explicitly
+        -- been extending by this langauge fragment. 
+        let isDeclaredInLang : all a. (String -> a -> Bool) = lam s. lam v.
             let hasStringIdent = lam decl. 
                 match decl with DeclSyn d in 
                 if eqString (nameGetStr d.ident) s then true else false
@@ -206,31 +232,25 @@ lang MLangSym = MLangAst + MExprSym
             match find hasStringIdent synDecls with Some _ then false else true
         in 
         let includedSyns = mapFilterWithKey isDeclaredInLang includedSyns in 
-
-        -- Filter out Syn names that are only included form one language fragment
-        let includedSyns = mapFilter (lam v. gti (length v) 1) includedSyns in 
-
-
         let includedSynsPairs = mapToSeq includedSyns in 
-        let symbPairs : LangEnv -> (String, [Name]) -> (LangEnv, Decl) = lam langEnv. lam pair. 
-            match pair with (ident, includes) in 
-            let ident = nameNoSym ident in 
 
-            match setSymbol langEnv.allNames.tyConEnv ident with (allTyConEnv, ident) in
-            match updateSymbol langEnv.extensibleNames.tyConEnv ident with (extensibleTyConEnv, ident) in
+        let symbPairs : LangEnv -> (String, [Decl]) -> (LangEnv, Decl) = lam langEnv. lam pair. 
+            match pair with (ident, includedSyns) in 
+            let ident = nameSym ident in 
 
-            let allNames = {langEnv.allNames with tyConEnv = allTyConEnv} in
-            let extensible = {langEnv.extensibleNames with tyConEnv = extensibleTyConEnv} in
-            let langEnv : LangEnv = {langEnv with allNames = allNames,
-                                                  extensibleNames = extensible} in
+            let includes = join (map 
+                (lam d. match d with DeclSyn s in s.defs) includedSyns) in 
 
-            let d = {ident = ident,
-                     params = [],
-                     defs = [],
-                     includes = includes,
-                     info = NoInfo ()} in
+            let decl = DeclSyn {ident = ident,
+                                params = [],
+                                defs = [],
+                                includes = includes,
+                                info = NoInfo ()} in
         
-            (langEnv, DeclSyn d)
+            let langEnv = {langEnv with 
+                syns = mapInsert (nameGetStr ident) decl langEnv.syns} in
+
+            (langEnv, decl)
         in
 
         match mapAccumL symbPairs langEnv includedSynsPairs with (langEnv, includedSyns) in
@@ -238,36 +258,27 @@ lang MLangSym = MLangAst + MExprSym
 
         -- 2. Symbolize DeclType and params
         let symbDeclType = lam langEnv : LangEnv. lam typeDecl. 
-            let env = {env with currentEnv = mergeNameEnv env.currentEnv langEnv.allNames} in 
             match typeDecl with DeclType t in 
+            let ident = nameSym (nameGetStr t.ident) in 
 
-            match setSymbol langEnv.allNames.tyConEnv t.ident with (allTyConEnv, ident) in
+            let env = convertNameEnv (convertLangEnv langEnv) in 
             match mapAccumL setSymbol env.currentEnv.tyVarEnv t.params with (_, params) in
 
-            let allNames = findAllConEnvs t.ident in 
-            (if null allNames then () else raiseNameConflictError ident) ;
+            let decl = DeclType {t with ident = ident,
+                                        params = params} in 
 
-            let allNames = {langEnv.allNames with tyConEnv = allTyConEnv} in
-            let langEnv = {langEnv with allNames = allNames} in 
+            let langEnv = {langEnv with 
+                definedTypes = mapInsert (nameGetStr ident) decl langEnv.definedTypes} in
 
-            let t = {t with ident = ident,
-                            params = params} in 
-            
-            (langEnv, DeclType t)
+            (langEnv, decl)
         in 
         match mapAccumL symbDeclType langEnv typeDecls with (langEnv, typeDecls) in 
 
         -- 3. Symbolize syntax constructors (add defs to conEnv)
         let symbDef = lam langEnv : LangEnv. lam def : {ident : Name, tyIdent : Type}. 
-            match setSymbol langEnv.allNames.conEnv def.ident with (allConEnv, ident) in 
-            match updateSymbol langEnv.extensibleNames.conEnv ident with (extensibleConEnv, ident) in 
+            let ident = nameSym (nameGetStr ident) in
 
-            let allNames : NameEnv = {langEnv.allNames with conEnv = allConEnv} in
-            let extensible : NameEnv = {langEnv.extensibleNames with conEnv = extensibleConEnv} in
-            let langEnv : LangEnv = {langEnv with allNames = allNames,
-                                                  extensibleNames = extensible} in
-
-            let env = {env with currentEnv = mergeNameEnv env.currentEnv langEnv.allNames} in
+            let env = convertNameEnv (convertLangEnv langEnv) in 
             let tyIdent = symbolizeType env def.tyIdent in
 
             (langEnv, {ident = ident, tyIdent = tyIdent})
@@ -275,8 +286,10 @@ lang MLangSym = MLangAst + MExprSym
         let symbSynConstructors = lam langEnv. lam synDecl. 
             match synDecl with DeclSyn s in 
             match mapAccumL symbDef langEnv s.defs with (langEnv, defs) in 
-            let s = {s with defs = defs} in 
-            (langEnv, DeclSyn s)
+            let decl = DeclSyn {s with defs = defs} in
+            let langEnv = {langEnv with 
+                syns = mapInsert (nameGetStr s.ident) decl langEnv.syns} in
+            (langEnv, decl)
         in 
         match mapAccumL symbSynConstructors langEnv synDecls with (langEnv, synDecls) in 
 
@@ -284,27 +297,29 @@ lang MLangSym = MLangAst + MExprSym
         let symbSem = lam langEnv : LangEnv. lam declSem. 
             match declSem with DeclSem s in 
 
-            match setSymbol langEnv.allNames.varEnv s.ident with (allVarEnv, ident) in 
-            match updateSymbol langEnv.extensibleNames.varEnv ident with (extensibleVarEnv, ident) in 
-            
-            let allNames : NameEnv = {langEnv.allNames with varEnv = allVarEnv} in
-            let extensible : NameEnv = {langEnv.extensibleNames with varEnv = extensibleVarEnv} in
-            let langEnv : LangEnv = {langEnv with allNames = allNames,
-                                                  extensibleNames = extensible} in
+            let ident = nameSym (nameGetStr s.ident) in 
 
-            let env = {env with currentEnv = mergeNameEnv env.currentEnv langEnv.allNames} in
+            let env = convertNameEnv (convertLangEnv langEnv) in
 
             let tyAnnot = symbolizeType env s.tyAnnot in 
             let tyBody = symbolizeType env s.tyBody in 
 
-            let includes : [Name] = findSemIncludes ident in
+            let includedSems = match mapLookup (nameGetStr s.ident) includedSems 
+                               with Some xs then xs else [] in 
+            
+            let includedCases = join (map 
+                (lam decl. match decl with DeclSem s in s.cases)
+                includedSems) in
 
-            let s = {s with ident = ident,
-                            tyAnnot = tyAnnot,
-                            tyBody = tyBody,
-                            includes = includes} in 
+            let decl = DeclSem {s with ident = ident,
+                                tyAnnot = tyAnnot,
+                                tyBody = tyBody,
+                                includes = includedCases} in 
 
-            (langEnv, DeclSem s)
+            let langEnv = {langEnv with 
+                sems = mapInsert (nameGetStr s.ident) decl langEnv.sems} in
+
+            (langEnv, decl)
         in 
         match mapAccumL symbSem langEnv semDecls with (langEnv, semDecls) in 
 
@@ -312,7 +327,7 @@ lang MLangSym = MLangAst + MExprSym
         let symbSem2 = lam langEnv : LangEnv. lam declSem. 
             match declSem with DeclSem s in 
 
-            let env = {env with currentEnv = mergeNameEnv env.currentEnv langEnv.allNames} in
+            let env = convertNameEnv (convertLangEnv langEnv) in
             
             let symbArg = lam env : SymEnv. lam arg : {ident : Name, tyAnnot : Type}. 
                 match setSymbol env.currentEnv.varEnv arg.ident with (varEnv, ident) in 
@@ -331,15 +346,21 @@ lang MLangSym = MLangAst + MExprSym
 
             let cases = map symbCases s.cases in
 
-            DeclSem {s with args = args,
-                            cases = cases}
+            let decl = DeclSem {s with args = args,
+                                cases = cases} in 
+
+            let langEnv = {langEnv with 
+                sems = mapInsert (nameGetStr s.ident) decl langEnv.sems} in
+
+            (langEnv, decl)
         in
-        let semDecls = map (symbSem2 langEnv) semDecls in 
+        match mapAccumL symbSem2 langEnv semDecls with (langEnv, semDecls) in 
 
         let env = {env with langEnv = mapInsert (nameGetStr t.ident) langEnv env.langEnv} in 
         let t = {t with decls = join [typeDecls, synDecls, semDecls],
                         includes = includes,
                         ident = ident} in
+
         (env, DeclLang t)
 end
 
@@ -479,10 +500,10 @@ utest isFullySymbolizedDecl l1 () with true in
 utest isFullySymbolizedDecl l2 () with true in 
 match l2 with DeclLang ld in 
 match head (tail ld.decls) with DeclSem f in 
-utest length f.includes with 1 in 
+utest length f.includes with 0 in 
 utest isFullySymbolized p.expr with true in 
 match head ld.decls with DeclSyn foo in 
-utest length foo.includes with 1 in
+utest length foo.includes with 2 in
 
 let p : MLangProgram = {
     decls = [
@@ -508,4 +529,23 @@ utest isFullySymbolizedDecl l12 () with true in
 match l12 with DeclLang l in
 utest length l.decls with 1 in 
 
+let p : MLangProgram = {
+    decls = [
+        decl_lang_ "L1" [
+            decl_syn_ "Foo" []
+        ],
+        decl_langi_ "L2" ["L1"] []
+    ],
+    expr = uunit_
+} in 
+match symbolizeMLang symEnvDefault p with (_, p) in 
+let l1 = head p.decls in 
+match l1 with DeclLang l in 
+utest isFullySymbolizedDecl l1 () with true in 
+utest isFullySymbolized p.expr with true in 
+utest nameHasSym l.ident with true in
+let l2 = head (tail p.decls) in 
+match l2 with DeclLang l in 
+utest isFullySymbolizedDecl l2 () with true in
+utest length l.decls with 1 in 
 ()

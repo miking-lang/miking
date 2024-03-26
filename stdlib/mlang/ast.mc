@@ -5,9 +5,9 @@ include "name.mc"
 include "option.mc"
 include "string.mc"
 include "stringid.mc"
+
 include "mexpr/ast.mc"
 include "mexpr/info.mc"
-
 
 -- TmUse --
 lang UseAst = Ast
@@ -55,7 +55,7 @@ lang SynDeclAst = DeclAst
   | DeclSyn {ident : Name,
              params : [Name],
              defs : [{ident : Name, tyIdent : Type}],
-             includes : [Name],
+             includes : [{ident : Name, tyIdent : Type}],
              info : Info}
 end
 
@@ -80,7 +80,7 @@ lang SemDeclAst = DeclAst
              tyBody : Type,
              args : [{ident : Name, tyAnnot : Type}],
              cases : [{pat : Pat, thn : Expr}],
-             includes : [Name],
+             includes : [{pat : Pat, thn : Expr}],
              info : Info}
 end
 

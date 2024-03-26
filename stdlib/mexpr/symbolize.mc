@@ -17,7 +17,7 @@ include "error.mc"
 include "pprint.mc"
 include "repr-ast.mc"
 
--- include "mlang/ast.mc"
+include "mlang/ast.mc"
 
 ---------------------------
 -- SYMBOLIZE ENVIRONMENT --
@@ -60,23 +60,28 @@ let mergeNameEnv = lam l. lam r. {
   reprEnv = mapUnion l.reprEnv r.reprEnv
 }
 
-type LangEnv = {
+type LangEnv = use MLangAst in {
   ident : Name,
-  -- INVARIANT extensibleNames \subseteq allNames
-  allNames : NameEnv,
-  extensibleNames : NameEnv
+
+  syns: Map String Decl, 
+  sems: Map String Decl,
+  definedTypes: Map String Decl,
+  includedTypes: Map String Decl
 }
 
 let _langEnvEmpty : Name -> LangEnv = lam n. {
   ident = n,
-  allNames = _nameEnvEmpty,
-  extensibleNames = _nameEnvEmpty
+  syns = mapEmpty cmpString,
+  sems = mapEmpty cmpString,
+  definedTypes = mapEmpty cmpString,
+  includedTypes = mapEmpty cmpString
 }
 
-let mergeLangEnv = lam l : LangEnv. lam r : LangEnv. {
-  ident = r.ident, 
-  allNames = mergeNameEnv l.allNames r.allNames,
-  extensibleNames = mergeNameEnv l.extensibleNames r.extensibleNames}
+let mergeLangEnv = lam l : LangEnv. lam r : LangEnv. 
+  r
+  -- {ident = r.ident, 
+  --  allNames = mergeNameEnv l.allNames r.allNames,
+  --  extensibleNames = mergeNameEnv l.extensibleNames r.extensibleNames}
 
 type SymEnv = {
   allowFree : Bool, 
