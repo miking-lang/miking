@@ -1,13 +1,18 @@
 include "bool.mc"
+include "error.mc"
 include "map.mc"
-include "set.mc"
 include "name.mc"
+include "set.mc"
 
 include "./pprint.mc"
 include "./ast.mc"
 
 include "mexpr/symbolize.mc"
 
+let mapDisjoint : all a. all b. (Map String a) -> (Map String b) -> Bool = lam l. lam r.
+    let leftKeys = setOfSeq cmpString (mapKeys l) in 
+    let rightKeys = setOfSeq cmpString (mapKeys r) in 
+    setDisjoint leftKeys rightKeys
 
 let sem2ident = lam d.
     use MLangAst in 
@@ -21,7 +26,7 @@ let type2ident = lam d.
     use MLangAst in 
     match d with DeclType d in d.ident 
 
-let name2pair : Name -> (String, Name) = lam n. 
+let name2pair : Name -> (String, Name) = lam n.
     (nameGetStr n, n)
 
 let convertLangEnv : LangEnv -> NameEnv = lam langEnv. 
@@ -158,6 +163,8 @@ lang MLangSym = MLangAst + MExprSym
             let env = updateVarEnv env varEnv in 
             (env, decl)
     | DeclLang t -> 
+        let langStr = nameGetStr t.ident in 
+
         let ident = nameSym (nameGetStr t.ident) in 
         let langEnv = _langEnvEmpty ident in 
 
@@ -183,33 +190,62 @@ lang MLangSym = MLangAst + MExprSym
         let includedSyns = combineMaps (map (lam env. env.syns) includedLangEnvs) in 
         let includedSems = combineMaps (map (lam env. env.sems) includedLangEnvs) in 
 
-        -- let raiseNameConflictError : Name -> () = lam n. 
-        --     error (join [
-        --         "Name conflict in language '",
-        --         nameGetStr t.ident,
-        --         "' on '",
-        --         nameGetStr n,
-        --         "'!"
-        --     ])
-        -- in
+        let accIncludedTypes : Map String Decl -> LangEnv -> Map String Decl = lam acc. lam env. 
+            if mapDisjoint env.includedTypes env.definedTypes then
+                mapUnion acc (mapUnion env.includedTypes env.definedTypes)
+            else
+                error (join [
+                    "Illegal state during symbolization! ",
+                    "The langauge '",
+                    nameGetStr env.ident,
+                    "' includes and defines a type with the same name!"
+                ])
+        in
+        let includedTypes = foldl accIncludedTypes (mapEmpty cmpString) includedLangEnvs in 
 
         -- 1. Symbolize ident and params of SynDecls in this langauge
         let symSynIdentParams = lam langEnv : LangEnv. lam synDecl.
             match synDecl with DeclSyn s in
             let ident = nameSym (nameGetStr s.ident) in 
 
+            -- Throw an error if DeclType is included with the same identifier
+            (match mapLookup (nameGetStr s.ident) includedTypes with Some decl then
+                match decl with DeclType t in 
+                errorMulti 
+                    [(s.info, ""), (t.info, "")] 
+                    (join [
+                        "A name conflict was found during symbolization in language '",
+                        langStr,
+                        "' for the name '",
+                        nameGetStr t.ident,
+                        "'!"
+                    ])
+            else ()) ;
+
+            (match mapLookup (nameGetStr ident) langEnv.syns with Some synDecl then
+                match synDecl with DeclSyn decl in 
+                errorMulti 
+                    [(s.info, ""), (decl.info, "")] 
+                    (join [
+                        "A name conflict was found during symbolization in language '",
+                        langStr,
+                        "' for the name '",
+                        nameGetStr ident,
+                        "'!"
+                    ])
+                else ()) ;
+
             let env : SymEnv = convertNameEnv (convertLangEnv langEnv) in 
             match mapAccumL setSymbol env.currentEnv.tyVarEnv s.params with (_, params) in
             let included : [Decl] = match mapLookup (nameGetStr ident) includedSyns 
-
                                     with Some xs then xs else [] in  
 
             let includes = join
                 (map (lam d. match d with DeclSyn s in s.defs) included) in
 
             let synn = DeclSyn {s with params = params,
-                                ident = ident,
-                                includes = includes} in 
+                                       ident = ident,
+                                       includes = includes} in 
 
             let langEnv = {langEnv with 
                 syns = mapInsert (nameGetStr ident) synn langEnv.syns} in
@@ -256,6 +292,34 @@ lang MLangSym = MLangAst + MExprSym
         let symbDeclType = lam langEnv : LangEnv. lam typeDecl. 
             match typeDecl with DeclType t in 
             let ident = nameSym (nameGetStr t.ident) in 
+
+            -- Throw an error if DeclType is included with the same identifier
+            (match mapLookup (nameGetStr ident) includedTypes with Some decl then
+                match decl with DeclType declType in 
+                errorMulti 
+                    [(t.info, ""), (declType.info, "")] 
+                    (join [
+                        "A name conflict was found during symbolization in language '",
+                        langStr,
+                        "' for the name '",
+                        nameGetStr ident,
+                        "'!"
+                    ])
+            else ()) ;
+
+            -- Throw an error if a DeclSyn is  or defined with the same identifier
+            (match mapLookup (nameGetStr ident) langEnv.syns with Some synDecl then
+                match synDecl with DeclSyn decl in 
+                errorMulti 
+                    [(t.info, ""), (decl.info, "")] 
+                    (join [
+                        "A name conflict was found during symbolization in language '",
+                        langStr,
+                        "' for the name '",
+                        nameGetStr ident,
+                        "'!"
+                    ])
+                else ());
 
             let env = convertNameEnv (convertLangEnv langEnv) in 
             match mapAccumL setSymbol env.currentEnv.tyVarEnv t.params with (_, params) in
@@ -546,4 +610,20 @@ let l2 = head (tail p.decls) in
 match l2 with DeclLang l in 
 utest isFullySymbolizedDecl l2 () with true in
 utest length l.decls with 1 in 
+
+let p : MLangProgram = {
+    decls = [
+        decl_lang_ "L1" [
+
+        ],
+        decl_langi_ "L2" ["L1"] [
+            decl_syn_ "Foo" [],
+            decl_syn_ "Foo" []
+        ]
+    ],
+    expr = uunit_
+} in 
+match symbolizeMLang symEnvDefault p with (_, p) in 
+
+
 ()
