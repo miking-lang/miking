@@ -9,10 +9,10 @@ let futUnknownTy_ = use FutharkAst in
   FTyUnknown {info = NoInfo ()}
 
 let futIntTy_ = use FutharkAst in
-  FTyInt {info = NoInfo ()}
+  FTyInt {info = NoInfo (), sz = I64 ()}
 
 let futFloatTy_ = use FutharkAst in
-  FTyFloat {info = NoInfo ()}
+  FTyFloat {info = NoInfo (), sz = F64 ()}
 
 let futBoolTy_ = use FutharkAst in
   FTyBool {info = NoInfo ()}
@@ -26,7 +26,7 @@ let futIdentTy_ = lam str.
 
 let futSizedArrayTy_ = use FutharkAst in
   lam elemTy. lam szId.
-  FTyArray {elem = elemTy, dim = Some szId, info = NoInfo ()}
+  FTyArray {elem = elemTy, dim = Some (NamedDim szId), info = NoInfo ()}
 
 let futUnsizedArrayTy_ = use FutharkAst in
   lam elemTy.
@@ -38,6 +38,14 @@ let futRecordTy_ = use FutharkAst in
                         (lam kv : (String, FutType). (stringToSid kv.0, kv.1))
                         fieldSeq),
              info = NoInfo ()}
+
+let futTupleTy_ = use FutharkAst in
+  lam fields.
+  futRecordTy_ (create (length fields) (lam i. (int2string i, get fields i)))
+
+let futProjTy_ = use FutharkAst in
+  lam target. lam label.
+  FTyProj {target = target, label = stringToSid label, info = NoInfo ()}
 
 let futUnitTy_ = lam. futRecordTy_ []
 
@@ -99,6 +107,11 @@ let futSizeEquality_ = use FutharkAst in
   FESizeEquality {x1 = x1, d1 = d1, x2 = x2, d2 = d2,
                   ty = FTyUnknown {info = NoInfo ()}, info = NoInfo ()}
 
+let futProj_ = use FutharkAst in
+  lam target. lam label.
+  FEProj {target = target, label = stringToSid label, ty = futUnknownTy_,
+          info = NoInfo ()}
+
 let futRecord_ = use FutharkAst in
   lam fieldSeq.
   FERecord {fields = mapFromSeq cmpSID (map
@@ -106,12 +119,13 @@ let futRecord_ = use FutharkAst in
                        fieldSeq),
             ty = futUnknownTy_, info = NoInfo ()}
 
+let futTuple_ = use FutharkAst in
+  lam fields.
+  futRecord_ (create (length fields) (lam i. (int2string i, get fields i)))
+
 let futUnit_ = lam. futRecord_ []
 
-let futRecordProj_ = use FutharkAst in
-  lam rec. lam field.
-  FERecordProj {rec = rec, key = stringToSid field, ty = futUnknownTy_,
-                info = NoInfo ()}
+let futRecordProj_ = futProj_
 
 let futRecordUpdate_ = use FutharkAst in
   lam rec. lam field. lam v.
@@ -190,11 +204,11 @@ let futMatch_ = use FutharkAst in
 
 let futInt_ = use FutharkAst in
   lam n.
-  futConst_ (FCInt {val = n})
+  futConst_ (FCInt {val = n, sz = Some (I64 ())})
 
 let futFloat_ = use FutharkAst in
   lam f.
-  futConst_ (FCFloat {val = f})
+  futConst_ (FCFloat {val = f, sz = Some (F64 ())})
 
 let futAdd_ = use FutharkAst in
   futBinop_ (futConst_ (FCAdd ()))
