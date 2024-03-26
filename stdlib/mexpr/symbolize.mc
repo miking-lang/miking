@@ -63,7 +63,7 @@ let mergeNameEnv = lam l. lam r. {
 type LangEnv = use MLangAst in {
   ident : Name,
 
-  syns: Map String Decl, 
+  syns: Map String Decl,
   sems: Map String Decl,
   definedTypes: Map String Decl,
   includedTypes: Map String Decl
@@ -76,12 +76,6 @@ let _langEnvEmpty : Name -> LangEnv = lam n. {
   definedTypes = mapEmpty cmpString,
   includedTypes = mapEmpty cmpString
 }
-
-let mergeLangEnv = lam l : LangEnv. lam r : LangEnv. 
-  r
-  -- {ident = r.ident, 
-  --  allNames = mergeNameEnv l.allNames r.allNames,
-  --  extensibleNames = mergeNameEnv l.extensibleNames r.extensibleNames}
 
 type SymEnv = {
   allowFree : Bool, 

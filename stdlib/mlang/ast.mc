@@ -38,6 +38,8 @@ end
 -- Base fragment for MLang declarations --
 lang DeclAst = Ast
   syn Decl = -- intentionally left blank
+
+  sem infoDecl = 
 end
 
 -- DeclLang --
@@ -47,6 +49,9 @@ lang LangDeclAst = DeclAst
               includes : [Name],
               decls : [Decl],
               info : Info}
+
+  sem infoDecl = 
+  | DeclLang d -> d.info
 end
 
 -- DeclSyn --
@@ -57,6 +62,9 @@ lang SynDeclAst = DeclAst
              defs : [{ident : Name, tyIdent : Type}],
              includes : [{ident : Name, tyIdent : Type}],
              info : Info}
+
+  sem infoDecl = 
+  | DeclSyn d -> d.info
 end
 
 -- DeclSynProdExt
@@ -70,7 +78,11 @@ lang SynProdExtDeclAst = DeclAst
   | DeclSynProdExt {synIdent : Name,
                     extIdent : Name,
                     globalExt : Type,
-                    specificExt : [{ident : Name, tyIdent : Type}]}
+                    specificExt : [{ident : Name, tyIdent : Type}],
+                    info : Info}
+
+  sem infoDecl = 
+  | DeclSynProdExt d -> d.info
 end
 -- DeclSem --
 lang SemDeclAst = DeclAst
@@ -82,6 +94,9 @@ lang SemDeclAst = DeclAst
              cases : [{pat : Pat, thn : Expr}],
              includes : [{pat : Pat, thn : Expr}],
              info : Info}
+
+  sem infoDecl = 
+  | DeclSem d -> d.info
 end
 
 -- DeclLet --
@@ -91,7 +106,10 @@ lang LetDeclAst = DeclAst
              tyAnnot : Type,
              tyBody : Type,
              body : Expr,
-             info : Info}
+             info: Info}
+
+  sem infoDecl = 
+  | DeclLet d -> d.info
 end
 
 -- DeclType --
@@ -101,6 +119,9 @@ lang TypeDeclAst = DeclAst
               params : [Name],
               tyIdent : Type,
               info : Info}
+
+  sem infoDecl = 
+  | DeclType d -> d.info
 end
 
 -- DeclRecLets --
@@ -108,6 +129,9 @@ lang RecLetsDeclAst = DeclAst + RecLetsAst
   syn Decl =
   | DeclRecLets {bindings : [RecLetBinding],
                  info : Info}
+
+  sem infoDecl = 
+  | DeclRecLets d -> d.info          
 end
 
 -- DeclConDef --
@@ -116,6 +140,9 @@ lang DataDeclAst = DeclAst
   | DeclConDef {ident : Name,
                 tyIdent : Type,
                 info : Info}
+
+  sem infoDecl = 
+  | DeclConDef d -> d.info
 end
 
 -- DeclUtest --
@@ -125,6 +152,9 @@ lang UtestDeclAst = DeclAst
                expected : Expr,
                tusing : Option Expr,
                info : Info}
+
+  sem infoDecl =
+  | DeclUtest d -> d.info
 end
 
 -- DeclExt --
@@ -134,6 +164,9 @@ lang ExtDeclAst = DeclAst
              tyIdent : Type,
              effect : Bool,
              info : Info}
+
+  sem infoDecl =
+  | DeclExt d -> d.info             
 end
 
 -- DeclInclude --
@@ -141,6 +174,9 @@ lang IncludeDeclAst = DeclAst
   syn Decl =
   | DeclInclude {path : String,
                  info : Info}
+
+  sem infoDecl =
+  | DeclInclude d -> d.info         
 end
 
 

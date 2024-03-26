@@ -78,6 +78,24 @@ let combineMaps : all a. [Map String a] -> Map String [a] = lam maps.
     in
     foldl addMap (mapEmpty cmpString) maps
 
+let errorOnNameConflict = lam m : Map String (use MLangAst in Decl). 
+                          lam n : Name. 
+                          lam langIdent : Name.
+                          lam i : Info.  
+    use MLangAst in 
+    match mapLookup (nameGetStr n) m with Some decl then
+        errorMulti 
+            [(i, ""), (infoDecl decl, "")] 
+            (join [
+                "A name conflict was found during symbolization in language '",
+                nameGetStr langIdent,
+                "' for the name '",
+                nameGetStr n,
+                "'!"
+            ])
+    else 
+        ()
+
 lang MLangSym = MLangAst + MExprSym 
     sem symbolizeMLang : SymEnv -> MLangProgram -> (SymEnv, MLangProgram)
     sem symbolizeMLang env =| prog -> 
@@ -163,7 +181,7 @@ lang MLangSym = MLangAst + MExprSym
             let env = updateVarEnv env varEnv in 
             (env, decl)
     | DeclLang t -> 
-        let langStr = nameGetStr t.ident in 
+        let langIdent = t.ident in 
 
         let ident = nameSym (nameGetStr t.ident) in 
         let langEnv = _langEnvEmpty ident in 
@@ -209,31 +227,9 @@ lang MLangSym = MLangAst + MExprSym
             let ident = nameSym (nameGetStr s.ident) in 
 
             -- Throw an error if DeclType is included with the same identifier
-            (match mapLookup (nameGetStr s.ident) includedTypes with Some decl then
-                match decl with DeclType t in 
-                errorMulti 
-                    [(s.info, ""), (t.info, "")] 
-                    (join [
-                        "A name conflict was found during symbolization in language '",
-                        langStr,
-                        "' for the name '",
-                        nameGetStr t.ident,
-                        "'!"
-                    ])
-            else ()) ;
-
-            (match mapLookup (nameGetStr ident) langEnv.syns with Some synDecl then
-                match synDecl with DeclSyn decl in 
-                errorMulti 
-                    [(s.info, ""), (decl.info, "")] 
-                    (join [
-                        "A name conflict was found during symbolization in language '",
-                        langStr,
-                        "' for the name '",
-                        nameGetStr ident,
-                        "'!"
-                    ])
-                else ()) ;
+            errorOnNameConflict includedTypes s.ident langIdent s.info ; 
+            -- throw an error if such a syn is already defined!
+            errorOnNameConflict langEnv.syns s.ident langIdent s.info ; 
 
             let env : SymEnv = convertNameEnv (convertLangEnv langEnv) in 
             match mapAccumL setSymbol env.currentEnv.tyVarEnv s.params with (_, params) in
@@ -294,32 +290,9 @@ lang MLangSym = MLangAst + MExprSym
             let ident = nameSym (nameGetStr t.ident) in 
 
             -- Throw an error if DeclType is included with the same identifier
-            (match mapLookup (nameGetStr ident) includedTypes with Some decl then
-                match decl with DeclType declType in 
-                errorMulti 
-                    [(t.info, ""), (declType.info, "")] 
-                    (join [
-                        "A name conflict was found during symbolization in language '",
-                        langStr,
-                        "' for the name '",
-                        nameGetStr ident,
-                        "'!"
-                    ])
-            else ()) ;
-
+            errorOnNameConflict includedTypes ident langIdent t.info ;
             -- Throw an error if a DeclSyn is  or defined with the same identifier
-            (match mapLookup (nameGetStr ident) langEnv.syns with Some synDecl then
-                match synDecl with DeclSyn decl in 
-                errorMulti 
-                    [(t.info, ""), (decl.info, "")] 
-                    (join [
-                        "A name conflict was found during symbolization in language '",
-                        langStr,
-                        "' for the name '",
-                        nameGetStr ident,
-                        "'!"
-                    ])
-                else ());
+            errorOnNameConflict langEnv.syns ident langIdent t.info ; 
 
             let env = convertNameEnv (convertLangEnv langEnv) in 
             match mapAccumL setSymbol env.currentEnv.tyVarEnv t.params with (_, params) in
