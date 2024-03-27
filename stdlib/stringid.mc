@@ -40,6 +40,11 @@ let stringToSid : String -> SID = lam str.
        sid)
     str (deref _mapStringToSid)
 
+
+-- Extracts the length of an underlying string of a SID
+let lengthSID : SID -> Int = lam sid. length (sidToString sid)
+
+
 mexpr
 
 let sid1 = stringToSid "Foo" in
@@ -48,6 +53,7 @@ utest sidToString sid1 with "Foo" in
 
 utest cmpSID sid1 sid1 with 0 in
 utest eqSID sid1 sid1 with true in
+utest lengthSID sid1 with 3 in
 
 let sid2 = stringToSid "Bar text" in
 utest sid2 with sid2 in
@@ -58,11 +64,14 @@ utest sidToString sid1 with sidToString sid2 using lam x. lam y. not (eqString x
 
 utest eqi (cmpSID sid1 sid2) 0 with false in
 utest eqSID sid1 sid2 with false in
+utest lengthSID sid2 with 8 in
 
 let sid3 = stringToSid "Foo" in
 utest sid1 with sid3 in
 utest sidToString sid1 with "Foo" in
 utest sidToString sid2 with "Bar text" in
 utest sidToString sid3 with "Foo" in
+
+utest lengthSID sid3 with 3 in
 
 ()

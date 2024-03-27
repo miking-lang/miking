@@ -44,7 +44,26 @@ type PprintEnv = {
   -- values in 'nameMap'.
   -- OPT(Linnea, 2021-01-27): Maps offer the most efficient lookups as for now.
   -- Could be replaced by an efficient set data structure, were we to have one.
-  strings: Set String
+  strings: Set String,
+
+  -- Compact match-else statements, do not line break and indent if the else
+  -- branch of a match is also a match.
+  -- If `true`:
+  --   else match
+  --     <cond>
+  --   then
+  -- If `false`:
+  --   else
+  --     match
+  --       <cond>
+  --     then
+  optCompactMatchElse: Bool,
+
+  optCompactRecordCreation: Bool,
+  optCompactRecordUpdate: Bool,
+
+  optSingleLineLimit: Int,
+  optSingleLineConstSeq: Bool
 
 }
 
@@ -52,7 +71,12 @@ type PprintEnv = {
 
 let pprintEnvEmpty = { nameMap = mapEmpty nameCmp,
                        count = mapEmpty cmpString,
-                       strings = setEmpty cmpString }
+                       strings = setEmpty cmpString,
+                       optCompactMatchElse = true,
+                       optCompactRecordCreation = true,
+                       optCompactRecordUpdate = true,
+                       optSingleLineLimit = 60,
+                       optSingleLineConstSeq = true }
 
 
 -- Look up the string associated with a name in the environment
@@ -73,7 +97,7 @@ let pprintEnvAdd : Name -> String -> Int -> PprintEnv -> PprintEnv =
     let count = mapInsert baseStr i count in
     let nameMap = mapInsert name str nameMap in
     let strings = setInsert str strings in
-    {nameMap = nameMap, count = count, strings = strings}
+    {env with nameMap = nameMap, count = count, strings = strings}
 
 -- Adds the given name to the environment, if its exact string is not already
 -- mapped to. If the exact string is already mapped to, return None (). This
@@ -242,7 +266,10 @@ lang PrettyPrint = IdentifierPrettyPrint
   sem printArgs (indent : Int) (env : PprintEnv) =
   | exprs ->
     match mapAccumL (printParen indent) env exprs with (env,args) in
-    (env, strJoin (pprintNewline indent) args)
+    if lti (foldl addi 0 (map length args)) env.optSingleLineLimit then
+      (env, strJoin " " args)
+    else
+      (env, strJoin (pprintNewline indent) args)
 
   -- Helper function for printing parentheses (around patterns)
   sem printPatParen (indent : Int) (prec : Int) (env : PprintEnv) =
@@ -290,7 +317,10 @@ lang AppPrettyPrint = PrettyPrint + AppAst
     match printParen indent env (head apps) with (env,fun) then
       let aindent = pprintIncr indent in
       match printArgs aindent env (tail apps) with (env,args) in
-      (env, join [fun, pprintNewline aindent, args])
+      if lti (length args) env.optSingleLineLimit then
+        (env, join [fun, " ", args])
+      else
+        (env, join [fun, pprintNewline aindent, args])
     else errorSingle [t.info] "Impossible"
 end
 
@@ -330,26 +360,52 @@ lang RecordPrettyPrint = PrettyPrint + RecordAst
         mapMapAccum
           (lam env. lam k. lam v.
              match pprintCode innerIndent env v with (env, str) in
-             (env,
-              join [pprintLabelString k, " =", pprintNewline innerIndent,
-                    str]))
+             if lti (addi (lengthSID k) (length str)) env.optSingleLineLimit then
+               (env, join [pprintLabelString k, " = ", str])
+             else
+               (env, join [pprintLabelString k, " =", pprintNewline innerIndent, str]))
            env bindings
       with (env, bindMap) in
       let binds = mapValues bindMap in
       let merged =
-        strJoin (concat "," (pprintNewline (pprintIncr indent))) binds
+        if lti (foldl addi 0 (map length binds)) env.optSingleLineLimit then
+          strJoin ", " binds
+        else
+          strJoin (concat "," (pprintNewline (pprintIncr indent))) binds
       in
       (env,join ["{ ", merged, " }"])
 
   | TmRecordUpdate t ->
     let i = pprintIncr indent in
     let ii = pprintIncr i in
-    match pprintCode i env t.rec with (env,rec) in
-      match pprintCode ii env t.value with (env,value) in
-        (env,join ["{ ", rec, pprintNewline i,
-                   "with", pprintNewline i,
-                   pprintLabelString t.key, " =", pprintNewline ii, value,
-                   " }"])
+    let chain =
+      if env.optCompactRecordUpdate then
+        recursive let accumUpdates = lam keyacc. lam valacc. lam recExpr.
+          match recExpr with TmRecordUpdate t2 then
+            accumUpdates (cons t2.key keyacc) (cons t2.value valacc) t2.rec
+          else
+            (recExpr, keyacc, valacc)
+        in
+        accumUpdates [t.key] [t.value] t.rec
+      else
+        (t.rec, [t.key], [t.value])
+    in
+    match chain with (crec, ckeys, cvalues) in
+    match pprintCode i env crec with (env,rec) in
+      match mapAccumL (pprintCode ii) env cvalues with (env, values) in
+        let strBindings = zipWith (lam k. lam v.
+          if lti (addi (lengthSID k) (length v)) env.optSingleLineLimit then
+            join [pprintLabelString k, " = ", v]
+          else
+            join [pprintLabelString k, " =", pprintNewline ii, v]
+        ) ckeys values in
+        if lti (foldl addi (length rec) (map length strBindings)) env.optSingleLineLimit then
+          (env, join ["{ ", rec, " with ", strJoin ", " strBindings, " }"])
+        else
+          (env,join ["{ ", rec, pprintNewline i,
+                     "with", pprintNewline i,
+                     strJoin (cons ',' (pprintNewline ii)) strBindings,
+                     " }"])
 end
 
 lang LetPrettyPrint = PrettyPrint + LetAst + UnknownTypeAst
@@ -365,9 +421,13 @@ lang LetPrettyPrint = PrettyPrint + LetAst + UnknownTypeAst
       (env, concat ": " ty)
     with (env, tyStr) in
     match pprintCode (pprintIncr indent) env body with (env,bodyStr) in
+    let bodySep =
+      if gti (length bodyStr) env.optSingleLineLimit then
+        pprintNewline (pprintIncr indent)
+      else " "
+    in
     (env,
-     join ["let ", pprintVarString baseStr, tyStr, " =",
-           pprintNewline (pprintIncr indent), bodyStr])
+     join ["let ", pprintVarString baseStr, tyStr, " =", bodySep, bodyStr])
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
   | TmLet t ->
@@ -380,9 +440,13 @@ lang LetPrettyPrint = PrettyPrint + LetAst + UnknownTypeAst
       match pprintLetAssignmentCode indent env {
               ident = t.ident, body = t.body, tyAnnot = t.tyAnnot}
       with (env, letStr) in
+      let inSep =
+        if gti (length letStr) env.optSingleLineLimit then
+          pprintNewline indent
+        else " "
+      in
       (env,
-       join [letStr,
-             pprintNewline indent, "in",
+       join [letStr, inSep, "in",
              pprintNewline indent, inexpr])
 end
 
@@ -529,12 +593,15 @@ lang MatchPrettyPrint = PrettyPrint + MatchAst
   | t ->
     let i = indent in
     let ii = pprintIncr indent in
+    match (match (env.optCompactMatchElse, t.els) with (true, TmMatch _)
+           then (i, " ") else (ii, pprintNewline ii))
+      with (elseIndent, elseSpacing) in
     match pprintTmMatchBegin i env t with (env,begin) in
     match pprintCode ii env t.thn with (env,thn) in
-    match pprintCode ii env t.els with (env,els) in
+    match pprintCode elseIndent env t.els with (env,els) in
     (env,join [begin,
                "then", pprintNewline ii, thn, pprintNewline i,
-               "else", pprintNewline ii, els])
+               "else", elseSpacing, els])
 
   sem pprintTmMatchIn (indent : Int) (env: PprintEnv) =
   | t ->
@@ -647,7 +714,11 @@ lang SeqPrettyPrint = PrettyPrint + SeqAst + ConstPrettyPrint + CharAst
                     env t.tms
     with (env,tms) in
     let merged =
-      strJoin (concat "," (pprintNewline (pprintIncr indent))) tms
+      if and env.optSingleLineConstSeq
+                  (forAll (lam e. match e with TmConst _ then true else false) t.tms) then
+        strJoin ", " tms
+      else
+        strJoin (concat "," (pprintNewline (pprintIncr indent))) tms
     in
     (env,join ["[ ", merged, " ]"])
 end
@@ -1648,9 +1719,9 @@ let sample_ast =
   ]
 in
 
--- print "\n\n";
--- print (expr2str sample_ast);
--- print "\n\n";
+print "\n\n";
+print (expr2str sample_ast);
+print "\n\n";
 
 utest length (expr2str sample_ast) with 0 using geqi in
 
