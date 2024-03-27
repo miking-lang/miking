@@ -394,8 +394,9 @@ lang RepTypesShallowSolverInterface = OpVarAst + OpImplAst + UnifyPure + AliasTy
   sem debugSolution : all a. SolverGlobal a -> [SolverSolution a] -> String
 
   -- NOTE(vipa, 2023-10-25): Solve the top-level, i.e., find a
-  -- `SolverSolution` per previous call to `addOpUse`.
-  sem topSolve : all a. Bool -> SolverGlobal a -> SolverTopQuery a -> [SolverSolution a]
+  -- `SolverSolution` per previous call to `addOpUse`. The string is a
+  -- path to a file in which to read/write a previous/new solution.
+  sem topSolve : all a. Bool -> Option String -> SolverGlobal a -> SolverTopQuery a -> [SolverSolution a]
 
   -- NOTE(vipa, 2023-10-25): Solve the top-level fully, i.e., find a
   -- `SolverSolution` per previous call to `addOpUse`, and find all
@@ -692,6 +693,7 @@ type ReprSolverOptions =
   , debugSolveTiming : Bool
   , debugImpls : Bool
   , solveAll : Bool
+  , solutionCacheFile : Option String
   }
 
 let defaultReprSolverOptions : ReprSolverOptions =
@@ -701,6 +703,7 @@ let defaultReprSolverOptions : ReprSolverOptions =
   , debugSolveTiming = false
   , debugImpls = false
   , solveAll = false
+  , solutionCacheFile = None ()
   }
 
 lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + VarAst + LetAst + OpDeclAst + ReprDeclAst + ReprTypeAst + UnifyPure + AliasTypeAst + PrettyPrint + ReprSubstAst + RepTypesHelpers
@@ -721,7 +724,7 @@ lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + 
     let postCollect = wallTimeMs () in
     let pickedSolutions = if options.solveAll
       then topSolveAll options.debugSolveProcess global state.topQuery
-      else [topSolve options.debugSolveProcess global state.topQuery] in
+      else [topSolve options.debugSolveProcess options.solutionCacheFile global state.topQuery] in
     let postTopSolve = wallTimeMs () in
     (switch options.debugFinalSolution
      case SDTNone _ then ()
@@ -2797,7 +2800,7 @@ type RTMaterializeLazyInterface env relevant constraint var val ident =
 let rtMaterializeLazyRecursive : all env. all relevant. all constraint. all var. all val. all a. all ident.
   RTMaterializeLazyInterface env relevant constraint var val ident
   -> RepTree relevant constraint var val ident a
-  -> LStream a
+  -> LStream (RTSingleRec a constraint var val relevant ident)
   = lam fs. lam tree.
     type Never in
     type Single a = RTSingleRec a constraint var val relevant ident in
@@ -2877,7 +2880,7 @@ let rtMaterializeLazyRecursive : all env. all relevant. all constraint. all var.
             eitherBindRight res construct in
           lazyExploreSorted tryMk (lam x. x.cost) children
         end
-    in lazyStreamMap (lam x. x.value) (work tree)
+    in work tree
 
 type RTMaterializeStatelessInterface env relevant constraint var val ident =
   { constraintAnd : constraint -> constraint -> Option constraint
@@ -2893,7 +2896,7 @@ type RTMaterializeStatelessInterface env relevant constraint var val ident =
 let rtMaterializeStateless : all env. all relevant. all constraint. all var. all val. all a. all ident.
   RTMaterializeStatelessInterface env relevant constraint var val ident
   -> RepTree relevant constraint var val ident a
-  -> LStream {value : a, cost : Float}
+  -> Iter (RTSingleRec a constraint var val relevant ident)
   = lam fs. lam tree.
     type Never in
     type Approx = PureUnionFind var (Set val) in
@@ -2984,13 +2987,7 @@ let rtMaterializeStateless : all env. all relevant. all constraint. all var. all
             iterMap mk iter
           else iterEmpty
       end in
-    let bigIter = work tree fs.constraintEmpty (pufEmpty (mapGetCmpFun (rtGetApprox tree))) in
-    printLn "Starting materialize";
-    let lazyStep : all a. Iter a -> Option (Iter a, a)  = lam iter. switch iter ()
-      case INNil _ then None ()
-      case INCons (x, xs) then Some (xs, x)
-      end in
-    lazyStreamMap (lam x. {cost = x.cost, value = x.value}) (lazyStream lazyStep bigIter)
+    work tree fs.constraintEmpty (pufEmpty (mapGetCmpFun (rtGetApprox tree)))
 
 type RTPartitionInternalInterface relevant constraint var val =
   { varsToRelevant : [var] -> relevant
@@ -3763,13 +3760,51 @@ let rtsFilterApprox : all env. all relevant. all constraint. all var. all val. a
     (filterTree (dedupREntries (mkRMap (mapEmpty _symCmp) rts)) tree).1
     -- (filterTree (mkRMap (None ()) rts) tree).1
 
-let rtsToJson : all ident. (env -> ident -> (env, JsonValue)) -> env -> RepTreeSolution ident -> (env, JsonValue)
+let rtsToJson : all env. all ident. (env -> ident -> (env, JsonValue)) -> env -> RepTreeSolution ident -> (env, JsonValue)
   = lam identJson. lam env. lam rts.
-    error "TODO"
+    recursive let work = lam env. lam rts.
+      match rts with RTSNode x in
+      match optionMapAccum identJson env x.ident with (env, ident) in
+      match mapAccumL work env x.children with (env, children) in
+      let res = JsonObject (mapFromSeq cmpString
+        [ ("ident", optionGetOr (JsonNull ()) ident)
+        , ("orIdx", optionMapOr (JsonNull ()) (lam x. JsonInt x) x.orIdx)
+        , ("children", JsonArray children)
+        , ("cost", JsonFloat x.cost)
+        ]) in
+      (env, res)
+    in work env rts
 
-let rtsFromJson : all ident. (env -> JsonValue -> Option (env, ident)) -> env -> JsonValue -> Option (env, RepTreeSolution ident)
-  = lam identJson. lam env. lam rts.
-    error "TODO"
+let rtsFromJson : all env. all ident. (env -> JsonValue -> Option (env, ident)) -> env -> JsonValue -> Option (env, RepTreeSolution ident)
+  = lam identJson. lam env. lam json.
+    let nullable : all x. (env -> JsonValue -> Option (env, x)) -> env -> JsonValue -> Option (env, Option x)
+      = lam f. lam env. lam json.
+        match json with JsonNull _ then Some (env, None ()) else
+        optionMap (lam x. (x.0, Some x.1)) (f env json) in
+    let getInt : env -> JsonValue -> Option (env, Int)
+      = lam env. lam json.
+        match json with JsonInt i then Some (env, i)
+        else None () in
+    recursive let work = lam env. lam json.
+      match json with JsonObject x then
+        match (mapLookup "ident" x, mapLookup "orIdx" x, mapLookup "children" x, mapLookup "cost" x)
+        with (Some ident, Some orIdx, Some (JsonArray children), Some (JsonFloat cost)) then
+          match nullable identJson env ident with Some (env, ident) then
+            match optionMapAccumLM work env children with Some (env, children) then
+              match nullable getInt env orIdx with Some (env, orIdx) then
+                let res = RTSNode
+                  { ident = ident
+                  , orIdx = orIdx
+                  , children = children
+                  , cost = cost
+                  } in
+                Some (env, res)
+              else None ()
+            else None ()
+          else None ()
+        else None ()
+      else None ()
+    in work env json
 
 type RTPStepKind
 con RTPSOr : () -> RTPStepKind
@@ -4313,6 +4348,37 @@ lang NonMemoTreeBuilder = RepTypesShallowSolverInterface + UnifyPure + RepTypesH
     -- and meaningful, since the type doesn't change as easily
     , reprSubsts : [SID]
     }
+  sem nodeIdentJson : all env. env -> NodeIdent -> (env, JsonValue)
+  sem nodeIdentJson env = | ident ->
+    let fromSid = lam sid. JsonString (sidToString sid) in
+    let opUses = mapFoldWithKey
+      (lam acc. lam sid. lam count. concat acc (make count (fromSid sid)))
+      []
+      ident.opUses in
+    let res = JsonObject (mapFromSeq cmpString
+      [ ("name", JsonString (sidToString ident.name))
+      , ("opUses", JsonArray opUses)
+      , ("reprs", JsonArray (map fromSid ident.reprSubsts))
+      ]) in
+    (env, res)
+  sem nodeIdentFromJson : all env. env -> JsonValue -> Option (env, NodeIdent)
+  sem nodeIdentFromJson env = | json ->
+    match json with JsonObject m then
+      match (mapLookup "name" m, mapLookup "opUses" m, mapLookup "reprs" m)
+      with (Some (JsonString name), Some (JsonArray opUses), Some (JsonArray reprSubsts)) then
+        let asString = lam x. match x with JsonString x then Some x else None () in
+        match (optionMapM asString opUses, optionMapM asString reprSubsts)
+        with (Some opUses, Some reprSubsts) then
+          let addUse = lam acc. lam opUse. mapInsertWith addi (stringToSid opUse) 1 acc in
+          let ident =
+            { name = stringToSid name
+            , opUses = foldl addUse (mapEmpty cmpSID) opUses
+            , reprSubsts = map stringToSid reprSubsts
+            } in
+          Some (env, ident)
+        else None ()
+      else None ()
+    else None ()
 
   -- Top Query
   type RTree a = RepTree Relevant Constraint Var Val NodeIdent (SolContent a)
@@ -4596,11 +4662,12 @@ end
 lang TreeSolverBase = NonMemoTreeBuilder
   type TSTree a = RepTree Relevant Constraint Var Val NodeIdent a
   type TSSingle a = RTSingleRec a Constraint Var Val Relevant NodeIdent
+  type RTS = RepTreeSolution NodeIdent
 
-  sem solveWork : all a. Bool -> TSTree [SolverSolution a] -> [SolverSolution a]
-  sem solveWorkAll : all a. Bool -> TSTree [SolverSolution a] -> [[SolverSolution a]]
+  sem solveWork : all a. Bool -> Option RTS -> TSTree a -> a
+  sem solveWorkAll : all a. Bool -> TSTree a -> [a]
 
-  sem topSolve debug global = | STQContent query ->
+  sem topSolve debug file global = | STQContent query ->
     let top = RTAnd
       { children = query
       , selfCost = 0.0
@@ -4613,7 +4680,23 @@ lang TreeSolverBase = NonMemoTreeBuilder
       , ident = None ()
       , history = HStart "root"
       } in
-    solveWork debug top
+    match file with Some file then
+      let rts =
+        if fileExists file then
+          switch jsonParse (readFile file)
+          case Left json then
+            optionMap (lam x. x.1) (rtsFromJson nodeIdentFromJson () json)
+          case Right err then
+            warnSingle [] err;
+            None ()
+          end
+        else None () in
+      let saveSol = lam res.
+        match res with (rts, sol) in
+        writeFile file (json2string (rtsToJson nodeIdentJson () rts).1);
+        sol in
+      saveSol (solveWork debug rts (rtRecordSolution top))
+    else solveWork debug (None ()) top
   sem topSolveAll debug global = | STQContent query ->
     let top = RTAnd
       { children = query
@@ -4693,18 +4776,7 @@ lang TreeSolverBase = NonMemoTreeBuilder
         , ("reprs", JsonArray (map (lam x. JsonString x) reprs))
         ]) in
       (env, res)
-    , identJson = lam env. lam ident.
-      let fromSid = lam sid. JsonString (sidToString sid) in
-      let opUses = mapFoldWithKey
-        (lam acc. lam sid. lam count. concat acc (make count (fromSid sid)))
-        []
-        ident.opUses in
-      let res = JsonObject (mapFromSeq cmpString
-        [ ("name", JsonString (sidToString ident.name))
-        , ("opUses", JsonArray opUses)
-        , ("reprs", JsonArray (map fromSid ident.reprSubsts))
-        ]) in
-      (env, res)
+    , identJson = nodeIdentJson
     }
 
   sem mkCollapseLeavesInterface : () -> RTCollapseLeavesInterface PprintEnv Relevant Constraint Var Val NodeIdent
@@ -4917,38 +4989,441 @@ lang TreeSolverBase = NonMemoTreeBuilder
     }
 end
 
-lang TreeSolverBottomUp = TreeSolverBase
-  sem solveWork debug = | top ->
+lang TreeSolverGreedy = TreeSolverBase
+  sem solveWork debug prev = | top ->
     let propagateInterface = mkPropagateInterface () in
+    let debugInterface = mkDebugInterface () in
+    let materializeLazyInterface = mkMaterializeLazyInterface () in
+    let partitionInternalInterface = mkPartitionInternalInterface () in
+    match rtPropagate propagateInterface top with (_, Some top) then
+      -- let top = rtPartitionInternalComponents partitionInternalInterface top in
+      let stream = rtMaterializeLazyRecursive materializeLazyInterface top in
+      match lazyStreamUncons stream with Some (res, _) then res else
+      errorSingle [] "Could not find a consistent assignment of impls across the program"
+    else errorSingle [] "Could not find a consistent assignment of impls across the program"
+end
+
+lang TreeSolverGuided = TreeSolverBase
+  sem solveWork debug prev = | top ->
+    let propagateInterface = mkPropagateInterface () in
+    let partitionInternalInterface = mkPartitionInternalInterface () in
+    let materializeConsistentInterface = mkMaterializeConsistentInterface () in
+    match rtPropagate propagateInterface top with (_, Some top) then
+      let top = rtPartitionInternalComponents partitionInternalInterface top in
+      match rtPropagate propagateInterface top with (_, Some top) then
+        match rtMaterializeConsistent materializeConsistentInterface top with Some res then
+          res.value
+        else errorSingle [] "Could not find a consistent assignment of impls across the program (though it may have been missed)"
+      else errorSingle [] "Could not find a consistent assignment of impls across the program"
+    else errorSingle [] "Could not find a consistent assignment of impls across the program"
+end
+
+lang ComposableSolver = TreeSolverBase
+  syn StepStatus a =
+  | StepDone (TSSingle a)
+  | StepStep (TSTree a)
+  | StepFail ()
+  type Step a = TSTree a -> StepStatus a
+
+  type CSSteps =
+    { getDone : all a. StepStatus a -> Option (TSSingle a)
+
+    , debug : all a. String -> Step a
+    , warn : all a. [Info] -> String -> Step a
+
+    , seq : all a. Step a -> Step a -> Step a
+    , chain : all a. [Step a] -> Step a
+    , bestDoneOf : all a. [Step a] -> Step a
+    , sizeBranches : all a. [(Int, Step a)] -> Step a -> Step a
+    , sizeBranch : all a. {threshold : Int, small : Step a, big : Step a} -> Step a
+    , fix : all a. Step a -> Step a
+
+    , checkDone : all a. Step a
+    , perIndep : all a. (all x. Step x) -> Step a
+    , pickBestOr : all a. Step a
+    , try : all a. Step a -> Step a -> Step a
+
+    , collapseLeaves : all a. Step a
+    , partitionIndep : all a. Step a
+    , flattenAnds : all a. Step a
+    , onTopHomogeneousAlts : all a. Step a -> Step a
+    , fail : all a. Bool -> Step a
+    , propagate : all a. Step a
+
+    , oneHomogeneous : all a. Step a
+    , consistent : all a. Step a
+    , lazy : all a. Step a
+
+    , filterApprox : all a. RTS -> Step a
+    }
+
+  sem mkCSSteps : Bool -> CSSteps
+  sem mkCSSteps = | debug ->
+    let cmpf = lam a. lam b. if ltf a b then negi 1 else if gtf a b then 1 else 0 in
+    let propagateInterface = {mkPropagateInterface () with recordFailures = debug} in
     let debugInterface = mkDebugInterface () in
     let collapseLeavesInterface = mkCollapseLeavesInterface () in
     let partitionInternalInterface = mkPartitionInternalInterface () in
-    recursive
-      let start = lam top.
-        (if debug then
-          printLn (json2string (rtDebugJson debugInterface pprintEnvEmpty top).1)
-         else ());
-        match rtPropagate propagateInterface top with (_, Some top) then
+    let flattenInterface = mkFlattenInterface () in
+    let filterApproxInterface = mkFilterApproxInterface () in
+    let materializeHomogeneousInterface = mkMaterializeHomogeneousInterface () in
+    let materializeConsistentInterface = mkMaterializeConsistentInterface () in
+    let materializeLazyInterface = mkMaterializeLazyInterface () in
+    let seq : all a. Step a -> Step a -> Step a = lam l. lam r.
+      let f : Step a = lam tree. switch l tree
+        case res & (StepDone _ | StepFail _) then res
+        case StepStep tree then r tree
+        end in
+      f in
+    { getDone =
+      let getDone : all a. StepStatus a -> Option (TSSingle a) = lam x.
+        match x with StepDone x then Some x else None () in
+      #frozen"getDone"
+    , fix =
+      let fix : all a. Step a -> Step a = lam step.
+        recursive let f : Step a = lam tree.
+          let res = step tree in
+          match res with StepStep tree then f tree else res in
+        f in
+      #frozen"fix"
+    , seq = #frozen"seq"
+    , chain =
+      let chain : all a. [Step a] -> Step a = lam fs.
+        match fs with fs ++ [last]
+        then foldr seq last fs
+        else error "Compiler error: empty list in chain" in
+      #frozen"chain"
+    , bestDoneOf =
+      let bestDoneOf : all a. [Step a] -> Step a = lam fs. lam tree.
+        let inner = lam f. match f tree with StepDone sing
+          then Some sing
+          else None () in
+        match min (lam a. lam b. cmpf a.cost b.cost) (mapOption inner fs)
+        with Some sing then StepDone sing
+        else StepFail () in
+      #frozen"bestDoneOf"
+    , sizeBranches =
+      let sizeBranches : all a. [(Int, Step a)] -> Step a -> Step a = lam smaller. lam default.
+        let smaller = sort (lam a. lam b. subi a.0 b.0) smaller in
+        match smaller with _ ++ [(upper, _)] then
+          let f = lam tree.
+            let size = rtBoundedSize upper tree in
+            let pair = optionBind size (lam size. find (lam pair. lti size pair.0) smaller) in
+            optionMapOrElse (lam. default tree) (lam pair. pair.1 tree) pair
+          in f
+        else default in
+      #frozen"sizeBranches"
+    , sizeBranch =
+      let sizeBranch : all a. {threshold : Int, small : Step a, big : Step a} -> Step a = lam opts. lam tree.
+        if optionIsSome (rtBoundedSize opts.threshold tree)
+        then opts.small tree
+        else opts.big tree in
+      #frozen"sizeBranch"
+    , pickBestOr =
+      let pickBestOr : all a. Step a = lam tree. match tree with RTOr (x & {others = []})
+        then match min (lam a. lam b. cmpf a.cost b.cost) x.singles with Some sing
+          then StepDone sing
+          else StepFail ()
+        else StepStep tree in
+      #frozen"pickBestOr"
+    , checkDone =
+      let checkDone : all a. Step a = lam tree. match tree with RTSingle sing
+        then StepDone sing
+        else StepStep tree in
+      #frozen"checkDone"
+    , perIndep =
+      let perIndep : all a. (all x. Step x) -> Step a = lam f. lam tree.
+        match tree with RTAnd (x & {dep = InDep _}) then
+          let runInner = lam child. switch f child.val
+            case StepDone sing then Some {child with val = RTSingle sing}
+            case StepStep tree then Some {child with val = tree}
+            case StepFail _ then None ()
+            end in
+          match optionMapM runInner x.children with Some children
+          then StepStep (RTAnd {x with children = children})
+          else StepFail ()
+        else f tree in
+      #frozen"perIndep"
+    , propagate =
+      let propagate : all a. Step a = lam tree.
+        match rtPropagate propagateInterface tree with (failures, res) in
+        match res with Some tree
+        then StepStep tree
+        else
           (if debug then
-            printLn (json2string (rtDebugJson debugInterface pprintEnvEmpty top).1)
+            printLn (json2string (JsonString "AUTO: propagate failure"));
+            let failures = mapAccumL (rtfToJson debugInterface) pprintEnvEmpty failures in
+            printLn (json2string (JsonArray failures.1))
            else ());
-          -- checkDone (rtPartitionInternalComponents partitionInternalInterface top)
-          checkDone top
-        else None ()
-      let propagate = lam top.
-        match rtPropagate propagateInterface top with (_, Some top) then
-          checkDone top
-        else None ()
-      let checkDone = lam top.
+          StepFail () in
+      #frozen"propagate"
+    , debug =
+      let debug : all a. String -> Step a = lam label. lam tree.
         (if debug then
-          printLn (json2string (rtDebugJson debugInterface pprintEnvEmpty top).1)
+          printLn (json2string (JsonString label));
+          printLn (json2string (rtDebugJson debugInterface pprintEnvEmpty tree).1)
          else ());
-        match top with RTSingle x then Some x.value else
-        collapseLeaves top
-      let collapseLeaves = lam top.
-        propagate (rtCollapseLeaves collapseLeavesInterface top)
-    in match start top with Some res then res else
-      errorSingle [] "Could not find a consistent assignment of impls across the program"
+        StepStep tree in
+      #frozen"debug"
+    , collapseLeaves =
+      let collapseLeaves : all a. Step a = lam tree.
+        StepStep (rtCollapseLeaves collapseLeavesInterface tree) in
+      #frozen"collapseLeaves"
+    , partitionIndep =
+      let partitionIndep : all a. Step a = lam tree.
+        StepStep (rtPartitionIndependent partitionInternalInterface tree) in
+      #frozen"partitionIndep"
+    , flattenAnds =
+      let flattenAnds : all a. Step a = lam tree.
+        StepStep (rtFlatten flattenInterface tree) in
+      #frozen"flattenAnds"
+    , oneHomogeneous =
+      let oneHomogeneous : all a. Step a = lam tree.
+        match rtMaterializeHomogeneous materializeHomogeneousInterface tree
+        with Some sing then StepDone sing
+        else StepFail () in
+      #frozen"oneHomogeneous"
+    , onTopHomogeneousAlts =
+      let onTopHomogeneousAlts : all a. Step a -> Step a = lam step. lam tree.
+        let res = rtHomogenizeTop nameCmp tree in
+        let res = mapOption (lam x. match step x with StepDone sing then Some sing else None ()) res in
+        match min (lam a. lam b. cmpf a.cost b.cost) res
+        with Some sing then StepDone sing
+        else StepFail () in
+      #frozen"onTopHomogeneousAlts"
+    , consistent =
+      let consistent : all a. Step a = lam tree.
+        match rtMaterializeConsistent materializeConsistentInterface tree
+        with Some sing then StepDone sing
+        else StepFail () in
+      #frozen"consistent"
+    , fail =
+      let fail : all a. Bool -> Step a = lam complete. lam.
+        if complete
+        then errorSingle [] "Could not find a consistent assignment of impls across the program"
+        else errorSingle [] "Could not find a consistent assignment of impls across the program (though it may have been missed)" in
+      #frozen"fail"
+    , filterApprox =
+      let f : all a. RTS -> Step a = lam rts. lam tree.
+        StepStep (rtsFilterApprox filterApproxInterface rts tree) in
+      #frozen"f"
+    , try =
+      let f : all a. Step a -> Step a -> Step a = lam a. lam b. lam tree.
+        let res = a tree in
+        match res with StepFail _ then b tree else res in
+      #frozen"f"
+    , warn =
+      let f : all a. [Info] -> String -> Step a = lam infos. lam msg. lam tree.
+        warnSingle infos msg;
+        StepStep tree in
+      #frozen"f"
+    , lazy =
+      let f : all a. Step a = lam tree.
+        match lazyStreamUncons (rtMaterializeLazyRecursive materializeLazyInterface tree)
+        with Some (sing, _) then StepDone sing
+        else StepFail () in
+      #frozen"f"
+    }
+end
+
+lang TreeSolverPartIndep = ComposableSolver
+  sem solveWork debug prev = | top ->
+    let s = mkCSSteps debug in
+    let bottomUp = lam x. s.fix (s.chain
+      [ s.collapseLeaves
+      , s.propagate
+      , s.debug "bu-step"
+      , s.checkDone
+      , s.pickBestOr
+      ]) x in
+    let inner = lam tree. s.chain
+      [ s.debug "pre-homogeneous"
+      , s.sizeBranches [(100000, bottomUp)]
+        (s.onTopHomogeneousAlts (s.seq s.propagate (s.sizeBranches
+         [ (100000, bottomUp)
+         ]
+         (s.seq (s.debug "homogeneous top") s.oneHomogeneous))))
+      , s.debug "post-homogeneous"
+      , s.propagate
+      , s.debug "post-inner-propagate"
+      ] tree in
+    let fastSolve = s.chain
+      [ s.debug "start"
+      , s.propagate
+      , s.debug "post-propagate"
+      , s.flattenAnds
+      , s.partitionIndep
+      , s.debug "post-partition-indep"
+      , s.perIndep #frozen"inner"
+      , s.debug "post-per-indep"
+      , s.propagate
+      , s.debug "post-final-propagate"
+      , s.checkDone
+      , s.fail false
+      ] in
+    let solve = match prev with Some prev
+      then s.try
+        (s.seq (s.filterApprox prev) fastSolve)
+        (s.seq (s.warn [] "Could not reuse previous solution, falling back to a re-solve.") fastSolve)
+      else fastSolve in
+    match s.getDone (solve top) with Some s then s.value else
+    errorSingle [] "Could not find a consistent assignment of impls across the program (though it may have been missed)"
+end
+
+lang TreeSolverEnum = ComposableSolver
+  sem solveWork debug prev = | top ->
+    let s = mkCSSteps debug in
+    let materializeStatelessInterface = mkMaterializeStatelessInterface () in
+    let bottomUp = lam x. s.fix (s.chain
+      [ s.collapseLeaves
+      , s.propagate
+      , s.debug "bu-step"
+      , s.checkDone
+      , s.pickBestOr
+      ]) x in
+    let customIndep : all a. Step a = lam tree.
+      match tree with RTAnd (x & {dep = InDep _}) then
+        let startTime = wallTimeMs () in
+        let mkThing = lam child.
+          match iterUncons (rtMaterializeStateless materializeStatelessInterface child) with Some (sing, next) then
+            let r = ref sing in
+            let step = lam new.
+              if ltf new.cost (deref r).cost
+              then modref r new
+              else () in
+            Some (r, iterMap step next)
+          else None () in
+        let runInner : Unknown -> Option (Ref (TSSingle Unknown), Iter ())= lam child.
+          if optionIsSome (rtBoundedSize 100000 child.val)
+          then match bottomUp child.val with StepDone sing
+            then Some (ref sing, iterEmpty)
+            else None ()
+          else mkThing child.val in
+        match optionMap unzip (optionMapM runInner x.children) with Some (best, steppers) then
+          let stepOne = lam stepper.
+            if gtf (subf (wallTimeMs ()) startTime) 60000.0 then None () else
+            match iterUncons stepper with Some (_, stepper)
+            then Some stepper
+            else None () in
+          recursive let work = lam steppers.
+            match steppers with [] then () else
+            work (mapOption stepOne steppers) in
+          work steppers;
+          let reconstruct = lam new. lam old. {scale = old.scale, val = RTSingle (deref new)} in
+          StepStep (RTAnd {x with children = zipWith reconstruct best x.children})
+        else StepFail ()
+      else StepStep tree in
+    let fastSolve = s.chain
+      [ s.debug "start"
+      , s.propagate
+      , s.debug "post-propagate"
+      , s.flattenAnds
+      , s.partitionIndep
+      , s.debug "post-partition-indep"
+      , customIndep
+      , s.debug "post-per-indep"
+      , s.propagate
+      , s.debug "post-final-propagate"
+      , s.checkDone
+      , s.fail false
+      ] in
+    let solve = match prev with Some prev
+      then s.try
+        (s.seq (s.filterApprox prev) fastSolve)
+        (s.seq (s.warn [] "Could not reuse previous solution, falling back to a re-solve.") fastSolve)
+      else fastSolve in
+    match s.getDone (solve top) with Some s then s.value else
+    errorSingle [] "Could not find a consistent assignment of impls across the program (though it may have been missed)"
+end
+
+lang TreeSolverFast = ComposableSolver
+  sem solveWork debug prev = | top ->
+    let s = mkCSSteps debug in
+    let materializeStatelessInterface = mkMaterializeStatelessInterface () in
+    let bottomUp = lam x. s.fix (s.chain
+      [ s.collapseLeaves
+      , s.propagate
+      , s.debug "bu-step"
+      , s.checkDone
+      , s.pickBestOr
+      ]) x in
+    let customIndep : all a. Step a = lam tree.
+      match tree with RTAnd (x & {dep = InDep _}) then
+        let startTime = wallTimeMs () in
+        let mkThing = lam child.
+          match iterUncons (rtMaterializeStateless materializeStatelessInterface child) with Some (sing, next) then
+            let r = ref sing in
+            let step = lam new.
+              if ltf new.cost (deref r).cost
+              then modref r new
+              else () in
+            Some (r, iterMap step next)
+          else None () in
+        let runInner = lam child.
+          if optionIsSome (rtBoundedSize 100000 child.val)
+          then s.getDone (bottomUp child.val)
+          else match iterUncons (rtMaterializeStateless materializeStatelessInterface child.val)
+            with Some (sing, _) then Some sing
+            else None () in
+        match optionMapM runInner x.children with Some sings then
+          let reconstruct = lam new. lam old. {scale = old.scale, val = RTSingle new} in
+          StepStep (RTAnd {x with children = zipWith reconstruct sings x.children})
+        else StepFail ()
+      else StepStep tree in
+    let fastSolve = s.chain
+      [ s.debug "start"
+      , s.propagate
+      , s.debug "post-propagate"
+      , s.flattenAnds
+      , s.partitionIndep
+      , s.debug "post-partition-indep"
+      , customIndep
+      , s.debug "post-per-indep"
+      , s.propagate
+      , s.debug "post-final-propagate"
+      , s.checkDone
+      , s.fail false
+      ] in
+    let solve = match prev with Some prev
+      then s.try
+        (s.seq (s.filterApprox prev) fastSolve)
+        (s.seq (s.warn [] "Could not reuse previous solution, falling back to a re-solve.") fastSolve)
+      else fastSolve in
+    match s.getDone (solve top) with Some s then s.value else
+    errorSingle [] "Could not find a consistent assignment of impls across the program (though it may have been missed)"
+end
+
+lang TreeSolverBottomUp = ComposableSolver
+  sem solveWork debug prev = | top ->
+    let s = mkCSSteps debug in
+    let bottomUp = lam x. s.fix (s.chain
+      [ s.collapseLeaves
+      , s.propagate
+      , s.debug "bu-step"
+      , s.checkDone
+      , s.pickBestOr
+      ]) x in
+    let solve = s.chain
+      [ s.debug "start"
+      , s.propagate
+      , s.debug "post-propagate"
+      , s.flattenAnds
+      , s.partitionIndep
+      , s.debug "post-partition-indep"
+      , s.perIndep #frozen"bottomUp"
+      , s.debug "post-per-indep"
+      , s.propagate
+      , s.debug "post-final-propagate"
+      , s.checkDone
+      , s.fail true
+      ] in
+    let solve = match prev with Some prev
+      then s.try
+        (s.seq (s.filterApprox prev) solve)
+        (s.seq (s.warn [] "Could not reuse previous solution, falling back to a re-solve.") solve)
+      else solve in
+    match s.getDone (solve top) with Some s then s.value else
+    errorSingle [] "Could not find a consistent assignment of impls across the program"
 
   sem solveWorkAll debug = | top ->
     let propagateInterface =
@@ -4992,292 +5467,44 @@ lang TreeSolverBottomUp = TreeSolverBase
       errorSingle [] "Could not find a consistent assignment of impls across the program"
 end
 
-lang TreeSolverGreedy = TreeSolverBase
-  sem solveWork debug = | top ->
-    let propagateInterface = mkPropagateInterface () in
-    let debugInterface = mkDebugInterface () in
-    let materializeLazyInterface = mkMaterializeLazyInterface () in
-    let partitionInternalInterface = mkPartitionInternalInterface () in
-    match rtPropagate propagateInterface top with (_, Some top) then
-      -- let top = rtPartitionInternalComponents partitionInternalInterface top in
-      let stream = rtMaterializeLazyRecursive materializeLazyInterface top in
-      match lazyStreamUncons stream with Some (res, _) then res else
-      errorSingle [] "Could not find a consistent assignment of impls across the program"
-    else errorSingle [] "Could not find a consistent assignment of impls across the program"
-end
-
-lang TreeSolverGuided = TreeSolverBase
-  sem solveWork debug = | top ->
-    let propagateInterface = mkPropagateInterface () in
-    let partitionInternalInterface = mkPartitionInternalInterface () in
-    let materializeConsistentInterface = mkMaterializeConsistentInterface () in
-    match rtPropagate propagateInterface top with (_, Some top) then
-      let top = rtPartitionInternalComponents partitionInternalInterface top in
-      match rtPropagate propagateInterface top with (_, Some top) then
-        match rtMaterializeConsistent materializeConsistentInterface top with Some res then
-          res.value
-        else errorSingle [] "Could not find a consistent assignment of impls across the program (though it may have been missed)"
-      else errorSingle [] "Could not find a consistent assignment of impls across the program"
-    else errorSingle [] "Could not find a consistent assignment of impls across the program"
-end
-
-lang TreeSolverStateless = TreeSolverBase
-  sem solveWork debug = | top ->
-    let propagateInterface = mkPropagateInterface () in
-    let materializeStatelessInterface = mkMaterializeStatelessInterface () in
-    match rtPropagate propagateInterface top with (_, Some top) then
-      let stream = rtMaterializeStateless materializeStatelessInterface top in
-      recursive let explore : Float -> Option {cost : Float, value : Unknown} -> LStream {cost : Float, value : Unknown} -> Option {cost : Float, value : Unknown}
-        = lam startTime. lam best. lam stream.
-          match lazyStreamUncons stream with Some (res, stream) then
-            let endTime = wallTimeMs () in
-            let resIsBetter = match best with Some best
-              then ltf res.cost best.cost
-              else true in
-            if resIsBetter then
-              print (join ["(", float2string (subf endTime startTime), "ms) Better cost: ", float2string res.cost]);
-              flushStdout ();
-              explore (wallTimeMs ()) (Some res) stream
-            else
-              print ".";
-              flushStdout ();
-              explore startTime best stream
-          else best in
-      match explore (wallTimeMs ()) (None ()) stream with Some res
-      then res.value
-      else errorSingle [] "Could not find a consistent assignment of impls across the program"
-    else errorSingle [] "Could not find a consistent assignment of impls across the program"
-  sem solveWorkAll debug = | top ->
-    let propagateInterface = mkPropagateInterface () in
-    let materializeStatelessInterface = mkMaterializeStatelessInterface () in
-    match rtPropagate propagateInterface top with (_, Some top) then
-      lazyStreamForceAll (lazyStreamMap (lam x. x.value) (rtMaterializeStateless materializeStatelessInterface top))
-    else errorSingle [] "Could not find a consistent assignment of impls across the program"
-end
-
-lang TreeSolverPartIndep = TreeSolverBase
-  sem solveWork debug = | top ->
-    let cmpf = lam a. lam b. if ltf a b then negi 1 else if gtf a b then 1 else 0 in
-    let propagateInterface = {mkPropagateInterface () with recordFailures = debug} in
-    let debugInterface = mkDebugInterface () in
-    let collapseLeavesInterface = mkCollapseLeavesInterface () in
-    let partitionInternalInterface = mkPartitionInternalInterface () in
-    let flattenInterface = mkFlattenInterface () in
-    let filterApproxInterface = mkFilterApproxInterface () in
-    let materializeHomogeneousInterface = mkMaterializeHomogeneousInterface () in
-    let materializeConsistentInterface = mkMaterializeConsistentInterface () in
-
-    let times = ref [] in
-    let lastT = ref (wallTimeMs ()) in
-    let phase = lam label.
-      let t = wallTimeMs () in
-      modref times (snoc (deref times) (join [int2string (length (deref times)), " " , label], JsonFloat (subf t (deref lastT))));
-      modref lastT (wallTimeMs ()) in
-    let newPhases = lam.
-      modref times [];
-      modref lastT (wallTimeMs ()) in
-    let debugPrintTimes = lam.
-      printLn (json2string (JsonObject (mapFromSeq cmpString (deref times)))) in
-
-    type StepStatus a in
-    con StepDone : all a. TSSingle a -> StepStatus a in
-    con StepStep : all a. TSTree a -> StepStatus a in
-    con StepFail : all a. () -> StepStatus a in
-    type Step a = TSTree a -> StepStatus a in
-
-    let getDone : all a. StepStatus a -> Option (TSSingle a) = lam x.
-      match x with StepDone x then Some x else None () in
-
-    let fix : all a. Step a -> Step a = lam step.
-      recursive let f : Step a = lam tree.
-        let res = step tree in
-        match res with StepStep tree then f tree else res in
-      f in
-    let seq : all a. Step a -> Step a -> Step a = lam l. lam r.
-      let f : Step a = lam tree. switch l tree
-        case res & (StepDone _ | StepFail _) then res
-        case StepStep tree then r tree
-        end in
-      f in
-    let chain : all a. [Step a] -> Step a = lam fs.
-      match fs with fs ++ [last]
-      then foldr seq last fs
-      else error "Compiler error: empty list in chain" in
-    let bestDoneOf : all a. [Step a] -> Step a = lam fs. lam tree.
-      let inner = lam f. match f tree with StepDone sing
-        then Some sing
-        else None () in
-      match min (lam a. lam b. cmpf a.cost b.cost) (mapOption inner fs)
-      with Some sing then StepDone sing
-      else StepFail () in
-    let sizeBranches : all a. [(Int, Step a)] -> Step a -> Step a = lam smaller. lam default.
-      let smaller = sort (lam a. lam b. subi a.0 b.0) smaller in
-      match smaller with _ ++ [(upper, _)] then
-        let f = lam tree.
-          let size = rtBoundedSize upper tree in
-          let pair = optionBind size (lam size. find (lam pair. lti size pair.0) smaller) in
-          optionMapOrElse (lam. default tree) (lam pair. pair.1 tree) pair
-        in f
-      else default in
-    let sizeBranch : all a. {threshold : Int, small : Step a, big : Step a} -> Step a = lam opts. lam tree.
-      if optionIsSome (rtBoundedSize opts.threshold tree)
-      then opts.small tree
-      else opts.big tree in
-
-    let pickBestOr : all a. Step a = lam tree. match tree with RTOr (x & {others = []})
-      then match min (lam a. lam b. cmpf a.cost b.cost) x.singles with Some sing
-        then StepDone sing
-        else StepFail ()
-      else StepStep tree in
-    let checkDone : all a. Step a = lam tree. match tree with RTSingle sing
-      then StepDone sing
-      else StepStep tree in
-    let perIndep : all a. (all x. Step x) -> Step a = lam f. lam tree.
-      match tree with RTAnd (x & {dep = InDep _}) then
-        let runInner = lam child. switch f child.val
-          case StepDone sing then Some {child with val = RTSingle sing}
-          case StepStep tree then Some {child with val = tree}
-          case StepFail _ then None ()
-          end in
-        let times = ref [] in
-        let runInner = lam child.
-          let startT = wallTimeMs () in
-          let res = runInner child in
-          let endT = wallTimeMs () in
-          modref times (snoc (deref times) (subf endT startT));
-          res in
-        let debugPrintTimes = lam.
-          let json = JsonObject (mapFromSeq cmpString
-            [ ("tag", JsonString "perIndex")
-            ]) in
-          printLn (json2string (JsonArray (map (lam x. JsonFloat x) (deref times)))) in
-        match optionMapM runInner x.children with Some children
-        then debugPrintTimes(); StepStep (RTAnd {x with children = children})
-        else debugPrintTimes(); StepFail ()
-      else f tree in
-
-    let propagate : all a. Step a = lam tree.
-      match rtPropagate propagateInterface tree with (failures, res) in
-      match res with Some tree
-      then StepStep tree
-      else
-        (if debug then
-          printLn (json2string (JsonString "AUTO: propagate failure"));
-          let failures = mapAccumL (rtfToJson debugInterface) pprintEnvEmpty failures in
-          printLn (json2string (JsonArray failures.1))
-         else ());
-        StepFail () in
-    let debug : all a. String -> Step a = lam label. lam tree.
-      (if debug then
-        printLn (json2string (JsonString label));
-        printLn (json2string (rtDebugJson debugInterface pprintEnvEmpty tree).1)
-       else ());
-      StepStep tree in
-    let collapseLeaves : all a. Step a = lam tree.
-      StepStep (rtCollapseLeaves collapseLeavesInterface tree) in
-    let partitionIndep : all a. Step a = lam tree.
-      StepStep (rtPartitionIndependent partitionInternalInterface tree) in
-    let flattenAnds : all a. Step a = lam tree.
-      StepStep (rtFlatten flattenInterface tree) in
-    let oneHomogeneous : all a. Step a = lam tree.
-      match rtMaterializeHomogeneous materializeHomogeneousInterface tree
-      with Some sing then StepDone sing
-      else StepFail () in
-    let onTopHomogeneousAlts : all a. Step a -> Step a = lam step. lam tree.
-      let res = rtHomogenizeTop nameCmp tree in
-      let res = mapOption (lam x. match step x with StepDone sing then Some sing else None ()) res in
-      match min (lam a. lam b. cmpf a.cost b.cost) res
-      with Some sing then StepDone sing
-      else StepFail () in
-    let consistent : all a. Step a = lam tree.
-      match rtMaterializeConsistent materializeConsistentInterface tree
-      with Some sing then StepDone sing
-      else StepFail () in
-    let fail : all a. Bool -> Step a = lam complete. lam.
-      if complete
-      then errorSingle [] "Could not find a consistent assignment of impls across the program"
-      else errorSingle [] "Could not find a consistent assignment of impls across the program (though it may have been missed)" in
-
-    let inner = lam tree. fix (chain
-      [ collapseLeaves
-      , debug "post-collapse"
-      , propagate
-      , debug "post-propagate"
-      , checkDone
-      ]) tree in
-    let bottomUp = lam x. fix (chain [collapseLeaves, propagate, debug "bu-step", checkDone, pickBestOr]) x in
-    let inner = lam tree. chain
-      [ debug "pre-homogeneous"
-      -- , oneHomogeneous
-      , onTopHomogeneousAlts (seq propagate (sizeBranches
-        [ (1000000, bottomUp)
-        ]
-        (seq (debug "homogeneous top") oneHomogeneous)))
-      , debug "post-homogeneous"
-      , propagate
-      , debug "post-inner-propagate"
-      ] tree in
-    let fastSolve = chain
-      [ debug "start"
-      , propagate
-      , debug "post-propagate"
-      , flattenAnds
-      , partitionIndep
-      , debug "post-partition-indep"
-      , perIndep #frozen"inner"
-      , debug "post-per-indep"
-      , propagate
-      , debug "post-final-propagate"
-      , checkDone
-      , fail false
+lang TreeSolverGreedy = ComposableSolver
+  sem solveWork debug prev = | top ->
+    let s = mkCSSteps debug in
+    let inner = s.lazy in
+    let solve = s.chain
+      [ s.debug "start"
+      , s.propagate
+      , s.debug "post-propagate"
+      , s.flattenAnds
+      , s.partitionIndep
+      , s.debug "post-partition-indep"
+      , s.perIndep #frozen"inner"
+      , s.debug "post-per-indep"
+      , s.propagate
+      , s.debug "post-final-propagate"
+      , s.checkDone
+      , s.fail false
       ] in
-    let completeSolve = chain
-      [ debug "post-filter"
-      , propagate
-      , debug "post-propagate"
-      , flattenAnds
-      , partitionIndep
-      , debug "post-filter-post-part-indep"
-      , perIndep #frozen"bottomUp"
-      , propagate
-      , checkDone
-      , fail false
-      ] in
-    newPhases ();
-    let recordedTop = rtRecordSolution top in
-    phase "record solution";
-    let solution = fastSolve recordedTop in
-    phase "solve first";
-    let solution = getDone solution in
-    let filteredTree = optionMap (lam sing. rtsFilterApprox filterApproxInterface sing.value.0 top) solution in
-    phase "filter tree";
-    let newSol = optionBind filteredTree (lam tree. getDone (completeSolve tree)) in
-    phase "solve second";
-    debugPrintTimes ();
-    switch (solution, newSol)
-    case (Some s1, Some s2) then
-      printLn (json2string (JsonFloat s1.cost));
-      printLn (json2string (JsonFloat s2.cost));
-      if ltf s1.cost s2.cost then s1.value.1 else s2.value
-    case (Some s, _) then
-      printLn (json2string (JsonString "resolve failed"));
-      s.value.1
-    case _ then
-      errorSingle [] "Could not find a consistent assignment of impls across the program (though it may have been missed)"
-    end
+    let solve = match prev with Some prev
+      then s.try
+        (s.seq (s.filterApprox prev) solve)
+        (s.seq (s.warn [] "Could not reuse previous solution, falling back to a re-solve.") solve)
+      else solve in
+    match s.getDone (solve top) with Some s then s.value else
+    errorSingle [] "Could not find a consistent assignment of impls across the program (though it may have been missed)"
 end
 
 lang TreeSolverFilterByBest = TreeSolverBase
-  sem solveWork debug = | top ->
+  sem solveWork debug prev = | top ->
     let propagateInterface = mkPropagateInterface () in
     let debugInterface = mkDebugInterface () in
     let collapseLeavesInterface = mkCollapseLeavesInterface () in
 
     type StepStatus in
-    con StepDone : [SolverSolution a] -> StepStatus in
-    con StepStep : TSTree [SolverSolution a] -> StepStatus in
+    con StepDone : a -> StepStatus in
+    con StepStep : TSTree a -> StepStatus in
     con StepFail : () -> StepStatus in
-    type Step = TSTree [SolverSolution a] -> StepStatus in
+    type Step = TSTree a -> StepStatus in
 
     let fix : Step -> Step = lam step.
       recursive let f : Step = lam tree.
@@ -5321,7 +5548,7 @@ lang TreeSolverFilterByBest = TreeSolverBase
 end
 
 lang TreeSolverHomogeneous = TreeSolverBase
-  sem solveWork debug = | top ->
+  sem solveWork debug prev = | top ->
     let propagateInterface = mkPropagateInterface () in
     let partitionInternalInterface = mkPartitionInternalInterface () in
     let materializeConsistentInterface = mkMaterializeConsistentInterface () in
@@ -5337,15 +5564,15 @@ lang TreeSolverHomogeneous = TreeSolverBase
 end
 
 lang TreeSolverMixed = TreeSolverBase
-  sem solveWork debug = | top ->
+  sem solveWork debug prev = | top ->
     let propagateInterface = mkPropagateInterface () in
     let partitionInternalInterface = mkPartitionInternalInterface () in
     let materializeConsistentInterface = mkMaterializeConsistentInterface () in
     let materializeHomogeneousInterface = mkMaterializeHomogeneousInterface () in
     let debugInterface = mkDebugInterface () in
     let cmpf = lam a. lam b. if ltf a b then negi 1 else if gtf a b then 1 else 0 in
-    type Tree = RepTree Relevant Constraint Var Val NodeIdent [SolverSolution a] in
-    type Res = RTSingleRec [SolverSolution a] Constraint Var Val Relevant NodeIdent in
+    type Tree = RepTree Relevant Constraint Var Val NodeIdent a in
+    type Res = RTSingleRec a Constraint Var Val Relevant NodeIdent in
 
     (if debug then
       match rtDebugJson debugInterface pprintEnvEmpty top with (env, debug) in
@@ -5376,7 +5603,7 @@ lang TreeSolverMixed = TreeSolverBase
 end
 
 lang TreeSolverExplore = TreeSolverBase
-  sem solveWork debug = | top ->
+  sem solveWork debug prev = | top ->
     let propagateInterface = mkPropagateInterface () in
     let partitionInternalInterface = mkPartitionInternalInterface () in
     let eqInterface = mkEqInterface () in
@@ -5722,7 +5949,7 @@ lang TreeSolverZ3 = TreeSolverBase + MExprAst
     then if null str then Some rt else error (concat "Extra stuff left in str: " str)
     else None ()
 
-  sem solveWork debug = | top ->
+  sem solveWork debug prev = | top ->
     let propagateInterface = mkPropagateInterface () in
     let solveExternallyBaseInterface = mkSolveExternallyBaseInterface () in
     let prelude = strJoin "\n"
@@ -6030,7 +6257,7 @@ lang SATishSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpers
       , join solutions
       ]
 
-  sem topSolve debug global = | STQContent topTrees ->
+  sem topSolve debug file global = | STQContent topTrees ->
     let constraintOr = lam a. lam b.
       { unfixedReprs = mapUnionWith (optionZipWith setUnion) a.unfixedReprs b.unfixedReprs
       , fixedUni = None ()
@@ -6571,7 +6798,7 @@ lang LazyTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHe
       , join (map (lam x. match x with SSContent x in work "" x) solutions)
       ]
 
-  sem topSolve debug global = | STQContent choices ->
+  sem topSolve debug file global = | STQContent choices ->
     let sols = exploreSolutions 0.0 (emptyUnification ()) choices in
     match lazyStreamUncons sols with Some (sol, _) then
       let sols = foldl
@@ -7005,7 +7232,7 @@ lang MemoedTopDownSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypes
       } in
     SBContent branch
 
-  sem topSolve debug global = | STQContent opUses ->
+  sem topSolve debug file global = | STQContent opUses ->
     -- TODO(vipa, 2023-10-26): Port solveViaModel and use it here if we have a large problem
     let mergeOpt = lam prev. lam sol.
       match mergeUnifications prev.uni sol.uni with Some uni then Some
@@ -7254,7 +7481,7 @@ lang EagerRepSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpe
     }
   sem initSolverTopQuery = | _ -> STQContent []
 
-  sem topSolve debug global = | STQContent opUses ->
+  sem topSolve debug file global = | STQContent opUses ->
     -- TODO(vipa, 2023-10-26): Port solveViaModel and use it here if we have a large problem
     let mergeOpt = lam prev. lam sol.
       match mergeUnifications prev.uni sol.uni with Some uni then Some

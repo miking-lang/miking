@@ -160,3 +160,9 @@ recursive let iterConcatMap : all a. all b. (a -> Iter b) -> Iter a -> Iter b
     case INCons (x, xs) then iterConcat (f x) (iterConcatMap f xs) ()
     end
 end
+
+let iterUncons : all a. Iter a -> Option (a, Iter a)
+  = lam it. switch it ()
+    case INNil _ then None ()
+    case INCons (x, xs) then Some (x, xs)
+    end
