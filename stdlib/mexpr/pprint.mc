@@ -59,7 +59,6 @@ type PprintEnv = {
   --     then
   optCompactMatchElse: Bool,
 
-  optCompactRecordCreation: Bool,
   optCompactRecordUpdate: Bool,
 
   optSingleLineLimit: Int,
@@ -73,7 +72,6 @@ let pprintEnvEmpty = { nameMap = mapEmpty nameCmp,
                        count = mapEmpty cmpString,
                        strings = setEmpty cmpString,
                        optCompactMatchElse = true,
-                       optCompactRecordCreation = true,
                        optCompactRecordUpdate = true,
                        optSingleLineLimit = 60,
                        optSingleLineConstSeq = true }
