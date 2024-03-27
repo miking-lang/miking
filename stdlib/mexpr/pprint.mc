@@ -1719,9 +1719,9 @@ let sample_ast =
   ]
 in
 
-print "\n\n";
-print (expr2str sample_ast);
-print "\n\n";
+-- print "\n\n";
+-- print (expr2str sample_ast);
+-- print "\n\n";
 
 utest length (expr2str sample_ast) with 0 using geqi in
 
