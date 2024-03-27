@@ -233,11 +233,9 @@ lang MLangSym = MLangAst + MExprSym
 
             let env : SymEnv = convertNameEnv (convertLangEnv langEnv) in 
             match mapAccumL setSymbol env.currentEnv.tyVarEnv s.params with (_, params) in
-            let included : [Decl] = match mapLookup (nameGetStr ident) includedSyns 
+            let includes : [Decl] = match mapLookup (nameGetStr ident) includedSyns 
                                     with Some xs then xs else [] in  
-
-            let includes = join
-                (map (lam d. match d with DeclSyn s in s.defs) included) in
+            let includes : [Name] = map syn2ident includes in 
 
             let synn = DeclSyn {s with params = params,
                                        ident = ident,
@@ -266,8 +264,7 @@ lang MLangSym = MLangAst + MExprSym
             match pair with (ident, includedSyns) in 
             let ident = nameSym ident in 
 
-            let includes = join (map 
-                (lam d. match d with DeclSyn s in s.defs) includedSyns) in 
+            let includes = map syn2ident includedSyns in 
 
             let decl = DeclSyn {ident = ident,
                                 params = [],
@@ -337,17 +334,14 @@ lang MLangSym = MLangAst + MExprSym
             let tyAnnot = symbolizeType env s.tyAnnot in 
             let tyBody = symbolizeType env s.tyBody in 
 
-            let includedSems = match mapLookup (nameGetStr s.ident) includedSems 
-                               with Some xs then xs else [] in 
-            
-            let includedCases = join (map 
-                (lam decl. match decl with DeclSem s in s.cases)
-                includedSems) in
+            let includes = match mapLookup (nameGetStr s.ident) includedSems 
+                           with Some xs then xs else [] in 
+            let includes = map (lam s. match s with DeclSem s in s.ident) includes in 
 
             let decl = DeclSem {s with ident = ident,
                                 tyAnnot = tyAnnot,
                                 tyBody = tyBody,
-                                includes = includedCases} in 
+                                includes = includes} in 
 
             let langEnv = {langEnv with 
                 sems = mapInsert (nameGetStr s.ident) decl langEnv.sems} in
@@ -535,10 +529,10 @@ utest isFullySymbolizedDecl l1 () with true in
 utest isFullySymbolizedDecl l2 () with true in 
 match l2 with DeclLang ld in 
 match head (tail ld.decls) with DeclSem f in 
-utest length f.includes with 0 in 
+utest length f.includes with 1 in 
 utest isFullySymbolized p.expr with true in 
 match head ld.decls with DeclSyn foo in 
-utest length foo.includes with 2 in
+utest length foo.includes with 1 in
 
 let p : MLangProgram = {
     decls = [
@@ -591,7 +585,7 @@ let p : MLangProgram = {
         ],
         decl_langi_ "L2" ["L1"] [
             decl_syn_ "Foo" [],
-            decl_syn_ "Foo" []
+            decl_syn_ "Bar" []
         ]
     ],
     expr = uunit_

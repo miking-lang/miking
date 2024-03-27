@@ -60,7 +60,9 @@ lang SynDeclAst = DeclAst
   | DeclSyn {ident : Name,
              params : [Name],
              defs : [{ident : Name, tyIdent : Type}],
-             includes : [{ident : Name, tyIdent : Type}],
+             -- The symbolized names of the syns to include. 
+             -- This field is set during symbolization.
+             includes : [Name],
              info : Info}
 
   sem infoDecl = 
@@ -92,7 +94,9 @@ lang SemDeclAst = DeclAst
              tyBody : Type,
              args : [{ident : Name, tyAnnot : Type}],
              cases : [{pat : Pat, thn : Expr}],
-             includes : [{pat : Pat, thn : Expr}],
+             -- The list of semantic function names whose cases should be 
+             -- included. This field is set during symbolization. 
+             includes : [Name],
              info : Info}
 
   sem infoDecl = 
