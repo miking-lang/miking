@@ -569,7 +569,7 @@ let tensorFind : all a. (a -> Bool) -> Tensor[a] -> Option a =
   lam p. lam t.
     let x = tensorFindi p t in
     -- NOTE(vsenderov, 2024-03-21) Workaround for a failing test in TreePPL
-    -- see https://github.com/treeppl/treeppl/pull/67
+    -- see https://github.com/treeppl/treeppl/pull/67, https://github.com/treeppl/treeppl/issues/69
     match x with Some (y, _) then Some y
     else match x with None _ then None ()
     else never
