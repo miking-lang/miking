@@ -8,6 +8,18 @@ include "name.mc"
 include "set.mc"
 include "result.mc"
 
+type CompositionCheckEnv = {
+  baseMap : Map Name Name
+}
+
+let _emptyCompositionCheckEnv = {
+  baseMap = mapEmpty nameCmp
+}
+
+let insertBaseMap : CompositionCheckEnv -> Name -> Name -> CompositionCheckEnv = 
+  lam env. lam k. lam v. 
+    {env with baseMap = mapInsert k v env.baseMap}
+
 lang MLangCompositionCheck = MLangAst
   syn CompositionError =
   | DifferentBaseSyn {}
@@ -21,49 +33,47 @@ lang MLangCompositionCheck = MLangAst
   sem checkComposition : MLangProgram -> [CompositionError] 
   sem checkComposition =
   | prog -> 
-    (switch (foldl accumSynBase (Right (mapEmpty nameCmp)) prog.decls)
-     case Left _ then (error "Language composition error: included syns do not share base!")
-     case Right _ then (printLn "Valid base for all syns and sems!")
+    let result : Result CompositionWarning CompositionError CompositionCheckEnv
+    = _foldl accumSynBase _emptyCompositionCheckEnv prog.decls in 
+    match _consume result with (_, errOrResult) in 
+    (switch errOrResult 
+     case Left _ then error "Error during composition check!"
+     case Right _ then printLn "Valid composition!"
      end) ;
-
     []
 
-  sem accumSynBase : Either CompositionError (Map Name Name) -> Decl -> Either CompositionError (Map Name Name)
-  sem accumSynBase env = 
-  | decl -> 
-    match env with Left err then env
-    else switch decl
-      case DeclLang l then foldl accumSynBase env l.decls
-      case DeclSyn s then
-        match env with Right m in 
-        match s.includes with [] then 
-          Right (mapInsert s.ident s.ident m)
-        else 
-          let includeList = map 
-            (lam incl. match mapLookup incl m with Some b in b) 
-            s.includes in 
-          let includeSet = setOfSeq nameCmp includeList in 
+  sem accumSynBase : CompositionCheckEnv -> 
+                     Decl -> 
+                     Result CompositionWarning CompositionError CompositionCheckEnv
+  sem accumSynBase env =
+  | DeclLang l ->
+   _foldl accumSynBase env l.decls
+  | DeclSyn s -> 
+    match s.includes with [] then 
+      _ok (insertBaseMap env s.ident s.ident)
+    else 
+      let includeList = map 
+        (lam incl. match mapLookup incl env.baseMap with Some b in b) 
+        s.includes in 
+      let includeSet = setOfSeq nameCmp includeList in 
 
-          if eqi 1 (setSize includeSet) then
-            Right (mapInsert s.ident (head includeList) m)
-          else
-            Left (DifferentBaseSyn {})
-      case DeclSem s then
-        match env with Right m in 
-        match s.includes with [] then 
-          Right (mapInsert s.ident s.ident m)
-        else 
-          let includeList = map 
-            (lam incl. match mapLookup incl m with Some b in b) 
-            s.includes in 
-          let includeSet = setOfSeq nameCmp includeList in 
+      if eqi 1 (setSize includeSet) then
+        _ok (insertBaseMap env s.ident (head includeList))
+      else
+        _err (DifferentBaseSyn {})
+  | DeclSem s ->
+    match s.includes with [] then 
+      _ok (insertBaseMap env s.ident s.ident)
+    else 
+      let includeList = map 
+        (lam incl. match mapLookup incl env.baseMap with Some b in b) 
+        s.includes in 
+      let includeSet = setOfSeq nameCmp includeList in 
 
-          if eqi 1 (setSize includeSet) then
-            Right (mapInsert s.ident (head includeList) m)
-          else
-            Left (DifferentBaseSem {})
-      case _ then env
-      end
+      if eqi 1 (setSize includeSet) then
+        _ok (insertBaseMap env s.ident (head includeList))
+      else
+        _err (DifferentBaseSem {})
 end
 
 lang TestLang = MLangSym + MLangCompositionCheck end
@@ -103,8 +113,8 @@ use TestLang in
 let p : MLangProgram = {
     decls = [
         decl_lang_ "L0" [
-            decl_syn_ "Foo" [],
-            decl_sem_ "f" [] []
+            -- decl_syn_ "Foo" []
+            -- decl_sem_ "f" [] []
         ],
         decl_langi_ "L1" ["L0"] [
             decl_syn_ "Foo" [("Baz", tyint_)],
