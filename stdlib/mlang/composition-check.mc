@@ -9,16 +9,24 @@ include "set.mc"
 include "result.mc"
 
 type CompositionCheckEnv = {
-  baseMap : Map Name Name
+  -- Mapping from the symbolized name of a syn or sem to their base declaration
+  baseMap : Map Name Name,
+  -- Mapping from symbolized name of a syn or sem to the amount of parameters
+  paramMap : Map Name Int 
 }
 
 let _emptyCompositionCheckEnv = {
-  baseMap = mapEmpty nameCmp
+  baseMap = mapEmpty nameCmp,
+  paramMap = mapEmpty nameCmp
 }
 
 let insertBaseMap : CompositionCheckEnv -> Name -> Name -> CompositionCheckEnv = 
   lam env. lam k. lam v. 
     {env with baseMap = mapInsert k v env.baseMap}
+    
+let insertParamMap : CompositionCheckEnv -> Name -> Int -> CompositionCheckEnv = 
+  lam env. lam k. lam v. 
+    {env with paramMap = mapInsert k v env.paramMap}
 
 lang MLangCompositionCheck = MLangAst
   syn CompositionError =
@@ -34,20 +42,77 @@ lang MLangCompositionCheck = MLangAst
   sem checkComposition =
   | prog -> 
     let result : Result CompositionWarning CompositionError CompositionCheckEnv
-    = _foldl accumSynBase _emptyCompositionCheckEnv prog.decls in 
+    = _foldl parseAll _emptyCompositionCheckEnv prog.decls in 
     match _consume result with (_, errOrResult) in 
     (switch errOrResult 
-     case Left _ then error "Error during composition check!"
-     case Right _ then printLn "Valid composition!"
+     case Right _ then printLn "Valid language composition!" 
+     case Left err then
+      (switch head err 
+      case DifferentBaseSyn _ then error "Different base syn!"
+      case DifferentBaseSem _ then error "Different base sem!"
+      case MismatchedSynParams _ then error "Mismatched syn parameters!"
+      case MismatchedSemParams _ then error "Mismatched sem parameters!"
+      case InvalidSemPatterns _ then error "Invalid sem patterns!"
+      end)
      end) ;
     []
 
-  sem accumSynBase : CompositionCheckEnv -> 
-                     Decl -> 
-                     Result CompositionWarning CompositionError CompositionCheckEnv
-  sem accumSynBase env =
-  | DeclLang l ->
-   _foldl accumSynBase env l.decls
+  sem parseAll : CompositionCheckEnv -> 
+                 Decl -> 
+                 Result CompositionWarning CompositionError CompositionCheckEnv
+  sem parseAll env = 
+  | DeclLang l -> 
+    _foldl parseAll env l.decls
+  | DeclSem s & d ->
+    _foldlfun env d [parseParams, parseBase]
+  | DeclSyn s & d ->
+    _foldlfun env d [parseParams, parseBase]
+
+  sem parseParams : CompositionCheckEnv -> 
+                    Decl -> 
+                    Result CompositionWarning CompositionError CompositionCheckEnv
+  sem parseParams env = 
+  | DeclSyn s -> 
+    let paramNum = length s.params in 
+
+    match s.includes with [] then 
+      _ok (insertParamMap env s.ident paramNum)
+    else 
+      let paramNum = length s.params in 
+
+      let includeList = map 
+        (lam incl. match mapLookup incl env.paramMap with Some b in b) 
+        s.includes in 
+      let includeSet = setOfSeq subi includeList in 
+      let includeSet = setInsert paramNum includeSet in 
+
+      if eqi 1 (setSize includeSet) then
+        _ok (insertParamMap env s.ident paramNum)
+      else
+        _err (MismatchedSynParams {})
+  | DeclSem s ->
+    let paramNum = length s.args in 
+
+    match s.includes with [] then 
+      _ok (insertParamMap env s.ident paramNum)
+    else 
+      let includeList = map 
+        (lam incl. match mapLookup incl env.paramMap with Some b in b) 
+        s.includes in 
+      let includeSet = setOfSeq subi includeList in 
+      let includeSet = setInsert paramNum includeSet in 
+
+      if eqi 1 (setSize includeSet) then
+        _ok (insertParamMap env s.ident paramNum)
+      else
+        _err (MismatchedSemParams {})
+
+  sem parseBase : CompositionCheckEnv -> 
+                  Decl -> 
+                  Result CompositionWarning CompositionError CompositionCheckEnv
+  sem parseBase env =
+  -- | DeclLang l ->
+  --  _foldl parseBase env l.decls
   | DeclSyn s -> 
     match s.includes with [] then 
       _ok (insertBaseMap env s.ident s.ident)
@@ -113,8 +178,8 @@ use TestLang in
 let p : MLangProgram = {
     decls = [
         decl_lang_ "L0" [
-            -- decl_syn_ "Foo" []
-            -- decl_sem_ "f" [] []
+            decl_syn_ "Foo" [],
+            decl_sem_ "f" [] []
         ],
         decl_langi_ "L1" ["L0"] [
             decl_syn_ "Foo" [("Baz", tyint_)],
@@ -125,7 +190,7 @@ let p : MLangProgram = {
             decl_sem_ "f" [] []
         ],
         decl_langi_ "L12" ["L0", "L1", "L2"] [
-          decl_sem_ "f" [] []
+          decl_sem_ "f" [("x", tyint_)] []
         ]        
     ],
     expr = bind_ (use_ "L2") (int_ 10)

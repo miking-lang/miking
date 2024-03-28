@@ -365,6 +365,23 @@ let _foldl : all w. all e. all a. all b.
             ResultOk { warnings = accWarn, value = acc }
     in workOK (_emptyMap ()) acc
 
+let _foldlfun : all w. all e. all a. all b.
+  a -> b -> [(a -> b -> Result w e a)] -> Result w e a
+  = lam acc. lam b.
+      recursive
+      let workOK : Map Symbol w -> a -> [(a -> b -> Result w e a)] -> Result w e a
+        = lam accWarn. lam acc. lam seq.
+          match seq with [hd] ++ tl then
+            switch hd acc b
+            case ResultOk c then
+              workOK (mapUnion accWarn c.warnings) (c.value) tl
+            case ResultErr c then
+              ResultErr {c with warnings = mapUnion accWarn c.warnings}
+            end
+          else
+            ResultOk { warnings = accWarn, value = acc }
+    in workOK (_emptyMap ()) acc
+
 -- Perform a computation on the values of a sequence while simultaneously
 -- folding an accumulator over the sequence from the left. Produces a non-error
 -- only if all individual computations produce a non-error. All errors and
