@@ -557,6 +557,9 @@ utest isFullySymbolizedDecl l12 () with true in
 
 match l12 with DeclLang l in
 utest length l.decls with 1 in 
+match head l.decls with DeclSyn synDecl in 
+utest length synDecl.includes with 2 in 
+utest foldl and true (map nameHasSym synDecl.includes) with true in 
 
 let p : MLangProgram = {
     decls = [
