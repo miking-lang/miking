@@ -306,7 +306,7 @@ lang MLangSym = MLangAst + MExprSym
 
         -- 3. Symbolize syntax constructors (add defs to conEnv)
         let symbDef = lam langEnv : LangEnv. lam def : {ident : Name, tyIdent : Type}. 
-            let ident = nameSym (nameGetStr ident) in
+            let ident = nameSym (nameGetStr def.ident) in
 
             let env = convertNameEnv (convertLangEnv langEnv) in 
             let tyIdent = symbolizeType env def.tyIdent in
@@ -604,4 +604,54 @@ let p : MLangProgram = {
 } in 
 match symbolizeMLang symEnvDefault p with (_, p) in 
 utest isFullySymbolizedProgram p () with true in 
+
+-- Test that symbolization of semantic function points to the correct
+-- semantic function under language composition
+-- Also test that symbolization removes occurences of TmUse.
+let p : MLangProgram = {
+    decls = [
+        decl_lang_ "L1" [
+            decl_sem_ "f" [] []
+        ],
+        decl_langi_ "L2" ["L1"] [
+            decl_sem_ "f" [] []
+        ]
+    ],
+    expr = (bind_) (use_ "L2") (var_ "f")
+} in 
+match symbolizeMLang symEnvDefault p with (_, p) in 
+utest isFullySymbolizedProgram p () with true in 
+match get p.decls 1 with DeclLang l2 in 
+match head l2.decls with DeclSem f2 in
+match p.expr with TmVar v in 
+utest nameEqSym v.ident f2.ident with true in 
+
+let p : MLangProgram = {
+    decls = [
+        decl_lang_ "L1" [
+            decl_syn_ "Foo" [("Bar", tyint_)]
+        ],
+        decl_langi_ "L2" ["L1"] [
+        ]
+    ],
+    expr = (bind_) (use_ "L1") (conapp_ "Bar" (int_ 10))
+} in 
+match symbolizeMLang symEnvDefault p with (_, p) in 
+utest isFullySymbolizedProgram p () with true in
+
+-- let p : MLangProgram = {
+--     decls = [
+--         decl_lang_ "L1" [
+--             decl_syn_ "Foo" [("Bar", tyint_)]
+--         ],
+--         decl_langi_ "L2" ["L1"] [
+--         ]
+--     ],
+--     expr = (bind_) (use_ "L2") (conapp_ "Bar" (int_ 10))
+-- } in 
+-- match symbolizeMLang symEnvDefault p with (_, p) in 
+-- match get p.decls 1 with DeclLang l2 in 
+-- utest length (l2.decls) with 1 in 
+-- utest isFullySymbolizedProgram p () with true in
+
 ()
