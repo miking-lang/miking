@@ -364,19 +364,18 @@ lang MLangSym = MLangAst + MExprSym
                 let tyAnnot = symbolizeType env arg.tyAnnot in 
                 (env, {ident = ident, tyAnnot = tyAnnot})
             in
-            
             match mapAccumL symbArg env s.args with (env, args) in 
 
             let symbCases = lam cas : {pat : Pat, thn : Expr}. 
                 match symbolizePat env (mapEmpty cmpString) cas.pat with (thnVarEnv, pat) in
-                let thn = symbolizeExpr (updateVarEnv env thnVarEnv) cas.thn in
+                let varEnv = mapUnion env.currentEnv.varEnv thnVarEnv in 
+                let thn = symbolizeExpr (updateVarEnv env varEnv) cas.thn in
                 {pat = pat, thn = thn}
             in
-
             let cases = map symbCases s.cases in
 
             let decl = DeclSem {s with args = args,
-                                cases = cases} in 
+                                       cases = cases} in 
 
             let langEnv = {langEnv with 
                 sems = mapInsert (nameGetStr s.ident) decl langEnv.sems} in
@@ -432,7 +431,13 @@ lang TestLang = MLangSym + SymCheck + MLangPrettyPrint
         _and (lam. nameHasSym l.ident) (_and 
              (lam. (forAll nameHasSym l.params))
              (isFullySymbolizedType l.tyIdent))
-        
+
+    sem isFullySymbolizedProgram : MLangProgram -> () -> Bool
+    sem isFullySymbolizedProgram =
+    | prog -> 
+        _and 
+            (isFullySymbolizedExpr prog.expr)
+            (foldl (_andFold isFullySymbolizedDecl) (lam. true) prog.decls)
 end
 
 let synDeclIdentHasSymbolized = lam decl. 
@@ -501,6 +506,7 @@ let p : MLangProgram = {
     expr = bind_ (use_ "L1") (var_ "f")
 } in 
 match symbolizeMLang symEnvDefault p with (_, p) in 
+utest isFullySymbolizedProgram p () with true in 
 let l1 = head p.decls in 
 match l1 with DeclLang l in 
 utest isFullySymbolizedDecl l1 () with true in 
@@ -523,6 +529,7 @@ let p : MLangProgram = {
     expr = bind_ (use_ "L2") (var_ "f")
 } in 
 match symbolizeMLang symEnvDefault p with (_, p) in 
+utest isFullySymbolizedProgram p () with true in 
 let l1 = head p.decls in 
 let l2 = head (tail p.decls) in 
 utest isFullySymbolizedDecl l1 () with true in 
@@ -548,6 +555,7 @@ let p : MLangProgram = {
     expr = bind_ (use_ "L2") (int_ 10)
 } in 
 match symbolizeMLang symEnvDefault p with (_, p) in 
+utest isFullySymbolizedProgram p () with true in 
 let l1 = head p.decls in 
 let l2 = get p.decls 1 in 
 let l12 = get p.decls 2 in 
@@ -571,6 +579,7 @@ let p : MLangProgram = {
     expr = uunit_
 } in 
 match symbolizeMLang symEnvDefault p with (_, p) in 
+utest isFullySymbolizedProgram p () with true in 
 let l1 = head p.decls in 
 match l1 with DeclLang l in 
 utest isFullySymbolizedDecl l1 () with true in 
@@ -581,19 +590,18 @@ match l2 with DeclLang l in
 utest isFullySymbolizedDecl l2 () with true in
 utest length l.decls with 1 in 
 
+-- Test that variable symbolization within semantic case bodies
 let p : MLangProgram = {
     decls = [
         decl_lang_ "L1" [
-
-        ],
-        decl_langi_ "L2" ["L1"] [
-            decl_syn_ "Foo" [],
-            decl_syn_ "Bar" []
+            decl_sem_ 
+                "f"
+                [("x", tyint_)]
+                [(pvar_ "y", addi_ (var_ "x") (var_ "y"))]
         ]
     ],
-    expr = uunit_
+    expr = bind_ (use_ "L1") (appf1_ (var_ "f") (int_ 10))
 } in 
 match symbolizeMLang symEnvDefault p with (_, p) in 
-
-
+utest isFullySymbolizedProgram p () with true in 
 ()
