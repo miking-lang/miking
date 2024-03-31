@@ -5053,6 +5053,7 @@ lang ComposableSolver = TreeSolverBase
     , oneHomogeneous : all a. Step a
     , consistent : all a. Step a
     , lazy : all a. Step a
+    , enumBest : all a. Option Int -> Step a
 
     , filterApprox : all a. RTS -> Step a
     }
@@ -5069,6 +5070,7 @@ lang ComposableSolver = TreeSolverBase
     let materializeHomogeneousInterface = mkMaterializeHomogeneousInterface () in
     let materializeConsistentInterface = mkMaterializeConsistentInterface () in
     let materializeLazyInterface = mkMaterializeLazyInterface () in
+    let materializeStatelessInterface = mkMaterializeStatelessInterface () in
     let seq : all a. Step a -> Step a -> Step a = lam l. lam r.
       let f : Step a = lam tree. switch l tree
         case res & (StepDone _ | StepFail _) then res
@@ -5223,6 +5225,14 @@ lang ComposableSolver = TreeSolverBase
         with Some (sing, _) then StepDone sing
         else StepFail () in
       #frozen"f"
+    , enumBest =
+      let f : all a. Option Int -> Step a = lam limit. lam tree.
+        let it = rtMaterializeStateless materializeStatelessInterface tree in
+        let it = optionMapOr it (lam limit. iterTake limit it) limit in
+        match iterMin (lam a. lam b. cmpf a.cost b.cost) it
+        with Some sing then StepDone sing
+        else StepFail () in
+      #frozen"f"
     }
 end
 
@@ -5236,13 +5246,16 @@ lang TreeSolverPartIndep = ComposableSolver
       , s.checkDone
       , s.pickBestOr
       ]) x in
-    let inner = lam tree. s.chain
-      [ s.debug "pre-homogeneous"
-      , s.sizeBranches [(100000, bottomUp)]
-        (s.onTopHomogeneousAlts (s.seq s.propagate (s.sizeBranches
+    let largeSolver = lam tree. s.try
+      (s.onTopHomogeneousAlts (s.seq s.propagate (s.sizeBranches
          [ (100000, bottomUp)
          ]
          (s.seq (s.debug "homogeneous top") s.oneHomogeneous))))
+      (s.enumBest (Some 1))
+      tree in
+    let inner = lam tree. s.chain
+      [ s.debug "pre-homogeneous"
+      , s.sizeBranches [(100000, bottomUp)] largeSolver
       , s.debug "post-homogeneous"
       , s.propagate
       , s.debug "post-inner-propagate"

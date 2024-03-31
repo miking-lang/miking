@@ -166,3 +166,24 @@ let iterUncons : all a. Iter a -> Option (a, Iter a)
     case INNil _ then None ()
     case INCons (x, xs) then Some (x, xs)
     end
+
+recursive let iterTake : all a. Int -> Iter a -> Iter a
+  = lam limit. lam it. lam.
+    if leqi limit 0 then INNil () else
+    switch it ()
+    case INNil _ then INNil ()
+    case INCons (x, xs) then INCons (x, iterTake (subi limit 1) xs)
+    end
+end
+
+let iterMin : all a. (a -> a -> Int) -> Iter a -> Option a
+  = lam cmp. lam it.
+    recursive let work = lam acc. lam it. switch it ()
+      case INNil _ then acc
+      case INCons (x, xs) then
+        work (if lti (cmp acc x) 0 then acc else x) xs
+      end in
+    switch it ()
+    case INNil _ then None ()
+    case INCons (x, xs) then Some (work x xs)
+    end
