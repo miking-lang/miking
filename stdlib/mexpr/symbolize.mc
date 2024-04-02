@@ -63,10 +63,13 @@ let mergeNameEnv = lam l. lam r. {
 type LangEnv = use MLangAst in {
   ident : Name,
 
-  syns: Map String Decl,
+  -- Map from the string of a syn identifier to a tuple 
+  -- in which the first element is the symbolized name of the syn identifier
+  -- and the second element is a list of symbolized constructor names.
+  syns: Map String (Name, [Name]),
   sems: Map String Name,
-  definedTypes: Map String Decl,
-  includedTypes: Map String Decl,
+  definedTypes: Map String Name,
+  includedTypes: Map String Name,
   includedConstructors: [Name]
 }
 
