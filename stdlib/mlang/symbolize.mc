@@ -51,7 +51,8 @@ let convertLangEnv : LangEnv -> NameEnv = lam langEnv.
         (lam d. match d with DeclSyn s in map (lam def. def.ident) s.defs)
         (mapValues langEnv.syns)
     in 
-    let conPairs = map name2pair (join conIdents) in 
+    let conIdents = concat (join conIdents) langEnv.includedConstructors in 
+    let conPairs = map name2pair conIdents in 
     let conEnv = mapFromSeq cmpString conPairs in 
     
     {_nameEnvEmpty with varEnv = varEnv,
@@ -266,6 +267,11 @@ lang MLangSym = MLangAst + MExprSym
 
             let includes = map syn2ident includedSyns in 
 
+            let includedCons = join (map 
+                (lam s. match s with DeclSyn s in s.defs)
+                includedSyns) in 
+            let includedCons = map (lam d. d.ident) includedCons in 
+
             let decl = DeclSyn {ident = ident,
                                 params = [],
                                 defs = [],
@@ -273,6 +279,7 @@ lang MLangSym = MLangAst + MExprSym
                                 info = NoInfo ()} in
         
             let langEnv = {langEnv with 
+                includedConstructors = concat langEnv.includedConstructors includedCons,
                 syns = mapInsert (nameGetStr ident) decl langEnv.syns} in
 
             (langEnv, decl)
@@ -626,6 +633,19 @@ match head l2.decls with DeclSem f2 in
 match p.expr with TmVar v in 
 utest nameEqSym v.ident f2.ident with true in 
 
+-- Test that constructors can be used in the langauge that they are defined
+let p : MLangProgram = {
+    decls = [
+        decl_lang_ "L1" [
+            decl_syn_ "Foo" [("Bar", tyint_)]
+        ]
+    ],
+    expr = (bind_) (use_ "L1") (conapp_ "Bar" (int_ 10))
+} in 
+match symbolizeMLang symEnvDefault p with (_, p) in 
+utest isFullySymbolizedProgram p () with true in
+
+-- Test that constructors that are defined in an included langauge can be used 
 let p : MLangProgram = {
     decls = [
         decl_lang_ "L1" [
@@ -634,24 +654,11 @@ let p : MLangProgram = {
         decl_langi_ "L2" ["L1"] [
         ]
     ],
-    expr = (bind_) (use_ "L1") (conapp_ "Bar" (int_ 10))
+    expr = (bind_) (use_ "L2") (conapp_ "Bar" (int_ 10))
 } in 
 match symbolizeMLang symEnvDefault p with (_, p) in 
+match get p.decls 1 with DeclLang l2 in 
+utest length (l2.decls) with 1 in
 utest isFullySymbolizedProgram p () with true in
-
--- let p : MLangProgram = {
---     decls = [
---         decl_lang_ "L1" [
---             decl_syn_ "Foo" [("Bar", tyint_)]
---         ],
---         decl_langi_ "L2" ["L1"] [
---         ]
---     ],
---     expr = (bind_) (use_ "L2") (conapp_ "Bar" (int_ 10))
--- } in 
--- match symbolizeMLang symEnvDefault p with (_, p) in 
--- match get p.decls 1 with DeclLang l2 in 
--- utest length (l2.decls) with 1 in 
--- utest isFullySymbolizedProgram p () with true in
 
 ()

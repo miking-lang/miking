@@ -66,7 +66,8 @@ type LangEnv = use MLangAst in {
   syns: Map String Decl,
   sems: Map String Decl,
   definedTypes: Map String Decl,
-  includedTypes: Map String Decl
+  includedTypes: Map String Decl,
+  includedConstructors: [Name]
 }
 
 let _langEnvEmpty : Name -> LangEnv = lam n. {
@@ -74,7 +75,8 @@ let _langEnvEmpty : Name -> LangEnv = lam n. {
   syns = mapEmpty cmpString,
   sems = mapEmpty cmpString,
   definedTypes = mapEmpty cmpString,
-  includedTypes = mapEmpty cmpString
+  includedTypes = mapEmpty cmpString,
+  includedConstructors = []
 }
 
 type SymEnv = {
