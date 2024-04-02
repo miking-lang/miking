@@ -614,7 +614,7 @@ utest isFullySymbolizedProgram p () with true in
 
 -- Test that symbolization of semantic function points to the correct
 -- semantic function under language composition
--- Also test that symbolization removes occurences of TmUse.
+-- Also test that symbolization removes occurrences of TmUse.
 let p : MLangProgram = {
     decls = [
         decl_lang_ "L1" [
