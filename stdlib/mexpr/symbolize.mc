@@ -64,7 +64,7 @@ type LangEnv = use MLangAst in {
   ident : Name,
 
   syns: Map String Decl,
-  sems: Map String Decl,
+  sems: Map String Name,
   definedTypes: Map String Decl,
   includedTypes: Map String Decl,
   includedConstructors: [Name]

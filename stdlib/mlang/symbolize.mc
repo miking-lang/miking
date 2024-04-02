@@ -31,8 +31,8 @@ let name2pair : Name -> (String, Name) = lam n.
 
 let convertLangEnv : LangEnv -> NameEnv = lam langEnv. 
     use MLangAst in 
-    let semIdents = map sem2ident (mapValues langEnv.sems) in 
-    let semPairs = map name2pair semIdents in 
+    -- let semIdents = map sem2ident (mapValues langEnv.sems) in 
+    let semPairs = map name2pair (mapValues langEnv.sems) in 
     let varEnv = mapFromSeq cmpString semPairs in 
 
     let synIdents = map syn2ident (mapValues langEnv.syns) in 
@@ -343,7 +343,7 @@ lang MLangSym = MLangAst + MExprSym
 
             let includes = match mapLookup (nameGetStr s.ident) includedSems 
                            with Some xs then xs else [] in 
-            let includes = map (lam s. match s with DeclSem s in s.ident) includes in 
+            -- let includes = map (lam s. match s with DeclSem s in s.ident) includes in 
 
             let decl = DeclSem {s with ident = ident,
                                 tyAnnot = tyAnnot,
@@ -351,7 +351,7 @@ lang MLangSym = MLangAst + MExprSym
                                 includes = includes} in 
 
             let langEnv = {langEnv with 
-                sems = mapInsert (nameGetStr s.ident) decl langEnv.sems} in
+                sems = mapInsert (nameGetStr s.ident) ident langEnv.sems} in
 
             (langEnv, decl)
         in 
@@ -383,9 +383,6 @@ lang MLangSym = MLangAst + MExprSym
 
             let decl = DeclSem {s with args = args,
                                        cases = cases} in 
-
-            let langEnv = {langEnv with 
-                sems = mapInsert (nameGetStr s.ident) decl langEnv.sems} in
 
             (langEnv, decl)
         in
