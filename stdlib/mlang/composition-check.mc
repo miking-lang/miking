@@ -38,7 +38,7 @@ lang MLangCompositionCheck = MLangAst
 
   syn CompositionWarning = 
 
-  sem checkComposition : MLangProgram -> [CompositionError] 
+  sem checkComposition : MLangProgram -> [CompositionError]
   sem checkComposition =
   | prog -> 
     let result : Result CompositionWarning CompositionError CompositionCheckEnv
@@ -48,12 +48,12 @@ lang MLangCompositionCheck = MLangAst
      case Right _ then printLn "Valid language composition!" 
      case Left err then
       (switch head err 
-      case DifferentBaseSyn _ then error "Different base syn!"
-      case DifferentBaseSem _ then error "Different base sem!"
-      case MismatchedSynParams _ then error "Mismatched syn parameters!"
-      case MismatchedSemParams _ then error "Mismatched sem parameters!"
-      case InvalidSemPatterns _ then error "Invalid sem patterns!"
-      end)
+       case DifferentBaseSyn _ then error "Different base syn!"
+       case DifferentBaseSem _ then error "Different base sem!"
+       case MismatchedSynParams _ then error "Mismatched syn parameters!"
+       case MismatchedSemParams _ then error "Mismatched sem parameters!"
+       case InvalidSemPatterns _ then error "Invalid sem patterns!"
+       end)
      end) ;
     []
 
