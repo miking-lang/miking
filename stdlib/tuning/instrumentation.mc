@@ -220,7 +220,7 @@ lang Instrumentation = MExprAst + HoleAst + TailPositions
        in\n"
     , "()\n"
     ] in
-    let ex = use BootParser in parseMExprStringKeywords [] str in
+    let ex = use BootParser in parseMExprStringKeywordsExn [] str in
     let str2name = lam str.
       use MExprFindSym in
       match findName str ex with Some n then n
@@ -325,7 +325,7 @@ lang Instrumentation = MExprAst + HoleAst + TailPositions
       in"
     , "()\n"
     ] in
-    let ex = use BootParser in parseMExprStringKeywords [] str in
+    let ex = use BootParser in parseMExprStringKeywordsExn [] str in
     let fun = use MExprFindSym in
       match findName "dumpLog" ex with Some n then n else error "impossible" in
     (ex, fun)
@@ -372,7 +372,7 @@ let debugPrintLn = lam debug.
 in
 
 let parse = lam str.
-  let ast = parseMExprStringKeywords holeKeywords str in
+  let ast = parseMExprStringKeywordsExn holeKeywords str in
   let ast = makeKeywords ast in
   symbolize ast
 in

@@ -22,11 +22,11 @@ lang LamRepTypesAnalysis = TypeCheck + LamAst + SubstituteNewReprs
     TmLam {t with body = body, tyParam = tyParam, ty = tyLam}
 end
 
-lang LetRepTypesAnalysis = TypeCheck + LetAst + SubstituteNewReprs + OpImplAst + OpDeclAst + IsValue + MetaVarDisableGeneralize
+lang LetRepTypesAnalysis = TypeCheck + LetAst + SubstituteNewReprs + OpImplAst + OpDeclAst + NonExpansive + MetaVarDisableGeneralize
   sem typeCheckExpr env =
   | TmLet t ->
     let newLvl = addi 1 env.currentLvl in
-    let isValue = isValue (GVal ()) t.body in
+    let isValue = nonExpansive true t.body in
     let shouldBeOp = if env.reptypes.inImpl
       then false
       else if isValue
@@ -102,7 +102,7 @@ lang LetRepTypesAnalysis = TypeCheck + LetAst + SubstituteNewReprs + OpImplAst +
                     ty = tyTm inexpr}
 end
 
-lang RecLetsRepTypesAnalysis = TypeCheck + RecLetsAst + MetaVarDisableGeneralize + RecordAst + OpImplAst + OpDeclAst + RepTypesHelpers + IsValue + SubstituteNewReprs
+lang RecLetsRepTypesAnalysis = TypeCheck + RecLetsAst + MetaVarDisableGeneralize + RecordAst + OpImplAst + OpDeclAst + RepTypesHelpers + NonExpansive + SubstituteNewReprs
   sem typeCheckExpr env =
   | TmRecLets t ->
     let typeCheckRecLets = lam env. lam t.
@@ -110,7 +110,7 @@ lang RecLetsRepTypesAnalysis = TypeCheck + RecLetsAst + MetaVarDisableGeneralize
       -- Build env with the recursive bindings
       let recLetEnvIteratee = lam acc. lam b: RecLetBinding.
         let tyBody = substituteNewReprs env b.tyBody in
-        let vars = if isValue (GVal ()) b.body then (stripTyAll tyBody).0 else [] in
+        let vars = if nonExpansive true b.body then (stripTyAll tyBody).0 else [] in
         let newEnv = _insertVar b.ident tyBody acc.0 in
         let newTyVars = foldr (uncurry mapInsert) acc.1 vars in
         ((newEnv, newTyVars), {b with tyBody = tyBody}) in
@@ -124,7 +124,7 @@ lang RecLetsRepTypesAnalysis = TypeCheck + RecLetsAst + MetaVarDisableGeneralize
       -- Type check each body
       let typeCheckBinding = lam b: RecLetBinding.
         let body =
-          if isValue (GVal ()) b.body then
+          if nonExpansive true b.body then
             let newEnv = {recLetEnv with currentLvl = newLvl, tyVarEnv = newTyVarEnv} in
             match stripTyAll b.tyBody with (_, stripped) in
             let body = typeCheckExpr newEnv b.body in
@@ -141,7 +141,7 @@ lang RecLetsRepTypesAnalysis = TypeCheck + RecLetsAst + MetaVarDisableGeneralize
       -- Build env with generalized types
       let envIteratee = lam acc. lam b : RecLetBinding.
         match
-          if isValue (GVal ()) b.body then
+          if nonExpansive true b.body then
             (if env.disableRecordPolymorphism then
               disableRecordGeneralize env.currentLvl b.tyBody else ());
             gen env.currentLvl acc.1 b.tyBody
@@ -163,7 +163,7 @@ lang RecLetsRepTypesAnalysis = TypeCheck + RecLetsAst + MetaVarDisableGeneralize
     in
 
     let shouldBeOp = if env.reptypes.inImpl then false else
-      if forAll (lam b. isValue (GVal ()) b.body) t.bindings
+      if forAll (lam b. nonExpansive true b.body) t.bindings
       then any (lam b. containsRepr b.tyBody) t.bindings
       else false in
     if not shouldBeOp then TmRecLets (typeCheckRecLets env t) else

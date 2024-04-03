@@ -54,7 +54,7 @@ mexpr
 use TestLang in
 
 let parse =
-  parseMExprString
+  parseMExprStringExn
     { _defaultBootParserParseMExprStringArg () with allowFree = true }
 in
 

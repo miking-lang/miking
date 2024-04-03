@@ -18,6 +18,7 @@ type Options = {
   runtimeChecks : Bool,
   disableOptimizations : Bool,
   enableConstantFold : Bool,
+  enableConstructorTypes : Bool,
   useTuned : Bool,
   compileAfterTune : Bool,
   accelerate : Bool,

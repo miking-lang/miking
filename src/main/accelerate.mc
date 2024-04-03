@@ -14,6 +14,7 @@ include "futhark/alias-analysis.mc"
 include "futhark/deadcode.mc"
 include "futhark/for-each-record-pat.mc"
 include "futhark/generate.mc"
+include "futhark/inline-literals.mc"
 include "futhark/pprint.mc"
 include "futhark/record-lift.mc"
 include "futhark/size-parameterize.mc"
@@ -61,13 +62,13 @@ lang PMExprCompile =
   PMExprUtestSizeConstraint + PMExprReplaceAccelerate +
   PMExprNestedAccelerate + OCamlGenerate + OCamlTypeDeclGenerate +
   OCamlGenerateExternalNaive + PMExprBuild + PMExprCompileWellFormed +
-  MCoreCompileLang
+  MCoreCompileLang + MExprPrettyPrint
 end
 
 lang MExprFutharkCompile =
   FutharkGenerate + FutharkDeadcodeElimination + FutharkSizeParameterize +
   FutharkCWrapper + FutharkRecordParamLift + FutharkForEachRecordPattern +
-  FutharkAliasAnalysis + FutharkWellFormed
+  FutharkAliasAnalysis + FutharkWellFormed + FutharkInlineLiterals
 end
 
 lang MExprCudaCompile =
@@ -116,6 +117,7 @@ let futharkTranslation : use MExprFutharkCompile in Set Name -> Expr -> FutProg 
   let ast = generateProgram entryPoints ast in
   let ast = liftRecordParameters ast in
   let ast = useRecordPatternInForEach ast in
+  let ast = inlineLiterals ast in
   let ast = aliasAnalysis ast in
   let ast = deadcodeElimination ast in
   parameterizeSizes ast

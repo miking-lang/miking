@@ -53,7 +53,7 @@ lang FutharkSizeTypeEliminate = FutharkAst + FutharkSizeType
 
   sem countSizeTypeParamUsesType : Map Name Int -> FutType -> Map Name Int
   sem countSizeTypeParamUsesType typeParamUseCount =
-  | FTyArray {elem = elem, dim = Some dimId} ->
+  | FTyArray {elem = elem, dim = Some (NamedDim dimId)} ->
     let typeParamUseCount =
       let count =
         match mapLookup dimId typeParamUseCount with Some count then
@@ -66,7 +66,7 @@ lang FutharkSizeTypeEliminate = FutharkAst + FutharkSizeType
   sem countSizeTypeParamUsesExpr : Map Name Int -> FutExpr -> Map Name Int
   sem countSizeTypeParamUsesExpr typeParamUseCount =
   | FEVar t -> _incrementUseCount typeParamUseCount t.ident
-  | FESizeCoercion {ty = FTyArray {dim = Some dimId}} ->
+  | FESizeCoercion {ty = FTyArray {dim = Some (NamedDim dimId)}} ->
     _incrementUseCount typeParamUseCount dimId
   | t -> sfold_FExpr_FExpr countSizeTypeParamUsesExpr typeParamUseCount t
 
@@ -110,10 +110,10 @@ lang FutharkSizeTypeEliminate = FutharkAst + FutharkSizeType
 
   sem stripUndefSizeParamsType : Set Name -> FutType -> FutType
   sem stripUndefSizeParamsType vars =
-  | FTyArray (t & {dim = Some dimId}) ->
+  | FTyArray (t & {dim = Some (NamedDim dimId)}) ->
     let elem = stripUndefSizeParamsType vars t.elem in
     let dim =
-      if setMem dimId vars then Some dimId
+      if setMem dimId vars then Some (NamedDim dimId)
       else None () in
     FTyArray {t with elem = elem, dim = dim}
   | ty -> smap_FType_FType (stripUndefSizeParamsType vars) ty
@@ -171,14 +171,14 @@ lang FutharkSizeParameterize = FutharkSizeTypeEliminate
   | FEApp ({lhs = FEConst {val = FCLength ()},
             rhs = FEVar {ident = s}} & t) ->
     let lengthParamVar = lam ident. lam info.
-      FEVar {ident = ident, ty = FTyInt {info = info}, info = info}
+      FEVar {ident = ident, ty = FTyInt {info = info, sz = I64 ()}, info = info}
     in
     match mapLookup s env.paramMap with Some (FTyArray tyArray) then
-      match tyArray.dim with Some n then
+      match tyArray.dim with Some (NamedDim n) then
         (env, lengthParamVar n tyArray.info)
       else
         let n = nameSym "n" in
-        let newParamType = FTyArray {tyArray with dim = Some n} in
+        let newParamType = FTyArray {tyArray with dim = Some (NamedDim n)} in
         let typeParam = FPSize {val = n} in
         let typeParams = mapInsert n typeParam env.typeParams in
         let env = {{env with paramMap = mapInsert s newParamType env.paramMap}
@@ -207,9 +207,9 @@ lang FutharkSizeParameterize = FutharkSizeTypeEliminate
       eliminateParamAliases env replacements t.inexpr
     else
       FELet {t with inexpr = eliminateParamAliases env replacements t.inexpr}
-  | FESizeCoercion (t & {ty = FTyArray (array & {dim = Some dimId})}) ->
+  | FESizeCoercion (t & {ty = FTyArray (array & {dim = Some (NamedDim dimId)})}) ->
     let newDimId = lookupReplacement dimId replacements in
-    FESizeCoercion {t with ty = FTyArray {array with dim = Some newDimId}}
+    FESizeCoercion {t with ty = FTyArray {array with dim = Some (NamedDim newDimId)}}
   | t -> smap_FExpr_FExpr (eliminateParamAliases env replacements) t
 
   -- Collects all size parameters by constructing a map from each distinct size
@@ -220,7 +220,7 @@ lang FutharkSizeParameterize = FutharkSizeTypeEliminate
   sem collectSizeParameters acc =
   | (id, ty) ->
     recursive let work = lam acc. lam dimIdx. lam ty.
-      match ty with FTyArray {elem = elem, dim = Some dimId} then
+      match ty with FTyArray {elem = elem, dim = Some (NamedDim dimId)} then
         let sizeParam = {id = id, dim = dimIdx} in
         let posIdx = mapSize acc.sizeToIndex in
         let acc =
@@ -249,14 +249,17 @@ lang FutharkSizeParameterize = FutharkSizeTypeEliminate
   sem includeSizeEqualityConstraints sizeParams =
   | env ->
     recursive let work = lam dimIdx. lam id. lam ty.
-      match ty with FTyArray (t & {dim = Some dimId}) then
+      match ty with FTyArray (t & {dim = Some (NamedDim dimId)}) then
         let sizeParam = {id = id, dim = dimIdx} in
         let newDimId =
           match mapLookup sizeParam sizeParams.sizeToIndex with Some idx then
             let parent = unionFindFind env.equalSizes idx in
-            if neqi idx parent then mapLookup parent sizeParams.indexToIdent
-            else Some dimId
-          else Some dimId in
+            if neqi idx parent then
+              optionMap
+                (lam v. NamedDim v)
+                (mapLookup parent sizeParams.indexToIdent)
+            else Some (NamedDim dimId)
+          else Some (NamedDim dimId) in
         let elem = work (addi dimIdx 1) id t.elem in
         FTyArray {{t with elem = elem} with dim = newDimId}
       else ty in

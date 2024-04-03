@@ -68,6 +68,10 @@ let optionsConfig : ParseConfig Options = [
     "Enables constant folding and constant propagation",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with enableConstantFold = true}),
+  ([("--enable-constructor-types", "", "")],
+    "Enables constructor types and exhaustiveness checking",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with enableConstructorTypes = true}),
   ([("--tuned", "", "")],
     "Use tuned values when compiling, or as defaults when tuning",
     lam p: ArgPart Options.

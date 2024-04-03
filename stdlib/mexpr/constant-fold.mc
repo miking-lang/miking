@@ -338,7 +338,7 @@ use TestLang in
 let _parse = lam prog.
   typeCheck
     (symbolize
-       (parseMExprString
+       (parseMExprStringExn
           { _defaultBootParserParseMExprStringArg () with allowFree = false }
           prog))
 in

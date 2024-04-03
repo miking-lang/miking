@@ -91,7 +91,7 @@ lang CudaCWrapperBase = PMExprCWrapper + CudaAst + MExprAst + CudaCompile
       let fields = mapFromSeq cmpSID fieldsSeq in
       let ty = TyRecord {t with fields = fields} in
       optionMap
-        (lam id. TyCon {ident = id, info = t.info})
+        (lam id. nitycon_ id t.info)
         (mapLookup ty cenv.revTypeEnv)
     else None ()
   | ty & (TySeq {ty = elemTy} | TyTensor {ty = elemTy}) ->
@@ -104,12 +104,12 @@ lang CudaCWrapperBase = PMExprCWrapper + CudaAst + MExprAst + CudaCompile
       else never in
     match env with CudaTargetEnv cenv in
     match mapLookup ty cenv.revTypeEnv with Some id then
-      Some (TyCon {ident = id, info = infoTy ty})
+      Some (nitycon_ id (infoTy ty))
     else None ()
   | ty & (TyVariant _) ->
     match env with CudaTargetEnv cenv in
     match mapLookup ty cenv.revTypeEnv with Some id then
-      Some (TyCon {ident = id, info = infoTy ty})
+      Some (nitycon_ id (infoTy ty))
     else None ()
   | TyAlias t -> lookupTypeIdent env t.content
   | ty -> Some ty

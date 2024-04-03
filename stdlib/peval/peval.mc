@@ -779,7 +779,7 @@ in
 let _toString = utestDefaultToString expr2str expr2str in
 
 let _parse =
-  parseMExprString
+  parseMExprStringExn
     { _defaultBootParserParseMExprStringArg () with allowFree = true }
 in
 

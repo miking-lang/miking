@@ -52,6 +52,7 @@ lang AVLTreeImpl
     avlCreate rlt.key rlt.value
       (avlCreate k v l rlt.l)
       (avlCreate rt.key rt.value rlt.r rr)
+  | Node _ -> error "avlRotateRightLeft: invalid shape of tree"
   | Leaf _ -> error "avlRotateRightLeft: empty tree"
 
   sem avlRotateRight : all k. all v. k -> v -> AVL k v -> AVL k v -> AVL k v
@@ -66,6 +67,7 @@ lang AVLTreeImpl
     avlCreate lrt.key lrt.value
       (avlCreate lt.key lt.value ll lrt.l)
       (avlCreate k v lrt.r r)
+  | Node _ -> error "avlRotateLeftRight: invalid shape of tree"
   | Leaf _ -> error "avlRotateLeftRight: empty tree"
 
   -- NOTE(larshum, 2023-03-04): Joins two AVL trees where the provided key is
@@ -202,6 +204,36 @@ lang AVLTreeImpl
     if lti d 0 then avlLookup cmp k t.l
     else if gti d 0 then avlLookup cmp k t.r
     else Some t.value
+
+  -- `avlFindUpper cmp k t` returns (k', v) in the tree `t`, where k' is the
+  -- minimum key in the tree and k≤k', according to `cmp`. Returns `None ()` if
+  -- no such key k' exists in the tree.
+  sem avlFindUpper : all k. all v. (k -> k -> Int) -> k -> AVL k v -> Option (k, v)
+  sem avlFindUpper cmp k =
+  | Node t ->
+    let d = cmp k t.key in
+    if gti d 0 then avlFindUpper cmp k t.r
+    else
+      switch avlFindUpper cmp k t.l
+        case None _ then Some (t.key, t.value)
+        case value then value
+      end
+  | Leaf _ -> None ()
+
+  -- `avlFindLower cmp k t` returns (k', v) in the tree `t`, where k' is the
+  -- maximum key in the tree and k≥k', according to `cmp`. Returns `None ()` if
+  -- no such key k' exists in the tree.
+  sem avlFindLower : all k. all v. (k -> k -> Int) -> k -> AVL k v -> Option (k, v)
+  sem avlFindLower cmp k =
+  | Node t ->
+    let d = cmp k t.key in
+    if lti d 0 then avlFindLower cmp k t.l
+    else
+      switch avlFindLower cmp k t.r
+        case None _ then Some (t.key, t.value)
+        case value then value
+      end
+  | Leaf _ -> None ()
 
   sem avlChoose : all k. all v. AVL k v -> Option (k, v)
   sem avlChoose =
@@ -618,5 +650,29 @@ let falseFn = lam. lam. false in
 utest avlFilter evenKey t1 with [(0, 1), (2, 3), (4, 5)] using eqAvlSeq subi eqi in
 utest avlFilter sumLessThanFive t1 with [(0, 1), (1, 2)] using eqAvlSeq subi eqi in
 utest avlFilter falseFn t1 with avlEmpty () using avlEq subi eqi in
+
+let cmp = lam a. lam b. if ltf a b then -1 else if gtf a b then 1 else 0 in
+let t = avlFromSeq cmp [(0., 0), (1., 1), (2., 2), (3., 3), (4., 4)] in
+utest avlFindUpper cmp 4.5 t with None () in
+utest avlFindUpper cmp 4. t with Some (4., 4) in
+utest avlFindUpper cmp 3.5 t with Some (4., 4) in
+utest avlFindUpper cmp 3. t with Some (3., 3) in
+utest avlFindUpper cmp 2.5 t with Some (3., 3) in
+utest avlFindUpper cmp 2. t with Some (2., 2) in
+utest avlFindUpper cmp 1.5 t with Some (2., 2) in
+utest avlFindUpper cmp 1. t with Some (1., 1) in
+utest avlFindUpper cmp 0.5 t with Some (1., 1) in
+utest avlFindUpper cmp 0. t with Some (0., 0) in
+utest avlFindLower cmp 4.5 t with Some (4., 4) in
+utest avlFindLower cmp 4. t with Some (4., 4) in
+utest avlFindLower cmp 3.5 t with Some (3., 3) in
+utest avlFindLower cmp 3. t with Some (3., 3) in
+utest avlFindLower cmp 2.5 t with Some (2., 2) in
+utest avlFindLower cmp 2. t with Some (2., 2) in
+utest avlFindLower cmp 1.5 t with Some (1., 1) in
+utest avlFindLower cmp 1. t with Some (1., 1) in
+utest avlFindLower cmp 0.5 t with Some (0., 0) in
+utest avlFindLower cmp 0. t with Some (0., 0) in
+utest avlFindLower cmp -1. t with None () in
 
 ()

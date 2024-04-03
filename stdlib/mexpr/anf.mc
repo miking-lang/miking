@@ -390,7 +390,7 @@ in
 use TestANF in
 
 let _test = _testConstr normalizeTerm in
-let _parse = parseMExprStringKeywords [] in
+let _parse = parseMExprStringKeywordsExn [] in
 
 let basic = _parse "
   let f = (lam x. x) in

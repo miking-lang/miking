@@ -22,10 +22,10 @@ type FutharkGenerateEnv = use Ast in {
 
 lang FutharkConstGenerate = MExprAst + FutharkAst
   sem generateConst (info : Info) =
-  | CInt n -> FCInt {val = n.val}
-  | CFloat f -> FCFloat {val = f.val}
+  | CInt n -> FCInt {val = n.val, sz = Some (I64 ())}
+  | CFloat f -> FCFloat {val = f.val, sz = Some (F64 ())}
   | CBool b -> FCBool {val = b.val}
-  | CChar c -> FCInt {val = char2int c.val}
+  | CChar c -> FCInt {val = char2int c.val, sz = Some (I64 ())}
   | CAddi _ | CAddf _ -> FCAdd ()
   | CSubi _ | CSubf _ -> FCSub ()
   | CMuli _ | CMulf _ -> FCMul ()
@@ -55,16 +55,16 @@ end
 lang FutharkTypeGenerate = MExprAst + FutharkAst
   sem generateType : FutharkGenerateEnv -> Type -> FutType
   sem generateType env =
-  | TyInt t -> FTyInt {info = t.info}
-  | TyFloat t -> FTyFloat {info = t.info}
+  | TyInt t -> FTyInt {info = t.info, sz = I64 ()}
+  | TyFloat t -> FTyFloat {info = t.info, sz = F64 ()}
   | TyBool t -> FTyBool {info = t.info}
-  | TyChar t -> FTyInt {info = t.info}
+  | TyChar t -> FTyInt {info = t.info, sz = I64 ()}
   | TySeq t ->
     -- NOTE(larshum, 2021-12-01): We generate an identifier for the size type
     -- of every array type. These identifiers are extracted at a later stage to
     -- declare the size type parameters.
     let dimId = nameSym "n" in
-    FTyArray {elem = generateType env t.ty, dim = Some dimId, info = t.info}
+    FTyArray {elem = generateType env t.ty, dim = Some (NamedDim dimId), info = t.info}
   | TyRecord t ->
     FTyRecord {fields = mapMap (generateType env) t.fields, info = t.info}
   | TyArrow t ->
@@ -140,19 +140,19 @@ lang FutharkMatchGenerate = MExprAst + FutharkAst + FutharkPatternGenerate +
     let condInfo = mergeInfo (infoTm t.target) (infoPat t.pat) in
     let resultTy = FTyBool {info = condInfo} in
     let eqiAppTy = FTyArrow {
-      from = FTyInt {info = condInfo}, to = resultTy, info = condInfo} in
+      from = FTyInt {info = condInfo, sz = I64 ()}, to = resultTy, info = condInfo} in
     let eqiTy = FTyArrow {
-      from = FTyInt {info = condInfo}, to = eqiAppTy, info = condInfo} in
+      from = FTyInt {info = condInfo, sz = I64 ()}, to = eqiAppTy, info = condInfo} in
     let lhsConstVal =
       match t.pat with PatInt {val = i} then
-        FCInt {val = i}
+        FCInt {val = i, sz = Some (I64 ())}
       else match t.pat with PatChar {val = c} then
-        FCInt {val = char2int c}
+        FCInt {val = char2int c, sz = Some (I64 ())}
       else never in
     let condExpr = FEApp {
       lhs = FEApp {
         lhs = FEConst {val = FCEq (), ty = eqiTy, info = condInfo},
-        rhs = FEConst {val = lhsConstVal, ty = FTyInt {info = condInfo},
+        rhs = FEConst {val = lhsConstVal, ty = FTyInt {info = condInfo, sz = I64 ()},
                        info = condInfo},
         ty = eqiAppTy, info = condInfo},
       rhs = generateExpr env t.target,
@@ -176,8 +176,8 @@ lang FutharkMatchGenerate = MExprAst + FutharkAst + FutharkPatternGenerate +
     match t.thn with TmVar {ident = exprName} then
       match binds with [(fieldLabel, PatNamed {ident = PName patName})] then
         if nameEq patName exprName then
-          FERecordProj {rec = generateExpr env t.target, key = fieldLabel,
-                        ty = generateType env t.ty, info = t.info}
+          FEProj {target = generateExpr env t.target, label = fieldLabel,
+                  ty = generateType env t.ty, info = t.info}
         else defaultGenerateRecordMatch ()
       else defaultGenerateRecordMatch ()
     else defaultGenerateRecordMatch ()
@@ -289,11 +289,12 @@ lang FutharkAppGenerate = MExprAst + FutharkAst + FutharkTypeGenerate +
             lhs = FEConst {val = FCAdd (), ty = futUnknownTy_, info = info},
             rhs = startIdx,
             ty = FTyArrow {
-              from = FTyInt {info = info}, to = FTyInt {info = info}, info = info},
+              from = FTyInt {info = info, sz = I64 ()},
+              to = FTyInt {info = info, sz = I64 ()}, info = info},
             info = info
           },
           rhs = offset,
-          ty = FTyInt {info = info},
+          ty = FTyInt {info = info, sz = I64 ()},
           info = info} in
     FEArraySlice {
       array = generateExpr env arg1, startIdx = startIdx, endIdx = endIdx,
@@ -302,19 +303,19 @@ lang FutharkAppGenerate = MExprAst + FutharkAst + FutharkTypeGenerate +
     FEApp {
       lhs = FEConst {
         val = FCFloat2Int (),
-        ty = FTyArrow {from = FTyFloat {info = info},
-                       to = FTyInt {info = info}, info = info},
+        ty = FTyArrow {from = FTyFloat {info = info, sz = F64 ()},
+                       to = FTyInt {info = info, sz = I64 ()}, info = info},
         info = info},
       rhs = FEApp {
         lhs = FEConst {
           val = FCFloatFloor (),
-          ty = FTyArrow {from = FTyFloat {info = info},
-                         to = FTyFloat {info = info}, info = info},
+          ty = FTyArrow {from = FTyFloat {info = info, sz = F64 ()},
+                         to = FTyFloat {info = info, sz = F64 ()}, info = info},
           info = info},
         rhs = generateExpr env arg,
-        ty = FTyFloat {info = info},
+        ty = FTyFloat {info = info, sz = F64 ()},
         info = info},
-      ty = FTyInt {info = info},
+      ty = FTyInt {info = info, sz = I64 ()},
       info = info}
   | TmApp ({
       lhs = TmApp {
@@ -418,7 +419,7 @@ lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
     let ty = generateType env t.ty in
     match ty with FTyArray aty then
       FESizeCoercion {
-        e = generateExpr env t.e, ty = FTyArray {aty with dim = Some t.size},
+        e = generateExpr env t.e, ty = FTyArray {aty with dim = Some (NamedDim t.size)},
         info = t.info}
     else errorSingle [t.info] (join ["Size coercion could not be generated ",
                                      "due to unexpected type of sequence"])
@@ -435,7 +436,7 @@ lang FutharkToplevelGenerate = FutharkExprGenerate + FutharkConstGenerate +
                                FutharkTypeGenerate
   sem collectTypeParams : [FutTypeParam] -> FutType -> [FutTypeParam]
   sem collectTypeParams acc =
-  | FTyArray {elem = elem, dim = Some id} ->
+  | FTyArray {elem = elem, dim = Some (NamedDim id)} ->
     let acc = cons (FPSize {val = id}) acc in
     sfold_FType_FType collectTypeParams acc elem
   | ty ->
@@ -605,10 +606,10 @@ let t = typeCheck (bindall_ [
   unit_]) in
 
 let intSeqType = lam n. FTyArray {
-  elem = FTyInt {info = NoInfo ()}, dim = Some n, info = NoInfo ()
+  elem = FTyInt {info = NoInfo (), sz = I64 ()}, dim = Some (NamedDim n), info = NoInfo ()
 } in
 let floatSeqType = lam n. FTyArray {
-  elem = FTyFloat {info = NoInfo ()}, dim = Some n, info = NoInfo ()
+  elem = FTyFloat {info = NoInfo (), sz = F64 ()}, dim = Some (NamedDim n), info = NoInfo ()
 } in
 let ns = create 5 (lam. nameSym "n") in
 let expected = FProg {decls = [

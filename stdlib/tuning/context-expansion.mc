@@ -131,7 +131,7 @@ lang ContextExpand = HoleAst
   sem _wrapReadFile (env : CallCtxEnv) (tuneFile : String) =
   | tm ->
     use BootParser in
-    let impl = parseMExprStringKeywords [] "
+    let impl = parseMExprStringKeywordsExn [] "
     let eqSeq = lam eq. lam s1. lam s2.
       recursive let work = lam s1. lam s2.
         match (s1, s2) with ([h1] ++ t1, [h2] ++ t2) then
@@ -277,7 +277,7 @@ let anf = compose normalizeTerm symbolize in
 
 let debug = false in
 let parse = lam str.
-  let ast = parseMExprStringKeywords holeKeywords str in
+  let ast = parseMExprStringKeywordsExn holeKeywords str in
   let ast = makeKeywords ast in
   symbolize ast
 in

@@ -53,6 +53,15 @@ lang Cmp = Ast
       errorMulti [(infoTy lhs, ""), (infoTy rhs, "")]
         "Missing case in cmpTypeH for types with equal indices."
     else res
+
+  sem cmpKind =
+  -- Default case when kinds are not the same
+  | (lhs, rhs) /- (Kind, Kind) -/ ->
+    let res = subi (constructorTag lhs) (constructorTag rhs) in
+    if eqi res 0 then
+      errorSingle []
+        "Missing case in cmpKind for types with equal indices."
+    else res
 end
 
 -----------
@@ -406,7 +415,16 @@ end
 
 lang ConTypeCmp = Cmp + ConTypeAst
   sem cmpTypeH =
-  | (TyCon t1, TyCon t2) -> nameCmp t1.ident t2.ident
+  | (TyCon t1, TyCon t2) ->
+    let nameDiff = nameCmp t1.ident t2.ident in
+    if eqi nameDiff 0 then cmpType t1.data t2.data
+    else nameDiff
+end
+
+lang DataTypeCmp = Cmp + DataTypeAst
+  sem cmpTypeH =
+  | (TyData l, TyData r) ->
+    mapCmp setCmp (computeData l) (computeData r)
 end
 
 lang VarTypeCmp = Cmp + VarTypeAst
@@ -414,15 +432,7 @@ lang VarTypeCmp = Cmp + VarTypeAst
   | (TyVar t1, TyVar t2) -> nameCmp t1.ident t2.ident
 end
 
-lang KindCmp = Cmp + KindAst
-  sem cmpKind =
-  | (Row l, Row r) ->
-    mapCmp cmpType l.fields r.fields
-  | (lhs, rhs) ->
-    subi (constructorTag lhs) (constructorTag rhs)
-end
-
-lang AllTypeCmp = KindCmp + AllTypeAst
+lang AllTypeCmp = Cmp + AllTypeAst
   sem cmpTypeH =
   | (TyAll t1, TyAll t2) ->
     let identDiff = nameCmp t1.ident t2.ident in
@@ -476,6 +486,36 @@ lang ReprSubstCmp = Cmp + ReprSubstAst
     cmpType l.arg r.arg
 end
 
+lang BaseKindCmp = Cmp + MonoKindAst + PolyKindAst
+  sem cmpKind =
+  | (Mono (), Mono ()) -> 0
+  | (Poly (), Poly ()) -> 0
+end
+
+lang RecordKindCmp = Cmp + RecordKindAst
+  sem cmpKind =
+  | (Record l, Record r) ->
+    mapCmp cmpType l.fields r.fields
+end
+
+lang DataKindCmp = Cmp + DataKindAst
+  sem cmpKind =
+  | (Data l, Data r) ->
+    let recCmp = lam r1. lam r2.
+      let lowerDiff = setCmp r1.lower r2.lower in
+      if eqi lowerDiff 0 then
+        switch (r1.upper, r2.upper)
+        case (Some u1, Some u2) then setCmp u1 u2
+        case (Some _, None _) then 1
+        case (None _, Some _) then negi 1
+        case _ then 0
+        end
+      else lowerDiff
+    in
+    mapCmp recCmp l.types r.types
+end
+
+
 --------------------
 -- MEXPR FRAGMENT --
 --------------------
@@ -496,7 +536,10 @@ lang MExprCmp =
   -- Types
   UnknownTypeCmp + BoolTypeCmp + IntTypeCmp + FloatTypeCmp + CharTypeCmp +
   FunTypeCmp + SeqTypeCmp + TensorTypeCmp + RecordTypeCmp + VariantTypeCmp +
-  ConTypeCmp + VarTypeCmp + AppTypeCmp + AllTypeCmp + AliasTypeCmp
+  ConTypeCmp + DataTypeCmp + VarTypeCmp + AppTypeCmp + AllTypeCmp + AliasTypeCmp +
+
+  -- Kinds
+  BaseKindCmp + RecordKindCmp + DataKindCmp
 end
 
 lang RepTypesCmp = ReprSubstCmp + ReprTypeCmp + TyWildCmp

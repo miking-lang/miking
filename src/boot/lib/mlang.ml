@@ -377,8 +377,8 @@ module NoCap = struct
     else (env, name)
 
   let rec subst_ty (env : big_env) : ty -> ty = function
-    | TyCon (fi, name) ->
-        TyCon (fi, subst_name name env.ty_cons)
+    | TyCon (fi, name, data) ->
+        TyCon (fi, subst_name name env.ty_cons, data)
     | TyUse (fi, _, _) ->
         raise_error fi
           "Compiler limitation: we can't easily rename syns or sems if 'use' \
@@ -588,13 +588,29 @@ let merge_env_prefer_right : mlang_env -> mlang_env -> mlang_env =
   ; language_envs=
       Record.union (fun _ _a b -> Some b) a.language_envs b.language_envs }
 
-let rec translate_ty (env : mlang_env) : ty -> ty = function
-  | TyCon (fi, id) -> (
-    match Record.find_opt id env.ty_cons with
-    | Some id ->
-        TyCon (fi, id)
-    | None ->
-        TyCon (fi, empty_mangle id) )
+let rec translate_ty (env : mlang_env) : ty -> ty =
+  let translate_cons =
+    List.map (fun k ->
+        Option.value ~default:k (Record.find_opt k env.constructors) )
+  in
+  function
+  | TyCon (fi, id, data) -> (
+      let data =
+        Option.map
+          (function
+            | DCons ks ->
+                DCons (translate_cons ks)
+            | DNCons ks ->
+                DNCons (translate_cons ks)
+            | DVar v ->
+                DVar v )
+          data
+      in
+      match Record.find_opt id env.ty_cons with
+      | Some id ->
+          TyCon (fi, id, data)
+      | None ->
+          TyCon (fi, empty_mangle id, data) )
   | TyUse (fi, lang, ty) -> (
     match Record.find_opt lang env.language_envs with
     | Some new_env ->
@@ -602,6 +618,23 @@ let rec translate_ty (env : mlang_env) : ty -> ty = function
     | None ->
         raise_error fi
           ("Unbound language fragment '" ^ Ustring.to_utf8 lang ^ "'") )
+  | TyAll (fi, id, kind, ty) ->
+      let kind =
+        kind
+        |> Option.map
+             (List.map (fun (t, lower, upper) ->
+                  let t =
+                    match Record.find_opt t env.ty_cons with
+                    | Some t ->
+                        t
+                    | None ->
+                        empty_mangle t
+                  in
+                  let lower = translate_cons lower in
+                  let upper = Option.map translate_cons upper in
+                  (t, lower, upper) ) )
+      in
+      TyAll (fi, id, kind, translate_ty env ty)
   | ty ->
       let ty = smap_ty_ty (translate_ty env) ty in
       ty
@@ -887,11 +920,15 @@ let wrap_cons : mlang_env -> lang_data -> tm -> tm =
     Record.to_seq syn.cons |> Seq.map (fun (_, c) -> (name, c))
   in
   let wrap_con (tm : tm) ((name : ustring), (con : syn_case)) =
-    let wrap_all (tyvar : ustring) (ty : ty) = TyAll (con.fi, tyvar, ty) in
+    let wrap_all (tyvar : ustring) (ty : ty) =
+      TyAll (con.fi, tyvar, None, ty)
+    in
     let wrap_app (ty : ty) (tyvar : ustring) =
       TyApp (con.fi, ty, TyVar (con.fi, tyvar))
     in
-    let ret = List.fold_left wrap_app (TyCon (con.fi, name)) con.ty_params in
+    let ret =
+      List.fold_left wrap_app (TyCon (con.fi, name, None)) con.ty_params
+    in
     let ty = TyArrow (con.fi, con.carried, ret) in
     let ty = List.fold_right wrap_all con.ty_params ty in
     TmConDef

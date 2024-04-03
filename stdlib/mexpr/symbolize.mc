@@ -216,6 +216,10 @@ lang Sym = Ast + SymLookup
     let t = symbolizeExpr env t in
     addTopNames env t
 
+  sem symbolizeKind : Info -> SymEnv -> Kind -> Kind
+  sem symbolizeKind info env =
+  | t -> smap_Kind_Type (symbolizeType env) t
+
   -- TODO(vipa, 2020-09-23): env is constant throughout symbolizePat,
   -- so it would be preferrable to pass it in some other way, a reader
   -- monad or something. patEnv on the other hand changes, it would be
@@ -278,16 +282,10 @@ lang LetSym = Sym + LetAst + AllTypeAst
   sem symbolizeTyAnnot : SymEnv -> Type -> (Map String Name, Type)
   sem symbolizeTyAnnot env =
   | tyAnnot ->
-    let setSymbolFirst = lam env. lam vs.
-      match setSymbol env vs.0 with (env, v) in
-      (env, (v, vs.1))
-    in
-    match stripTyAll tyAnnot with (vars, stripped) in
-    match mapAccumL setSymbolFirst env.currentEnv.tyVarEnv vars with (tyVarEnv, vars) in
-    (tyVarEnv,
-     foldr (lam vs. lam ty. TyAll {info = infoTy tyAnnot,
-                                   ident = vs.0, kind = vs.1, ty = ty})
-       (symbolizeType (updateTyVarEnv env tyVarEnv) stripped) vars)
+    let symbolized = symbolizeType env tyAnnot in
+    match stripTyAll symbolized with (vars, stripped) in
+    (foldl (lam env. lam nk. mapInsert (nameGetStr nk.0) nk.0 env)
+       env.currentEnv.tyVarEnv vars, symbolized)
 
   sem addTopNames (env : SymEnv) =
   | TmLet t ->
@@ -475,7 +473,21 @@ lang ConTypeSym = Sym + ConTypeAst
                  allowFree = env.allowFree}
         env.currentEnv.tyConEnv t.ident
     in
-    TyCon {t with ident = ident}
+    TyCon {t with ident = ident, data = symbolizeType env t.data}
+end
+
+lang DataTypeSym = Sym + DataTypeAst
+  sem symbolizeType env =
+  | TyData t ->
+    let cons =
+      setFold (lam ks. lam k.
+        setInsert
+          (getSymbol {kind = "constructor",
+                      info = [t.info],
+                      allowFree = env.allowFree}
+             env.currentEnv.conEnv k) ks)
+        (setEmpty nameCmp) t.cons
+    in TyData {t with cons = cons}
 end
 
 lang VarTypeSym = Sym + VarTypeAst + UnknownTypeAst
@@ -490,14 +502,45 @@ lang VarTypeSym = Sym + VarTypeAst + UnknownTypeAst
     TyVar {t with ident = ident}
 end
 
-lang AllTypeSym = Sym + AllTypeAst + KindAst
+lang AllTypeSym = Sym + AllTypeAst
   sem symbolizeType env =
   | TyAll t ->
-    let kind = smap_Kind_Type (symbolizeType env) t.kind in
+    let kind = symbolizeKind t.info env t.kind in
     match setSymbol env.currentEnv.tyVarEnv t.ident with (tyVarEnv, ident) in
     TyAll {t with ident = ident,
                   ty = symbolizeType (updateTyVarEnv env tyVarEnv) t.ty,
                   kind = kind}
+end
+
+lang DataKindSym = Sym + DataKindAst
+  sem symbolizeKind info env =
+  | Data t ->
+    let symbolizeCons = lam cons.
+      setFold
+        (lam ks. lam k.
+          setInsert
+            (getSymbol {kind = "constructor",
+                        info = [info],
+                        allowFree = env.allowFree}
+               env.currentEnv.conEnv k) ks)
+        (setEmpty nameCmp)
+        cons
+    in
+    let types =
+      foldl
+        (lam m. lam b.
+          match b with (t, r) in
+          let t = getSymbol {kind = "type constructor",
+                             info = [info],
+                             allowFree = env.allowFree}
+                    env.currentEnv.tyConEnv t
+          in
+          mapInsert t {r with lower = symbolizeCons r.lower,
+                              upper = optionMap symbolizeCons r.upper} m)
+        (mapEmpty nameCmp)
+        (mapBindings t.types)
+    in
+    Data {t with types = types}
 end
 
 lang ReprSubstSym = Sym + ReprSubstAst
@@ -588,6 +631,9 @@ lang MExprSym =
   UnknownTypeAst + BoolTypeAst + IntTypeAst + FloatTypeAst + CharTypeAst +
   FunTypeAst + SeqTypeAst + TensorTypeAst + RecordTypeAst + AppTypeAst +
 
+  -- Default implementations (Kinds)
+  PolyKindAst + MonoKindAst + RecordKindAst +
+
   -- Default implementations (Patterns)
   SeqTotPat + RecordPat + IntPat + CharPat + BoolPat + AndPat + OrPat +
 
@@ -596,7 +642,10 @@ lang MExprSym =
   MatchSym +
 
   -- Non-default implementations (Types)
-  VariantTypeSym + ConTypeSym + VarTypeSym + AllTypeSym +
+  VariantTypeSym + ConTypeSym + DataTypeSym + VarTypeSym + AllTypeSym +
+
+  -- Non-default implementations (Kinds)
+  DataKindSym +
 
   -- Non-default implementations (Patterns)
   NamedPatSym + SeqEdgePatSym + DataPatSym + NotPatSym

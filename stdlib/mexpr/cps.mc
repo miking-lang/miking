@@ -387,7 +387,7 @@ mexpr
 use Test in
 
 let _parse =
-  parseMExprString { defaultBootParserParseMExprStringArg with allowFree = true }
+  parseMExprStringExn { defaultBootParserParseMExprStringArg with allowFree = true }
 in
 
 -------------------------

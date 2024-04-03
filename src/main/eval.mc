@@ -65,7 +65,13 @@ let eval = lam files. lam options : Options. lam args.
       else ast
     in
 
-    let ast = typeCheck ast in
+    let ast =
+      removeMetaVarExpr
+        (typeCheckExpr
+           {typcheckEnvDefault with
+            disableConstructorTypes = not options.enableConstructorTypes}
+           ast)
+    in
     (if options.debugTypeCheck then
        printLn (use TyAnnotFull in annotateMExpr ast) else ());
 

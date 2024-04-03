@@ -157,6 +157,7 @@ let pascal : Int -> [[Int]] = lam n.
       case [1] then [1, 1]
       case [c1, c2] then snoc (cons 1 (snoc acc (addi c1 c2))) 1
       case [c1, c2] ++ cs then recur (snoc acc (addi c1 c2)) (cons c2 cs)
+      case _ then error "impossible"
       end
     in
     recur [] row

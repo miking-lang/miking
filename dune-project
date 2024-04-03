@@ -3,6 +3,8 @@
 (name boot)
 (maintainers "David Broman <dbro@kth.se>")
 
+(using menhir 2.0)
+
 (package
  (name boot)
  (synopsis "The Miking boot interpreter")
