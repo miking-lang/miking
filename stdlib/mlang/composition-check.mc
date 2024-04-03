@@ -78,22 +78,8 @@ lang MLangCompositionCheck = MLangAst + MExprPatAnalysis
   | InvalidSemPatterns e -> error "InvalidSemPatterns"
 
   sem checkComposition : MLangProgram -> Result CompositionWarning CompositionError CompositionCheckEnv
-  sem checkComposition =
-  | prog -> 
+  sem checkComposition =| prog -> 
     _foldl parseAll _emptyCompositionCheckEnv prog.decls 
-    -- match _consume result with (_, errOrResult) in 
-    -- (switch errOrResult 
-    --  case Right _ then printLn "Valid language composition!" 
-    --  case Left err then
-    --   (switch head err 
-    --    case DifferentBaseSyn _ then error "Different base syn!"
-    --    case DifferentBaseSem _ then error "Different base sem!"
-    --    case MismatchedSynParams _ then error "Mismatched syn parameters!"
-    --    case MismatchedSemParams _ then error "Mismatched sem parameters!"
-    --    case InvalidSemPatterns _ then error "Invalid sem patterns!"
-    --    end)
-    --  end) ;
-    -- []
 
   sem parseAll : CompositionCheckEnv -> 
                  Decl -> 
@@ -215,8 +201,6 @@ lang MLangCompositionCheck = MLangAst + MExprPatAnalysis
           -- printLn "Overlapping!" ;
           false
     in
-
-    -- (iter (lam p. printLn (bool2string (pairIsValid p))) pairs) ;
 
     if forAll pairIsValid pairs then
       _ok (insertSemPatMap env s.ident pats)
