@@ -69,24 +69,31 @@ lang MLangCompositionCheck = MLangAst + MExprPatAnalysis
 
   syn CompositionWarning = 
 
-  sem checkComposition : MLangProgram -> [CompositionError]
+  sem raiseError : CompositionError -> ()
+  sem raiseError = 
+  | DifferentBaseSyn e -> error "DifferentBaseSyn"
+  | DifferentBaseSem e -> error "DifferentBaseSem"
+  | MismatchedSemParams e -> error "MismatchedSemParams"
+  | MismatchedSynParams e -> error "MismatchedSynParams"
+  | InvalidSemPatterns e -> error "InvalidSemPatterns"
+
+  sem checkComposition : MLangProgram -> Result CompositionWarning CompositionError CompositionCheckEnv
   sem checkComposition =
   | prog -> 
-    let result : Result CompositionWarning CompositionError CompositionCheckEnv
-    = _foldl parseAll _emptyCompositionCheckEnv prog.decls in 
-    match _consume result with (_, errOrResult) in 
-    (switch errOrResult 
-     case Right _ then printLn "Valid language composition!" 
-     case Left err then
-      (switch head err 
-       case DifferentBaseSyn _ then error "Different base syn!"
-       case DifferentBaseSem _ then error "Different base sem!"
-       case MismatchedSynParams _ then error "Mismatched syn parameters!"
-       case MismatchedSemParams _ then error "Mismatched sem parameters!"
-       case InvalidSemPatterns _ then error "Invalid sem patterns!"
-       end)
-     end) ;
-    []
+    _foldl parseAll _emptyCompositionCheckEnv prog.decls 
+    -- match _consume result with (_, errOrResult) in 
+    -- (switch errOrResult 
+    --  case Right _ then printLn "Valid language composition!" 
+    --  case Left err then
+    --   (switch head err 
+    --    case DifferentBaseSyn _ then error "Different base syn!"
+    --    case DifferentBaseSem _ then error "Different base sem!"
+    --    case MismatchedSynParams _ then error "Mismatched syn parameters!"
+    --    case MismatchedSemParams _ then error "Mismatched sem parameters!"
+    --    case InvalidSemPatterns _ then error "Invalid sem patterns!"
+    --    end)
+    --  end) ;
+    -- []
 
   sem parseAll : CompositionCheckEnv -> 
                  Decl -> 
@@ -222,36 +229,112 @@ lang TestLang = MLangSym + MLangCompositionCheck end
 
 mexpr 
 use TestLang in 
--- let p : MLangProgram = {
---     decls = [
---         decl_lang_ "L1" [
---             decl_syn_ "Foo" [("Baz", tyint_)]
---         ],
---         decl_lang_ "L2" [
---             -- decl_type_ "Foo" [] tychar_,
---             decl_syn_ "Foo" [("BazBaz", tychar_)]
---         ],
---         decl_langi_ "L12" ["L1", "L2"] []
---     ],
---     expr = bind_ (use_ "L2") (int_ 10)
--- } in 
 
--- let p : MLangProgram = {
---     decls = [
---         decl_lang_ "L0" [
---             decl_syn_ "Foo" []
---         ],
---         decl_langi_ "L1" ["L0"] [
---             decl_syn_ "Foo" [("Baz", tyint_)]
---         ],
---         decl_langi_ "L2" ["L0"] [
---             decl_syn_ "Foo" [("BazBaz", tychar_)]
---         ],
---         decl_langi_ "L12" ["L0", "L1", "L2"] []
---     ],
---     expr = bind_ (use_ "L2") (int_ 10)
--- } in 
+let handleResult = lam res.
+  switch _consume res 
+    case (_, Left errors) then iter raiseError errors
+    case (_, Right _) then printLn "Langauge composition is valid!"
+    end
+in  
 
+let assertValid = lam res. 
+  switch _consume res 
+  case (_, Left errors) then 
+    printLn "Expected language composition to be valid, but found the following errors:" ;
+    iter raiseError errors
+  case _ then print "."
+  end
+in
+
+let assertDifferentBaseSem = lam res. 
+  switch _consume res 
+  case (_, Left ([DifferentBaseSem _] ++ _)) then print "."
+  case _ then error "Assertion failed!"
+  end
+in
+
+let assertDifferentBaseSyn = lam res. 
+  switch _consume res 
+  case (_, Left ([DifferentBaseSyn _] ++ _)) then print "."
+  case _ then error "Assertion failed!"
+  end
+in
+
+let assertMismatchedSemsParams = lam res. 
+  switch _consume res 
+  case (_, Left ([MismatchedSemParams _] ++ _)) then print "."
+  case _ then error "Assertion failed!"
+  end
+in
+
+let assertMIsmatchedSynParams = lam res. 
+  switch _consume res 
+  case (_, Left ([MismatchedSynParams _] ++ _)) then print "."
+  case _ then error "Assertion failed!"
+  end
+in
+
+let assertInvalidSemParams = lam res. 
+  switch _consume res 
+  case (_, Left ([InvalidSemPatterns _] ++ _)) then print "."
+  case _ then error "Assertion failed!"
+  end
+in
+
+-- Test invalid language composition due to lack of base 
+let p : MLangProgram = {
+    decls = [
+        decl_lang_ "L1" [
+            decl_syn_ "Foo" [("Baz", tyint_)]
+        ],
+        decl_lang_ "L2" [
+            -- decl_type_ "Foo" [] tychar_,
+            decl_syn_ "Foo" [("BazBaz", tychar_)]
+        ],
+        decl_langi_ "L12" ["L1", "L2"] []
+    ],
+    expr = bind_ (use_ "L2") (int_ 10)
+} in 
+match symbolizeMLang symEnvDefault p with (_, p) in 
+assertDifferentBaseSyn (checkComposition p) ;
+
+let p : MLangProgram = {
+    decls = [
+        decl_lang_ "L0" [
+            decl_syn_ "Foo" []
+        ],
+        decl_langi_ "L1" ["L0"] [
+            decl_syn_ "Foo" [("Baz", tyint_)]
+        ],
+        decl_langi_ "L2" ["L0"] [
+            decl_syn_ "Foo" [("BazBaz", tychar_)]
+        ],
+        decl_langi_ "L12" ["L0", "L1", "L2"] []
+    ],
+    expr = bind_ (use_ "L2") (int_ 10)
+} in 
+match symbolizeMLang symEnvDefault p with (_, p) in 
+assertValid (checkComposition p) ;
+
+-- Test invalid language composition due to lack of base
+let p : MLangProgram = {
+    decls = [
+        decl_langi_ "L1" [] [
+            decl_sem_ "f" [] []
+        ],
+        decl_langi_ "L2" [] [
+            decl_sem_ "f" [] []
+        ],
+        decl_langi_ "L12" ["L1", "L2"] [
+          decl_sem_ "f" [] []
+        ]        
+    ],
+    expr = bind_ (use_ "L2") (int_ 10)
+} in 
+match symbolizeMLang symEnvDefault p with (_, p) in 
+assertDifferentBaseSem (checkComposition p) ;
+
+-- Test semantic functions with valid base
 let p : MLangProgram = {
     decls = [
         decl_lang_ "L0" [
@@ -267,20 +350,77 @@ let p : MLangProgram = {
             decl_sem_ "f" [] []
         ],
         decl_langi_ "L12" ["L0", "L1", "L2"] [
-          -- decl_sem_ "f" [("x", tyint_)] []
         ]        
     ],
     expr = bind_ (use_ "L2") (int_ 10)
 } in 
 match symbolizeMLang symEnvDefault p with (_, p) in 
-checkComposition p ;
-utest nameCmp (nameSym "s1") (nameSym "s2") with 0 using neqi in 
+assertValid (checkComposition p) ;
 
+-- Test semantic function with matching number of params
+let p : MLangProgram = {
+    decls = [
+        decl_lang_ "L0" [
+            decl_sem_ "f" [("x", tyint_), ("y", tyint_)] []
+        ],
+        decl_langi_ "L1" ["L0"] [
+          decl_sem_ "f" [("x", tyint_), ("y", tyint_)] []
+        ]
+    ],
+    expr = bind_ (use_ "L0") (int_ 10)
+} in 
+match symbolizeMLang symEnvDefault p with (_, p) in 
+assertValid (checkComposition p) ;
+
+-- Test semantic function with non-matching number of params
+let p : MLangProgram = {
+    decls = [
+        decl_lang_ "L0" [
+            decl_sem_ "f" [("x", tyint_), ("y", tyint_)] []
+        ],
+        decl_langi_ "L1" ["L0"] [
+          decl_sem_ "f" [("x", tyint_)] []
+        ]
+    ],
+    expr = bind_ (use_ "L0") (int_ 10)
+} in 
+match symbolizeMLang symEnvDefault p with (_, p) in 
+
+-- Test sem with valid patterns
 let p : MLangProgram = {
     decls = [
         decl_lang_ "L0" [
             decl_sem_ "f" [] [
-              (pvarw_, int_ 0),
+              (por_ (pint_ 3) (pint_ 2), int_ 1),
+              (por_ (pint_ 0) (pint_ 1), int_ 2)
+            ]
+        ]
+    ],
+    expr = bind_ (use_ "L0") (int_ 10)
+} in 
+match symbolizeMLang symEnvDefault p with (_, p) in 
+assertValid (checkComposition p) ;
+
+-- Test invalid sem with equal patterns
+let p : MLangProgram = {
+    decls = [
+        decl_lang_ "L0" [
+            decl_sem_ "f" [] [
+              (por_ (pint_ 0) (pint_ 1), int_ 1),
+              (por_ (pint_ 0) (pint_ 1), int_ 2)
+            ]
+        ]
+    ],
+    expr = bind_ (use_ "L0") (int_ 10)
+} in 
+match symbolizeMLang symEnvDefault p with (_, p) in 
+assertInvalidSemParams (checkComposition p) ;
+
+-- Test sem with invalid overlapping patterns
+let p : MLangProgram = {
+    decls = [
+        decl_lang_ "L0" [
+            decl_sem_ "f" [] [
               (por_ (pint_ 0) (pint_ 1), int_ 1),
               (por_ (pint_ 0) (pint_ 2), int_ 2)
             ]
@@ -289,6 +429,27 @@ let p : MLangProgram = {
     expr = bind_ (use_ "L0") (int_ 10)
 } in 
 match symbolizeMLang symEnvDefault p with (_, p) in 
-checkComposition p ;
+assertInvalidSemParams (checkComposition p) ;
+
+-- Test invalid sem where patterns are spread accross langauges
+-- Test sem with invalid overlapping patterns
+let p : MLangProgram = {
+    decls = [
+        decl_lang_ "L0" [
+            decl_sem_ "f" [] [
+              (por_ (pint_ 0) (pint_ 1), int_ 1)
+            ]
+        ],
+        decl_langi_ "L1" ["L0"] [
+          decl_sem_ "f" [] [
+              (por_ (pint_ 0) (pint_ 2), int_ 2)
+          ]
+        ]
+    ],
+    expr = bind_ (use_ "L0") (int_ 10)
+} in 
+match symbolizeMLang symEnvDefault p with (_, p) in 
+assertInvalidSemParams (checkComposition p) ;
+
 
 ()
