@@ -61,21 +61,66 @@ let insertSemPatMap : CompositionCheckEnv -> Name -> [use MLangAst in Pat] -> Co
 
 lang MLangCompositionCheck = MLangAst + MExprPatAnalysis
   syn CompositionError =
-  | DifferentBaseSyn {}
-  | DifferentBaseSem {}
-  | MismatchedSemParams {}
-  | MismatchedSynParams {}
-  | InvalidSemPatterns {}
+  | DifferentBaseSyn {
+    synIdent : Name,
+    info : Info 
+  }
+  | DifferentBaseSem {
+    semIdent : Name,
+    info : Info
+  }
+  | MismatchedSemParams {
+    semIdent : Name,
+    info : Info
+  }
+  | MismatchedSynParams {
+    synIdent : Name,
+    info : Info
+  }
+  | InvalidSemPatterns {
+    semIdent : Name,
+    info : Info
+  }
 
   syn CompositionWarning = 
 
   sem raiseError : CompositionError -> ()
   sem raiseError = 
-  | DifferentBaseSyn e -> error "DifferentBaseSyn"
-  | DifferentBaseSem e -> error "DifferentBaseSem"
-  | MismatchedSemParams e -> error "MismatchedSemParams"
-  | MismatchedSynParams e -> error "MismatchedSynParams"
-  | InvalidSemPatterns e -> error "InvalidSemPatterns"
+  | DifferentBaseSyn e -> 
+    let msg = join [
+      "Invalid language composition because the syn '",
+      nameGetStr e.synIdent,
+      "' includes syns with different bases!"
+    ] in 
+    errorMulti [(e.info, "")] msg
+  | DifferentBaseSem e -> 
+    let msg = join [
+      "Invalid language composition because the semantic function '",
+      nameGetStr e.semIdent,
+      "' includes semantic functions with different bases!"
+    ] in 
+    errorMulti [(e.info, "")] msg
+  | MismatchedSemParams e -> 
+    let msg = join [
+      "Invalid language composition because the semantic function '",
+      nameGetStr e.semIdent,
+      "' includes semantic functions with different number of parameters!"
+    ] in 
+    errorMulti [(e.info, "")] msg
+  | MismatchedSynParams e ->     
+    let msg = join [
+      "Invalid language composition because the syn '",
+      nameGetStr e.synIdent,
+      "' includes syns with different number of parameters!"
+    ] in 
+    errorMulti [(e.info, "")] msg
+  | InvalidSemPatterns e ->     
+    let msg = join [
+      "Invalid language composition because the semantic function '",
+      nameGetStr e.semIdent,
+      "' includes or defined patterns which are overlapping or equal!"
+    ] in 
+    errorMulti [(e.info, "")] msg
 
   sem checkComposition : MLangProgram -> Result CompositionWarning CompositionError CompositionCheckEnv
   sem checkComposition =| prog -> 
@@ -114,7 +159,10 @@ lang MLangCompositionCheck = MLangAst + MExprPatAnalysis
       if eqi 1 (setSize includeSet) then
         _ok (insertParamMap env s.ident paramNum)
       else
-        _err (MismatchedSynParams {})
+        _err (MismatchedSynParams {
+          synIdent = s.ident,
+          info = s.info
+        })
   | DeclSem s ->
     let paramNum = length s.args in 
 
@@ -130,7 +178,10 @@ lang MLangCompositionCheck = MLangAst + MExprPatAnalysis
       if eqi 1 (setSize includeSet) then
         _ok (insertParamMap env s.ident paramNum)
       else
-        _err (MismatchedSemParams {})
+        _err (MismatchedSemParams {
+          semIdent = s.ident,
+          info = s.info
+        })
 
   sem parseBase : CompositionCheckEnv -> 
                   Decl -> 
@@ -148,7 +199,10 @@ lang MLangCompositionCheck = MLangAst + MExprPatAnalysis
       if eqi 1 (setSize includeSet) then
         _ok (insertBaseMap env s.ident (head includeList))
       else
-        _err (DifferentBaseSyn {})
+        _err (DifferentBaseSyn {
+          synIdent = s.ident,
+          info = s.info
+        })
   | DeclSem s ->
     match s.includes with [] then 
       _ok (insertBaseMap env s.ident s.ident)
@@ -161,7 +215,10 @@ lang MLangCompositionCheck = MLangAst + MExprPatAnalysis
       if eqi 1 (setSize includeSet) then
         _ok (insertBaseMap env s.ident (head includeList))
       else
-        _err (DifferentBaseSem {})
+        _err (DifferentBaseSem {
+          semIdent = s.ident, 
+          info = s.info
+        })
 
   sem parseCases env = 
   | DeclSem s -> 
@@ -205,7 +262,10 @@ lang MLangCompositionCheck = MLangAst + MExprPatAnalysis
     if forAll pairIsValid pairs then
       _ok (insertSemPatMap env s.ident pats)
     else 
-      _err (InvalidSemPatterns {})
+      _err (InvalidSemPatterns {
+        semIdent = s.ident, 
+        info = s.info
+      })
 
 end
 
@@ -281,6 +341,7 @@ let p : MLangProgram = {
 } in 
 match symbolizeMLang symEnvDefault p with (_, p) in 
 assertDifferentBaseSyn (checkComposition p) ;
+-- handleResult (checkComposition p) ;
 
 let p : MLangProgram = {
     decls = [
@@ -434,6 +495,7 @@ let p : MLangProgram = {
 } in 
 match symbolizeMLang symEnvDefault p with (_, p) in 
 assertInvalidSemParams (checkComposition p) ;
+-- handleResult (checkComposition p) ;
 
 
 ()
