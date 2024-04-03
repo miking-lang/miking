@@ -6,6 +6,7 @@ include "./symbolize.mc"
 include "mexpr/pattern-analysis.mc"
 
 include "common.mc"
+include "bool.mc"
 include "name.mc"
 include "set.mc"
 include "result.mc"
@@ -175,13 +176,42 @@ lang MLangCompositionCheck = MLangAst + MExprPatAnalysis
     let normPats = map patToNormpat pats in 
     let pairs = indexPairs (length normPats) in 
 
-    let pairIsDisjoint = lam p. 
-      match p with (i, j) in 
-      null (normpatIntersect (get normPats i) (get normPats j))
-    in 
+    let isStrictSubpat = lam pat1. lam pat2.
+      null (normpatIntersect pat1 (normpatComplement pat2))
+    in
 
+    let pairIsValid = lam p. 
+      match p with (i, j) in
+      let ap = get normPats i in 
+      let an = normpatComplement ap in 
 
-    if forAll pairIsDisjoint pairs then
+      let bp = get normPats j in 
+      let bn = normpatComplement bp in 
+
+      let a_minus_b = normpatIntersect ap bn in
+      let b_minus_a = normpatIntersect bp an in
+      if and (null a_minus_b) (null b_minus_a) then 
+        -- printLn "EQUAL" ;
+        false
+      else if null a_minus_b then 
+        -- printLn "Subset" ;
+        true 
+      else if null b_minus_a then 
+        -- printLn "Superset" ;
+        true 
+      else
+        let overlapping = normpatIntersect ap bp in
+        if null overlapping then 
+          -- printLn "Disjoint" ;
+          true
+        else
+          -- printLn "Overlapping!" ;
+          false
+    in
+
+    -- (iter (lam p. printLn (bool2string (pairIsValid p))) pairs) ;
+
+    if forAll pairIsValid pairs then
       _ok (insertSemPatMap env s.ident pats)
     else 
       _err (InvalidSemPatterns {})
@@ -250,8 +280,9 @@ let p : MLangProgram = {
     decls = [
         decl_lang_ "L0" [
             decl_sem_ "f" [] [
-              (pvarw_, int_ 1),
-              (pvarw_, int_ 2)
+              (pvarw_, int_ 0),
+              (por_ (pint_ 0) (pint_ 1), int_ 1),
+              (por_ (pint_ 0) (pint_ 2), int_ 2)
             ]
         ]
     ],
