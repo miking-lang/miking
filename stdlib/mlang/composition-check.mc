@@ -24,8 +24,9 @@ let collectPats : CompositionCheckEnv -> [Name] -> [use MLangAst in Pat] = lam e
   let incl2pats = lam i : Name. 
     match mapLookup i env.semPatMap with Some pats then
       pats
-    else 
-      error "Illegal state during composition-check! ..."
+    else error (concat 
+      "Illegal state during composition-check! The name patterns for each "
+      "included sem should have already been included!")
   in 
   join (map incl2pats includes)
 
@@ -430,6 +431,23 @@ let p : MLangProgram = {
     expr = bind_ (use_ "L0") (int_ 10)
 } in 
 match symbolizeMLang symEnvDefault p with (_, p) in 
+assertMismatchedSemsParams (checkComposition p) ;
+
+-- Test that semantic params get copied correctly. 
+let p : MLangProgram = {
+    decls = [
+        decl_lang_ "L1" [
+            decl_sem_ "f" [] []
+        ],
+        decl_lang_ "L2" [
+            decl_sem_ "f" [] []
+        ],
+        decl_langi_ "L12" ["L1", "L2"] []
+    ],
+    expr = bind_ (use_ "L12") (appf1_ (var_ "f") (int_ 10))
+} in 
+match symbolizeMLang symEnvDefault p with (_, p) in 
+assertValid (checkComposition p) ;
 
 -- Test sem with valid patterns
 let p : MLangProgram = {

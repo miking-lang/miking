@@ -336,6 +336,41 @@ lang MLangSym = MLangAst + MExprSym
         in 
         match mapAccumL symbSynConstructors langEnv synDecls with (langEnv, synDecls) in 
 
+        -- 3.5 Merge sems from included languages that have not explicitly
+        -- been extending by this langauge fragment. 
+        let isDeclaredInLang : all a. (String -> a -> Bool) = lam s. lam v.
+            let hasStringIdent = lam decl. 
+                match decl with DeclSem d in 
+                eqString (nameGetStr d.ident) s
+            in
+            match find hasStringIdent semDecls with Some _ then false else true
+        in 
+        let filteredSems = mapFilterWithKey isDeclaredInLang includedSems in 
+        let includedSemsPairs = mapToSeq filteredSems in 
+
+        -- let symbPairs : LangEnv -> (String, [Decl]) -> (LangEnv, Decl) = lam langEnv. lam pair. 
+        let symbSemPairs = lam langEnv. lam pair. 
+            match pair with (ident, ss) in 
+            let ident = nameSym ident in 
+
+            -- Todo, figure out where the args are coming from!
+            let decl = DeclSem {ident = ident,
+                                tyAnnot = TyUnknown {info = NoInfo ()},
+                                tyBody = TyUnknown {info = NoInfo ()},
+                                args = [],
+                                cases = [],
+                                includes = ss,
+                                info = NoInfo ()} in
+        
+            let langEnv = {langEnv with 
+                sems = mapInsert (nameGetStr ident) ident langEnv.sems} in
+
+            (langEnv, decl)
+        in
+
+        match mapAccumL symbSemPairs langEnv includedSemsPairs with (langEnv, newSems) in
+        let semDecls = concat semDecls newSems in
+
         -- 4. Assign names to semantic functions
         let symbSem = lam langEnv : LangEnv. lam declSem. 
             match declSem with DeclSem s in 
@@ -362,6 +397,8 @@ lang MLangSym = MLangAst + MExprSym
             (langEnv, decl)
         in 
         match mapAccumL symbSem langEnv semDecls with (langEnv, semDecls) in 
+
+
 
         -- 5. Assign names to semantic bodies.
         -- TODO: We must resymbolize the included cases as any recursive calls
@@ -572,6 +609,21 @@ let l12 = get p.decls 2 in
 utest isFullySymbolizedDecl l1 () with true in 
 utest isFullySymbolizedDecl l2 () with true in 
 utest isFullySymbolizedDecl l12 () with true in
+
+let p : MLangProgram = {
+    decls = [
+        decl_lang_ "L1" [
+            decl_sem_ "f" [] []
+        ],
+        decl_lang_ "L2" [
+            decl_sem_ "f" [] []
+        ],
+        decl_langi_ "L12" ["L1", "L2"] []
+    ],
+    expr = bind_ (use_ "L12") (appf1_ (var_ "f") (int_ 10))
+} in 
+match symbolizeMLang symEnvDefault p with (_, p) in 
+utest isFullySymbolizedProgram p () with true in 
 
 match l12 with DeclLang l in
 utest length l.decls with 1 in 
