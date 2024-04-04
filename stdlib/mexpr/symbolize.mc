@@ -67,7 +67,10 @@ type LangEnv = use MLangAst in {
   -- in which the first element is the symbolized name of the syn identifier
   -- and the second element is a list of symbolized constructor names.
   syns: Map String (Name, [Name]),
-  sems: Map String Name,
+  -- Map from the string of a sem identifier to a tuple
+  -- in whic hteh first element is the symbolized name of the identifier
+  -- and the second element is the number of parameters
+  sems: Map String (Name, Int),
   definedTypes: Map String Name,
   includedTypes: Map String Name,
   includedConstructors: [Name]

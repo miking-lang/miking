@@ -403,6 +403,28 @@ let p : MLangProgram = {
 match symbolizeMLang symEnvDefault p with (_, p) in 
 assertValid (checkComposition p) ;
 
+let p : MLangProgram = {
+    decls = [
+        decl_lang_ "L0" [
+            decl_syn_ "Foo" [],
+            decl_sem_ "f" [("x", tyint_), ("y", tyint_)] []
+        ],
+        decl_langi_ "L1" ["L0"] [
+            decl_syn_ "Foo" [("Baz", tyint_)],
+            decl_sem_ "f" [("x", tyint_), ("y", tyint_)] []
+        ],
+        decl_langi_ "L2" ["L0"] [
+            decl_syn_ "Foo" [("BazBaz", tychar_)],
+            decl_sem_ "f" [("x", tyint_), ("y", tyint_)] []
+        ],
+        decl_langi_ "L12" ["L0", "L1", "L2"] [
+        ]        
+    ],
+    expr = bind_ (use_ "L2") (int_ 10)
+} in 
+match symbolizeMLang symEnvDefault p with (_, p) in 
+assertValid (checkComposition p) ;
+
 -- Test semantic function with matching number of params
 let p : MLangProgram = {
     decls = [
@@ -447,7 +469,7 @@ let p : MLangProgram = {
     expr = bind_ (use_ "L12") (appf1_ (var_ "f") (int_ 10))
 } in 
 match symbolizeMLang symEnvDefault p with (_, p) in 
-assertValid (checkComposition p) ;
+assertDifferentBaseSem (checkComposition p) ;
 
 -- Test sem with valid patterns
 let p : MLangProgram = {

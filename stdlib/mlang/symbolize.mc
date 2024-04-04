@@ -39,7 +39,7 @@ let name2pair : Name -> (String, Name) = lam n.
 let convertLangEnv : LangEnv -> NameEnv = lam langEnv. 
     use MLangAst in 
     -- let semIdents = map sem2ident (mapValues langEnv.sems) in 
-    let semPairs = map name2pair (mapValues langEnv.sems) in 
+    let semPairs = map name2pair (map fst (mapValues langEnv.sems)) in 
     let varEnv = mapFromSeq cmpString semPairs in 
 
     let synIdents = map (lam p. match p with (fst, _) in fst) (mapValues langEnv.syns) in 
@@ -351,19 +351,19 @@ lang MLangSym = MLangAst + MExprSym
         -- let symbPairs : LangEnv -> (String, [Decl]) -> (LangEnv, Decl) = lam langEnv. lam pair. 
         let symbSemPairs = lam langEnv. lam pair. 
             match pair with (ident, ss) in 
+            let incls = map fst ss in 
             let ident = nameSym ident in 
 
-            -- Todo, figure out where the args are coming from!
             let decl = DeclSem {ident = ident,
                                 tyAnnot = TyUnknown {info = NoInfo ()},
                                 tyBody = TyUnknown {info = NoInfo ()},
-                                args = [],
+                                args = create (snd (head ss)) (lam. {ident = nameSym "tmp", tyAnnot = TyUnknown {info = NoInfo ()}}),
                                 cases = [],
-                                includes = ss,
+                                includes = incls,
                                 info = NoInfo ()} in
         
             let langEnv = {langEnv with 
-                sems = mapInsert (nameGetStr ident) ident langEnv.sems} in
+                sems = mapInsert (nameGetStr ident) (ident, 0) langEnv.sems} in
 
             (langEnv, decl)
         in
@@ -384,7 +384,7 @@ lang MLangSym = MLangAst + MExprSym
 
             let includes = match mapLookup (nameGetStr s.ident) includedSems 
                            with Some xs then xs else [] in 
-            -- let includes = map (lam s. match s with DeclSem s in s.ident) includes in 
+            let includes = map fst includes in 
 
             let decl = DeclSem {s with ident = ident,
                                 tyAnnot = tyAnnot,
@@ -392,7 +392,7 @@ lang MLangSym = MLangAst + MExprSym
                                 includes = includes} in 
 
             let langEnv = {langEnv with 
-                sems = mapInsert (nameGetStr s.ident) ident langEnv.sems} in
+                sems = mapInsert (nameGetStr s.ident) (ident, length s.args) langEnv.sems} in
 
             (langEnv, decl)
         in 
