@@ -5641,10 +5641,13 @@ lang TreeSolverPartIndep = ComposableSolver
       , s.pickBestOr
       ]) x in
     let largeSolver = lam tree. s.try
-      (s.onTopHomogeneousAlts (s.seq s.propagate (s.sizeBranches
-         [ (100000, bottomUp)
-         ]
-         (s.seq (s.debug "homogeneous top") s.oneHomogeneous))))
+      (s.bestDoneOf
+        [ s.consistent
+        , s.onTopHomogeneousAlts (s.seq s.propagate (s.sizeBranches
+          [ (100000, bottomUp)
+          ]
+          (s.seq (s.debug "homogeneous top") s.oneHomogeneous)))
+        ])
       (s.enumBest (Some 1))
       tree in
     let inner = lam tree. s.chain
@@ -5659,6 +5662,7 @@ lang TreeSolverPartIndep = ComposableSolver
       , s.propagate
       , s.debug "post-propagate"
       , s.flattenAnds
+      , s.debug "post-flatten"
       , s.partitionIndep
       , s.debug "post-partition-indep"
       , s.perIndep #frozen"inner"
