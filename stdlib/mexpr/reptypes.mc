@@ -8,6 +8,7 @@ include "eval.mc"
 include "lazy.mc"
 include "heap.mc"
 include "mexpr/annotate.mc"
+include "multicore/pseq.mc"
 include "sys.mc"
 include "json.mc"
 include "these.mc"
@@ -3422,7 +3423,7 @@ let rtSolveExternally : all env. all relevant. all constraint. all var. all val.
   RTSolveExternallyBaseInterface env relevant constraint var val ident
   -> RTSolveExternallyWorkInterface constraint acc query
   -> RepTree relevant constraint var val ident a
-  -> (acc, query, RTExtSol -> a)
+  -> (acc, query, RTExtSol -> RTSingleRec a constraint var val relevant ident)
   = lam base. lam fs. lam tree.
     type Never in
     type Single a = RTSingleRec a constraint var val relevant ident in
@@ -3485,7 +3486,7 @@ let rtSolveExternally : all env. all relevant. all constraint. all var. all val.
           (acc, (query, mk))
         end in
     match work fs.emptyAcc tree with (acc, (query, mk)) in
-    (acc, query, lam sol. (mk sol).value)
+    (acc, query, mk)
 
 let rtStateSpace : all relevant. all constraint. all var. all val. all a. all ident.
   RepTree relevant constraint var val ident a
@@ -5017,8 +5018,377 @@ lang TreeSolverGuided = TreeSolverBase
       else errorSingle [] "Could not find a consistent assignment of impls across the program"
     else errorSingle [] "Could not find a consistent assignment of impls across the program"
 end
+lang Z3Stuff = TreeSolverBase + MExprAst
+  type Z3State =
+    { vars : VarMap ()
+    , env : PprintEnv
+    , reprs : Set Name
+    , tyCons : Set Name
+    , labels : Set SID
+    }
+  syn Ast =
+  | AAnd [Ast]
+  | AOr [Ast]
+  | AEq (Ast, Ast)
+  | AAdd [Ast]
+  | AMul [Ast]
+  | ALit String
+  | ALet (String, Ast, Ast)
+  | AMatch (String, [(String, Ast)], Option Ast)
+  | AMatchI (String, [(Int, Ast)], Ast)
 
-lang ComposableSolver = TreeSolverBase
+  sem getReprVar : Z3State -> Symbol -> (Z3State, String)
+  sem getReprVar state = | sym ->
+    let vars = {state.vars with reprs = setInsert sym state.vars.reprs} in
+    match pprintEnvGetStr state.env ("rv_", sym) with (env, str) in
+    ({state with vars = vars, env = env}, str)
+
+  sem getMetaVar : Z3State -> Name -> (Z3State, String)
+  sem getMetaVar state = | name ->
+    let vars = {state.vars with metas = setInsert name state.vars.metas} in
+    match pprintEnvGetStr state.env name with (env, str) in
+    ({state with vars = vars, env = env}, concat "m_" str)
+
+  sem getRepr : Z3State -> Name -> (Z3State, String)
+  sem getRepr state = | name ->
+    let reprs = setInsert name state.reprs in
+    match pprintEnvGetStr state.env name with (env, str) in
+    ({state with reprs = reprs, env = env}, concat "r_" str)
+
+  sem getTyCon : Z3State -> Name -> (Z3State, String)
+  sem getTyCon state = | name ->
+    let tyCons = setInsert name state.tyCons in
+    match pprintEnvGetStr state.env name with (env, str) in
+    ({state with tyCons = tyCons, env = env}, concat "c_" str)
+
+  sem getLabel : Z3State -> SID -> (Z3State, String)
+  sem getLabel state = | sid ->
+    let labels = setInsert sid state.labels in
+    ({state with labels = labels}, concat "l_" (sidToString sid))
+
+  sem tyToZ3 : [Name] -> Z3State -> Type -> (Z3State, String)
+  sem tyToZ3 boundTyVars state =
+  | ty -> errorSingle [infoTy ty] "Missing case in tyToZ3"
+  | TyBool _ -> (state, "boolTy")
+  | TyInt _ -> (state, "intTy")
+  | TyFloat _ -> (state, "floatTy")
+  | TyChar _ -> (state, "charTy")
+  | TyArrow x ->
+    match tyToZ3 boundTyVars state x.from with (state, from) in
+    match tyToZ3 boundTyVars state x.to with (state, to) in
+    (state, join ["(funTy ", from, " ", to, ")"])
+  | TySeq x ->
+    match tyToZ3 boundTyVars state x.ty with (state, ty) in
+    (state, join ["(seqTy ", ty, ")"])
+  | TyRecord x ->
+    match mapMapAccum (lam a. lam. lam v. tyToZ3 boundTyVars a v) state x.fields with (state, fields) in
+    match unzip (mapBindings fields) with (labels, types) in
+    match mapAccumL getLabel state labels with (state, labels) in
+    let inUnit = lam x. join ["(seq.unit ", x, ")"] in
+    let asSeq = lam ty. lam xs. match xs with []
+      then join ["(as seq.empty (Seq ", ty, "))"]
+      else join ["(seq.++ ", strJoin " " (map inUnit xs), ")"] in
+    (state, join ["(recordTy ", asSeq "Label" labels, " ", asSeq "Ty" types, ")"])
+  | TyCon x ->
+    match getTyCon state x.ident with (state, tycon) in
+    (state, join ["(conTy ", tycon, ")"])
+  | TyVar x ->
+    match index (nameEq x.ident) boundTyVars with Some idx then
+      (state, join ["(boundTyVar ", int2string idx, ")"])
+    else
+      -- NOTE(vipa, 2024-01-18): Tyvars that are rigid (i.e., not
+      -- bound with an `all` inside the current type) are
+      -- indistinguishable from type constructors for the current
+      -- purposes, thus they are encoded the same
+      match getTyCon state x.ident with (state, tycon) in
+      (state, join ["(conTy ", tycon, ")"])
+  | TyAll x ->
+    let boundTyVars = cons x.ident boundTyVars in
+    match tyToZ3 boundTyVars state x.ty with (state, ty) in
+    (state, join ["(forallTy ", ty, ")"])
+  | TyApp x ->
+    match tyToZ3 boundTyVars state x.lhs with (state, lhs) in
+    match tyToZ3 boundTyVars state x.rhs with (state, rhs) in
+    (state, join ["(appTy ", lhs, " ", rhs, ")"])
+  | TyAlias x -> tyToZ3 boundTyVars state x.content
+  | ty & TyMetaVar _ -> switch unwrapType ty
+    case TyMetaVar x then
+      match deref x.contents with Unbound u then
+        getMetaVar state u.ident
+      else error "Compiler error: unwrapType didn't unwrap a TyMetaVar"
+    case ty then
+      tyToZ3 boundTyVars state ty
+    end
+  | TyRepr x ->
+    match deref (botRepr x.repr) with BotRepr u then
+      match tyToZ3 boundTyVars state x.arg with (state, arg) in
+      match getReprVar state u.sym with (state, sym) in
+      (state, join ["(reprTy ", sym, " ", arg, ")"])
+    else error "Compiler error: found a repr without an initialized repr var"
+  | TyWild _ ->
+    printError "Warning: tyToZ3 found a TyWild, should not be possible";
+    (state, "wildTy")
+
+  sem uniToZ3 : Z3State -> Unification -> (Z3State, [Ast])
+  sem uniToZ3 state = | uni ->
+    let f = lam getVar. lam getOut. lam state. lam equalities. lam puf. pufFoldRaw
+      (lam acc. lam l. lam r.
+        let st = acc.0 in
+        match getVar st l.0 with (st, l) in
+        match getVar st r.0 with (st, r) in
+        (st, snoc acc.1 (AEq (ALit l, ALit r))))
+      (lam acc. lam l. lam out.
+        let st = acc.0 in
+        match getVar st l.0 with (st, l) in
+        match getOut st out with (st, out) in
+        (st, snoc acc.1 (AEq (ALit l, ALit out))))
+      (state, equalities)
+      puf in
+    let equalities = [] in
+    match f getReprVar getRepr state equalities uni.reprs with (state, equalities) in
+    match f getMetaVar (tyToZ3 []) state equalities uni.types with (state, equalities) in
+    (state, equalities)
+
+  sem pprintZ3Helper : String -> String -> [Ast] -> String
+  sem pprintZ3Helper indent label = | children ->
+    let f = lam x. match x with ALit str then Some str else None () in
+    match optionMapM f children with Some simples then
+      join ["(", label, " ", strJoin " " simples, ")"]
+    else
+      let indent = concat indent " " in
+      join ["(", label, join (map (lam c. join ["\n", indent, pprintZ3Ast indent c]) children), ")"]
+
+  sem pprintZ3Ast : String -> Ast -> String
+  sem pprintZ3Ast indent =
+  | AAnd xs -> pprintZ3Helper indent "and" xs
+  | AOr xs -> pprintZ3Helper indent "or" xs
+  | AEq (l, r) -> pprintZ3Helper indent "=" [l, r]
+  | AAdd xs -> pprintZ3Helper indent "+" xs
+  | AMul xs -> pprintZ3Helper indent "*" xs
+  | ALit str -> str
+  | ALet (label, body, inexpr) ->
+    let indent = concat indent " " in
+    join
+    [ "(let ((", label, " ", pprintZ3Ast indent body, "))\n"
+    , indent, pprintZ3Ast indent inexpr, ")"
+    ]
+  | AMatch (scrut, arms, default) ->
+    let indent = concat indent " " in
+    let iindent = concat indent " " in
+    let iindent = concat iindent " " in
+    let arms = match default with Some default
+      then snoc arms ("_", default)
+      else arms in
+    let f = lam arm. switch arm
+      case (pat, ALit str) then join ["(", pat, " ", str, ")"]
+      case (pat, body) then join ["(", pat, "\n", iindent, pprintZ3Ast iindent body, ")"]
+      end in
+    join [ "(match ", scrut, "\n", indent, "(", strJoin (concat "\n" iindent) (map f arms), "))"]
+  | AMatchI (scrut, arms, default) ->
+    let iindent = concat indent " " in
+    let f = lam arm. lam acc.
+      match arm with (idx, body) in
+      join ["(ite (= ", scrut, " ", int2string idx, ")\n", iindent, pprintZ3Ast iindent body, "\n", indent, acc, ")"] in
+    foldr f (pprintZ3Ast iindent default) arms
+
+  sem parseZ3Output : String -> Option RTExtSol
+  sem parseZ3Output =
+  | _ -> None ()
+  | "sat\n\"" ++ str ++ "\"\n" ->
+    recursive let ltrim = lam str.
+      switch str
+      case "" then str
+      case " " ++ str then ltrim str
+      case str then str
+      end in
+    let partitionWhile : all a. (a -> Bool) -> [a] -> ([a], [a]) = lam pred. lam seq.
+      match index (lam x. not (pred x)) seq with Some idx
+      then splitAt seq idx
+      else (seq, []) in
+    let repeatUntilNone : all a. all x. (x -> Option (a, x)) -> x -> ([a], x) = lam f.
+      recursive let work = lam acc. lam x.
+        match f x with Some (a, x) then
+          work (snoc acc a) x
+        else (acc, x)
+      in work [] in
+    recursive let parseOne = lam str.
+      switch ltrim str
+      case "(and " ++ str then
+        match repeatUntilNone parseOne str with (children, str) in
+        match ltrim str with ")" ++ str in
+        Some (RTExtAnd children, str)
+      case "(or " ++ str then
+        match partitionWhile isDigit str with (digits, str) in
+        let str = ltrim str in
+        match parseOne str with Some (child, str) then
+          match ltrim str with ")" ++ str in
+          Some (RTExtOr {idx = string2int digits, sub = child}, str)
+        else None ()
+      case "single" ++ str then
+        Some (RTExtSingle (), str)
+      case _ then
+        None ()
+      end in
+    match parseOne str with Some (rt, str)
+    then if null str then Some rt else error (concat "Extra stuff left in str: " str)
+    else None ()
+
+  sem solveWithZ3 : all a. TSTree a -> Option (TSSingle a)
+  sem solveWithZ3 = | tree ->
+    let solveExternallyBaseInterface = mkSolveExternallyBaseInterface () in
+    let prelude = strJoin "\n"
+      [ "(declare-datatypes ((Sol 0))"
+      , "  (((solAnd (solChildren (Seq Sol)))"
+      , "    (solOr (solIndex Int) (solChild Sol))"
+      , "    solSingle)))"
+      , ""
+      , "(define-funs-rec"
+      , "  ((pp-sol ((sol Sol)) String)"
+      , "   (recur-child ((sol Sol)) String)"
+      , "   (concat ((a String) (b String)) String))"
+      , "  ((match sol"
+      , "    (((solAnd children)"
+      , "      (let ((subs (seq.map recur-child children)))"
+      , "        (str.++ \"(and\" (seq.foldl concat \"\" subs) \")\")))"
+      , "     ((solOr idx child)"
+      , "      (str.++ \"(or \" (int.to.str idx) \" \" (pp-sol child) \")\"))"
+      , "     (solSingle"
+      , "      \"single\")))"
+      , "   (str.++ \" \" (pp-sol sol))"
+      , "   (str.++ a b)))"
+      ] in
+    let midlude = strJoin "\n"
+      [ "(declare-datatypes ((Ty 0))"
+      , "  (((appTy (fTy Ty) (argTy Ty))"
+      , "    boolTy intTy floatTy charTy wildTy ostringTy olistTy"
+      , "    (opaqueTy (opaque String))"
+      , "    (seqTy (elemTy Ty))"
+      , "    (conTy (const ConstTy))"
+      , "    (reprTy (rep RepTy) (repArgTy Ty))"
+      , "    (forallTy (quantTy Ty))"
+      , "    (boundTyVar (debruijn Int))"
+      , "    (recordTy (fieldLabels (Seq Label)) (fieldTypes (Seq Ty)))"
+      , "    (funTy (fromTy Ty) (toTy Ty)))))"
+      ] in
+    type Query = {costExpr : Ast, boolExpr : Ast} in
+    let interface =
+      -- NOTE(vipa, 2024-01-18): All expressions assume that the
+      -- solution to examine is bound to `sol`
+      { and =
+        let f : Z3State -> Unification -> OpCost -> [{scale : OpCost, val : Query}] -> (Z3State, Query)
+          = lam st. lam uni. lam cost. lam children.
+            let childToCost = lam idx. lam child. ALet
+              ( "sol"
+              , ALit (join ["(seq.nth ss ", int2string idx, ")"])
+              , AMul [ALit (float2string child.scale), child.val.costExpr]
+              ) in
+            let costExpr = AMatch
+              ( "sol"
+              , [("(solAnd ss)" , AAdd (cons (ALit (float2string cost)) (mapi childToCost children)))]
+              , Some (ALit "999999999999.9")
+              ) in
+            let childToBool = lam idx. lam child. ALet
+              ( "sol"
+              , ALit (join ["(seq.nth ss ", int2string idx, ")"])
+              , child.val.boolExpr
+              ) in
+            match uniToZ3 st uni with (st, predicates) in
+            let lenEq = AEq (ALit "(seq.len ss)", ALit (int2string (length children))) in
+            let boolExpr = AMatch
+              ( "sol"
+              , [("(solAnd ss)", AAnd (join [[lenEq], predicates, mapi childToBool children]))]
+              , Some (ALit "false")
+              ) in
+            (st, {costExpr = costExpr, boolExpr = boolExpr})
+        in f
+      , or =
+        let f : Z3State -> Unification -> OpCost -> [Query] -> (Z3State, Query)
+          = lam st. lam uni. lam cost. lam alts.
+            let altToCost = lam idx. lam alt.
+              (idx, alt.costExpr) in
+            let costExpr =
+              let matchIdx = AMatchI ("idx", mapi altToCost alts, ALit "999999999999.9") in
+              let matchShape = AMatch ("sol", [("(solOr idx sol)", matchIdx)], Some (ALit "999999999999.9")) in
+              AAdd [ALit (float2string cost), matchShape] in
+            let altToBool = lam idx. lam alt. (idx, alt.boolExpr) in
+            let boolExpr =
+              AMatch ("sol", [("(solOr idx sol)", AMatchI ("idx", mapi altToBool alts, ALit "false"))], Some (ALit "false")) in
+            match uniToZ3 st uni with (st, predicates) in
+            let boolExpr = AAnd (snoc predicates boolExpr) in
+            (st, {costExpr = costExpr, boolExpr = boolExpr})
+        in f
+      , single =
+        let f : Z3State -> Unification -> OpCost -> (Z3State, Query)
+          = lam st. lam uni. lam cost.
+            let costExpr = ALit (float2string cost) in
+            match uniToZ3 st uni with (st, predicates) in
+            let boolExpr = AAnd (cons (ALit "(= sol solSingle)") predicates) in
+            (st, {costExpr = costExpr, boolExpr = boolExpr})
+        in f
+      , emptyAcc =
+        { vars = varMapEmpty
+        , env = pprintEnvEmpty
+        , reprs = setEmpty nameCmp
+        , tyCons = setEmpty nameCmp
+        , labels = setEmpty cmpSID
+        }
+      } in
+    match rtSolveExternally solveExternallyBaseInterface interface tree with (state, query, mk) in
+    match mapAccumL getTyCon state (setToSeq state.tyCons) with (state, tyCons) in
+    let tyCons = strJoin "\n"
+      [ "(declare-datatypes ()"
+      , "  ((ConstTy ", if null tyCons then "cx" else strJoin " " tyCons, ")))"
+      ] in
+
+    match mapAccumL getRepr state (setToSeq state.reprs) with (state, reprs) in
+    let reprs = strJoin "\n"
+      [ "(declare-datatypes ()"
+      , "  ((RepTy ", if null reprs then "rx" else strJoin " " reprs, ")))"
+      ] in
+
+    match mapAccumL getLabel state (setToSeq state.labels) with (state, labels) in
+    let labels = strJoin "\n"
+      [ "(declare-datatypes ()"
+      , "  ((Label ", if null labels then "lx" else strJoin " " labels, ")))"
+      ] in
+
+    match mapAccumL getMetaVar state (setToSeq state.vars.metas) with (state, metaVars) in
+    let mkMetaVarDecl = lam var. join ["(declare-const ", var, " Ty)"] in
+    let metaVars = strJoin "\n" (map mkMetaVarDecl metaVars) in
+
+    match mapAccumL getReprVar state (setToSeq state.vars.reprs) with (state, reprVars) in
+    let mkReprVarDecl = lam var. join ["(declare-const ", var, " RepTy)"] in
+    let reprVars = strJoin "\n" (map mkReprVarDecl reprVars) in
+
+    let boolExpr = pprintZ3Ast "" query.boolExpr in
+    let assertion = join ["(assert ", boolExpr, ")"] in
+
+    let costExpr = pprintZ3Ast "" query.costExpr in
+    let objective = join ["(minimize ", costExpr, ")"] in
+
+    let program = strJoin "\n\n"
+      [ prelude
+      , tyCons, reprs, labels
+      , midlude
+      , metaVars, reprVars
+      , "(declare-const sol Sol)"
+      , assertion, objective
+      , "(check-sat)"
+      , "(eval (pp-sol sol))"
+      ] in
+
+    -- printLn "# Input model:";
+    -- printLn program;
+    let res = sysRunCommand ["z3", "-smt2", "-in"] program "." in
+    -- printLn "# Output:";
+    -- printLn res.stdout;
+    -- printLn "# Error:";
+    -- printLn res.stderr;
+    -- printLn (join ["# Exit code: ", int2string res.returncode]);
+    optionMap mk (parseZ3Output res.stdout)
+end
+
+lang ComposableSolver = TreeSolverBase + Z3Stuff
   syn StepStatus a =
   | StepDone (TSSingle a)
   | StepStep (TSTree a)
@@ -5040,6 +5410,7 @@ lang ComposableSolver = TreeSolverBase
 
     , checkDone : all a. Step a
     , perIndep : all a. (all x. Step x) -> Step a
+    , perIndepPar : all a. Int -> (all x. Step x) -> Step a
     , pickBestOr : all a. Step a
     , try : all a. Step a -> Step a -> Step a
 
@@ -5054,6 +5425,7 @@ lang ComposableSolver = TreeSolverBase
     , consistent : all a. Step a
     , lazy : all a. Step a
     , enumBest : all a. Option Int -> Step a
+    , z3 : all a. Step a
 
     , filterApprox : all a. RTS -> Step a
     }
@@ -5146,6 +5518,22 @@ lang ComposableSolver = TreeSolverBase
           else StepFail ()
         else f tree in
       #frozen"perIndep"
+    , perIndepPar =
+      let perIndep : all a. Int -> (all x. Step x) -> Step a = lam count. lam f. lam tree.
+        match tree with RTAnd (x & {dep = InDep _}) then
+          let pool = threadPoolCreate count in
+          let runInner = lam child. switch f child.val
+            case StepDone sing then Some {child with val = RTSingle sing}
+            case StepStep tree then Some {child with val = tree}
+            case StepFail _ then None ()
+            end in
+          let resses = pmap pool count runInner x.children in
+          threadPoolTearDown pool;
+          match optionMapM (lam x. x) resses with Some children
+          then StepStep (RTAnd {x with children = children})
+          else StepFail ()
+        else f tree in
+      #frozen"perIndep"
     , propagate =
       let propagate : all a. Step a = lam tree.
         match rtPropagate propagateInterface tree with (failures, res) in
@@ -5223,6 +5611,12 @@ lang ComposableSolver = TreeSolverBase
       let f : all a. Step a = lam tree.
         match lazyStreamUncons (rtMaterializeLazyRecursive materializeLazyInterface tree)
         with Some (sing, _) then StepDone sing
+        else StepFail () in
+      #frozen"f"
+    , z3 =
+      let f : all a. Step a = lam tree.
+        match solveWithZ3 tree with Some sing
+        then StepDone sing
         else StepFail () in
       #frozen"f"
     , enumBest =
@@ -5404,6 +5798,33 @@ lang TreeSolverFast = ComposableSolver
       else fastSolve in
     match s.getDone (solve top) with Some s then s.value else
     errorSingle [] "Could not find a consistent assignment of impls across the program (though it may have been missed)"
+end
+
+lang TreeSolverZ3 = ComposableSolver
+  sem solveWork debug prev = | top ->
+    let s = mkCSSteps debug in
+    let inner = lam tree. s.seq (s.debug "pre indep-branch") s.z3 tree in
+    let solve = s.chain
+      [ s.debug "start"
+      , s.propagate
+      , s.debug "post-propagate"
+      , s.flattenAnds
+      , s.partitionIndep
+      , s.debug "post-partition-indep"
+      , s.perIndepPar 8 #frozen"inner"
+      , s.debug "post-per-indep"
+      , s.propagate
+      , s.debug "post-final-propagate"
+      , s.checkDone
+      , s.fail true
+      ] in
+    let solve = match prev with Some prev
+      then s.try
+        (s.seq (s.filterApprox prev) solve)
+        (s.seq (s.warn [] "Could not reuse previous solution, falling back to a re-solve.") solve)
+      else solve in
+    match s.getDone (solve top) with Some s then s.value else
+    errorSingle [] "Could not find a consistent assignment of impls across the program"
 end
 
 lang TreeSolverBottomUp = ComposableSolver
@@ -5745,383 +6166,6 @@ lang TreeSolverExplore = TreeSolverBase
     for_ properties (lam prop. for_ states (lam st. prop.1 st.0 st.1; ()));
 
     error "TODOexploreEnd"
-end
-
-lang TreeSolverZ3 = TreeSolverBase + MExprAst
-  type Z3State =
-    { vars : VarMap ()
-    , env : PprintEnv
-    , reprs : Set Name
-    , tyCons : Set Name
-    , labels : Set SID
-    }
-  syn Ast =
-  | AAnd [Ast]
-  | AOr [Ast]
-  | AEq (Ast, Ast)
-  | AAdd [Ast]
-  | AMul [Ast]
-  | ALit String
-  | ALet (String, Ast, Ast)
-  | AMatch (String, [(String, Ast)], Option Ast)
-  | AMatchI (String, [(Int, Ast)], Ast)
-
-  sem getReprVar : Z3State -> Symbol -> (Z3State, String)
-  sem getReprVar state = | sym ->
-    let vars = {state.vars with reprs = setInsert sym state.vars.reprs} in
-    match pprintEnvGetStr state.env ("rv_", sym) with (env, str) in
-    ({state with vars = vars, env = env}, str)
-
-  sem getMetaVar : Z3State -> Name -> (Z3State, String)
-  sem getMetaVar state = | name ->
-    let vars = {state.vars with metas = setInsert name state.vars.metas} in
-    match pprintEnvGetStr state.env name with (env, str) in
-    ({state with vars = vars, env = env}, concat "m_" str)
-
-  sem getRepr : Z3State -> Name -> (Z3State, String)
-  sem getRepr state = | name ->
-    let reprs = setInsert name state.reprs in
-    match pprintEnvGetStr state.env name with (env, str) in
-    ({state with reprs = reprs, env = env}, concat "r_" str)
-
-  sem getTyCon : Z3State -> Name -> (Z3State, String)
-  sem getTyCon state = | name ->
-    let tyCons = setInsert name state.tyCons in
-    match pprintEnvGetStr state.env name with (env, str) in
-    ({state with tyCons = tyCons, env = env}, concat "c_" str)
-
-  sem getLabel : Z3State -> SID -> (Z3State, String)
-  sem getLabel state = | sid ->
-    let labels = setInsert sid state.labels in
-    ({state with labels = labels}, concat "l_" (sidToString sid))
-
-  sem tyToZ3 : [Name] -> Z3State -> Type -> (Z3State, String)
-  sem tyToZ3 boundTyVars state =
-  | ty -> errorSingle [infoTy ty] "Missing case in tyToZ3"
-  | TyBool _ -> (state, "boolTy")
-  | TyInt _ -> (state, "intTy")
-  | TyFloat _ -> (state, "floatTy")
-  | TyChar _ -> (state, "charTy")
-  | TyArrow x ->
-    match tyToZ3 boundTyVars state x.from with (state, from) in
-    match tyToZ3 boundTyVars state x.to with (state, to) in
-    (state, join ["(funTy ", from, " ", to, ")"])
-  | TySeq x ->
-    match tyToZ3 boundTyVars state x.ty with (state, ty) in
-    (state, join ["(seqTy ", ty, ")"])
-  | TyRecord x ->
-    match mapMapAccum (lam a. lam. lam v. tyToZ3 boundTyVars a v) state x.fields with (state, fields) in
-    match unzip (mapBindings fields) with (labels, types) in
-    match mapAccumL getLabel state labels with (state, labels) in
-    let inUnit = lam x. join ["(seq.unit ", x, ")"] in
-    let asSeq = lam ty. lam xs. match xs with []
-      then join ["(as seq.empty (Seq ", ty, "))"]
-      else join ["(seq.++ ", strJoin " " (map inUnit xs), ")"] in
-    (state, join ["(recordTy ", asSeq "Label" labels, " ", asSeq "Ty" types, ")"])
-  | TyCon x ->
-    match getTyCon state x.ident with (state, tycon) in
-    (state, join ["(conTy ", tycon, ")"])
-  | TyVar x ->
-    match index (nameEq x.ident) boundTyVars with Some idx then
-      (state, join ["(boundTyVar ", int2string idx, ")"])
-    else
-      -- NOTE(vipa, 2024-01-18): Tyvars that are rigid (i.e., not
-      -- bound with an `all` inside the current type) are
-      -- indistinguishable from type constructors for the current
-      -- purposes, thus they are encoded the same
-      match getTyCon state x.ident with (state, tycon) in
-      (state, join ["(conTy ", tycon, ")"])
-  | TyAll x ->
-    let boundTyVars = cons x.ident boundTyVars in
-    match tyToZ3 boundTyVars state x.ty with (state, ty) in
-    (state, join ["(forallTy ", ty, ")"])
-  | TyApp x ->
-    match tyToZ3 boundTyVars state x.lhs with (state, lhs) in
-    match tyToZ3 boundTyVars state x.rhs with (state, rhs) in
-    (state, join ["(appTy ", lhs, " ", rhs, ")"])
-  | TyAlias x -> tyToZ3 boundTyVars state x.content
-  | ty & TyMetaVar _ -> switch unwrapType ty
-    case TyMetaVar x then
-      match deref x.contents with Unbound u then
-        getMetaVar state u.ident
-      else error "Compiler error: unwrapType didn't unwrap a TyMetaVar"
-    case ty then
-      tyToZ3 boundTyVars state ty
-    end
-  | TyRepr x ->
-    match deref (botRepr x.repr) with BotRepr u then
-      match tyToZ3 boundTyVars state x.arg with (state, arg) in
-      match getReprVar state u.sym with (state, sym) in
-      (state, join ["(reprTy ", sym, " ", arg, ")"])
-    else error "Compiler error: found a repr without an initialized repr var"
-  | TyWild _ ->
-    printError "Warning: tyToZ3 found a TyWild, should not be possible";
-    (state, "wildTy")
-
-  sem uniToZ3 : Z3State -> Unification -> (Z3State, [Ast])
-  sem uniToZ3 state = | uni ->
-    let f = lam getVar. lam getOut. lam state. lam equalities. lam puf. pufFoldRaw
-      (lam acc. lam l. lam r.
-        let st = acc.0 in
-        match getVar st l.0 with (st, l) in
-        match getVar st r.0 with (st, r) in
-        (st, snoc acc.1 (AEq (ALit l, ALit r))))
-      (lam acc. lam l. lam out.
-        let st = acc.0 in
-        match getVar st l.0 with (st, l) in
-        match getOut st out with (st, out) in
-        (st, snoc acc.1 (AEq (ALit l, ALit out))))
-      (state, equalities)
-      puf in
-    let equalities = [] in
-    match f getReprVar getRepr state equalities uni.reprs with (state, equalities) in
-    match f getMetaVar (tyToZ3 []) state equalities uni.types with (state, equalities) in
-    (state, equalities)
-
-  sem pprintZ3Helper : String -> String -> [Ast] -> String
-  sem pprintZ3Helper indent label = | children ->
-    let f = lam x. match x with ALit str then Some str else None () in
-    match optionMapM f children with Some simples then
-      join ["(", label, " ", strJoin " " simples, ")"]
-    else
-      let indent = concat indent " " in
-      join ["(", label, join (map (lam c. join ["\n", indent, pprintZ3Ast indent c]) children), ")"]
-
-  sem pprintZ3Ast : String -> Ast -> String
-  sem pprintZ3Ast indent =
-  | AAnd xs -> pprintZ3Helper indent "and" xs
-  | AOr xs -> pprintZ3Helper indent "or" xs
-  | AEq (l, r) -> pprintZ3Helper indent "=" [l, r]
-  | AAdd xs -> pprintZ3Helper indent "+" xs
-  | AMul xs -> pprintZ3Helper indent "*" xs
-  | ALit str -> str
-  | ALet (label, body, inexpr) ->
-    let indent = concat indent " " in
-    join
-    [ "(let ((", label, " ", pprintZ3Ast indent body, "))\n"
-    , indent, pprintZ3Ast indent inexpr, ")"
-    ]
-  | AMatch (scrut, arms, default) ->
-    let indent = concat indent " " in
-    let iindent = concat indent " " in
-    let iindent = concat iindent " " in
-    let arms = match default with Some default
-      then snoc arms ("_", default)
-      else arms in
-    let f = lam arm. switch arm
-      case (pat, ALit str) then join ["(", pat, " ", str, ")"]
-      case (pat, body) then join ["(", pat, "\n", iindent, pprintZ3Ast iindent body, ")"]
-      end in
-    join [ "(match ", scrut, "\n", indent, "(", strJoin (concat "\n" iindent) (map f arms), "))"]
-  | AMatchI (scrut, arms, default) ->
-    let iindent = concat indent " " in
-    let f = lam arm. lam acc.
-      match arm with (idx, body) in
-      join ["(ite (= ", scrut, " ", int2string idx, ")\n", iindent, pprintZ3Ast iindent body, "\n", indent, acc, ")"] in
-    foldr f (pprintZ3Ast iindent default) arms
-
-  sem parseZ3Output : String -> Option RTExtSol
-  sem parseZ3Output =
-  | _ -> None ()
-  | "sat\n\"" ++ str ++ "\"\n" ->
-    recursive let ltrim = lam str.
-      switch str
-      case "" then str
-      case " " ++ str then ltrim str
-      case str then str
-      end in
-    let partitionWhile : all a. (a -> Bool) -> [a] -> ([a], [a]) = lam pred. lam seq.
-      match index (lam x. not (pred x)) seq with Some idx
-      then splitAt seq idx
-      else (seq, []) in
-    let repeatUntilNone : all a. all x. (x -> Option (a, x)) -> x -> ([a], x) = lam f.
-      recursive let work = lam acc. lam x.
-        match f x with Some (a, x) then
-          work (snoc acc a) x
-        else (acc, x)
-      in work [] in
-    recursive let parseOne = lam str.
-      switch ltrim str
-      case "(and " ++ str then
-        match repeatUntilNone parseOne str with (children, str) in
-        match ltrim str with ")" ++ str in
-        Some (RTExtAnd children, str)
-      case "(or " ++ str then
-        match partitionWhile isDigit str with (digits, str) in
-        let str = ltrim str in
-        match parseOne str with Some (child, str) then
-          match ltrim str with ")" ++ str in
-          Some (RTExtOr {idx = string2int digits, sub = child}, str)
-        else None ()
-      case "single" ++ str then
-        Some (RTExtSingle (), str)
-      case _ then
-        None ()
-      end in
-    match parseOne str with Some (rt, str)
-    then if null str then Some rt else error (concat "Extra stuff left in str: " str)
-    else None ()
-
-  sem solveWork debug prev = | top ->
-    let propagateInterface = mkPropagateInterface () in
-    let solveExternallyBaseInterface = mkSolveExternallyBaseInterface () in
-    let prelude = strJoin "\n"
-      [ "(declare-datatypes ((Sol 0))"
-      , "  (((solAnd (solChildren (Seq Sol)))"
-      , "    (solOr (solIndex Int) (solChild Sol))"
-      , "    solSingle)))"
-      , ""
-      , "(define-funs-rec"
-      , "  ((pp-sol ((sol Sol)) String)"
-      , "   (recur-child ((sol Sol)) String)"
-      , "   (concat ((a String) (b String)) String))"
-      , "  ((match sol"
-      , "    (((solAnd children)"
-      , "      (let ((subs (seq.map recur-child children)))"
-      , "        (str.++ \"(and\" (seq.foldl concat \"\" subs) \")\")))"
-      , "     ((solOr idx child)"
-      , "      (str.++ \"(or \" (int.to.str idx) \" \" (pp-sol child) \")\"))"
-      , "     (solSingle"
-      , "      \"single\")))"
-      , "   (str.++ \" \" (pp-sol sol))"
-      , "   (str.++ a b)))"
-      ] in
-    let midlude = strJoin "\n"
-      [ "(declare-datatypes ((Ty 0))"
-      , "  (((appTy (fTy Ty) (argTy Ty))"
-      , "    boolTy intTy floatTy charTy wildTy ostringTy olistTy"
-      , "    (opaqueTy (opaque String))"
-      , "    (seqTy (elemTy Ty))"
-      , "    (conTy (const ConstTy))"
-      , "    (reprTy (rep RepTy) (repArgTy Ty))"
-      , "    (forallTy (quantTy Ty))"
-      , "    (boundTyVar (debruijn Int))"
-      , "    (recordTy (fieldLabels (Seq Label)) (fieldTypes (Seq Ty)))"
-      , "    (funTy (fromTy Ty) (toTy Ty)))))"
-      ] in
-    type Query = {costExpr : Ast, boolExpr : Ast} in
-    let interface =
-      -- NOTE(vipa, 2024-01-18): All expressions assume that the
-      -- solution to examine is bound to `sol`
-      { and =
-        let f : Z3State -> Unification -> OpCost -> [{scale : OpCost, val : Query}] -> (Z3State, Query)
-          = lam st. lam uni. lam cost. lam children.
-            let childToCost = lam idx. lam child. ALet
-              ( "sol"
-              , ALit (join ["(seq.nth ss ", int2string idx, ")"])
-              , AMul [ALit (float2string child.scale), child.val.costExpr]
-              ) in
-            let costExpr = AMatch
-              ( "sol"
-              , [("(solAnd ss)" , AAdd (cons (ALit (float2string cost)) (mapi childToCost children)))]
-              , Some (ALit "999999999999.9")
-              ) in
-            let childToBool = lam idx. lam child. ALet
-              ( "sol"
-              , ALit (join ["(seq.nth ss ", int2string idx, ")"])
-              , child.val.boolExpr
-              ) in
-            match uniToZ3 st uni with (st, predicates) in
-            let lenEq = AEq (ALit "(seq.len ss)", ALit (int2string (length children))) in
-            let boolExpr = AMatch
-              ( "sol"
-              , [("(solAnd ss)", AAnd (join [[lenEq], predicates, mapi childToBool children]))]
-              , Some (ALit "false")
-              ) in
-            (st, {costExpr = costExpr, boolExpr = boolExpr})
-        in f
-      , or =
-        let f : Z3State -> Unification -> OpCost -> [Query] -> (Z3State, Query)
-          = lam st. lam uni. lam cost. lam alts.
-            let altToCost = lam idx. lam alt.
-              (idx, alt.costExpr) in
-            let costExpr =
-              let matchIdx = AMatchI ("idx", mapi altToCost alts, ALit "999999999999.9") in
-              let matchShape = AMatch ("sol", [("(solOr idx sol)", matchIdx)], Some (ALit "999999999999.9")) in
-              AAdd [ALit (float2string cost), matchShape] in
-            let altToBool = lam idx. lam alt. (idx, alt.boolExpr) in
-            let boolExpr =
-              AMatch ("sol", [("(solOr idx sol)", AMatchI ("idx", mapi altToBool alts, ALit "false"))], Some (ALit "false")) in
-            match uniToZ3 st uni with (st, predicates) in
-            let boolExpr = AAnd (snoc predicates boolExpr) in
-            (st, {costExpr = costExpr, boolExpr = boolExpr})
-        in f
-      , single =
-        let f : Z3State -> Unification -> OpCost -> (Z3State, Query)
-          = lam st. lam uni. lam cost.
-            let costExpr = ALit (float2string cost) in
-            match uniToZ3 st uni with (st, predicates) in
-            let boolExpr = AAnd (cons (ALit "(= sol solSingle)") predicates) in
-            (st, {costExpr = costExpr, boolExpr = boolExpr})
-        in f
-      , emptyAcc =
-        { vars = varMapEmpty
-        , env = pprintEnvEmpty
-        , reprs = setEmpty nameCmp
-        , tyCons = setEmpty nameCmp
-        , labels = setEmpty cmpSID
-        }
-      } in
-    match rtPropagate propagateInterface top with (_, Some top) then
-      match rtSolveExternally solveExternallyBaseInterface interface top with (state, query, mk) in
-
-      match mapAccumL getTyCon state (setToSeq state.tyCons) with (state, tyCons) in
-      let tyCons = join
-        [ "(declare-datatypes ()"
-        , "  ((ConstTy ", strJoin " " tyCons, ")))"
-        ] in
-
-      match mapAccumL getRepr state (setToSeq state.reprs) with (state, reprs) in
-      let reprs = join
-        [ "(declare-datatypes ()"
-        , "  ((RepTy ", strJoin " " reprs, ")))"
-        ] in
-
-      match mapAccumL getLabel state (setToSeq state.labels) with (state, labels) in
-      let labels = join
-        [ "(declare-datatypes ()"
-        , "  ((Label ", strJoin " " labels, ")))"
-        ] in
-
-      match mapAccumL getMetaVar state (setToSeq state.vars.metas) with (state, metaVars) in
-      let mkMetaVarDecl = lam var. join ["(declare-const ", var, " Ty)"] in
-      let metaVars = strJoin "\n" (map mkMetaVarDecl metaVars) in
-
-      match mapAccumL getReprVar state (setToSeq state.vars.reprs) with (state, reprVars) in
-      let mkReprVarDecl = lam var. join ["(declare-const ", var, " RepTy)"] in
-      let reprVars = strJoin "\n" (map mkReprVarDecl reprVars) in
-
-      let boolExpr = pprintZ3Ast "" query.boolExpr in
-      let assertion = join ["(assert ", boolExpr, ")"] in
-
-      let costExpr = pprintZ3Ast "" query.costExpr in
-      let objective = join ["(minimize ", costExpr, ")"] in
-
-      let program = strJoin "\n\n"
-        [ prelude
-        , tyCons, reprs, labels
-        , midlude
-        , metaVars, reprVars
-        , "(declare-const sol Sol)"
-        , assertion, objective
-        , "(check-sat)"
-        , "(eval (pp-sol sol))"
-        ] in
-
-      -- printLn "# Input model:";
-      -- printLn program;
-      let res = sysRunCommand ["z3", "-smt2", "-in"] program "." in
-      -- printLn "# Output:";
-      -- printLn res.stdout;
-      -- printLn "# Error:";
-      -- printLn res.stderr;
-      -- printLn (join ["# Exit code: ", int2string res.returncode]);
-      match parseZ3Output res.stdout with Some rtext
-      then mk rtext
-      else errorSingle [] "Z3 could not find an optimal solution"
-
-      error "TODOsolve"
-    else errorSingle [] "Could not find a consistent assignment of impls across the program"
 end
 
 lang SATishSolver = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpers + PrettyPrint + Cmp + Generalize + VarAccessHelpers + LocallyNamelessStuff + SolTreeSolver + WildToMeta
