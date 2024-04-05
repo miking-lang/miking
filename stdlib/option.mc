@@ -306,6 +306,14 @@ utest optionOr (Some 1) (None ()) with (Some 1) using optionEq eqi
 utest optionOr (None ()) (Some 2) with (Some 2) using optionEq eqi
 utest optionOr (None ()) (None ()) with (None ()) using optionEq eqi
 
+-- Return the option if it contains a value, otherwise use the
+-- function to compute a value to return.
+let optionOrElse : all a. (() -> Option a) -> Option a -> Option a = lam f. lam o.
+  match o with Some _ then o else f ()
+
+utest optionOrElse (lam. Some 2) (Some 1) with (Some 1) using optionEq eqi
+utest optionOrElse (lam. Some 2) (None ()) with (Some 2) using optionEq eqi
+
 -- If exactly one option is `Some`, that option is returned,
 -- otherwise returns `None`.
 let optionXor : all a. Option a -> Option a -> Option a = lam o1. lam o2.

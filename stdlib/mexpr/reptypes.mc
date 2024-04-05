@@ -45,7 +45,7 @@ lang LetRepTypesAnalysis = TypeCheck + LetAst + SubstituteNewReprs + OpImplAst +
         let env = {env with reptypes = {env.reptypes with inImpl = true}} in
         let tyBody = substituteNewReprs env t.tyBody in
         match stripTyAll tyBody with (vars, stripped) in
-        let newTyVars = foldr (lam v. mapInsert v.0 newLvl) env.tyVarEnv vars in
+        let newTyVars = foldr (lam v. mapInsert v.0 (newLvl, v.1)) env.tyVarEnv vars in
         let env = {env with currentLvl = newLvl, tyVarEnv = newTyVars} in
         let body = typeCheckExpr env t.body in
         unify env [infoTm body] stripped (tyTm body);
@@ -86,7 +86,7 @@ lang LetRepTypesAnalysis = TypeCheck + LetAst + SubstituteNewReprs + OpImplAst +
       match
         if isValue then
           match stripTyAll tyBody with (vars, stripped) in
-          let newTyVars = foldr (lam v. mapInsert v.0 newLvl) env.tyVarEnv vars in
+          let newTyVars = foldr (lam v. mapInsert v.0 (newLvl, v.1)) env.tyVarEnv vars in
           let newEnv = {env with currentLvl = newLvl, tyVarEnv = newTyVars} in
           let body = typeCheckExpr newEnv t.body in
           -- Unify the annotated type with the inferred one and generalize
@@ -109,131 +109,192 @@ lang LetRepTypesAnalysis = TypeCheck + LetAst + SubstituteNewReprs + OpImplAst +
                     ty = tyTm inexpr}
 end
 
-lang RecLetsRepTypesAnalysis = TypeCheck + RecLetsAst + MetaVarDisableGeneralize + RecordAst + OpImplAst + OpDeclAst + RepTypesHelpers + NonExpansive + SubstituteNewReprs
+lang RecLetsRepTypesAnalysis = TypeCheck + RecLetsAst + MetaVarDisableGeneralize + RecordAst + OpImplAst + OpDeclAst + RepTypesHelpers + NonExpansive + SubstituteNewReprs + PropagateTypeAnnot + SubstituteUnknown + ResolveType
   sem typeCheckExpr env =
   | TmRecLets t ->
-    let typeCheckRecLets = lam env. lam t.
-      let newLvl = addi 1 env.currentLvl in
-      -- Build env with the recursive bindings
-      let recLetEnvIteratee = lam acc. lam b: RecLetBinding.
-        let tyBody = substituteNewReprs env b.tyBody in
-        let vars = if nonExpansive true b.body then (stripTyAll tyBody).0 else [] in
-        let newEnv = _insertVar b.ident tyBody acc.0 in
-        let newTyVars = foldr (uncurry mapInsert) acc.1 vars in
-        ((newEnv, newTyVars), {b with tyBody = tyBody}) in
-      match mapAccumL recLetEnvIteratee (env, mapEmpty nameCmp) t.bindings
-        with ((recLetEnv, tyVars), bindings) in
-      let newTyVarEnv = mapFoldWithKey
-        (lam vs. lam v. lam. mapInsert v newLvl vs)
-        recLetEnv.tyVarEnv
-        tyVars in
-
-      -- Type check each body
-      let typeCheckBinding = lam b: RecLetBinding.
-        let body =
-          if nonExpansive true b.body then
-            let newEnv = {recLetEnv with currentLvl = newLvl, tyVarEnv = newTyVarEnv} in
-            match stripTyAll b.tyBody with (_, stripped) in
-            let body = typeCheckExpr newEnv b.body in
-            -- Unify the inferred type of the body with the annotated one
-            unify newEnv [infoTy b.tyAnnot, infoTm body] stripped (tyTm body);
-            body
-          else
-            let body = typeCheckExpr {recLetEnv with currentLvl = newLvl} b.body in
-            unify recLetEnv [infoTy b.tyAnnot, infoTm body] b.tyBody (tyTm body);
-            body
-        in {b with body = body} in
-      let bindings = map typeCheckBinding bindings in
-
-      -- Build env with generalized types
-      let envIteratee = lam acc. lam b : RecLetBinding.
-        match
-          if nonExpansive true b.body then
-            (if env.disableRecordPolymorphism then
-              disableRecordGeneralize env.currentLvl b.tyBody else ());
-            gen env.currentLvl acc.1 b.tyBody
-          else
-            weakenMetaVars env.currentLvl b.tyBody;
-            (b.tyBody, [])
-          with (tyBody, vars) in
-        let newEnv = _insertVar b.ident tyBody acc.0 in
-        let newTyVars = foldr (uncurry mapInsert) acc.1 vars in
-        ((newEnv, newTyVars), {b with tyBody = tyBody}) in
-      match mapAccumL envIteratee (env, tyVars) bindings
-        with ((env, _), bindings) in
-
-      let inexpr = typeCheckExpr env t.inexpr in
-      { t with bindings = bindings
-             , inexpr = inexpr
-             , ty = tyTm inexpr
-      }
-    in
-
-    let shouldBeOp = if env.reptypes.inImpl then false else
-      if forAll (lam b. nonExpansive true b.body) t.bindings
-      then any (lam b. containsRepr b.tyBody) t.bindings
-      else false in
-    -- TODO(vipa, 2024-02-22): This translation doesn't quite do what
-    -- we want, because each function in the letrec gets generalized,
-    -- whereby any opuses inside have to satisfy a rigid
-    -- typevariable. For now we just don't translate rec lets to
-    -- letops, and we'll have to figure out how to do it later
-    let shouldBeOp = false in
-    if not shouldBeOp then TmRecLets (typeCheckRecLets env t) else
-    let bindingToBindingPair = lam b.
-      ( stringToSid (nameGetStr b.ident)
-      , TmVar
-        { ident = b.ident
-        , ty = tyunknown_
-        , info = t.info
-        , frozen = false
-        }
-      ) in
-    let opRecord = TmRecord
-      { bindings = mapFromSeq cmpSID (map bindingToBindingPair t.bindings)
-      , ty = tyunknown_
-      , info = t.info
-      } in
     let newLvl = addi 1 env.currentLvl in
-    let implEnv = {env with currentLvl = newLvl, reptypes = {env.reptypes with inImpl = true}} in
-    match withNewReprScope implEnv (lam env. typeCheckRecLets env {t with inexpr = opRecord})
-      with (newT, reprScope, delayedReprUnifications) in
-    (if env.disableRecordPolymorphism
-      then disableRecordGeneralize env.currentLvl newT.ty
-      else ());
-    match gen env.currentLvl (mapEmpty nameCmp) newT.ty with (newTy, _) in
-    let recordName =
-      let ident = (head newT.bindings).ident in
-      nameSym (concat (nameGetStr ident) "_etc") in
-    let inexpr =
-      let opNamesInScope = foldl
-        (lam acc. lam b. mapInsert b.ident (Some (recordName, stringToSid (nameGetStr b.ident))) acc)
-        env.reptypes.opNamesInScope
-        newT.bindings in
-      let opNamesInScope = mapInsert recordName (None ()) opNamesInScope in
-      let env = _insertVar recordName newTy env in
-      let env = {env with reptypes = {env.reptypes with opNamesInScope = opNamesInScope}} in
-      typeCheckExpr env t.inexpr in
-    let ty = tyTm inexpr in
-    TmOpDecl
-    { info = t.info
-    , ident = recordName
-    , tyAnnot = newTy
-    , ty = ty
-    , inexpr = TmOpImpl
-      { ident = recordName
-      , implId = negi 1
-      , selfCost = 1.0
-      , body = TmRecLets newT
-      , specType = newTy
-      , delayedReprUnifications = delayedReprUnifications
-      , inexpr = inexpr
-      , ty = ty
-      , reprScope = reprScope
-      , metaLevel = env.currentLvl
-      , info = t.info
-      }
-    }
+    -- First: Generate a new environment containing the recursive bindings
+    let recLetEnvIteratee = lam acc. lam b: RecLetBinding.
+      let tyAnnot = resolveType t.info env false b.tyBody in
+      let tyAnnot = substituteNewReprs env tyAnnot in
+      let tyBody = substituteUnknown t.info {env with currentLvl = newLvl} (Poly ()) tyAnnot in
+      let vars = if nonExpansive true b.body then (stripTyAll tyBody).0 else [] in
+      let newEnv = _insertVar b.ident tyBody acc.0 in
+      let newTyVars = foldr (uncurry mapInsert) acc.1 vars in
+      ((newEnv, newTyVars), {b with tyBody = tyBody})
+    in
+    match mapAccumL recLetEnvIteratee (env, mapEmpty nameCmp) t.bindings
+    with ((recLetEnv, tyVars), bindings) in
+    let newTyVarEnv =
+      mapFoldWithKey (lam vs. lam v. lam k. mapInsert v (newLvl, k) vs) recLetEnv.tyVarEnv tyVars in
+
+    -- Second: Type check the body of each binding in the new environment
+    let typeCheckBinding = lam b: RecLetBinding.
+      let body =
+        if nonExpansive true b.body then
+          let newEnv = {recLetEnv with currentLvl = newLvl, tyVarEnv = newTyVarEnv} in
+          match stripTyAll b.tyBody with (_, stripped) in
+          let body = typeCheckExpr newEnv (propagateTyAnnot (b.body, b.tyBody)) in
+          -- Unify the inferred type of the body with the annotated one
+          unify newEnv [infoTy b.tyBody, infoTm body] stripped (tyTm body);
+          body
+        else
+          let body = typeCheckExpr {recLetEnv with currentLvl = newLvl} b.body in
+          unify recLetEnv [infoTy b.tyBody, infoTm body] b.tyBody (tyTm body);
+          body
+      in
+      {b with body = body}
+    in
+    let bindings = map typeCheckBinding bindings in
+
+    -- Third: Produce a new environment with generalized types
+    let envIteratee = lam acc. lam b : RecLetBinding.
+      match
+        if nonExpansive true b.body then
+          (if env.disableRecordPolymorphism then
+             disableRecordGeneralize env.currentLvl b.tyBody else ());
+          gen env.currentLvl acc.1 b.tyBody
+        else
+          weakenMetaVars env.currentLvl b.tyBody;
+          (b.tyBody, [])
+      with (tyBody, vars) in
+      let newEnv = _insertVar b.ident tyBody acc.0 in
+      let newTyVars = foldr (uncurry mapInsert) acc.1 vars in
+      ((newEnv, newTyVars), {b with tyBody = tyBody})
+    in
+    match mapAccumL envIteratee (env, tyVars) bindings with ((env, _), bindings) in
+    let inexpr = typeCheckExpr env t.inexpr in
+    TmRecLets {t with bindings = bindings, inexpr = inexpr, ty = tyTm inexpr}
+-- NOTE(vipa, 2024-04-22): This currently just uses the normal
+-- type-checking for TmRecLets. In the end we want to infer when
+-- something should be replaced with a letop and letimpl pair, but the
+-- current analysis didn't do quite what we wanted, so we're leaving
+-- it out for now.
+
+--   sem typeCheckExpr env =
+--   | TmRecLets t ->
+--     let typeCheckRecLets = lam env. lam t.
+--       let newLvl = addi 1 env.currentLvl in
+--       -- Build env with the recursive bindings
+--       let recLetEnvIteratee = lam acc. lam b: RecLetBinding.
+--         let tyBody = substituteNewReprs env b.tyBody in
+--         let vars = if nonExpansive true b.body then (stripTyAll tyBody).0 else [] in
+--         let newEnv = _insertVar b.ident tyBody acc.0 in
+--         let newTyVars = foldr (uncurry mapInsert) acc.1 vars in
+--         ((newEnv, newTyVars), {b with tyBody = tyBody}) in
+--       match mapAccumL recLetEnvIteratee (env, mapEmpty nameCmp) t.bindings
+--         with ((recLetEnv, tyVars), bindings) in
+--       let newTyVarEnv = mapFoldWithKey
+--         (lam vs. lam v. lam. mapInsert v newLvl vs)
+--         recLetEnv.tyVarEnv
+--         tyVars in
+
+--       -- Type check each body
+--       let typeCheckBinding = lam b: RecLetBinding.
+--         let body =
+--           if nonExpansive true b.body then
+--             let newEnv = {recLetEnv with currentLvl = newLvl, tyVarEnv = newTyVarEnv} in
+--             match stripTyAll b.tyBody with (_, stripped) in
+--             let body = typeCheckExpr newEnv b.body in
+--             -- Unify the inferred type of the body with the annotated one
+--             unify newEnv [infoTy b.tyAnnot, infoTm body] stripped (tyTm body);
+--             body
+--           else
+--             let body = typeCheckExpr {recLetEnv with currentLvl = newLvl} b.body in
+--             unify recLetEnv [infoTy b.tyAnnot, infoTm body] b.tyBody (tyTm body);
+--             body
+--         in {b with body = body} in
+--       let bindings = map typeCheckBinding bindings in
+
+--       -- Build env with generalized types
+--       let envIteratee = lam acc. lam b : RecLetBinding.
+--         match
+--           if nonExpansive true b.body then
+--             (if env.disableRecordPolymorphism then
+--               disableRecordGeneralize env.currentLvl b.tyBody else ());
+--             gen env.currentLvl acc.1 b.tyBody
+--           else
+--             weakenMetaVars env.currentLvl b.tyBody;
+--             (b.tyBody, [])
+--           with (tyBody, vars) in
+--         let newEnv = _insertVar b.ident tyBody acc.0 in
+--         let newTyVars = foldr (uncurry mapInsert) acc.1 vars in
+--         ((newEnv, newTyVars), {b with tyBody = tyBody}) in
+--       match mapAccumL envIteratee (env, tyVars) bindings
+--         with ((env, _), bindings) in
+
+--       let inexpr = typeCheckExpr env t.inexpr in
+--       { t with bindings = bindings
+--              , inexpr = inexpr
+--              , ty = tyTm inexpr
+--       }
+--     in
+
+--     let shouldBeOp = if env.reptypes.inImpl then false else
+--       if forAll (lam b. nonExpansive true b.body) t.bindings
+--       then any (lam b. containsRepr b.tyBody) t.bindings
+--       else false in
+--     -- TODO(vipa, 2024-02-22): This translation doesn't quite do what
+--     -- we want, because each function in the letrec gets generalized,
+--     -- whereby any opuses inside have to satisfy a rigid
+--     -- typevariable. For now we just don't translate rec lets to
+--     -- letops, and we'll have to figure out how to do it later
+--     let shouldBeOp = false in
+--     if not shouldBeOp then TmRecLets (typeCheckRecLets env t) else
+--     let bindingToBindingPair = lam b.
+--       ( stringToSid (nameGetStr b.ident)
+--       , TmVar
+--         { ident = b.ident
+--         , ty = tyunknown_
+--         , info = t.info
+--         , frozen = false
+--         }
+--       ) in
+--     let opRecord = TmRecord
+--       { bindings = mapFromSeq cmpSID (map bindingToBindingPair t.bindings)
+--       , ty = tyunknown_
+--       , info = t.info
+--       } in
+--     let newLvl = addi 1 env.currentLvl in
+--     let implEnv = {env with currentLvl = newLvl, reptypes = {env.reptypes with inImpl = true}} in
+--     match withNewReprScope implEnv (lam env. typeCheckRecLets env {t with inexpr = opRecord})
+--       with (newT, reprScope, delayedReprUnifications) in
+--     (if env.disableRecordPolymorphism
+--       then disableRecordGeneralize env.currentLvl newT.ty
+--       else ());
+--     match gen env.currentLvl (mapEmpty nameCmp) newT.ty with (newTy, _) in
+--     let recordName =
+--       let ident = (head newT.bindings).ident in
+--       nameSym (concat (nameGetStr ident) "_etc") in
+--     let inexpr =
+--       let opNamesInScope = foldl
+--         (lam acc. lam b. mapInsert b.ident (Some (recordName, stringToSid (nameGetStr b.ident))) acc)
+--         env.reptypes.opNamesInScope
+--         newT.bindings in
+--       let opNamesInScope = mapInsert recordName (None ()) opNamesInScope in
+--       let env = _insertVar recordName newTy env in
+--       let env = {env with reptypes = {env.reptypes with opNamesInScope = opNamesInScope}} in
+--       typeCheckExpr env t.inexpr in
+--     let ty = tyTm inexpr in
+--     TmOpDecl
+--     { info = t.info
+--     , ident = recordName
+--     , tyAnnot = newTy
+--     , ty = ty
+--     , inexpr = TmOpImpl
+--       { ident = recordName
+--       , implId = negi 1
+--       , selfCost = 1.0
+--       , body = TmRecLets newT
+--       , specType = newTy
+--       , delayedReprUnifications = delayedReprUnifications
+--       , inexpr = inexpr
+--       , ty = ty
+--       , reprScope = reprScope
+--       , metaLevel = env.currentLvl
+--       , info = t.info
+--       }
+--     }
 end
 
 lang VarRepTypesAnalysis = TypeCheck + VarAst + OpVarAst + RepTypesHelpers + SubstituteNewReprs + NeverAst + MatchAst + NamedPat + RecordPat
@@ -298,7 +359,7 @@ lang OpImplRepTypesAnalysis = TypeCheck + OpImplAst + ResolveType + SubstituteNe
       let newEnv = {env with currentLvl = newLvl} in
       let reprType = applyReprSubsts newEnv specType in
       match stripTyAll reprType with (vars, reprType) in
-      let newTyVars = foldr (lam v. mapInsert v.0 newLvl) newEnv.tyVarEnv vars in
+      let newTyVars = foldr (lam v. mapInsert v.0 (newLvl, v.1)) newEnv.tyVarEnv vars in
       let newEnv = {newEnv with tyVarEnv = newTyVars} in
       match captureDelayedReprUnifications newEnv
         (lam. typeCheckExpr newEnv x.body)
@@ -5454,16 +5515,9 @@ lang ComposableSolver = TreeSolverBase + Z3Stuff
     let materializeStatelessInterface = mkMaterializeStatelessInterface () in
     let seq : all a. Step a -> Step a -> Step a = lam l. lam r.
       let f : Step a = lam tree.
-        let before = wallTimeMs () in
         switch l tree
         case res & (StepDone _ | StepFail _) then res
-        case StepStep tree then
-          (if debug then
-            printLn (json2string (JsonObject (mapFromSeq cmpString
-              [ ("seq left time", JsonFloat (subf (wallTimeMs ()) before))
-              ])))
-           else ());
-          r tree
+        case StepStep tree then r tree
         end in
       f in
     { getDone =

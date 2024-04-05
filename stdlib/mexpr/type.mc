@@ -84,7 +84,7 @@ lang MetaVarTypeCmp = Cmp + MetaVarTypeAst
     else error "cmpTypeH reached non-unwrapped MetaVar!"
 end
 
-lang MetaVarTypePrettyPrint = PrettyPrint + MetaVarTypeAst
+lang MetaVarTypePrettyPrint = PrettyPrint + MetaVarTypeAst + MonoKindAst
   sem typePrecedence =
   | TyMetaVar t ->
     switch deref t.contents
@@ -98,10 +98,7 @@ lang MetaVarTypePrettyPrint = PrettyPrint + MetaVarTypeAst
     switch deref t.contents
     case Unbound t then
       match pprintVarName env t.ident with (env, idstr) in
-      match getKindStringCode indent env idstr t.kind with (env, str) in
-      let monoPrefix =
-        match t.kind with Mono _ then "_m" else "_p" in
-      (env, concat monoPrefix str)
+      (env, cons '_' idstr)
     case Link ty then
       getTypeStringCode indent env ty
     end

@@ -1047,7 +1047,7 @@ lang OpDeclTypeCheck = OpDeclAst + TypeCheck + ResolveType + SubstituteNewReprs
   sem typeCheckExpr env =
   | TmOpDecl x ->
     let lvl = env.currentLvl in
-    let tyAnnot = resolveType x.info env.tyConEnv x.tyAnnot in
+    let tyAnnot = resolveType x.info env false x.tyAnnot in
     let tyAnnot = substituteNewReprs env tyAnnot in
     let env = {env with reptypes = {env.reptypes with opNamesInScope = mapInsert x.ident (None ()) env.reptypes.opNamesInScope}} in
     let inexpr = typeCheckExpr (_insertVar x.ident tyAnnot env) x.inexpr in
@@ -1057,8 +1057,8 @@ end
 lang ReprDeclTypeCheck = ReprDeclAst + TypeCheck + ResolveType + WildToMeta
   sem typeCheckExpr env =
   | TmReprDecl x ->
-    let pat = resolveType x.info env.tyConEnv x.pat in
-    let repr = resolveType x.info env.tyConEnv x.repr in
+    let pat = resolveType x.info env false x.pat in
+    let repr = resolveType x.info env false x.repr in
     let env = {env with reptypes = {env.reptypes with reprEnv = mapInsert x.ident {vars = x.vars, pat = pat, repr = repr} env.reptypes.reprEnv}} in
     let inexpr = typeCheckExpr env x.inexpr in
     TmReprDecl {x with inexpr = inexpr, ty = tyTm inexpr, pat = pat, repr = repr}
@@ -1076,11 +1076,12 @@ end
 
 lang LetTypeCheck =
   TypeCheck + LetAst + LamAst + FunTypeAst + ResolveType + SubstituteUnknown +
-  NonExpansive + MetaVarDisableGeneralize + PropagateTypeAnnot
+  NonExpansive + MetaVarDisableGeneralize + PropagateTypeAnnot + SubstituteNewReprs
   sem typeCheckExpr env =
   | TmLet t ->
     let newLvl = addi 1 env.currentLvl in
     let tyAnnot = resolveType t.info env false t.tyAnnot in
+    let tyAnnot = substituteNewReprs env tyAnnot in
     let tyBody = substituteUnknown t.info {env with currentLvl = newLvl} (Poly ()) tyAnnot in
     match
       if nonExpansive true t.body then
@@ -1138,7 +1139,7 @@ lang ApplyReprSubsts = TypeCheck + WildToMeta + ReprSubstAst
       errorSingle [s.info] msg
   | TyAlias x -> TyAlias {x with content = applyReprSubsts env x.content}
   | TyAll x ->
-    let newEnv = {env with tyVarEnv = mapInsert x.ident env.currentLvl env.tyVarEnv} in
+    let newEnv = {env with tyVarEnv = mapInsert x.ident (env.currentLvl, x.kind) env.tyVarEnv} in
     TyAll { x with ty = applyReprSubsts newEnv x.ty }
   | ty -> smap_Type_Type (applyReprSubsts env) ty
 end
@@ -1150,6 +1151,7 @@ lang OpImplTypeCheck = OpImplAst + TypeCheck + ResolveType + PropagateTypeAnnot 
       if optionIsSome (mapLookup x.ident env.reptypes.opNamesInScope) then
         let newLvl = addi 1 env.currentLvl in
         let typeCheckBody = lam env.
+          let newEnv = {env with currentLvl = newLvl} in
           let specTypeInfo = infoTy x.specType in
           let opTypeInfo = infoTy ty in
           -- NOTE(vipa, 2023-06-30): First we want to check that
@@ -1158,15 +1160,14 @@ lang OpImplTypeCheck = OpImplAst + TypeCheck + ResolveType + PropagateTypeAnnot 
           -- strip `specType`, and unify the two.
           let ty = inst x.info newLvl ty in
           let ty = substituteNewReprs env ty in
-          let specType = resolveType (infoTy x.specType) env.tyConEnv x.specType in
-          let specType = substituteUnknown (Poly ()) newLvl x.info specType in
+          let specType = resolveType (infoTy x.specType) env false x.specType in
+          let specType = substituteUnknown x.info newEnv (Poly ()) specType in
           let specType = inst x.info newLvl specType in
           let specType = substituteNewReprs env specType in
           let specType = (wildToMeta newLvl (setEmpty nameCmp) specType).1 in
           -- NOTE(vipa, 2023-07-03): This may do some unifications from
           -- substitutions, as a side-effect, so we do it here rather
           -- than later.
-          let newEnv = {env with currentLvl = newLvl} in
           let reprType = applyReprSubsts newEnv specType in
           unify newEnv [opTypeInfo, specTypeInfo] ty (removeReprSubsts specType);
           -- NOTE(vipa, 2023-06-30): Next we want to type-check the body
@@ -1176,7 +1177,7 @@ lang OpImplTypeCheck = OpImplAst + TypeCheck + ResolveType + PropagateTypeAnnot 
           -- generalizing `reprType`, then stripping it.
           match gen env.currentLvl (mapEmpty nameCmp) reprType with (reprType, genVars) in
           match stripTyAll reprType with (vars, reprType) in
-          let newTyVars = foldr (lam v. mapInsert v.0 newLvl) env.tyVarEnv vars in
+          let newTyVars = foldr (lam v. mapInsert v.0 (newLvl, v.1)) env.tyVarEnv vars in
           let newEnv = {env with currentLvl = newLvl, tyVarEnv = newTyVars} in
           match captureDelayedReprUnifications env
             (lam. typeCheckExpr newEnv (propagateTyAnnot (x.body, reprType)))
@@ -1213,13 +1214,14 @@ lang OpImplTypeCheck = OpImplAst + TypeCheck + ResolveType + PropagateTypeAnnot 
       errorSingle [x.info] msg
 end
 
-lang RecLetsTypeCheck = TypeCheck + RecLetsAst + LetTypeCheck + MetaVarDisableGeneralize
+lang RecLetsTypeCheck = TypeCheck + RecLetsAst + MetaVarDisableGeneralize + PropagateTypeAnnot + SubstituteUnknown + ResolveType + NonExpansive + SubstituteNewReprs
   sem typeCheckExpr env =
   | TmRecLets t ->
     let newLvl = addi 1 env.currentLvl in
     -- First: Generate a new environment containing the recursive bindings
     let recLetEnvIteratee = lam acc. lam b: RecLetBinding.
       let tyAnnot = resolveType t.info env false b.tyAnnot in
+      let tyAnnot = substituteNewReprs env tyAnnot in
       let tyBody = substituteUnknown t.info {env with currentLvl = newLvl} (Poly ()) tyAnnot in
       let vars = if nonExpansive true b.body then (stripTyAll tyBody).0 else [] in
       let newEnv = _insertVar b.ident tyBody acc.0 in
