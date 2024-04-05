@@ -4192,7 +4192,6 @@ let rtMaterializeHomogeneous : all env. all relevant. all constraint. all var. a
       , debugInterface = fs.propagateInterface.debugInterface
       , debugEnv = fs.propagateInterface.debugEnv
       } in
-    let nextCallIdx = ref 0 in
     recursive
       let descend : all a. Tree a -> [Single a] = lam tree.
         let approx = rtGetApprox tree in
@@ -4230,16 +4229,26 @@ let rtMaterializeHomogeneous : all env. all relevant. all constraint. all var. a
             mapOption mkResult results
           end
       let pickApprox : all a. Approx -> Tree a -> [Single a] = lam approx. lam tree.
+        let mkTup = lam vals.
+          if eqi 1 (setSize vals)
+          then mapMap (lam. (1, 1)) vals
+          else mapMap (lam. (0, 1)) vals in
+        let addTup = lam a. lam b.
+          (addi a.0 b.0, addi a.1 b.1) in
+        let cmpTup = lam a. lam b.
+          let res = subi a.0 b.0 in
+          if neqi res 0 then res else
+          subi a.1 b.1 in
         let valsWithCount = pufFold
           (lam a. lam. lam. a)
           (lam a. lam. lam vals.
-            mapUnionWith addi (mapMap (lam. 1) vals) a)
+            mapUnionWith addTup (mkTup vals) a)
           (mapEmpty fs.cmpVal)
           approx in
         let valsInOrder =
           -- NOTE(vipa, 2024-01-22): Reverse order, i.e., highest
           -- count first
-          let x = sort (lam a. lam b. subi b.1 a.1) (mapBindings valsWithCount) in
+          let x = sort (lam a. lam b. cmpTup b.1 a.1) (mapBindings valsWithCount) in
           map (lam x. x.0) x in
         let homogeneousApprox =
           let empty = setEmpty fs.cmpVal in
@@ -5444,9 +5453,17 @@ lang ComposableSolver = TreeSolverBase + Z3Stuff
     let materializeLazyInterface = mkMaterializeLazyInterface () in
     let materializeStatelessInterface = mkMaterializeStatelessInterface () in
     let seq : all a. Step a -> Step a -> Step a = lam l. lam r.
-      let f : Step a = lam tree. switch l tree
+      let f : Step a = lam tree.
+        let before = wallTimeMs () in
+        switch l tree
         case res & (StepDone _ | StepFail _) then res
-        case StepStep tree then r tree
+        case StepStep tree then
+          (if debug then
+            printLn (json2string (JsonObject (mapFromSeq cmpString
+              [ ("seq left time", JsonFloat (subf (wallTimeMs ()) before))
+              ])))
+           else ());
+          r tree
         end in
       f in
     { getDone =
@@ -5472,8 +5489,8 @@ lang ComposableSolver = TreeSolverBase + Z3Stuff
         let inner = lam f. match f tree with StepDone sing
           then Some sing
           else None () in
-        match min (lam a. lam b. cmpf a.cost b.cost) (mapOption inner fs)
-        with Some sing then StepDone sing
+        match minIdx (lam a. lam b. cmpf a.cost b.cost) (mapOption inner fs)
+        with Some (_, sing) then StepDone sing
         else StepFail () in
       #frozen"bestDoneOf"
     , sizeBranches =
@@ -5640,14 +5657,22 @@ lang TreeSolverPartIndep = ComposableSolver
       , s.checkDone
       , s.pickBestOr
       ]) x in
+    -- let largeSolver = lam tree. s.try
+    --   (s.bestDoneOf
+    --     [ s.consistent
+    --     , s.onTopHomogeneousAlts (s.seq s.propagate (s.sizeBranches
+    --       [ (100000, bottomUp)
+    --       ]
+    --       (s.seq (s.debug "homogeneous top") s.oneHomogeneous)))
+    --     ])
+    --   (s.enumBest (Some 1))
+    --   tree in
     let largeSolver = lam tree. s.try
-      (s.bestDoneOf
-        [ s.consistent
-        , s.onTopHomogeneousAlts (s.seq s.propagate (s.sizeBranches
-          [ (100000, bottomUp)
-          ]
-          (s.seq (s.debug "homogeneous top") s.oneHomogeneous)))
-        ])
+      ( s.onTopHomogeneousAlts (s.seq s.propagate (s.sizeBranches
+        [ (100000, bottomUp)
+        ]
+        (s.seq (s.debug "homogeneous top") s.oneHomogeneous)))
+      )
       (s.enumBest (Some 1))
       tree in
     let inner = lam tree. s.chain
