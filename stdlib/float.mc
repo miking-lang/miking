@@ -76,3 +76,32 @@ utest cmpf 0. (negf inf) with 1
 utest cmpf nan nan with 0
 utest cmpf nan (negf inf) with -1
 utest cmpf (negf inf) nan with 1
+
+
+-- `eqfApprox epsilon l r` has the same semantics as `eqf` but where `l` and `r`
+-- are considered equal if l = r or |l - r| ≤ epsilon. Returns false if
+-- `epsilon` is not a number greater than or equal to zero.
+let eqfApprox = lam epsilon. lam l. lam r.
+  if or (ltf epsilon 0.) (isNaN epsilon) then false
+  else
+    if (eqf l r) then
+       -- handles the cases where `subf l r` is `nan`.
+       true
+    else leqf (absf (subf l r)) epsilon
+
+utest 1. with 1.01 using eqfApprox 0.011
+utest negf 1.0 with negf 1.009 using eqfApprox 0.01
+utest 0.0 with 0.0  using (eqfApprox 0.)
+utest eqfApprox 0.01 1.0 1.011 with false
+utest 1. with 1.000009 using eqfApprox 0.00001
+utest eqfApprox 0.00001 1.0 1.000011 with false
+utest eqfApprox 0.01 inf inf with true
+utest eqfApprox 0. inf inf with true
+utest eqfApprox 0. (negf inf) (negf inf) with true
+utest eqfApprox 0. nan 0. with false
+utest eqfApprox 0. 0. nan with false
+utest eqfApprox 0. nan nan with false
+utest eqfApprox inf nan nan with false
+utest eqfApprox inf inf 0. with true
+utest eqfApprox inf 0. inf with true
+utest eqfApprox inf inf (negf inf) with true
