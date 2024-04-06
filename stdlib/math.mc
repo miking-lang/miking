@@ -1,10 +1,8 @@
 include "ext/math-ext.mc"
 include "bool.mc"
+include "float.mc"
 
 -- Float stuff
-let inf = divf 1.0 0.0
-let nan = mulf 0. inf
-
 let minf: Float -> Float -> Float = lam r. lam l. if ltf r l then r else l
 utest minf 0. 0. with 0. using eqf
 utest minf 1. 0. with 0. using eqf
