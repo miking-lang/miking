@@ -1,18 +1,6 @@
-let _maxf: Float -> Float -> Float = lam r. lam l. if gtf r l then r else l
+include "float.mc"
 
-let _absf: Float -> Float = lam f. _maxf f (negf f)
-
-let _eqfApprox = lam epsilon. lam r. lam l.
-  if leqf (_absf (subf r l)) epsilon then true else false
-
-utest 1. with 1.01 using _eqfApprox 0.011
-utest negf 1.0 with negf 1.009 using _eqfApprox 0.01
-utest 0.0 with 0.0  using (_eqfApprox 0.)
-utest _eqfApprox 0.01 1.0 1.011 with false
-utest 1. with 1.000009 using _eqfApprox 0.00001
-utest _eqfApprox 0.00001 1.0 1.000011 with false
-
-let _eqf = _eqfApprox 1e-15
+let _eqf = eqfApprox 1e-15
 
 utest _maxf 0. 0. with 0. using eqf
 utest _maxf 1. 0. with 1. using eqf
