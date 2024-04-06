@@ -29,6 +29,20 @@ utest isNaN (maxf nan 0.) with true
 utest isNaN (maxf 0. nan) with true
 
 
+-- `minf l r` returns the minimum of `l` and `r`. If either is `nan` it returns
+-- `nan`. If `minf 0. -0.` and `minf -0. 0.` returns `-0.`.
+let minf: Float -> Float -> Float = lam r. lam l.
+  if or (isNaN l) (isNaN r) then nan
+  else
+    if ltf r l then r else l
+
+utest minf 0. 0. with 0.
+utest minf 1. 0. with 0.
+utest minf 0. 1. with 0.
+utest isNaN (minf nan 0.) with true
+utest isNaN (minf 0. nan) with true
+
+
 -- `absf a` returns the absolute value of `a` or `nan` if `a` is `nan`.
 let absf: Float -> Float = lam f. maxf f (negf f)
 

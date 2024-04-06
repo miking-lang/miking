@@ -3,10 +3,6 @@ include "bool.mc"
 include "float.mc"
 
 -- Float stuff
-let minf: Float -> Float -> Float = lam r. lam l. if ltf r l then r else l
-utest minf 0. 0. with 0. using eqf
-utest minf 1. 0. with 0. using eqf
-utest minf 0. 1. with 0. using eqf
 
 let cmpfApprox : Float -> Float -> Float -> Int =
   lam epsilon. lam l. lam r.
