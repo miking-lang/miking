@@ -27,3 +27,13 @@ utest maxf 1. 0. with 1.
 utest maxf 0. 1. with 1.
 utest isNaN (maxf nan 0.) with true
 utest isNaN (maxf 0. nan) with true
+
+
+-- `absf a` returns the absolute value of `a` or `nan` if `a` is `nan`.
+let absf: Float -> Float = lam f. maxf f (negf f)
+
+utest absf 0. with 0. using eqf
+utest absf 1. with 1. using eqf
+utest absf -1. with 1. using eqf
+utest absf -0. with 0. using eqf
+utest isNaN (absf nan) with true

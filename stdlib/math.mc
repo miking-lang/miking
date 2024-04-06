@@ -8,10 +8,6 @@ utest minf 0. 0. with 0. using eqf
 utest minf 1. 0. with 0. using eqf
 utest minf 0. 1. with 0. using eqf
 
-utest absf 0. with 0. using eqf
-utest absf 1. with 1. using eqf
-utest absf (negf 1.) with 1. using eqf
-
 let cmpfApprox : Float -> Float -> Float -> Int =
   lam epsilon. lam l. lam r.
     if eqfApprox epsilon l r then 0
