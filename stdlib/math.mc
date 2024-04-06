@@ -8,11 +8,6 @@ utest minf 0. 0. with 0. using eqf
 utest minf 1. 0. with 0. using eqf
 utest minf 0. 1. with 0. using eqf
 
-let maxf: Float -> Float -> Float = lam r. lam l. if gtf r l then r else l
-utest maxf 0. 0. with 0. using eqf
-utest maxf 1. 0. with 1. using eqf
-utest maxf 0. 1. with 1. using eqf
-
 utest absf 0. with 0. using eqf
 utest absf 1. with 1. using eqf
 utest absf (negf 1.) with 1. using eqf
