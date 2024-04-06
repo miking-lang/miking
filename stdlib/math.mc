@@ -4,16 +4,6 @@ include "float.mc"
 
 -- Float stuff
 
-let cmpfApprox : Float -> Float -> Float -> Int =
-  lam epsilon. lam l. lam r.
-    if eqfApprox epsilon l r then 0
-    else if ltf l r then subi 0 1
-    else 1
-
-utest cmpfApprox 0.1 0. 0.1 with 0
-utest cmpfApprox 0. 0.1 0.2 with subi 0 1
-utest cmpfApprox 0.1 0.4 0.2 with 1
-
 -- Inefficient version of logFactorial
 let logFactorial : Int -> Float = lam n.
   recursive let work = lam acc. lam n.

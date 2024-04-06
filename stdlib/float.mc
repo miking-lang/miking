@@ -105,3 +105,59 @@ utest eqfApprox inf nan nan with false
 utest eqfApprox inf inf 0. with true
 utest eqfApprox inf 0. inf with true
 utest eqfApprox inf inf (negf inf) with true
+
+
+-- `cmpf l r` compares `l` and `r`. `cmpf l r = -1` if l < r, `cmpf l r = 1` if
+-- l > r, and `cmpf l r = 0` if l = r. `nan` is considered smaller than negative
+-- infinity and equal to itself.
+let cmpf: Float -> Float -> Int = lam l. lam r.
+  let lIsNaN = isNaN l in
+  let rIsNaN = isNaN r in
+  if and lIsNaN rIsNaN then 0
+  else if lIsNaN then -1
+  else if rIsNaN then 1
+  else
+    if ltf l r then -1 else if gtf l r then 1 else 0
+
+utest cmpf 0. 0. with 0
+utest cmpf 1. 0. with 1
+utest cmpf 0. 1. with -1
+utest cmpf inf inf with 0
+utest cmpf (negf inf) (negf inf) with 0
+utest cmpf inf inf with 0
+utest cmpf (negf inf) 0. with -1
+utest cmpf 0. (negf inf) with 1
+utest cmpf nan nan with 0
+utest cmpf nan (negf inf) with -1
+utest cmpf (negf inf) nan with 1
+
+
+-- `cmpfApprox epsilon l r` has the same semantics as `cmpf` but where `l` and
+-- `r` are considered equal if l = r or |l - r| ≤ epsilon. Gives an error if
+-- `epsilon` is not a number greater than or equal to zero.
+let cmpfApprox : Float -> Float -> Float -> Int =
+  lam epsilon. lam l. lam r.
+  if or (ltf epsilon 0.) (isNaN epsilon) then
+    error "eqfApprox: Invalid input, epsilon must be a number greater than or equal to zero."
+  else
+    let lIsNaN = isNaN l in
+    let rIsNaN = isNaN r in
+    if and lIsNaN rIsNaN then 0
+    else if lIsNaN then -1
+    else if rIsNaN then 1
+    else
+      if eqfApprox epsilon l r then 0
+      else if ltf l r then -1
+      else 1
+
+utest cmpfApprox 0.01 0. 0. with 0
+utest cmpfApprox 0.01 1. 0. with 1
+utest cmpfApprox 0.01 0. 1. with -1
+utest cmpfApprox 0.01 inf inf with 0
+utest cmpfApprox 0.01 (negf inf) (negf inf) with 0
+utest cmpfApprox 0.01 inf inf with 0
+utest cmpfApprox 0.01 (negf inf) 0. with -1
+utest cmpfApprox 0.01 0. (negf inf) with 1
+utest cmpfApprox 0.01 nan nan with 0
+utest cmpfApprox 0.01 nan (negf inf) with -1
+utest cmpfApprox 0.01 (negf inf) nan with 1
