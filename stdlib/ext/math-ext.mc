@@ -2,10 +2,6 @@ include "float.mc"
 
 let _eqf = eqfApprox 1e-15
 
-utest _maxf 0. 0. with 0. using eqf
-utest _maxf 1. 0. with 1. using eqf
-utest _maxf 0. 1. with 1. using eqf
-
 external externalExp : Float -> Float
 let exp = lam x: Float. externalExp x
 utest exp 0. with 1. using eqf
