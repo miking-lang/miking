@@ -261,7 +261,7 @@ lang MLangSym = MLangAst + MExprSym
         let isDeclaredInLang : all a. (String -> a -> Bool) = lam s. lam v.
             let hasStringIdent = lam decl. 
                 match decl with DeclSyn d in 
-                if eqString (nameGetStr d.ident) s then true else false
+                eqString (nameGetStr d.ident) s
             in
             match find hasStringIdent synDecls with Some _ then false else true
         in 
@@ -438,9 +438,6 @@ lang MLangSym = MLangAst + MExprSym
 
         (env, DeclLang t)
 end
-
--- let _and = lam cond. lam f. lam. if cond () then f () else false
--- let _andFold = lam f. lam acc. lam e. _and acc (f e)
 
 lang TestLang = MLangSym + SymCheck + MLangPrettyPrint
     sem isFullySymbolizedExpr = 
