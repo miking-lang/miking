@@ -17,7 +17,7 @@ external rtpplSetMaxPriority : () -> Int
 external rtpplSetPriority : Int -> Int
 
 -- Opens and closes file descriptors
-external rtpplOpenFileDescriptor : String -> Int
+external rtpplOpenFileDescriptor : String -> Int -> Int
 external rtpplCloseFileDescriptor : Int -> ()
 
 type Opaque

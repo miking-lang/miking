@@ -3,7 +3,7 @@ include "ocaml/ast.mc"
 
 let tyts_ = tytuple_ [tyint_, tyunknown_]
 let impl = lam arg : {expr : String, ty : use Ast in Type }.
-  [ { expr = arg.expr, ty = arg.ty, libraries = ["rtppl-support"], cLibraries = ["rt"] } ]
+  [ { expr = arg.expr, ty = arg.ty, libraries = ["rtppl-support"], cLibraries = [] } ]
 
 let timespec = otytuple_ [tyint_, tyint_]
 let readDistTy = lam ty. otyarray_ (otytuple_ [tyfloat_, ty])
@@ -35,7 +35,7 @@ let rtpplExtMap =
            , ty = tyarrow_ tyint_ tyint_ } ),
     ( "rtpplOpenFileDescriptor"
     , impl { expr = "Rtppl.open_file_descriptor"
-           , ty = tyarrow_ otystring_ tyint_ } ),
+           , ty = tyarrows_ [otystring_, tyint_, tyint_] } ),
     ( "rtpplCloseFileDescriptor"
     , impl { expr = "Rtppl.close_file_descriptor"
            , ty = tyarrow_ tyint_ otyunit_ } ),
