@@ -55,7 +55,9 @@ utest isNaN (absf nan) with true
 
 -- `cmpf l r` compares `l` and `r`. `cmpf l r = -1` if l < r, `cmpf l r = 1` if
 -- l > r, and `cmpf l r = 0` if l = r. `nan` is considered smaller than negative
--- infinity and equal to itself.
+-- infinity and equal to itself. OPT(oerikss, 2024-04-18): For a faster `cmpf` you
+-- should create an external to, e.g., OCamls `Float.compare which` uses an 
+-- optimized C under the hood. 
 let cmpf: Float -> Float -> Int = lam l. lam r.
   let lIsNaN = isNaN l in
   let rIsNaN = isNaN r in
