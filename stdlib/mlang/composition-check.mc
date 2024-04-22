@@ -10,6 +10,7 @@ include "bool.mc"
 include "name.mc"
 include "set.mc"
 include "result.mc"
+include "digraph.mc"
 
 type CompositionCheckEnv = {
   -- Mapping from the symbolized name of a syn or sem to their base declaration
@@ -17,10 +18,11 @@ type CompositionCheckEnv = {
   -- Mapping from symbolized name of a syn or sem to the amount of parameters
   paramMap : Map Name Int,
   -- Mapping from symbolized names of a sem to its cases
-  semPatMap : Map Name [use MLangAst in Pat] 
+  semPatMap : Map Name [{pat: use MLangAst in Pat, thn : use MLangAst in Expr}] 
 }
 
-let collectPats : CompositionCheckEnv -> [Name] -> [use MLangAst in Pat] = lam env. lam includes.
+let collectPats : CompositionCheckEnv -> [Name] -> [{pat: use MLangAst in Pat, thn : use MLangAst in Expr}] 
+  = lam env. lam includes.
   let incl2pats = lam i : Name. 
     match mapLookup i env.semPatMap with Some pats then
       pats
@@ -56,9 +58,8 @@ let insertParamMap : CompositionCheckEnv -> Name -> Int -> CompositionCheckEnv =
   lam env. lam k. lam v. 
     {env with paramMap = mapInsert k v env.paramMap}
 
-let insertSemPatMap : CompositionCheckEnv -> Name -> [use MLangAst in Pat] -> CompositionCheckEnv =
-  lam env. lam k. lam v.
-    {env with semPatMap = mapInsert k v env.semPatMap}
+let insertSemPatMap = lam env. lam k. lam v.
+  {env with semPatMap = mapInsert k v env.semPatMap}
 
 lang MLangCompositionCheck = MLangAst + MExprPatAnalysis
   syn CompositionError =
@@ -223,50 +224,64 @@ lang MLangCompositionCheck = MLangAst + MExprPatAnalysis
 
   sem parseCases env = 
   | DeclSem s -> 
-    let pats = concat (collectPats env s.includes) (map (lam c. c.pat) s.cases) in
-    let normPats = map patToNormpat pats in 
+    let pats = concat (collectPats env s.includes) s.cases in
+    let normPats = map patToNormpat (map (lam c. c.pat) pats) in 
     let pairs = indexPairs (length normPats) in 
 
     let isStrictSubpat = lam pat1. lam pat2.
       null (normpatIntersect pat1 (normpatComplement pat2))
     in
 
-    let pairIsValid = lam p. 
-      match p with (i, j) in
-      let ap = get normPats i in 
-      let an = normpatComplement ap in 
+    let g = digraphAddVertices (range 0 (length pats) 1) (digraphEmpty subi (lam. lam. true)) in 
 
-      let bp = get normPats j in 
-      let bn = normpatComplement bp in 
+    let accGraph : (Digraph Int ())
+                -> (Int, Int)
+                -> Result CompositionWarning CompositionError (Digraph Int ())
+      = lam g. lam p. 
+        match p with (i, j) in 
+        let ap = get normPats i in 
+        let an = normpatComplement ap in 
 
-      let a_minus_b = normpatIntersect ap bn in
-      let b_minus_a = normpatIntersect bp an in
-      if and (null a_minus_b) (null b_minus_a) then 
-        -- printLn "EQUAL" ;
-        false
-      else if null a_minus_b then 
-        -- printLn "Subset" ;
-        true 
-      else if null b_minus_a then 
-        -- printLn "Superset" ;
-        true 
-      else
-        let overlapping = normpatIntersect ap bp in
-        if null overlapping then 
-          -- printLn "Disjoint" ;
-          true
+        let bp = get normPats j in 
+        let bn = normpatComplement bp in 
+
+        let a_minus_b = normpatIntersect ap bn in
+        let b_minus_a = normpatIntersect bp an in
+        if and (null a_minus_b) (null b_minus_a) then 
+          -- EQUAL
+          _err (InvalidSemPatterns {
+            semIdent = s.ident, 
+            info = s.info
+          })
+        else if null a_minus_b then 
+          -- SUBSET
+          _ok (digraphAddEdge i j () g)
+        else if null b_minus_a then 
+          -- SUPERSET
+          _ok (digraphAddEdge j i () g)
+
         else
-          -- printLn "Overlapping!" ;
-          false
-    in
+          let overlapping = normpatIntersect ap bp in
+          if null overlapping then 
+            -- DISJOINT
+            _ok g
+          else
+            -- OVERLAPPING
+            _err (InvalidSemPatterns {
+              semIdent = s.ident, 
+              info = s.info
+            })
+    in 
+    let result = _foldl accGraph g pairs in 
 
-    if forAll pairIsValid pairs then
-      _ok (insertSemPatMap env s.ident pats)
-    else 
-      _err (InvalidSemPatterns {
-        semIdent = s.ident, 
-        info = s.info
-      })
+    match _consume result with (_, errorsOrGraph) in
+    switch errorsOrGraph 
+    case Left errs then _err (head errs)
+    case Right graph then 
+      let order = digraphTopologicalOrder graph in
+      let orderedCases = map (lam i. get pats i) order in 
+      _ok (insertSemPatMap env s.ident orderedCases)
+    end
 
 end
 
