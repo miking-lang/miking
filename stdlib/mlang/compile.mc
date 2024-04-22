@@ -41,6 +41,11 @@ lang MLangCompiler = MLangAst + MExprAst
                          info = d.info,
                          ty = tyunknown_,
                          inexpr = uunit_}))
+  | DeclRecLets d -> _ok (
+    withExpr ctx (TmRecLets {bindings = d.bindings,
+                             inexpr = uunit_,
+                             ty = tyunknown_,
+                             info = d.info}))
 
   sem compileProg : CompilationContext -> MLangProgram -> CompilationResult
   sem compileProg ctx = 
@@ -78,13 +83,41 @@ let testEval = lam p.
   simpleEval (testCompile p)
 in 
 
+-- Test simple let binding
 let p : MLangProgram = {
     decls = [
         decl_ulet_ "x" (int_ 1)
     ],
     expr = var_ "x"
 } in 
-
 utest testEval p with int_ 1 using eqExpr in 
+
+-- Test recursive let bindings through mutually recursive odd/even
+let odd = (ulam_ "x" 
+  (if_ 
+    (eqi_ (var_ "x") (int_ 0))
+    (false_)
+    (appf1_ (var_ "even") (subi_ (var_ "x") (int_ 1)))))
+in 
+let even = (ulam_ "x" 
+  (if_ 
+    (eqi_ (var_ "x") (int_ 0))
+    (true_)
+    (appf1_ (var_ "odd") (subi_ (var_ "x") (int_ 1)))))
+in 
+let p : MLangProgram = {
+    decls = [
+        decl_ureclets_ [("odd", odd), ("even", even)]
+    ],
+    expr = appf1_ (var_ "odd") (int_ 9)
+} in 
+utest testEval p with true_ using eqExpr in 
+let p : MLangProgram = {
+    decls = [
+        decl_ureclets_ [("odd", odd), ("even", even)]
+    ],
+    expr = appf1_ (var_ "odd") (int_ 10)
+} in 
+utest testEval p with false_ using eqExpr in 
 
 ()
