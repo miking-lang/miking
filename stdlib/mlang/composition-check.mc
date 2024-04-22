@@ -17,7 +17,8 @@ type CompositionCheckEnv = {
   baseMap : Map Name Name,
   -- Mapping from symbolized name of a syn or sem to the amount of parameters
   paramMap : Map Name Int,
-  -- Mapping from symbolized names of a sem to its cases
+  -- Mapping from symbolized names of a sem to its cases that are ordered by
+  -- the subset relation on the patterns. 
   semPatMap : Map Name [{pat: use MLangAst in Pat, thn : use MLangAst in Expr}] 
 }
 
