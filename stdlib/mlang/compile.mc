@@ -32,6 +32,13 @@ type CompilationWarning
 
 type CompilationResult = Result CompilationWarning CompilationError CompilationContext 
 
+let isTypeDecl = use MLangAst in 
+  lam d. match d with DeclType _ then true else false
+let isSynDecl = use MLangAst in 
+  lam d. match d with DeclSyn _ then true else false
+let isSemDecl = use MLangAst in 
+  lam d. match d with DeclSem _ then true else false
+
 lang MLangCompiler = MLangAst + MExprAst
   sem compileDecl : CompilationContext -> Decl -> CompilationResult
   sem compileDecl ctx = 
@@ -79,6 +86,79 @@ lang MLangCompiler = MLangAst + MExprAst
                          inexpr = uunit_}))
   -- TODO(voorberg, 2024-04-23): Add test case for error on DeclInclude
   | DeclInclude d -> _err (FoundIncludeError {info = d.info, path = d.path})
+  | DeclLang l -> 
+    let typeDecls = filter isTypeDecl l.decls in 
+    let synDecls = filter isSynDecl l.decls in 
+    let semDecls = filter isSemDecl l.decls in 
+
+    let res = _foldl compileDecl ctx typeDecls in 
+    let res = _bind res (lam ctx. _foldl compileDecl ctx synDecls) in 
+
+    let compileSemToResult : CompilationContext -> [Decl] -> CompilationResult
+      = lam ctx. lam sems.
+        let bindings = map (compileSem ctx) sems in 
+        _ok (withExpr ctx (TmRecLets {bindings = bindings,
+                                      inexpr = uunit_, 
+                                      ty = tyunknown_,
+                                      info = l.info}))
+    in
+    _bind res (lam ctx. compileSemToResult ctx semDecls)
+  | DeclSyn s -> 
+    -- TODO(voorberg, 2024-04-23): Handle includes
+    -- NOTE(voorberg, 2024-04-23): We use the info field of the DeclSyn
+    --                             for the generated TmConDef.
+    let compileDef = lam ctx. lam def : {ident : Name, tyIdent : Type}.
+      _ok (withExpr ctx (TmConDef {ident = def.ident,
+                                   tyIdent = def.tyIdent,
+                                   inexpr = uunit_,
+                                   ty = tyunknown_,
+                                   info = s.info}))
+    in
+    _foldl compileDef ctx s.defs
+  | DeclSem s -> 
+    error "Unexpected DeclSem!"
+
+  sem compileSem : CompilationContext -> Decl -> RecLetBinding 
+  sem compileSem ctx = 
+  | DeclSem d -> 
+    let targetName = nameSym "target" in 
+    let target = nvar_ targetName in 
+    recursive 
+      let compileBody = lam cases : [{pat : Pat, thn : Expr}]. 
+        match cases with [h] ++ t then
+          TmMatch {target = target,
+                  pat = h.pat,
+                  thn = h.thn,
+                  els = compileBody t,
+                  ty = tyunknown_,
+                  info = d.info}
+        else (error_ (str_ "Inexhaustive match!"))
+    in 
+    -- TODO(voorberg, 2024-04-23): Use ordered sem cases from CompositionCheckEnv
+    let body = compileBody d.cases in 
+    recursive let compileArgs = lam args. 
+          match args with [h] ++ t then
+            TmLam {ident = h.ident,
+                  tyAnnot = h.tyAnnot,
+                  tyParam = tyunknown_,
+                  body = compileArgs t,
+                  ty = tyunknown_,
+                  info = d.info}
+          else
+            TmLam {ident = targetName,
+                  tyAnnot = tyunknown_,
+                  tyParam = tyunknown_,
+                  body = body,
+                  ty = tyunknown_,
+                  info = d.info}
+    in 
+    let result = compileArgs d.args in 
+    {ident = d.ident,
+     tyAnnot = d.tyAnnot,
+     tyBody = tyunknown_,
+     body = result,
+     info = d.info}
+
 
   sem compileProg : CompilationContext -> MLangProgram -> CompilationResult
   sem compileProg ctx = 
@@ -189,4 +269,18 @@ let p : MLangProgram = {
 let res = testCompile p in 
 utest testEval p with int_ 2 using eqExpr in 
 
+-- Test basic semantic function
+let p : MLangProgram = {
+    decls = [
+        decl_lang_ "L1" [
+            decl_sem_ 
+                "f"
+                [("x", tyint_)]
+                [(pvar_ "y", addi_ (var_ "x") (var_ "y"))]
+        ]
+    ],
+    expr = bind_ (use_ "L1") (appf2_ (var_ "f") (int_ 10) (int_ 20))
+} in 
+utest testEval p with int_ 30 using eqExpr in 
+-- printLn (expr2str (testCompile p)) ;
 ()
