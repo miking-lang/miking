@@ -46,12 +46,19 @@ lang MLangCompiler = MLangAst + MExprAst
                              inexpr = uunit_,
                              ty = tyunknown_,
                              info = d.info}))
+  | DeclUtest d -> _ok (
+    withExpr ctx (TmUtest {test = d.test,
+                           expected = d.expected,
+                           next = uunit_,
+                           tusing = d.tusing,
+                           tonfail = None (),
+                           ty = tyunknown_,
+                           info = d.info}))
 
   sem compileProg : CompilationContext -> MLangProgram -> CompilationResult
   sem compileProg ctx = 
   | prog -> 
     let res = _foldl compileDecl ctx prog.decls in
-    -- let f = lam ctx. _ok (withExpr ctx prog.expr) in 
     _map (lam ctx. withExpr ctx prog.expr) res
 
   sem compile : CompilationContext -> MLangProgram -> Expr
@@ -59,7 +66,7 @@ lang MLangCompiler = MLangAst + MExprAst
     match _consume (compileProg ctx prog) with (_, res) in
     switch res
       case Left err then error "Compilation error(s) occured!"
-      case Right ctx then bindall_ ctx.exprs
+      case Right ctx then bindallutest_ ctx.exprs
     end
 end
 
@@ -119,5 +126,15 @@ let p : MLangProgram = {
     expr = appf1_ (var_ "odd") (int_ 10)
 } in 
 utest testEval p with false_ using eqExpr in 
+
+-- Test Utest
+let p : MLangProgram = {
+    decls = [
+        decl_utest_ (int_ 3) (addi_ (int_ 1) (int_ 2))
+    ],
+    expr = uunit_
+} in 
+let expected : Expr = utest_ (int_ 3) (addi_ (int_ 1) (int_ 2)) uunit_ in 
+utest testCompile p with expected using eqExpr in 
 
 ()
