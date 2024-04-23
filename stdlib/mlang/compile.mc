@@ -54,6 +54,19 @@ lang MLangCompiler = MLangAst + MExprAst
                            tonfail = None (),
                            ty = tyunknown_,
                            info = d.info}))
+  | DeclType d -> _ok (
+    withExpr ctx (TmType {ident = d.ident,
+                          params = d.params,
+                          tyIdent = d.tyIdent,
+                          info = d.info,
+                          ty = tyunknown_,
+                          inexpr = uunit_}))
+  | DeclConDef d -> _ok (
+    withExpr ctx (TmConDef {ident = d.ident,
+                            tyIdent = d.tyIdent,
+                            info = d.info,
+                            ty = tyunknown_,
+                            inexpr = uunit_}))
 
   sem compileProg : CompilationContext -> MLangProgram -> CompilationResult
   sem compileProg ctx = 
@@ -136,5 +149,21 @@ let p : MLangProgram = {
 } in 
 let expected : Expr = utest_ (int_ 3) (addi_ (int_ 1) (int_ 2)) uunit_ in 
 utest testCompile p with expected using eqExpr in 
+
+-- Test TmType and TmConDef
+let p : MLangProgram = {
+    decls = [
+      decl_type_ "Foo" [] (tyvariant_ []),
+      decl_condef_ "Bar"
+        (tyarrow_ tyint_ (tycon_ "Foo"))
+      ],
+    expr = matchex_ 
+      (conapp_ "Bar" (int_ 1))
+      (pcon_ "Bar" (pvar_ "x"))
+      (addi_ (var_ "x") (int_ 1))
+} in 
+let res = testCompile p in 
+utest testEval p with int_ 2 using eqExpr in 
+
 
 ()
