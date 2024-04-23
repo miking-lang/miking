@@ -26,6 +26,8 @@ let _emptyCompilationContext : CompositionCheckEnv -> CompilationContext = lam e
 let withExpr = lam ctx. lam expr. {ctx with exprs = snoc ctx.exprs expr}
 
 type CompilationError
+con FoundIncludeError : {info : Info, path: String} -> CompilationError
+
 type CompilationWarning
 
 type CompilationResult = Result CompilationWarning CompilationError CompilationContext 
@@ -75,6 +77,8 @@ lang MLangCompiler = MLangAst + MExprAst
                          info = d.info,
                          ty = tyunknown_,
                          inexpr = uunit_}))
+  -- TODO(voorberg, 2024-04-23): Add test case for error on DeclInclude
+  | DeclInclude d -> _err (FoundIncludeError {info = d.info, path = d.path})
 
   sem compileProg : CompilationContext -> MLangProgram -> CompilationResult
   sem compileProg ctx = 
@@ -82,12 +86,12 @@ lang MLangCompiler = MLangAst + MExprAst
     let res = _foldl compileDecl ctx prog.decls in
     _map (lam ctx. withExpr ctx prog.expr) res
 
-  sem compile : CompilationContext -> MLangProgram -> Expr
+  sem compile : CompilationContext -> MLangProgram -> Result CompilationWarning CompilationError Expr
   sem compile ctx =| prog -> 
     match _consume (compileProg ctx prog) with (_, res) in
     switch res
-      case Left err then error "Compilation error(s) occured!"
-      case Right ctx then bindallutest_ ctx.exprs
+      case Left err then _err (head err)
+      case Right ctx then _ok (bindallutest_ ctx.exprs)
     end
 end
 
@@ -104,7 +108,19 @@ let testCompile = lam p.
   match _consume (checkComposition p) with (_, res) in 
   match res with Right env in
   let ctx = _emptyCompilationContext env in 
-  compile ctx p
+  let res = _consume (compile ctx p) in 
+  match res with (_, rhs) in 
+  match rhs with Right expr in expr
+in
+
+let testError = lam p. 
+  match symbolizeMLang symEnvDefault p with (_, p) in 
+  match _consume (checkComposition p) with (_, res) in 
+  match res with Right env in
+  let ctx = _emptyCompilationContext env in 
+  let res = _consume (compile ctx p) in 
+  match res with (_, rhs) in 
+  match rhs with Left errs in errs
 in
 
 let testEval = lam p.
@@ -158,7 +174,7 @@ let p : MLangProgram = {
 let expected : Expr = utest_ (int_ 3) (addi_ (int_ 1) (int_ 2)) uunit_ in 
 utest testCompile p with expected using eqExpr in 
 
--- Test TmType and TmConDef
+-- Test Declype and DeclConDef
 let p : MLangProgram = {
     decls = [
       decl_type_ "Foo" [] (tyvariant_ []),
@@ -172,6 +188,5 @@ let p : MLangProgram = {
 } in 
 let res = testCompile p in 
 utest testEval p with int_ 2 using eqExpr in 
-
 
 ()
