@@ -123,34 +123,40 @@ lang MLangCompiler = MLangAst + MExprAst
   | DeclSem d -> 
     let targetName = nameSym "target" in 
     let target = nvar_ targetName in 
+
+    -- OPT(voorberg, 23-04-2024): The implementation of compileBody and
+    --                            compileArgs can be made tail-recursive.
     recursive 
       let compileBody = lam cases : [{pat : Pat, thn : Expr}]. 
         match cases with [h] ++ t then
           TmMatch {target = target,
-                  pat = h.pat,
-                  thn = h.thn,
-                  els = compileBody t,
-                  ty = tyunknown_,
-                  info = d.info}
+                   pat = h.pat,
+                   thn = h.thn,
+                   els = compileBody t,
+                   ty = tyunknown_,
+                   info = d.info}
         else (error_ (str_ "Inexhaustive match!"))
     in 
-    -- TODO(voorberg, 2024-04-23): Use ordered sem cases from CompositionCheckEnv
-    let body = compileBody d.cases in 
+    let cases = match mapLookup d.ident ctx.compositionCheckEnv.semPatMap 
+                with Some x then x
+                else error "CompositionCheckEnv must contain the ordered cases for all semantic functions!"
+    in
+    let body = compileBody cases in 
     recursive let compileArgs = lam args. 
           match args with [h] ++ t then
             TmLam {ident = h.ident,
-                  tyAnnot = h.tyAnnot,
-                  tyParam = tyunknown_,
-                  body = compileArgs t,
-                  ty = tyunknown_,
-                  info = d.info}
+                   tyAnnot = h.tyAnnot,
+                   tyParam = tyunknown_,
+                   body = compileArgs t,
+                   ty = tyunknown_,
+                   info = d.info}
           else
             TmLam {ident = targetName,
-                  tyAnnot = tyunknown_,
-                  tyParam = tyunknown_,
-                  body = body,
-                  ty = tyunknown_,
-                  info = d.info}
+                   tyAnnot = tyunknown_,
+                   tyParam = tyunknown_,
+                   body = body,
+                   ty = tyunknown_,
+                   info = d.info}
     in 
     let result = compileArgs d.args in 
     {ident = d.ident,
@@ -282,5 +288,28 @@ let p : MLangProgram = {
     expr = bind_ (use_ "L1") (appf2_ (var_ "f") (int_ 10) (int_ 20))
 } in 
 utest testEval p with int_ 30 using eqExpr in 
--- printLn (expr2str (testCompile p)) ;
+
+-- Test semantic function with pattern that must be ordered
+-- Since the 2nd pattern is a strict subset of the first,
+-- the first pattern is checked first and only if this is not a match
+-- do we fall through to the first pattern. 
+let fsem = decl_sem_ "f" [] [(por_ (pint_ 1) (pint_ 2), int_ -1),
+                             (pint_ 2, int_ 1)]
+in
+let p : MLangProgram = {
+    decls = [
+        decl_lang_ "L1" [fsem]
+    ],
+    expr = bind_ (use_ "L1") (appf1_ (var_ "f") (int_ 2))
+} in 
+utest testEval p with int_ 1 using eqExpr in 
+
+let p : MLangProgram = {
+    decls = [
+        decl_lang_ "L1" [fsem]
+    ],
+    expr = bind_ (use_ "L1") (appf1_ (var_ "f") (int_ 1))
+} in 
+utest testEval p with int_ -1 using eqExpr in
+
 ()
