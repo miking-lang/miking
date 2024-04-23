@@ -243,6 +243,7 @@ lang MLangSym = MLangAst + MExprSym
             match mapAccumL setSymbol env.currentEnv.tyVarEnv s.params with (_, params) in
             let includes : [(Name, [Name])] = match mapLookup (nameGetStr ident) includedSyns 
                                               with Some xs then xs else [] in  
+            let includedConstructors : [Name] = join (map snd includes) in 
             let includes : [Name] = map fst includes in 
 
             let synn = DeclSyn {s with params = params,
@@ -250,6 +251,7 @@ lang MLangSym = MLangAst + MExprSym
                                        includes = includes} in 
 
             let langEnv = {langEnv with 
+                includedConstructors = concat langEnv.includedConstructors includedConstructors,
                 syns = mapInsert (nameGetStr ident) (ident, []) langEnv.syns} in
 
             (langEnv, synn)
@@ -276,7 +278,6 @@ lang MLangSym = MLangAst + MExprSym
             let includes = map fst includedSyns in 
 
             let includedCons = join (map snd includedSyns) in 
-
             let decl = DeclSyn {ident = ident,
                                 params = [],
                                 defs = [],
@@ -711,6 +712,28 @@ let p : MLangProgram = {
 match symbolizeMLang symEnvDefault p with (_, p) in 
 match get p.decls 1 with DeclLang l2 in 
 utest length (l2.decls) with 1 in
+utest isFullySymbolizedProgram p () with true in
+
+-- Sum Extension Test Case
+let baseSyn = decl_syn_ "Expr" [("IntExpr", tyint_), 
+                                ("AddExpr", tytuple_ [tycon_ "Expr", tycon_ "Expr"])] in 
+let baseSem = decl_sem_ "eval" [] [(pcon_ "IntExpr" (pvar_ "i"), var_ "i"),
+                                   (pcon_ "AddExpr" (ptuple_ [pvar_ "lhs", pvar_ "rhs"]), 
+                                    addi_ (appf1_ (var_ "eval") (var_ "lhs")) (appf1_ (var_ "eval") (var_ "rhs")))] in 
+let sugarSyn = decl_syn_ "Expr" [("IncrExpr", tycon_ "Expr")] in 
+let sugarEval = decl_sem_ "eval" [] [(pcon_ "IncrExpr" (pvar_ "e"), addi_ (int_ 1) (appf1_ (var_ "eval") (var_ "e")))] in 
+let p : MLangProgram = {
+    decls = [
+        decl_lang_ "MyIntArith" [baseSyn, baseSem],
+        decl_langi_ "SugaredIntArith" ["MyIntArith"] [sugarSyn, sugarEval]
+    ],
+    expr = bind_ (use_ "SugaredIntArith") 
+                 (appf1_ (var_ "eval") 
+                         (conapp_ "AddExpr" (utuple_ [(conapp_ "IncrExpr" (conapp_ "IntExpr" (int_ 21))),
+                                                      (conapp_ "IntExpr" (int_ 1))])))
+} in 
+
+match symbolizeMLang symEnvDefault p with (_, p) in 
 utest isFullySymbolizedProgram p () with true in
 
 ()
