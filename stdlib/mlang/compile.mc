@@ -15,12 +15,21 @@ include "result.mc"
 
 type CompilationContext = use MLangAst in {
   exprs: [Expr],
-  compositionCheckEnv : CompositionCheckEnv
+  compositionCheckEnv : CompositionCheckEnv,
+  synNameDefMap : Map Name [{ident : Name, tyIdent : Type}]
 }
+
+let collectIncludedDefs = lam ctx. lam includes. 
+  let getDefs = lam incl : Name. 
+    match mapLookup incl ctx.synNameDefMap with Some defs then defs 
+    else error "No definitions for included Syntax definition! This is illegal!"
+  in 
+  join (map getDefs includes)
 
 let _emptyCompilationContext : CompositionCheckEnv -> CompilationContext = lam env : CompositionCheckEnv. {
   exprs = [],
-  compositionCheckEnv = env
+  compositionCheckEnv = env,
+  synNameDefMap = mapEmpty nameCmp
 }
 
 let withExpr = lam ctx. lam expr. {ctx with exprs = snoc ctx.exprs expr}
@@ -104,6 +113,8 @@ lang MLangCompiler = MLangAst + MExprAst
     in
     _bind res (lam ctx. compileSemToResult ctx semDecls)
   | DeclSyn s -> 
+    let allDefs = concat s.defs (collectIncludedDefs ctx s.includes) in 
+
     -- TODO(voorberg, 2024-04-23): Handle includes
     -- NOTE(voorberg, 2024-04-23): We use the info field of the DeclSyn
     --                             for the generated TmConDef.
@@ -120,7 +131,8 @@ lang MLangCompiler = MLangAst + MExprAst
                                    ty = tyunknown_,
                                    info = s.info}))
     in
-    _foldl compileDef ctx s.defs
+    let res = _foldl compileDef ctx allDefs in 
+    _map (lam ctx. {ctx with synNameDefMap = mapInsert s.ident allDefs ctx.synNameDefMap}) res
   | DeclSem s -> 
     error "Unexpected DeclSem!"
 
@@ -336,4 +348,26 @@ let p : MLangProgram = {
 } in 
 utest testEval p with int_ 42 using eqExpr in
 
+-- Test Sum Extension
+let baseSyn = decl_syn_ "Expr" [("IntExpr", tyint_), 
+                                ("AddExpr", tytuple_ [tycon_ "Expr", tycon_ "Expr"])] in 
+let baseSem = decl_sem_ "eval" [] [(pcon_ "IntExpr" (pvar_ "i"), var_ "i"),
+                                   (pcon_ "AddExpr" (ptuple_ [pvar_ "lhs", pvar_ "rhs"]), 
+                                    addi_ (appf1_ (var_ "eval") (var_ "lhs")) (appf1_ (var_ "eval") (var_ "rhs")))] in 
+let sugarSyn = decl_syn_ "Expr" [("IncrExpr", tycon_ "Expr")] in 
+let sugarEval = decl_sem_ "eval" [] [(pcon_ "IncrExpr" (pvar_ "e"), addi_ (int_ 1) (appf1_ (var_ "eval") (var_ "e")))] in 
+let p : MLangProgram = {
+    decls = [
+        decl_lang_ "MyIntArith" [baseSyn, baseSem],
+        decl_langi_ "SugaredIntArith" ["MyIntArith"] [sugarSyn, sugarEval]
+    ],
+    expr = bind_ (use_ "SugaredIntArith") 
+                 (appf1_ (var_ "eval") 
+                         (conapp_ "IncrExpr" (conapp_ "AddExpr" (utuple_ [(conapp_ "IntExpr" (int_ 20)),
+                                                      (conapp_ "IntExpr" (int_ 2))]))))
+                --  (appf1_ (var_ "eval") 
+                --          (conapp_ "AddExpr" (utuple_ [(conapp_ "IncrExpr" (conapp_ "IntExpr" (int_ 21))),
+                --                                       (conapp_ "IntExpr" (int_ 1))])))
+} in 
+utest testEval p with int_ 23 using eqExpr in
 ()
