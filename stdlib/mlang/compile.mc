@@ -107,6 +107,12 @@ lang MLangCompiler = MLangAst + MExprAst
     -- TODO(voorberg, 2024-04-23): Handle includes
     -- NOTE(voorberg, 2024-04-23): We use the info field of the DeclSyn
     --                             for the generated TmConDef.
+    let ctx = withExpr ctx (TmType {ident = s.ident,
+                                    params = s.params,
+                                    tyIdent = tyvariant_ [],
+                                    inexpr = uunit_,
+                                    ty = tyunknown_,
+                                    info = s.info}) in 
     let compileDef = lam ctx. lam def : {ident : Name, tyIdent : Type}.
       _ok (withExpr ctx (TmConDef {ident = def.ident,
                                    tyIdent = def.tyIdent,
@@ -311,5 +317,23 @@ let p : MLangProgram = {
     expr = bind_ (use_ "L1") (appf1_ (var_ "f") (int_ 1))
 } in 
 utest testEval p with int_ -1 using eqExpr in
+
+-- Test DeclSyn and DeclSem using a small arithmetic language
+let exprSyn = decl_syn_ "Expr" [("IntExpr", tyint_), 
+                                ("AddExpr", tytuple_ [tycon_ "Expr", tycon_ "Expr"])] in 
+let evalSem = decl_sem_ "eval" [] [(pcon_ "IntExpr" (pvar_ "i"), var_ "i"),
+                                   (pcon_ "AddExpr" (ptuple_ [pvar_ "lhs", pvar_ "rhs"]), 
+                                    addi_ (appf1_ (var_ "eval") (var_ "lhs")) (appf1_ (var_ "eval") (var_ "rhs")))] in 
+
+let p : MLangProgram = {
+    decls = [
+        decl_lang_ "MyIntArith" [exprSyn, evalSem]
+    ],
+    expr = bind_ (use_ "MyIntArith") 
+                 (appf1_ (var_ "eval") 
+                         (conapp_ "AddExpr" (utuple_ [(conapp_ "IntExpr" (int_ 40)),
+                                                      (conapp_ "IntExpr" (int_ 2))])))
+} in 
+utest testEval p with int_ 42 using eqExpr in
 
 ()
