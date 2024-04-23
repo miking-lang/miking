@@ -67,6 +67,14 @@ lang MLangCompiler = MLangAst + MExprAst
                             info = d.info,
                             ty = tyunknown_,
                             inexpr = uunit_}))
+  -- TODO(voorberg, 2024-04-23): Add test case for the compilation of externals.
+  | DeclExt d -> _ok (
+    withExpr ctx (TmExt {ident = d.ident,
+                         tyIdent = d.tyIdent,
+                         effect = d.effect,
+                         info = d.info,
+                         ty = tyunknown_,
+                         inexpr = uunit_}))
 
   sem compileProg : CompilationContext -> MLangProgram -> CompilationResult
   sem compileProg ctx = 
