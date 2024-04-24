@@ -8,6 +8,8 @@ include "mexpr/eval.mc"
 include "mexpr/eq.mc"
 
 include "common.mc"
+include "option.mc"
+include "map.mc"
 include "bool.mc"
 include "name.mc"
 include "set.mc"
@@ -16,8 +18,17 @@ include "result.mc"
 type CompilationContext = use MLangAst in {
   exprs: [Expr],
   compositionCheckEnv : CompositionCheckEnv,
-  synNameDefMap : Map Name [{ident : Name, tyIdent : Type}]
+  synNameDefMap : Map Name [{ident : Name, tyIdent : Type}],
+  semSymbols : Map String [Name]
 }
+
+recursive let subTmVarSymbol = lam subst : (Name -> Name). lam expr. 
+  use MExprAst in 
+  switch expr
+    case TmVar tm then TmVar {tm with ident = subst tm.ident}
+    case other then smap_Expr_Expr (subTmVarSymbol subst) other
+  end
+end
 
 let collectIncludedDefs = lam ctx. lam includes. 
   let getDefs = lam incl : Name. 
@@ -29,10 +40,29 @@ let collectIncludedDefs = lam ctx. lam includes.
 let _emptyCompilationContext : CompositionCheckEnv -> CompilationContext = lam env : CompositionCheckEnv. {
   exprs = [],
   compositionCheckEnv = env,
-  synNameDefMap = mapEmpty nameCmp
+  synNameDefMap = mapEmpty nameCmp,
+  semSymbols = mapEmpty cmpString
 }
 
 let withExpr = lam ctx. lam expr. {ctx with exprs = snoc ctx.exprs expr}
+
+let withSemSymbol = lam ctx : CompilationContext. lam n : Name.
+  let s = nameGetStr n in 
+  let newValue = match mapLookup s ctx.semSymbols with Some names 
+                 then cons n names 
+                 else [n]
+  in
+  {ctx with semSymbols = mapInsert s newValue ctx.semSymbols}
+
+let createSubst = lam semSymbols. lam semNames. lam n. 
+  let s = nameGetStr n in 
+  match mapLookup s semSymbols with Some xs then
+    if optionIsSome (find (lam x. nameEqSym x n) xs) then
+      match mapLookup s semNames with Some res in res
+    else
+      n
+  else 
+    n
 
 type CompilationError
 con FoundIncludeError : {info : Info, path: String} -> CompilationError
@@ -100,12 +130,16 @@ lang MLangCompiler = MLangAst + MExprAst
     let synDecls = filter isSynDecl l.decls in 
     let semDecls = filter isSemDecl l.decls in 
 
+    let nameSeq =  (map (lam s. match s with DeclSem s in (nameGetStr s.ident, s.ident)) semDecls) in 
+    let semNames = mapFromSeq cmpString nameSeq in 
+    let ctx = foldl withSemSymbol ctx (map (lam s. match s with DeclSem s in s.ident) semDecls) in 
+
     let res = _foldl compileDecl ctx typeDecls in 
     let res = _bind res (lam ctx. _foldl compileDecl ctx synDecls) in 
 
     let compileSemToResult : CompilationContext -> [Decl] -> CompilationResult
       = lam ctx. lam sems.
-        let bindings = map (compileSem ctx) sems in 
+        let bindings = map (compileSem ctx semNames) sems in 
         _ok (withExpr ctx (TmRecLets {bindings = bindings,
                                       inexpr = uunit_, 
                                       ty = tyunknown_,
@@ -136,9 +170,10 @@ lang MLangCompiler = MLangAst + MExprAst
   | DeclSem s -> 
     error "Unexpected DeclSem!"
 
-  sem compileSem : CompilationContext -> Decl -> RecLetBinding 
-  sem compileSem ctx = 
+  sem compileSem : CompilationContext -> Map String Name -> Decl -> RecLetBinding 
+  sem compileSem ctx semNames = 
   | DeclSem d -> 
+    let subst = createSubst ctx.semSymbols semNames in 
     let targetName = nameSym "target" in 
     let target = nvar_ targetName in 
 
@@ -159,6 +194,7 @@ lang MLangCompiler = MLangAst + MExprAst
                 with Some x then x
                 else error "CompositionCheckEnv must contain the ordered cases for all semantic functions!"
     in
+    let cases = map (lam c. {c with thn = subTmVarSymbol subst c.thn}) cases in 
     let body = compileBody cases in 
     recursive let compileArgs = lam args. 
           match args with [h] ++ t then
@@ -370,4 +406,17 @@ let p : MLangProgram = {
                 --                                       (conapp_ "IntExpr" (int_ 1))])))
 } in 
 utest testEval p with int_ 23 using eqExpr in
+
+let p : MLangProgram = {
+    decls = [
+        decl_lang_ "MyIntArith" [baseSyn, baseSem],
+        decl_langi_ "SugaredIntArith" ["MyIntArith"] [sugarSyn, sugarEval]
+    ],
+    expr = bind_ (use_ "SugaredIntArith")
+                 (appf1_ (var_ "eval") 
+                         (conapp_ "AddExpr" (utuple_ [(conapp_ "IncrExpr" (conapp_ "IntExpr" (int_ 21))),
+                                                      (conapp_ "IntExpr" (int_ 1))])))
+} in 
+utest testEval p with int_ 23 using eqExpr in
+
 ()
