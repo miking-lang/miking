@@ -16,12 +16,20 @@ include "set.mc"
 include "result.mc"
 
 type CompilationContext = use MLangAst in {
+  -- Accumulator of compilation result
   exprs: [Expr],
+
   compositionCheckEnv : CompositionCheckEnv,
+
+  -- A mapping from syn identifiers to their constructors
   synNameDefMap : Map Name [{ident : Name, tyIdent : Type}],
+
+  -- A map from identifier strings of semantic functions to the 
+  -- symbolized names that the function has in different fragments.
   semSymbols : Map String [Name]
 }
 
+-- Substitute the identifier stored in a TmVar based on the provided substitution
 recursive let subTmVarSymbol = lam subst : (Name -> Name). lam expr. 
   use MExprAst in 
   switch expr
@@ -54,6 +62,10 @@ let withSemSymbol = lam ctx : CompilationContext. lam n : Name.
   in
   {ctx with semSymbols = mapInsert s newValue ctx.semSymbols}
 
+-- Create a substitution function by partially applying the first two elements
+-- This substitution function maps symbols belonging to semantic function in 
+-- included language fragments to the symbol of the semantic function in the 
+-- current fragment
 let createSubst = lam semSymbols. lam semNames. lam n. 
   let s = nameGetStr n in 
   match mapLookup s semSymbols with Some xs then
@@ -401,9 +413,6 @@ let p : MLangProgram = {
                  (appf1_ (var_ "eval") 
                          (conapp_ "IncrExpr" (conapp_ "AddExpr" (utuple_ [(conapp_ "IntExpr" (int_ 20)),
                                                       (conapp_ "IntExpr" (int_ 2))]))))
-                --  (appf1_ (var_ "eval") 
-                --          (conapp_ "AddExpr" (utuple_ [(conapp_ "IncrExpr" (conapp_ "IntExpr" (int_ 21))),
-                --                                       (conapp_ "IntExpr" (int_ 1))])))
 } in 
 utest testEval p with int_ 23 using eqExpr in
 
