@@ -345,34 +345,11 @@ recursive let bindF_ = use MExprAst in
     f letexpr expr -- Insert at the end of the chain
 end
 
-recursive let bindFWithUtest = use MExprAst in
-  lam f : Expr -> Expr -> Expr. lam letexpr. lam expr.
-  match letexpr with TmLet t then
-    TmLet {t with inexpr = bindF_ f t.inexpr expr}
-  else match letexpr with TmRecLets t then
-    TmRecLets {t with inexpr = bindF_ f t.inexpr expr}
-  else match letexpr with TmConDef t then
-    TmConDef {t with inexpr = bindF_ f t.inexpr expr}
-  else match letexpr with TmType t then
-    TmType {t with inexpr = bindF_ f t.inexpr expr}
-  else match letexpr with TmExt t then
-    TmExt {t with inexpr = bindF_ f t.inexpr expr}
-  else match letexpr with TmUtest t then 
-    TmUtest {t with next = bindFWithUtest f t.next expr}
-  else
-    f letexpr expr -- Insert at the end of the chain
-end
-
 let bind_ = bindF_ (lam. lam expr. expr)
-
-let bindutest_ = bindFWithUtest (lam. lam expr. expr)
 
 let bindall_ = use MExprAst in
   lam exprs.
   foldr1 bind_ exprs
-
-let bindallutest_ = lam exprs.
-  foldr1 bindutest_ exprs
 
 let uunit_ = use MExprAst in
   TmRecord {bindings = mapEmpty cmpSID, ty = tyunknown_, info = NoInfo ()}
