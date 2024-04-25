@@ -41,16 +41,89 @@ let addPA : all a. PA a -> a -> PA a = lam pa. lam y.
            then PAData(10,x0,x1,x2,x3,x4,x5,x6,x7,x8,y) else
   match pa with PAData(10,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9)
            then PANode(1,10,PAData(10,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9),
-                       PAData(1,y,x1,x2,x3,x4,x5,x6,x7,x8,x9),
+                       PAData(1,y,y,y,y,y,y,y,y,y,y),
                        PAEmpty(),PAEmpty(),PAEmpty(),PAEmpty(),PAEmpty(),
                        PAEmpty(),PAEmpty(),PAEmpty()) else
-  match pa with PANode(1,l,x0,PAData(10,z0,z1,z2,z3,z4,z5,z6,z7,z8,z9),
+  match pa with PANode(1,l,x0,
+                       PAData(10,z0,z1,z2,z3,z4,z5,z6,z7,z8,z9),
                        x2,x3,x4,x5,x6,x7,x8,x9)
-           then PANode(1,l,x0,PAData(10,z0,z1,z2,z3,z4,z5,z6,z7,z8,z9),
+           then PANode(2,l,x0,
+                       PAData(10,z0,z1,z2,z3,z4,z5,z6,z7,z8,z9),
                        PAData(1,y,y,y,y,y,y,y,y,y,y),
                        x3,x4,x5,x6,x7,x8,x9) else
+  match pa with PANode(2,l,x0,x1,
+                       PAData(10,z0,z1,z2,z3,z4,z5,z6,z7,z8,z9),
+                       x3,x4,x5,x6,x7,x8,x9)
+           then PANode(3,l,x0,x1,
+                       PAData(10,z0,z1,z2,z3,z4,z5,z6,z7,z8,z9),
+                       PAData(1,y,y,y,y,y,y,y,y,y,y),
+                       x4,x5,x6,x7,x8,x9) else
+  match pa with PANode(3,l,x0,x1,x2,
+                       PAData(10,z0,z1,z2,z3,z4,z5,z6,z7,z8,z9),
+                       x4,x5,x6,x7,x8,x9)
+           then PANode(4,l,x0,x1,x2,
+                       PAData(10,z0,z1,z2,z3,z4,z5,z6,z7,z8,z9),
+                       PAData(1,y,y,y,y,y,y,y,y,y,y),
+                       x5,x6,x7,x8,x9) else
+  match pa with PANode(4,l,x0,x1,x2,x3,
+                       PAData(10,z0,z1,z2,z3,z4,z5,z6,z7,z8,z9),
+                       x5,x6,x7,x8,x9)
+           then PANode(5,l,x0,x1,x2,x3,
+                       PAData(10,z0,z1,z2,z3,z4,z5,z6,z7,z8,z9),
+                       PAData(1,y,y,y,y,y,y,y,y,y,y),
+                       x6,x7,x8,x9) else
+  match pa with PANode(5,l,x0,x1,x2,x3,x4,
+                       PAData(10,z0,z1,z2,z3,z4,z5,z6,z7,z8,z9),
+                       x6,x7,x8,x9)
+           then PANode(6,l,x0,x1,x2,x3,x4,
+                       PAData(10,z0,z1,z2,z3,z4,z5,z6,z7,z8,z9),
+                       PAData(1,y,y,y,y,y,y,y,y,y,y),
+                       x7,x8,x9) else
+  match pa with PANode(6,l,x0,x1,x2,x3,x4,x5,
+                       PAData(10,z0,z1,z2,z3,z4,z5,z6,z7,z8,z9),
+                       x7,x8,x9)
+           then PANode(7,l,x0,x1,x2,x3,x4,x5,
+                       PAData(10,z0,z1,z2,z3,z4,z5,z6,z7,z8,z9),
+                       PAData(1,y,y,y,y,y,y,y,y,y,y),
+                       x8,x9) else
+  match pa with PANode(7,l,x0,x1,x2,x3,x4,x5,x6,
+                       PAData(10,z0,z1,z2,z3,z4,z5,z6,z7,z8,z9),
+                       x8,x9)
+           then PANode(8,l,x0,x1,x2,x3,x4,x5,x6,
+                       PAData(10,z0,z1,z2,z3,z4,z5,z6,z7,z8,z9),
+                       PAData(1,y,y,y,y,y,y,y,y,y,y),
+                       x9) else
+  match pa with PANode(8,l,x0,x1,x2,x3,x4,x5,x6,x7,
+                       PAData(10,z0,z1,z2,z3,z4,z5,z6,z7,z8,z9),
+                       x9)
+           then PANode(9,l,x0,x1,x2,x3,x4,x5,x6,x7,
+                       PAData(10,z0,z1,z2,z3,z4,z5,z6,z7,z8,z9),
+                       PAData(1,y,y,y,y,y,y,y,y,y,y)
+                       ) else
   match pa with PANode(1,l,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9)
-           in PANode(1,l,x0,addPA x1 y,x2,x3,x4,x5,x6,x7,x8,x9)
+           then PANode(1,l,x0,addPA x1 y,x2,x3,x4,x5,x6,x7,x8,x9) else
+  match pa with PANode(2,l,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9)
+           then PANode(2,l,x0,x1,addPA x2 y,x3,x4,x5,x6,x7,x8,x9) else
+  match pa with PANode(3,l,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9)
+           then PANode(3,l,x0,x1,x2,addPA x3 y,x4,x5,x6,x7,x8,x9) else
+  match pa with PANode(4,l,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9)
+           then PANode(4,l,x0,x1,x2,x3,addPA x4 y,x5,x6,x7,x8,x9) else
+  match pa with PANode(5,l,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9)
+           then PANode(5,l,x0,x1,x2,x3,x4,addPA x5 y,x6,x7,x8,x9) else
+  match pa with PANode(6,l,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9)
+           then PANode(6,l,x0,x1,x2,x3,x4,x5,addPA x6 y,x7,x8,x9) else
+  match pa with PANode(7,l,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9)
+           then PANode(7,l,x0,x1,x2,x3,x4,x5,x6,addPA x7 y,x8,x9) else
+  match pa with PANode(8,l,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9)
+           then PANode(8,l,x0,x1,x2,x3,x4,x5,x6,x7,addPA x8 y,x9) else
+  match pa with PANode(9,l,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9)
+           in PANode(9,l,x0,x1,x2,x3,x4,x5,x6,x7,x8,addPA x9 y)
+/--
+  match pa with PANode(9,l,x0,x1,x2,x3,x4,x5,x6,x7,x8,
+                       PAData(10,z0,z1,z2,z3,z4,z5,z6,z7,z8,z9)) & rest
+           in   PANode(1,100,rest,,PAEmpty(),PAEmpty(),PAEmpty(),
+                    PAEmpty(),PAEmpty(),PAEmpty(),PAEmpty(),PAEmpty())
+--/
 end
 
 
@@ -71,7 +144,7 @@ let getPA = lam pa. lam n.
      match i with 6 then getPA x6 n2 else
      match i with 7 then getPA x7 n2 else
      match i with 8 then getPA x8 n2 else
-     match i with 9 in   getPA x0 n2)
+     match i with 9 in   getPA x9 n2)
      else
   match pa with PAData(_,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9) in
     (match n with 0 then x0 else
@@ -171,7 +244,7 @@ utest pa2seq (makePA 5 (lam x. muli x 2)) with [0,2,4,6,8]
 utest pa2seq (makePA 12 (lam x.x)) with [0,1,2,3,4,5,6,7,8,9,10,11]
 
 -- One large test, including all functions
-let testlen = 12
+let testlen = 99
 let setlist = [(2,23),(9,77),(10,22)]
 utest
   let pa = makePA testlen (lam x.x) in
