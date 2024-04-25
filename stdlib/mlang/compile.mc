@@ -243,7 +243,7 @@ lang MLangCompiler = MLangAst + MExprAst
     match _consume (compileProg ctx prog) with (_, res) in
     switch res
       case Left err then _err (head err)
-      case Right ctx then _ok (bindallutest_ ctx.exprs)
+      case Right ctx then _ok (bindall_ ctx.exprs)
     end
 end
 
