@@ -76,6 +76,38 @@ end
 lang MExprWSACParser = WhitespaceParser + LineCommentParser + MultilineCommentParser
 end
 
+lang ErrorTokenParser = TokenParser
+  syn Token =
+  | ErrorTok {char : Char, info : Info}
+  syn TokenRepr =
+  | ErrorRepr ()
+
+  sem parseToken pos =
+  | [c] ++ str ->
+    let pos2 = advanceCol pos 1 in
+    let info = makeInfo pos pos2 in
+    { token = ErrorTok {char = c, info = info}
+    , lit = [c]
+    , info = info
+    , stream = {pos = pos2, str = str}
+    }
+
+  sem tokKindEq tokRepr =
+  | ErrorTok _ -> match tokRepr with ErrorRepr _ then true else false
+
+  sem tokInfo =
+  | ErrorTok x -> x.info
+
+  sem tokToStr =
+  | ErrorTok x -> join ["<Lexing error: '", x.char, "'"]
+
+  sem tokToRepr =
+  | ErrorTok _ -> ErrorRepr ()
+
+  sem tokReprToStr =
+  | ErrorRepr _ -> "<Error>"
+end
+
 lang EOFTokenParser = TokenParser + TokenReprEOF
   syn Token =
   | EOFTok {info : Info}

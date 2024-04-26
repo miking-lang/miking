@@ -23,6 +23,9 @@ type Heap a
 con HNil : all a. () -> Heap a
 con HNode : all a. (a, [Heap a]) -> Heap a
 
+let heapEmpty : all a. Heap a
+  = HNil ()
+
 let heapSingleton : all a. a -> Heap a
   = lam a. HNode (a, [])
 
