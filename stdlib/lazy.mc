@@ -31,6 +31,9 @@ type LStream a = Lazy (StreamNode a)
 let lazyStreamEmpty : all a. () -> LStream a
   = lam. ref (LazyVal (SNil ()))
 
+let lazyStreamSingleton : all a. a -> LStream a
+  = lam a. ref (LazyVal (SCons (a, lazyStreamEmpty ())))
+
 let lazyStream : all acc. all a. (acc -> Option (acc, a)) -> acc -> LStream a
   = lam f. lam acc.
     recursive let goNext = lam acc.
@@ -119,3 +122,68 @@ let lazyStreamStatefulFilterMap : all a. all b. all acc. (acc -> a -> (acc, Opti
 let lazyStreamStatefulFilter : all a. all acc. (acc -> a -> (acc, Bool)) -> acc -> LStream a -> LStream a
   = lam f. lam acc. lam s.
     lazyStreamStatefulFilterMap (lam acc. lam a. match f acc a with (acc, keep) in (acc, if keep then Some a else None ())) acc s
+
+let lazyStreamForceAll : all a. LStream a -> [a]
+  = lam s.
+    recursive let work = lam acc. lam s.
+      match lazyStreamUncons s with Some (x, s)
+      then work (snoc acc x) s
+      else acc
+    in work [] s
+
+type IterNode a
+type Iter a = () -> IterNode a
+con INNil : all a. () -> IterNode a
+con INCons : all a. (a, Iter a) -> IterNode a
+
+let iterEmpty : all a. Iter a = lam. INNil ()
+let iterCons : all a. a -> Iter a -> Iter a = lam a. lam it. lam. INCons (a, it)
+let iterSingle : all a. a -> Iter a = lam a. iterCons a iterEmpty
+
+recursive let iterConcat : all a. Iter a -> Iter a -> Iter a
+  = lam a. lam b. lam. switch a ()
+    case INNil _ then b ()
+    case INCons (a, aNext) then INCons (a, iterConcat aNext b)
+    end
+end
+
+recursive let iterMap : all a. all b. (a -> b) -> Iter a -> Iter b
+  = lam f. lam xs. lam. switch xs ()
+    case INNil _ then INNil ()
+    case INCons (x, xs) then INCons (f x, iterMap f xs)
+    end
+end
+
+recursive let iterConcatMap : all a. all b. (a -> Iter b) -> Iter a -> Iter b
+  = lam f. lam xs. lam. switch xs ()
+    case INNil _ then INNil ()
+    case INCons (x, xs) then iterConcat (f x) (iterConcatMap f xs) ()
+    end
+end
+
+let iterUncons : all a. Iter a -> Option (a, Iter a)
+  = lam it. switch it ()
+    case INNil _ then None ()
+    case INCons (x, xs) then Some (x, xs)
+    end
+
+recursive let iterTake : all a. Int -> Iter a -> Iter a
+  = lam limit. lam it. lam.
+    if leqi limit 0 then INNil () else
+    switch it ()
+    case INNil _ then INNil ()
+    case INCons (x, xs) then INCons (x, iterTake (subi limit 1) xs)
+    end
+end
+
+let iterMin : all a. (a -> a -> Int) -> Iter a -> Option a
+  = lam cmp. lam it.
+    recursive let work = lam acc. lam it. switch it ()
+      case INNil _ then acc
+      case INCons (x, xs) then
+        work (if lti (cmp acc x) 0 then acc else x) xs
+      end in
+    switch it ()
+    case INNil _ then None ()
+    case INCons (x, xs) then Some (work x xs)
+    end
