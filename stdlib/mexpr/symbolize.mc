@@ -17,8 +17,6 @@ include "error.mc"
 include "pprint.mc"
 include "repr-ast.mc"
 
-include "mlang/ast.mc"
-
 ---------------------------
 -- SYMBOLIZE ENVIRONMENT --
 ---------------------------
@@ -60,7 +58,7 @@ let mergeNameEnv = lam l. lam r. {
   reprEnv = mapUnion l.reprEnv r.reprEnv
 }
 
-type LangEnv = use MLangAst in {
+type LangEnv = {
   ident : Name,
 
   -- Map from the string of a syn identifier to a tuple 
