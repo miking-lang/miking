@@ -206,6 +206,8 @@ and const =
   (* MCore intrinsics: Boot parser *)
   | CbootParserTree of ptree
   | CbootParserParseMExprString of bool option * int Mseq.t Mseq.t option
+  (* | CbootParserParseMLangString of (int Mseq.t) option *)
+  | CbootParserParseMLangString of (int Mseq.t) option
   | CbootParserParseMCoreFile of
       (bool * bool * int Mseq.t Mseq.t * bool * bool * bool) option
       * int Mseq.t Mseq.t option
@@ -873,6 +875,7 @@ let const_has_side_effect = function
   (* MCore Boot parser *)
   | CbootParserTree _
   | CbootParserParseMExprString _
+  | CbootParserParseMLangString _
   | CbootParserParseMCoreFile _
   | CbootParserGetId
   | CbootParserGetTerm _
