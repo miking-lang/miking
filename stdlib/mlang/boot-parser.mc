@@ -4,6 +4,7 @@ include "pprint.mc"
 
 include "mexpr/boot-parser.mc"
 
+include "name.mc"
 include "seq.mc"
 include "result.mc"
 
@@ -55,10 +56,13 @@ let getIncludeStrings : MLangProgram -> [String] = lam p.
 in
 
 let str = "include \"foo.mc\"\ninclude \"bar.mc\"\ninclude \"baz.mc\"\ninclude \"bar.mc\"\nlet x = 10\nmexpr\nx" in
-
--- Test includes
 let p = parseProgram str in
+
+-- Test includes are parsed
 utest getIncludeStrings p with ["foo.mc", "bar.mc", "baz.mc", "bar.mc"] using eqSeq eqString in
+
+-- Test expression is parsed
+utest match p.expr with TmVar {ident = ident} in ident with nameNoSym "x" using nameEqStr in 
 
 -- printLn "before!" ;
 -- let t = bootParserParseMLangString str in 
