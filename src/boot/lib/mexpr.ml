@@ -122,6 +122,25 @@ let idError = 600
 (* MLang *)
 let idProgram = 700
 
+let idDeclLang = 701
+
+let idDeclSyn = 702
+
+let idDeclSem = 703
+
+let idDeclLet = 704
+
+let idDeclType = 705
+
+let idDeclRecLets = 706 
+
+let idDeclConDef = 707 
+
+let idDeclUtest = 708 
+
+let idDeclExt = 709
+
+
 let sym = Symb.gensym ()
 
 let patNameToStr = function NameStr (x, _) -> x | NameWildcard -> us ""
@@ -330,7 +349,7 @@ let getData = function
       let includeInfos = List.map 
         (fun incl -> match incl with Include (i, _) -> i) 
         includes in 
-      (idProgram, includeInfos, [List.length includes; List.length tops], [], [expr], includeStrings, [], [], [], [], [])
+      (idProgram, includeInfos, [List.length includes; List.length tops], [], [expr], includeStrings, [], [], [], [], tops)
   (* Info *)
   | PTreeInfo (Info (fn, r1, c1, r2, c2)) ->
       (idInfo, [], [], [], [], [fn], [r1; c1; r2; c2], [], [], [], [])
@@ -340,6 +359,8 @@ let getData = function
   | PTreeError es ->
       let fis, msgs = List.split es in
       (idError, fis, [List.length es], [], [], msgs, [], [], [], [], [])
+  | PTreeDecl (TopLet (Let (fi, x, ty, tm))) -> 
+    (idDeclLet, [fi], [], [ty], [tm], [x], [], [], [], [], [])
   | _ ->
       failwith "The AST node is unknown"
 
@@ -378,6 +399,10 @@ let getConst t n =
 let getPat t n =
   let _, _, _, _, _, _, _, _, _, lst, _ = getData t in
   PTreePat (List.nth lst n)
+
+let getDecl t n =
+  let _, _, _, _, _, _, _, _, _, _, lst = getData t in
+  PTreeDecl (List.nth lst n)
 
 let getInfo t n =
   let _, lst, _, _, _, _, _, _, _, _, _ = getData t in
@@ -780,6 +805,10 @@ let arity = function
   | CbootParserGetTerm None ->
       2
   | CbootParserGetTerm (Some _) ->
+      1
+  | CbootParserGetDecl None ->
+      2
+  | CbootParserGetDecl (Some _) ->
       1
   | CbootParserGetType None ->
       2
@@ -2081,6 +2110,13 @@ and delta (apply : info -> tm -> tm -> tm) fi c v =
     , TmConst (_, CInt n) ) ->
       TmConst (fi, CbootParserTree (getTerm ptree n))
   | CbootParserGetTerm (Some _), _ ->
+      fail_constapp fi
+  | CbootParserGetDecl None, t ->
+      TmConst (fi, CbootParserGetDecl (Some t))
+  | ( CbootParserGetDecl (Some (TmConst (fi, CbootParserTree ptree)))
+    , TmConst (_, CInt n) ) ->
+      TmConst (fi, CbootParserTree (getDecl ptree n))
+  | CbootParserGetDecl (Some _), _ ->
       fail_constapp fi
   | CbootParserGetType None, t ->
       TmConst (fi, CbootParserGetType (Some t))

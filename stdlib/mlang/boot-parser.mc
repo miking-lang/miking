@@ -33,11 +33,25 @@ lang BootParserMLang = BootParser + MLangAst
     in
     let includes = map parseInclude (range 0 nIncludes 1) in 
 
+    let parseDecl = lam i. 
+      let d = bootParserGetDecl p i in 
+      matchDecl d (bootParserGetId d)
+    in
+    let decls = map parseDecl (range 0 nTops 1) in 
+
     let unparsedExpr = bootParserGetTerm p 0 in 
 
-    {decls = includes,
+    {decls = concat includes decls,
      expr = matchTerm unparsedExpr (bootParserGetId unparsedExpr)}
 
+  sem matchDecl : Unknown -> Int -> DeclInclude
+  sem matchDecl d = 
+  | 704 -> 
+    DeclLet {ident = gname d 0,
+             tyAnnot = gtype d 0,
+             tyBody = tyunknown_,
+             body = gterm d 0,
+             info = ginfo d 0}
 end
 
 mexpr
@@ -58,24 +72,31 @@ in
 let str = "include \"foo.mc\"\ninclude \"bar.mc\"\ninclude \"baz.mc\"\ninclude \"bar.mc\"\nlet x = 10\nmexpr\nx" in
 let p = parseProgram str in
 
+printLn (mlang2str p) ;
+
 -- Test includes are parsed
 utest getIncludeStrings p with ["foo.mc", "bar.mc", "baz.mc", "bar.mc"] using eqSeq eqString in
 
 -- Test expression is parsed
 utest match p.expr with TmVar {ident = ident} in ident with nameNoSym "x" using nameEqStr in 
 
--- printLn "before!" ;
--- let t = bootParserParseMLangString str in 
+printLn "before!" ;
+
+let t = bootParserParseMLangString str in 
+
+let decl = bootParserGetDecl t 0 in 
+printLn (int2string (bootParserGetId decl)) ; 
+
 -- printLn (int2string (bootParserGetId t)) ;
 -- let len = bootParserGetListLength t 0 in
 -- printLn (int2string (len)) ;
 -- let len = bootParserGetListLength t 1 in
 -- printLn (int2string (len)) ;
 
--- printLn (bootParserGetString t 0) ;
--- printLn (bootParserGetString t 1) ;
--- printLn "after!" ;
+printLn (bootParserGetString t 0) ;
+printLn (bootParserGetString t 1) ;
 
--- utest 1 with 1 in 
+printLn "after!" ;
+
 
 ()

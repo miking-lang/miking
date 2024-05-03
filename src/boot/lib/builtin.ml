@@ -146,6 +146,7 @@ let builtin =
   ; ("bootParserParseMCoreFile", f (CbootParserParseMCoreFile (None, None)))
   ; ("bootParserGetId", f CbootParserGetId)
   ; ("bootParserGetTerm", f (CbootParserGetTerm None))
+  ; ("bootParserGetDecl", f (CbootParserGetDecl None))
   ; ("bootParserGetType", f (CbootParserGetType None))
   ; ("bootParserGetString", f (CbootParserGetString None))
   ; ("bootParserGetInt", f (CbootParserGetInt None))
