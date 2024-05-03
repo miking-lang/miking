@@ -965,4 +965,10 @@ utest
   with true
 in
 
+printLn "before!" ;
+let t = bootParserParseMLangString "let x = 10\nmexpr\nx" in 
+printLn (int2string (bootParserGetId t)) ;
+printLn "after!" ;
+
+
 ()

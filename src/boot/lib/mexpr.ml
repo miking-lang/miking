@@ -1013,10 +1013,12 @@ let add_call fi ms =
   else Hashtbl.add runtimes fi (1, ms)
 
 let parseMLangString str = 
+  (* printf "Do we get here?\n"; *)
   let prog = str |> Intrinsics.Mseq.Helpers.to_ustring |> Parserutils.parse_mlang_string in 
   match prog with Program (_, _, expr) -> 
-    (match expr with TmVar (_, ident, _, _, _) -> printf "\n%s\n" (Ustring.to_utf8 ident)
-     | _ -> exit 0) ;
+    (* (match expr with TmVar (_, ident, _, _, _) -> 
+     printf "\n%s\n" (Ustring.to_utf8 ident)
+     | _ -> exit 0) ; *)
     PTreeTm expr
 
 let parseMExprString allow_free keywords str =

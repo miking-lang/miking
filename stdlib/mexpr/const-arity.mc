@@ -217,6 +217,7 @@ end
 lang BootParserArity = ConstArity + BootParserAst
   sem constArity =
   | CBootParserParseMExprString _ -> 3
+  | CBootParserParseMLangString _ -> 1
   | CBootParserParseMCoreFile _ -> 3
   | CBootParserGetId _ -> 1
   | CBootParserGetTerm _ -> 2

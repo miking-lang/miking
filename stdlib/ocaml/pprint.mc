@@ -291,6 +291,7 @@ lang OCamlPrettyPrint =
   | CTensorEq _ -> intrinsicOpTensor "equal"
   | CTensorToString _ -> intrinsicOpTensor "to_string"
   | CBootParserParseMExprString _ -> intrinsicOpBootparser "parseMExprString"
+  | CBootParserParseMLangString _ -> intrinsicOpBootparser "parseMLangString"
   | CBootParserParseMCoreFile _ -> intrinsicOpBootparser "parseMCoreFile"
   | CBootParserGetId _ -> intrinsicOpBootparser "getId"
   | CBootParserGetTerm _ -> intrinsicOpBootparser "getTerm"

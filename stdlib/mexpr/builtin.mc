@@ -123,6 +123,7 @@ let builtin = use MExprAst in
   , ("tensor2string", CTensorToString ())
   -- Boot parser
   , ("bootParserParseMExprString", CBootParserParseMExprString ())
+  , ("bootParserParseMLangString", CBootParserParseMLangString ())
   , ("bootParserParseMCoreFile", CBootParserParseMCoreFile ())
   , ("bootParserGetId", CBootParserGetId ())
   , ("bootParserGetTerm", CBootParserGetTerm ())

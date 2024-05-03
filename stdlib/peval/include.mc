@@ -130,6 +130,7 @@ let builtinsMapping = mapFromSeq cmpString [
     ("tensorEq", "TensorOpAst_CTensorEq"),
     ("tensor2string", "TensorOpAst_CTensorToString"),
     ("bootParserParseMExprString", "BootParserAst_CBootParserParseMExprString"),
+    ("bootParserParseMLangString", "BootParserAst_CBootParserParseMLangString"),
     ("bootParserParseMCoreFile", "BootParserAst_CBootParserParseMCoreFile"),
     ("bootParserGetId", "BootParserAst_CBootParserGetId"),
     ("bootParserGetTerm", "BootParserAst_CBootParserGetTerm"),

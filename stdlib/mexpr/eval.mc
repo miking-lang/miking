@@ -1007,6 +1007,13 @@ lang BootParserEval =
     else
       errorSingle [info]
         "First argument to bootParserParseMExprString incorrect record"
+  | (CBootParserParseMLangString _, [TmSeq {tms = seq}]) ->
+    let t = bootParserParseMLangString (_evalSeqOfCharsToString info seq) in
+    TmConst {
+        val = CBootParserTree {val = t},
+        ty = TyUnknown {info = NoInfo ()},
+        info = NoInfo ()
+    }
   | (CBootParserParseMCoreFile _, [
     TmRecord {bindings = bs}, TmSeq {tms = keywords}, TmSeq {tms = filename}
   ]) ->

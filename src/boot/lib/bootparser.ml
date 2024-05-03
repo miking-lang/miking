@@ -27,4 +27,6 @@ let getInfo = Mexpr.getInfo
 
 let parseMExprString = Mexpr.parseMExprString
 
+let parseMLangString = Mexpr.parseMLangString
+
 let parseMCoreFile = Mexpr.parseMCoreFile
