@@ -9,6 +9,8 @@ let getId = Mexpr.getId
 
 let getTerm = Mexpr.getTerm
 
+let getDecl = Mexpr.getDecl
+
 let getType = Mexpr.getType
 
 let getString = Mexpr.getString

@@ -1568,6 +1568,7 @@ lang BootParserCFA = CFA + ConstCFA + BootParserAst
   | CBootParserParseMCoreFile _ -> graph
   | CBootParserGetId _ -> graph
   | CBootParserGetTerm _ -> graph
+  | CBootParserGetDecl _ -> graph
   | CBootParserGetType _ -> graph
   | CBootParserGetString _ -> graph
   | CBootParserGetInt _ -> graph

@@ -44,7 +44,7 @@ lang BootParserMLang = BootParser + MLangAst
     {decls = concat includes decls,
      expr = matchTerm unparsedExpr (bootParserGetId unparsedExpr)}
 
-  sem matchDecl : Unknown -> Int -> DeclInclude
+  sem matchDecl : Unknown -> Int -> Decl
   sem matchDecl d = 
   | 704 -> 
     DeclLet {ident = gname d 0,

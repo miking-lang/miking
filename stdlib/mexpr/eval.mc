@@ -1079,6 +1079,12 @@ lang BootParserEval =
   ]) ->
     TmConst {val = CBootParserTree {val = bootParserGetTerm ptree n},
              ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
+  | (CBootParserGetDecl _, [
+    TmConst {val = CBootParserTree {val = ptree}},
+    TmConst {val = CInt {val = n}}
+  ]) ->
+    TmConst {val = CBootParserTree {val = bootParserGetDecl ptree n},
+             ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
   | (CBootParserGetType _, [
     TmConst {val = CBootParserTree {val = ptree}},
     TmConst {val = CInt {val = n}}
