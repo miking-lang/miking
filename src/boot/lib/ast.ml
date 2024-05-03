@@ -232,6 +232,7 @@ and ptree =
   | PTreeConst of const
   | PTreeInfo of info
   | PTreeError of (info * ustring) list
+  | PTreeProgram of program
 
 (* Terms in MLang *)
 and cdecl =

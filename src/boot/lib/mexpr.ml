@@ -120,7 +120,7 @@ let idNoInfo = 501
 let idError = 600
 
 (* MLang *)
-let idLangDecl = 700
+let idProgram = 700
 
 let sym = Symb.gensym ()
 
@@ -321,6 +321,15 @@ let getData = function
       (idPatOr, [fi], [], [], [], [], [], [], [], [p1; p2])
   | PTreePat (PatNot (fi, p)) ->
       (idPatNot, [fi], [], [], [], [], [], [], [], [p])
+  (* MLang *)
+  | PTreeProgram (Program (includes, tops, expr)) ->
+      let includeStrings = List.map 
+        (fun incl -> match incl with Include (_, s) -> s) 
+        includes in
+      let includeInfos = List.map 
+        (fun incl -> match incl with Include (i, _) -> i) 
+        includes in 
+      (idProgram, includeInfos, [List.length includes; List.length tops], [], [expr], includeStrings, [], [], [], [])
   (* Info *)
   | PTreeInfo (Info (fn, r1, c1, r2, c2)) ->
       (idInfo, [], [], [], [], [fn], [r1; c1; r2; c2], [], [], [])
@@ -1014,12 +1023,9 @@ let add_call fi ms =
 
 let parseMLangString str = 
   (* printf "Do we get here?\n"; *)
-  let prog = str |> Intrinsics.Mseq.Helpers.to_ustring |> Parserutils.parse_mlang_string in 
-  match prog with Program (_, _, expr) -> 
-    (* (match expr with TmVar (_, ident, _, _, _) -> 
-     printf "\n%s\n" (Ustring.to_utf8 ident)
-     | _ -> exit 0) ; *)
-    PTreeTm expr
+  let prog = str |> Intrinsics.Mseq.Helpers.to_ustring 
+                 |> Parserutils.parse_mlang_string in
+  PTreeProgram prog
 
 let parseMExprString allow_free keywords str =
   try
@@ -2005,7 +2011,6 @@ and delta (apply : info -> tm -> tm -> tm) fi c v =
       fail_constapp fi
   | CbootParserParseMLangString None, TmSeq (fi, seq)
     ->
-      printf "The magic should happen here";
       let s = tm_seq2int_seq fi seq in 
       let t = parseMLangString s in 
       TmConst (fi, CbootParserTree t)
