@@ -52,6 +52,34 @@ lang BootParserMLang = BootParser + MLangAst
              tyBody = tyunknown_,
              body = gterm d 0,
              info = ginfo d 0}
+  | 705 /-TmType-/ ->
+    DeclType {ident = gname d 0,
+              params = map (gname d) (range 1 (glistlen d 0) 1),
+              tyIdent = gtype d 0,
+              info = ginfo d 0}
+  | 706 -> 
+    DeclRecLets {bindings =
+                 create (glistlen d 0)
+                        (lam n. {ident = gname d n,
+                                 tyAnnot = gtype d n,
+                                 tyBody = TyUnknown { info = ginfo d (addi n 1)},
+                                 body = gterm d n,
+                                 info = ginfo d (addi n 1)}),
+                 info = ginfo d 0}
+  | 707 -> 
+    DeclConDef {ident = gname d 0,
+                tyIdent = gtype d 0,
+                info = ginfo d 0}
+  | 708 -> 
+    DeclUtest {test = gterm d 0,
+               expected = gterm d 1,
+               tusing = match glistlen d 0 with 0 then None () else Some (gterm d 2),
+               info = ginfo d 0}
+  | 709 -> 
+    DeclExt {ident = gname d 0,
+             tyIdent = gtype d 0,
+             effect = neqi (gint d 0) 0,
+             info = ginfo d 0}
 end
 
 mexpr
@@ -80,23 +108,50 @@ utest getIncludeStrings p with ["foo.mc", "bar.mc", "baz.mc", "bar.mc"] using eq
 -- Test expression is parsed
 utest match p.expr with TmVar {ident = ident} in ident with nameNoSym "x" using nameEqStr in 
 
-printLn "before!" ;
+-- Test TypeDecl
+let str = "type Pair = (Int, Char)\nmexpr\n1" in 
+let p = parseProgram str in 
+utest match head p.decls with DeclType {ident = ident} in ident with nameNoSym "Pair" using nameEqStr in
 
-let t = bootParserParseMLangString str in 
+-- Test Reclets
+let str = strJoin "\n" [
+  "recursive",
+  "  let isOdd  = lam n. match n with 0 then false else isEven (subi n 1)",
+  "  let isEven = lam n. match n with 0 then true  else isOdd  (subi n 1)",
+  "end",
+  "mexpr",
+  "isOdd 43"
+] in
+let p = parseProgram str in 
+printLn (mlang2str p) ;
 
-let decl = bootParserGetDecl t 0 in 
-printLn (int2string (bootParserGetId decl)) ; 
+-- Test ConDef 
+let str = strJoin "\n" [
+  "type Tree",
+  "con Leaf: Int -> Tree",
+  "con Node: (Tree, Tree) -> Tree",
+  "recursive",
+  "  let sum = lam tree.",
+  "    match tree with Node (l, r) then",
+  "    addi (sum l) (sum r)",
+  "    else (match tree with Leaf val in val)",
+  "end",
+  "mexpr",
+  "sum (Node (Leaf 10) (Leaf 20))"
+] in
+let p = parseProgram str in 
+printLn (mlang2str p) ;
 
--- printLn (int2string (bootParserGetId t)) ;
--- let len = bootParserGetListLength t 0 in
--- printLn (int2string (len)) ;
--- let len = bootParserGetListLength t 1 in
--- printLn (int2string (len)) ;
-
-printLn (bootParserGetString t 0) ;
-printLn (bootParserGetString t 1) ;
-
-printLn "after!" ;
+-- Test Utest
+-- Test ConDef 
+let str = strJoin "\n" [
+  "utest 10 with addi 7 3",
+  "utest 12 with addi 7 3 using neqi",
+  "mexpr",
+  "()"
+] in
+let p = parseProgram str in 
+printLn (mlang2str p) ;
 
 
 ()

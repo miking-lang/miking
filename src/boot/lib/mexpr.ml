@@ -360,7 +360,27 @@ let getData = function
       let fis, msgs = List.split es in
       (idError, fis, [List.length es], [], [], msgs, [], [], [], [], [])
   | PTreeDecl (TopLet (Let (fi, x, ty, tm))) -> 
-    (idDeclLet, [fi], [], [ty], [tm], [x], [], [], [], [], [])
+      (idDeclLet, [fi], [], [ty], [tm], [x], [], [], [], [], [])
+  | PTreeDecl (TopType (Type (fi, x, params, ty))) ->
+      let len = List.length params + 1 in
+      (idDeclType, [fi], [len], [ty], [], x :: params, [], [], [], [], [])
+  | PTreeDecl (TopRecLet (RecLet (fi, lst))) ->
+      let len = List.length lst in
+      let fis = fi :: List.map (fun (fi, _, _, _) -> fi) lst in
+      let strs = List.map (fun (_, s, _, _) -> s) lst in
+      let tys = List.map (fun (_, _, ty, _) -> ty) lst in
+      let tms = List.map (fun (_, _, _, t) -> t) lst in
+      (idDeclRecLets, fis, [len], tys, tms, strs, [], [], [], [], [])
+  | PTreeDecl (TopCon (Con (fi, str, ty))) ->
+      (idDeclConDef, [fi], [], [ty], [], [str], [], [], [], [], [])
+  | PTreeDecl (TopUtest (Utest (fi, tm1, tm2, tmUsing, _))) -> 
+      (match tmUsing with 
+       Some tm ->
+         (idDeclUtest, [fi], [1], [], [tm1; tm2; tm], [], [], [], [], [], [])
+       | _ ->
+         (idDeclUtest, [fi], [0], [], [tm1; tm2], [], [], [], [], [], []))
+  | PTreeDecl (TopExt (Ext (fi, str, effect, ty))) ->
+      (idDeclExt, [fi], [], [ty], [], [str], [(if effect then 1 else 0)], [], [], [], [])
   | _ ->
       failwith "The AST node is unknown"
 
