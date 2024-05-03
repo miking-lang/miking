@@ -213,6 +213,7 @@ and const =
       * int Mseq.t Mseq.t option
   | CbootParserGetId
   | CbootParserGetTerm of tm option
+  | CbootParserGetTop of tm option
   | CbootParserGetDecl of tm option
   | CbootParserGetType of tm option
   | CbootParserGetString of tm option
@@ -234,7 +235,8 @@ and ptree =
   | PTreeInfo of info
   | PTreeError of (info * ustring) list
   | PTreeProgram of program
-  | PTreeDecl of top
+  | PTreeTop of top
+  | PTreeDecl of decl
 
 (* Terms in MLang *)
 and cdecl =
@@ -882,6 +884,7 @@ let const_has_side_effect = function
   | CbootParserParseMCoreFile _
   | CbootParserGetId
   | CbootParserGetTerm _
+  | CbootParserGetTop _
   | CbootParserGetDecl _
   | CbootParserGetType _
   | CbootParserGetString _

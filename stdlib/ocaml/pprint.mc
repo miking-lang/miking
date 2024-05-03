@@ -295,6 +295,7 @@ lang OCamlPrettyPrint =
   | CBootParserParseMCoreFile _ -> intrinsicOpBootparser "parseMCoreFile"
   | CBootParserGetId _ -> intrinsicOpBootparser "getId"
   | CBootParserGetTerm _ -> intrinsicOpBootparser "getTerm"
+  | CBootParserGetTop _ -> intrinsicOpBootparser "getTop"
   | CBootParserGetDecl _ -> intrinsicOpBootparser "getDecl"
   | CBootParserGetType _ -> intrinsicOpBootparser "getType"
   | CBootParserGetString _ -> intrinsicOpBootparser "getString"

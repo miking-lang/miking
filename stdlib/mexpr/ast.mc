@@ -978,6 +978,7 @@ lang BootParserAst = ConstAst
   | CBootParserParseMCoreFile {}
   | CBootParserGetId {}
   | CBootParserGetTerm {}
+  | CBootParserGetTop {}
   | CBootParserGetDecl {}
   | CBootParserGetType {}
   | CBootParserGetString {}

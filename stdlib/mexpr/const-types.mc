@@ -280,6 +280,7 @@ lang BootParserTypeAst = TyConst + BootParserAst
       ])
   | CBootParserGetId _ -> mktybootparsetree_ d (lam b. tyarrow_ b tyint_)
   | CBootParserGetTerm _ -> mktybootparsetree_ d (lam b. tyarrows_ [b, tyint_, b])
+  | CBootParserGetTop _ -> mktybootparsetree_ d (lam b. tyarrows_ [b, tyint_, b])
   | CBootParserGetDecl _ -> mktybootparsetree_ d (lam b. tyarrows_ [b, tyint_, b])
   | CBootParserGetType _ -> mktybootparsetree_ d (lam b. tyarrows_ [b, tyint_, b])
   | CBootParserGetString _ -> mktybootparsetree_ d (lam b. tyarrows_ [b, tyint_, tystr_])

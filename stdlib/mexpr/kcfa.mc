@@ -1603,6 +1603,7 @@ lang BootParserKCFA = KCFA + ConstKCFA + BootParserAst
   | CBootParserParseMCoreFile _ -> []
   | CBootParserGetId _ -> []
   | CBootParserGetTerm _ -> []
+  | CBootParserGetTop _ -> []
   | CBootParserGetDecl _ -> []
   | CBootParserGetType _ -> []
   | CBootParserGetString _ -> []

@@ -34,8 +34,8 @@ lang BootParserMLang = BootParser + MLangAst
     let includes = map parseInclude (range 0 nIncludes 1) in 
 
     let parseDecl = lam i. 
-      let d = bootParserGetDecl p i in 
-      matchDecl d (bootParserGetId d)
+      let d = bootParserGetTop p i in 
+      matchTop d (bootParserGetId d)
     in
     let decls = map parseDecl (range 0 nTops 1) in 
 
@@ -43,9 +43,52 @@ lang BootParserMLang = BootParser + MLangAst
 
     {decls = concat includes decls,
      expr = matchTerm unparsedExpr (bootParserGetId unparsedExpr)}
+  | other -> error "We died here"
 
   sem matchDecl : Unknown -> Int -> Decl
-  sem matchDecl d = 
+  sem matchDecl d =
+  | 702 -> 
+    let nCons = glistlen d 0 in 
+    let parseCon = lam i. 
+      let ident = gname d (addi i 1) in 
+      let ty = gtype d i in 
+      {ident = ident, tyIdent = ty}
+    in 
+
+    DeclSyn {ident = gname d 0,
+             params = [],
+             defs = map parseCon (range 0 nCons 1),
+             includes = [],
+             info = ginfo d 0}
+  | 703 -> 
+    let nCases = glistlen d 0 in 
+    let parseCase = lam i. 
+      {pat = gpat d i, thn = gterm d i}
+    in 
+
+    DeclSem {ident = gname d 0,
+             tyAnnot = gtype d 0,
+             tyBody = tyunknown_,
+             args = [],
+             cases = map parseCase (range 0 nCases 1),
+             includes = [],
+             info = ginfo d 0}
+
+
+  sem matchTop : Unknown -> Int -> Decl
+  sem matchTop d = 
+  | 701 -> 
+    -- Todo includes
+    let nIncludes = glistlen d 0 in 
+    let nDecls = glistlen d 1 in 
+
+    let parseDecl = lam i. 
+      let a = bootParserGetDecl d i in 
+      matchDecl a (bootParserGetId a)
+    in
+    DeclLang {ident = gname d 0,
+              includes = [],
+              decls = map parseDecl (range 0 nDecls 1)}
   | 704 -> 
     DeclLet {ident = gname d 0,
              tyAnnot = gtype d 0,
@@ -147,6 +190,42 @@ printLn (mlang2str p) ;
 let str = strJoin "\n" [
   "utest 10 with addi 7 3",
   "utest 12 with addi 7 3 using neqi",
+  "mexpr",
+  "()"
+] in
+let p = parseProgram str in 
+printLn (mlang2str p) ;
+
+-- Test empty language
+let str = strJoin "\n" [
+  "lang L1",
+  "end",
+  "mexpr",
+  "()"
+] in
+let p = parseProgram str in 
+printLn (mlang2str p) ;
+
+-- Test language with empty constructor
+let str = strJoin "\n" [
+  "lang IntArith",
+  "  syn Expr =",
+  "  | IntExpr Int",
+  "  | AddExpr (Expr, Expr)",
+  "end",
+  "mexpr",
+  "()"
+] in
+let p = parseProgram str in 
+printLn (mlang2str p) ;
+
+-- Test language with semantic function
+let str = strJoin "\n" [
+  "lang IntArith",
+  "  sem f =",
+  "  | 0 -> 0",
+  "  | _ -> 1",
+  "end",
   "mexpr",
   "()"
 ] in
