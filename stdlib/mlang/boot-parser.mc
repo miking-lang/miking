@@ -62,14 +62,19 @@ lang BootParserMLang = BootParser + MLangAst
              info = ginfo d 0}
   | 703 -> 
     let nCases = glistlen d 0 in 
+    let nArgs = glistlen d 1 in 
     let parseCase = lam i. 
       {pat = gpat d i, thn = gterm d i}
     in 
 
+    let args = map 
+      (lam i. {ident = gname d i, tyAnnot = gtype d i})
+      (range 1 (addi 1 nArgs) 1) in 
+
     DeclSem {ident = gname d 0,
              tyAnnot = gtype d 0,
              tyBody = tyunknown_,
-             args = [],
+             args = args,
              cases = map parseCase (range 0 nCases 1),
              includes = [],
              info = ginfo d 0}
@@ -82,12 +87,15 @@ lang BootParserMLang = BootParser + MLangAst
     let nIncludes = glistlen d 0 in 
     let nDecls = glistlen d 1 in 
 
+    let includes = map (gname d) (range 1 (addi nIncludes 1) 1) in 
+
     let parseDecl = lam i. 
       let a = bootParserGetDecl d i in 
       matchDecl a (bootParserGetId a)
     in
     DeclLang {ident = gname d 0,
-              includes = [],
+              info = ginfo d 0,
+              includes = includes,
               decls = map parseDecl (range 0 nDecls 1)}
   | 704 -> 
     DeclLet {ident = gname d 0,
@@ -232,5 +240,36 @@ let str = strJoin "\n" [
 let p = parseProgram str in 
 printLn (mlang2str p) ;
 
+-- Test language with semantic function
+let str = strJoin "\n" [
+  "lang Base",
+  "  sem f =",
+  "end",
+  "lang L1 = Base",
+  "  sem f =",
+  "  | 0 -> 0",
+  "end",
+  "lang L2 = Base",
+  "  sem f =",
+  "  | _ -> 1",
+  "end",
+  "lang L12 = L1 + L2",
+  "end",
+  "mexpr",
+  "()"
+] in
+let p = parseProgram str in 
+printLn (mlang2str p) ;
 
+-- Test semantic function with multiple args
+let str = strJoin "\n" [
+  "lang IntArith",
+  "  sem f x y =",
+  "  | _ -> addi x y",
+  "end",
+  "mexpr",
+  "()"
+] in
+let p = parseProgram str in 
+printLn (mlang2str p) ;
 ()

@@ -391,11 +391,20 @@ let getData = function
       let tys = List.map (fun (_, _, _, ty) -> ty) lst in 
 
       (idDeclSyn, fis, [List.length decls], tys, [], ident :: allStr, [], [], [], [], [], [])
-  | PTreeDecl (Inter (fi, ident, ty, _, cases)) ->
-      let pats = List.map fst cases in
-      let tms = List.map snd cases in 
+  | PTreeDecl (Inter (fi, ident, ty, paramListOpt, cases)) ->
+      (match paramListOpt with Some (paramList) -> 
+         let argIdents = List.map (fun x -> match x with Param (_, s, _) -> s) paramList in
+         let argTys = List.map (fun x -> match x with Param (_, _, ty) -> ty) paramList in
 
-      (idDeclSem, [fi], [List.length cases], [ty], tms, [ident], [], [], [], pats, [], [])
+         let pats = List.map fst cases in
+         let tms = List.map snd cases in 
+ 
+         (idDeclSem, [fi], [List.length cases ; List.length paramList], ty :: argTys, tms, ident :: argIdents, [], [], [], pats, [], [])
+       | None -> 
+         let pats = List.map fst cases in
+         let tms = List.map snd cases in 
+ 
+         (idDeclSem, [fi], [List.length cases], [ty], tms, [ident], [], [], [], pats, [], []))
   | _ ->
       failwith "The AST node is unknown"
 
