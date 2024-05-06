@@ -143,6 +143,7 @@ let builtin =
     (* MCore intrinsics: Boot parser *)
   ; ("bootParserParseMExprString", f (CbootParserParseMExprString (None, None)))
   ; ("bootParserParseMLangString", f (CbootParserParseMLangString None))
+  ; ("bootParserParseMLangFile", f (CbootParserParseMLangFile None))
   ; ("bootParserParseMCoreFile", f (CbootParserParseMCoreFile (None, None)))
   ; ("bootParserGetId", f CbootParserGetId)
   ; ("bootParserGetTerm", f (CbootParserGetTerm None))

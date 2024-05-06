@@ -1565,6 +1565,7 @@ lang BootParserCFA = CFA + ConstCFA + BootParserAst
   sem generateConstraintsConst graph info ident =
   | CBootParserParseMExprString _ -> graph
   | CBootParserParseMLangString _ -> graph
+  | CBootParserParseMLangFile _ -> graph
   | CBootParserParseMCoreFile _ -> graph
   | CBootParserGetId _ -> graph
   | CBootParserGetTerm _ -> graph

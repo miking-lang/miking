@@ -889,6 +889,7 @@ lang BootParserPrettyPrint = BootParserAst + ConstPrettyPrint
   sem getConstStringCode (indent : Int) =
   | CBootParserParseMExprString _ -> "bootParserParseMExprString"
   | CBootParserParseMLangString _ -> "bootParserParseMLangString"
+  | CBootParserParseMLangFile _ -> "bootParserParseMLangFile"
   | CBootParserParseMCoreFile _ -> "bootParserParseMCoreFile"
   | CBootParserGetId _ -> "bootParserGetId"
   | CBootParserGetTerm _ -> "bootParserGetTerm"

@@ -842,6 +842,10 @@ let arity = function
       1
   | CbootParserParseMLangString Some _ -> 
       0
+  | CbootParserParseMLangFile None -> 
+      1
+  | CbootParserParseMLangFile Some _ -> 
+      0
   | CbootParserParseMCoreFile (None, None) ->
       3
   | CbootParserParseMCoreFile (Some _, None) ->
@@ -1107,6 +1111,21 @@ let parseMLangString str =
   try
     let prog = str |> Intrinsics.Mseq.Helpers.to_ustring 
                    |> Parserutils.parse_mlang_string in
+    PTreeProgram prog
+  with (Lexer.Lex_error _ | Msg.Error _ | Parser.Error) as e ->
+    PTreeError
+      [ ( match Parserutils.error_to_error_message e with
+        | Some (id, _, info, _) ->
+            (info, id2str id)
+        | None ->
+            (NoInfo, us (Printexc.to_string e)) ) ]
+
+let parseMLangFile filename = 
+  try
+    let prog = filename |> Intrinsics.Mseq.Helpers.to_ustring 
+                        |> Ustring.to_utf8 
+                        |> Utils.normalize_path 
+                        |> Parserutils.local_parse_mcore_file in 
     PTreeProgram prog
   with (Lexer.Lex_error _ | Msg.Error _ | Parser.Error) as e ->
     PTreeError
@@ -2103,8 +2122,15 @@ and delta (apply : info -> tm -> tm -> tm) fi c v =
       let s = tm_seq2int_seq fi seq in 
       let t = parseMLangString s in 
       TmConst (fi, CbootParserTree t)
-      (* TmConst (fi, CbootParserParseMLangString (Some s)) *)
   | CbootParserParseMLangString _, _ 
+    -> 
+      fail_constapp fi
+  | CbootParserParseMLangFile None, TmSeq (fi, seq)
+    ->
+      let s = tm_seq2int_seq fi seq in 
+      let t = parseMLangFile s in 
+      TmConst (fi, CbootParserTree t)
+  | CbootParserParseMLangFile _, _ 
     -> 
       fail_constapp fi
   | CbootParserParseMCoreFile (None, None), TmRecord (_, r) -> (

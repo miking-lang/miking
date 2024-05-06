@@ -1014,6 +1014,13 @@ lang BootParserEval =
         ty = TyUnknown {info = NoInfo ()},
         info = NoInfo ()
     }
+  | (CBootParserParseMLangFile _, [TmSeq {tms = seq}]) ->
+    let t = bootParserParseMLangFile (_evalSeqOfCharsToString info seq) in
+    TmConst {
+        val = CBootParserTree {val = t},
+        ty = TyUnknown {info = NoInfo ()},
+        info = NoInfo ()
+    }
   | (CBootParserParseMCoreFile _, [
     TmRecord {bindings = bs}, TmSeq {tms = keywords}, TmSeq {tms = filename}
   ]) ->

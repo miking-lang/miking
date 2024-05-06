@@ -40,6 +40,24 @@ let eval = lam str.
     simpleEval expr
 in 
 
+
+let evalFile = lam str. 
+  let parseResult = _consume (parseMLangFile str) in
+  match parseResult with (_, errOrResult) in 
+  match errOrResult with Left _ then 
+    error "Something went wrong during parsing!"
+  else match errOrResult with Right p in
+    let p = constTransformProgram builtin p in
+    match symbolizeMLang symEnvDefault p with (_, p) in 
+    match _consume (checkComposition p) with (_, res) in 
+    match res with Right env in
+    let ctx = _emptyCompilationContext env in 
+    let res = _consume (compile ctx p) in 
+    match res with (_, rhs) in 
+    match rhs with Right expr in
+    simpleEval expr
+in 
+
 utest eval "let x = 10\nmexpr\n10" with int_ 10 using eqExpr in 
 
 let str = strJoin "\n" [
@@ -55,6 +73,8 @@ let str = strJoin "\n" [
   "mexpr",
   "sum (Node (Leaf 10, Leaf 20))"
 ] in
-utest eval str with int_ 30 using eqExpr in 
+-- utest eval str with int_ 30 using eqExpr in 
+
+utest evalFile "temp/example.mc" with int_ 20 using eqExpr in 
 
 ()

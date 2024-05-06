@@ -93,7 +93,7 @@ lang ConstSideEffect = ConstSideEffectBase + MExprAst
   | CTensorReshapeExn _ | CTensorCopy _ | CTensorTransposeExn _
   | CTensorSliceExn _ | CTensorSubExn _ | CTensorIterSlice _ |  CTensorEq _
   | CTensorToString _ -> true
-  | CBootParserParseMExprString _ | CBootParserParseMCoreFile _
+  | CBootParserParseMExprString _ | CBootParserParseMCoreFile _ | CBootParserParseMLangFile _
   | CBootParserParseMLangString _ | CBootParserGetTop _ | CBootParserGetDecl _
   | CBootParserGetId _ | CBootParserGetTerm _ | CBootParserGetType _
   | CBootParserGetString _ | CBootParserGetInt _ | CBootParserGetFloat _

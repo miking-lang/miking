@@ -33,4 +33,6 @@ let parseMExprString = Mexpr.parseMExprString
 
 let parseMLangString = Mexpr.parseMLangString
 
+let parseMLangFile = Mexpr.parseMLangFile
+
 let parseMCoreFile = Mexpr.parseMCoreFile

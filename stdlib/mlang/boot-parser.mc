@@ -9,6 +9,17 @@ include "seq.mc"
 include "result.mc"
 
 lang BootParserMLang = BootParser + MLangAst
+  sem parseMLangFile : all a. String -> Result a (Info, String) MLangProgram
+  sem parseMLangFile =| filepath -> 
+    let p = bootParserParseMLangFile filepath in
+    if eqi (bootParserGetId p) 600 /- Error -/ then
+      let n = glistlen p 0 in
+      let infos = create n (lam i. ginfo p i) in
+      let msgs = create n (lam i. gstr p i) in
+      foldl1 result.withAnnotations (zipWith (curry result.err) infos msgs)
+    else
+      result.ok (matchProgram p (bootParserGetId p))
+
   sem parseMLangString : all a. String -> Result a (Info, String) MLangProgram
   sem parseMLangString =| str ->
     let p = bootParserParseMLangString str in

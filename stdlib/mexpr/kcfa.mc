@@ -1600,6 +1600,7 @@ lang BootParserKCFA = KCFA + ConstKCFA + BootParserAst
   sem generateConstraintsConst info ident =
   | CBootParserParseMExprString _ -> []
   | CBootParserParseMLangString _ -> []
+  | CBootParserParseMLangFile _ -> []
   | CBootParserParseMCoreFile _ -> []
   | CBootParserGetId _ -> []
   | CBootParserGetTerm _ -> []
