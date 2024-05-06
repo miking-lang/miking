@@ -3,7 +3,7 @@ include "ocaml/ast.mc"
 
 let tyts_ = tytuple_ [tyint_, tyunknown_]
 let impl = lam arg : {expr : String, ty : use Ast in Type }.
-  [ { expr = arg.expr, ty = arg.ty, libraries = ["rtppl-support"], cLibraries = [] } ]
+  [ { expr = arg.expr, ty = arg.ty, libraries = ["rtppl-support"], cLibraries = ["rt"] } ]
 
 let timespec = otytuple_ [tyint_, tyint_]
 let readDistTy = lam ty. otyarray_ (otytuple_ [tyfloat_, ty])
