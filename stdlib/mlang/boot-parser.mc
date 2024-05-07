@@ -1,11 +1,14 @@
 include "ast.mc"
 include "ast-builder.mc"
 include "pprint.mc"
+include "compile.mc"
 
+include "mexpr/eval.mc"
 include "mexpr/boot-parser.mc"
 
 include "name.mc"
 include "seq.mc"
+include "option.mc"
 include "result.mc"
 
 lang BootParserMLang = BootParser + MLangAst
@@ -147,6 +150,7 @@ end
 mexpr
 use BootParserMLang in 
 use MLangPrettyPrint in 
+use MExprEq in 
 
 let parseProgram = lam str.
   match _consume (parseMLangString str) with (_, Right p) in p
@@ -162,7 +166,7 @@ in
 let str = "include \"foo.mc\"\ninclude \"bar.mc\"\ninclude \"baz.mc\"\ninclude \"bar.mc\"\nlet x = 10\nmexpr\nx" in
 let p = parseProgram str in
 
-printLn (mlang2str p) ;
+-- printLn (mlang2str p) ;
 
 -- Test includes are parsed
 utest getIncludeStrings p with ["foo.mc", "bar.mc", "baz.mc", "bar.mc"] using eqSeq eqString in
@@ -185,7 +189,9 @@ let str = strJoin "\n" [
   "isOdd 43"
 ] in
 let p = parseProgram str in 
-printLn (mlang2str p) ;
+match head p.decls with DeclRecLets d in 
+utest map (lam b. nameGetStr b.ident) d.bindings with ["isOdd", "isEven"] using eqSeq eqString in 
+-- printLn (mlang2str p) ;
 
 -- Test ConDef 
 let str = strJoin "\n" [
@@ -202,10 +208,15 @@ let str = strJoin "\n" [
   "sum (Node (Leaf 10) (Leaf 20))"
 ] in
 let p = parseProgram str in 
-printLn (mlang2str p) ;
+match head p.decls with DeclType d in 
+utest d.ident with nameNoSym "Tree" using nameEqStr in 
+match get p.decls 1 with DeclConDef d in 
+utest d.ident with nameNoSym "Leaf" using nameEqStr in 
+match get p.decls 2 with DeclConDef d in 
+utest d.ident with nameNoSym "Node" using nameEqStr in 
+-- printLn (mlang2str p) ;
 
 -- Test Utest
--- Test ConDef 
 let str = strJoin "\n" [
   "utest 10 with addi 7 3",
   "utest 12 with addi 7 3 using neqi",
@@ -213,7 +224,13 @@ let str = strJoin "\n" [
   "()"
 ] in
 let p = parseProgram str in 
-printLn (mlang2str p) ;
+match head p.decls with DeclUtest d in 
+utest d.test with int_ 10 using eqExpr in 
+utest optionIsNone d.tusing with true in
+match get p.decls 1 with DeclUtest d in 
+utest d.test with int_ 12 using eqExpr in 
+utest optionIsSome d.tusing with true in
+-- printLn (mlang2str p) ;
 
 -- Test empty language
 let str = strJoin "\n" [
@@ -223,9 +240,12 @@ let str = strJoin "\n" [
   "()"
 ] in
 let p = parseProgram str in 
-printLn (mlang2str p) ;
+match head p.decls with DeclLang d in
+utest nameGetStr d.ident with "L1" in
+utest length d.decls with 0 in 
+-- printLn (mlang2str p) ;
 
--- Test language with empty constructor
+-- Test language with syn definition
 let str = strJoin "\n" [
   "lang IntArith",
   "  syn Expr =",
@@ -236,7 +256,13 @@ let str = strJoin "\n" [
   "()"
 ] in
 let p = parseProgram str in 
-printLn (mlang2str p) ;
+match head p.decls with DeclLang d in
+utest nameGetStr d.ident with "IntArith" in
+match head d.decls with DeclSyn s in 
+utest nameGetStr s.ident with "Expr" in 
+utest nameGetStr (head s.defs).ident with "IntExpr" in 
+utest nameGetStr (get s.defs 1).ident with "AddExpr" in
+-- printLn (mlang2str p) ;
 
 -- Test language with semantic function
 let str = strJoin "\n" [
@@ -249,7 +275,13 @@ let str = strJoin "\n" [
   "()"
 ] in
 let p = parseProgram str in 
-printLn (mlang2str p) ;
+match head p.decls with DeclLang d in
+utest nameGetStr d.ident with "IntArith" in
+match head d.decls with DeclSem s in 
+utest nameGetStr s.ident with "f" in 
+utest (head s.cases).thn with int_ 0 using eqExpr in 
+utest (get s.cases 1).thn with int_ 1 using eqExpr in 
+-- printLn (mlang2str p) ;
 
 -- Test language with semantic function
 let str = strJoin "\n" [
@@ -270,7 +302,10 @@ let str = strJoin "\n" [
   "()"
 ] in
 let p = parseProgram str in 
-printLn (mlang2str p) ;
+match get p.decls 3 with DeclLang d in
+utest nameGetStr d.ident with "L12" in
+utest d.includes with [nameNoSym "L1", nameNoSym "L2"] using eqSeq nameEqStr in
+-- printLn (mlang2str p) ;
 
 -- Test semantic function with multiple args
 let str = strJoin "\n" [
@@ -282,5 +317,11 @@ let str = strJoin "\n" [
   "()"
 ] in
 let p = parseProgram str in 
-printLn (mlang2str p) ;
+let p = parseProgram str in 
+match head p.decls with DeclLang d in
+utest nameGetStr d.ident with "IntArith" in
+match head d.decls with DeclSem s in 
+utest nameGetStr s.ident with "f" in 
+utest map (lam a. nameGetStr a.ident) s.args with ["x", "y"] using eqSeq eqString in 
+-- printLn (mlang2str p) ;
 ()
