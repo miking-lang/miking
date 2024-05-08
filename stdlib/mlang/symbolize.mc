@@ -8,6 +8,7 @@ include "./pprint.mc"
 include "./ast.mc"
 
 include "mexpr/symbolize.mc"
+include "mexpr/ast-builder.mc"
 
 let fst : all a. all b. (a, b) -> a = lam p.
     match p with (res, _) in res
@@ -134,6 +135,7 @@ lang MLangSym = MLangAst + MExprSym
         match symbolizeTyAnnot env t.tyAnnot with (tyVarEnv, tyAnnot) in
         match setSymbol env.currentEnv.varEnv t.ident with (varEnv, ident) in
         let env = updateVarEnv env varEnv in 
+        let env = updateTyVarEnv env tyVarEnv in 
         let decl = DeclLet {t with ident = ident,
                             tyAnnot = tyAnnot,
                             body = symbolizeExpr env t.body} in 
@@ -472,6 +474,12 @@ lang TestLang = MLangSym + SymCheck + MLangPrettyPrint
             foldl (_andFold isFullySymbolizedPat) (lam. true) casePats, 
             foldl (_andFold isFullySymbolizedExpr) (lam. true) caseThns
         ]
+    | DeclLet l ->
+        foldl _and (lam. true) [
+            lam. nameHasSym l.ident,
+            isFullySymbolizedType l.tyAnnot,
+            isFullySymbolizedExpr l.body
+        ]
     | DeclType l -> 
         _and (lam. nameHasSym l.ident) (_and 
              (lam. (forAll nameHasSym l.params))
@@ -736,4 +744,13 @@ let p : MLangProgram = {
 match symbolizeMLang symEnvDefault p with (_, p) in 
 utest isFullySymbolizedProgram p () with true in
 
+-- Test type variable, 'all', and let type annotations
+let p : MLangProgram = {
+    decls = [decl_let_ "id" 
+                       (tyall_ "a" (tyarrow_ (tyvar_ "a") (tyvar_ "a"))) 
+                       (lam_ "x" (tyvar_ "a") (var_ "x"))],
+    expr = appf1_ (var_ "id") (int_ 1)
+} in 
+match symbolizeMLang symEnvDefault p with (_, p) in 
+utest isFullySymbolizedProgram p () with true in
 ()
