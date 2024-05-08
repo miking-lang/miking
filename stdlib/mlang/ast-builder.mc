@@ -94,6 +94,13 @@ let decl_syn_ = use MLangAst in
   lam s. lam defs: [(String, Type)].
   decl_nsyn_ (nameNoSym s) defs
 
+let decl_syn_params_ = use MLangAst in 
+  lam s : String. lam ss : [String]. lam defs : [(String, Type)].
+  DeclSyn {ident = nameNoSym s,
+           defs = map (lam t. {ident = nameNoSym t.0, tyIdent = t.1}) defs,
+           params = map nameNoSym ss,
+           includes = [],
+           info = NoInfo {}}
 
 let decl_nsemty_ = use MLangAst in
   lam n. lam ty.

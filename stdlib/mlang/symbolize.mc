@@ -320,17 +320,28 @@ lang MLangSym = MLangAst + MExprSym
         match mapAccumL symbDeclType langEnv typeDecls with (langEnv, typeDecls) in 
 
         -- 3. Symbolize syntax constructors (add defs to conEnv)
-        let symbDef = lam langEnv : LangEnv. lam def : {ident : Name, tyIdent : Type}. 
+        let symbDef = lam synIdents : [Name]. lam params : [Name]. lam langEnv : LangEnv. lam def : {ident : Name, tyIdent : Type}. 
             let ident = nameSym (nameGetStr def.ident) in
 
             let env = convertNameEnv (convertLangEnv langEnv) in 
+
+            -- Add syn params  and syn idents to tyVarEnv
+            let paramPairs = map (lam p. (nameGetStr p, p)) params in 
+            let paramMap = mapFromSeq cmpString paramPairs in 
+            let identPairs = map (lam p. (nameGetStr p, p)) synIdents in 
+            let synMap = mapFromSeq cmpString identPairs in 
+
+            let m = mapUnion env.currentEnv.tyVarEnv (mapUnion paramMap synMap) in 
+            let env = updateTyVarEnv env m in 
+
             let tyIdent = symbolizeType env def.tyIdent in
 
             (langEnv, {ident = ident, tyIdent = tyIdent})
         in
         let symbSynConstructors = lam langEnv. lam synDecl. 
             match synDecl with DeclSyn s in 
-            match mapAccumL symbDef langEnv s.defs with (langEnv, defs) in 
+            let synIdents = map (lam x. match x with DeclSyn x in x.ident) synDecls in 
+            match mapAccumL (symbDef synIdents s.params) langEnv s.defs with (langEnv, defs) in 
             let decl = DeclSyn {s with defs = defs} in
             let constrs = map (lam d. d.ident) defs in 
             let langEnv = {langEnv with 
@@ -750,6 +761,17 @@ let p : MLangProgram = {
                        (tyall_ "a" (tyarrow_ (tyvar_ "a") (tyvar_ "a"))) 
                        (lam_ "x" (tyvar_ "a") (var_ "x"))],
     expr = appf1_ (var_ "id") (int_ 1)
+} in 
+match symbolizeMLang symEnvDefault p with (_, p) in 
+utest isFullySymbolizedProgram p () with true in
+
+-- Test syn with type variable
+-- Test type variable, 'all', and let type annotations
+let p : MLangProgram = {
+    decls = [decl_lang_ "SomeListLang" [
+        decl_syn_params_ "MyList" ["a"] [("Nil", tyunit_), ("Cons", tytuple_ [tyvar_ "a", tyvar_ "MyList"])] 
+    ]],
+    expr = uunit_
 } in 
 match symbolizeMLang symEnvDefault p with (_, p) in 
 utest isFullySymbolizedProgram p () with true in
