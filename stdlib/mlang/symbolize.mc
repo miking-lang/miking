@@ -67,6 +67,9 @@ let convertLangEnv : LangEnv -> NameEnv = lam langEnv.
 let convertNameEnv : NameEnv -> SymEnv = lam env.
     {_symEnvEmpty with currentEnv = env}
 
+let updateEnv : SymEnv -> LangEnv -> SymEnv = lam symEnv. lam langEnv.
+    {symEnv with currentEnv = mergeNameEnv (symEnv.currentEnv) (convertLangEnv langEnv)}
+
 
 let combineMaps : all a. [Map String a] -> Map String [a] = lam maps. 
     let addMap = lam acc : Map String [a]. lam m : Map String a. 
@@ -142,11 +145,12 @@ lang MLangSym = MLangAst + MExprSym
         (env, decl)
     | DeclType t -> 
         match setSymbol env.currentEnv.tyConEnv t.ident with (tyConEnv, ident) in
+        let env = updateTyConEnv env tyConEnv in 
         match mapAccumL setSymbol env.currentEnv.tyVarEnv t.params with (tyVarEnv, params) in
         let decl = DeclType {t with ident = ident,
                              params = params,
                              tyIdent = symbolizeType (updateTyVarEnv env tyVarEnv) t.tyIdent} in 
-        let env = updateTyConEnv env tyConEnv in 
+        let env = updateTyVarEnv env tyVarEnv in 
         (env, decl)
     | DeclRecLets t -> 
         -- Generate fresh symbols for all identifiers and add to the environment
@@ -306,7 +310,7 @@ lang MLangSym = MLangAst + MExprSym
             -- Throw an error if a DeclSyn is  or defined with the same identifier
             errorOnNameConflict langEnv.syns ident langIdent t.info ; 
 
-            let env = convertNameEnv (convertLangEnv langEnv) in 
+            let env = updateEnv env langEnv in 
             match mapAccumL setSymbol env.currentEnv.tyVarEnv t.params with (_, params) in
 
             let decl = DeclType {t with ident = ident,
@@ -323,7 +327,7 @@ lang MLangSym = MLangAst + MExprSym
         let symbDef = lam synIdents : [Name]. lam params : [Name]. lam langEnv : LangEnv. lam def : {ident : Name, tyIdent : Type}. 
             let ident = nameSym (nameGetStr def.ident) in
 
-            let env = convertNameEnv (convertLangEnv langEnv) in 
+            let env = updateEnv env langEnv in 
 
             -- Add syn params  and syn idents to tyVarEnv
             let paramPairs = map (lam p. (nameGetStr p, p)) params in 
@@ -391,7 +395,7 @@ lang MLangSym = MLangAst + MExprSym
 
             let ident = nameSym (nameGetStr s.ident) in 
 
-            let env = convertNameEnv (convertLangEnv langEnv) in
+            let env = updateEnv env langEnv in
 
             let tyAnnot = symbolizeType env s.tyAnnot in 
             let tyBody = symbolizeType env s.tyBody in 
@@ -420,7 +424,7 @@ lang MLangSym = MLangAst + MExprSym
         let symbSem2 = lam langEnv : LangEnv. lam declSem. 
             match declSem with DeclSem s in 
 
-            let env = convertNameEnv (convertLangEnv langEnv) in
+            let env = updateEnv env langEnv in
             
             let symbArg = lam env : SymEnv. lam arg : {ident : Name, tyAnnot : Type}. 
                 match setSymbol env.currentEnv.varEnv arg.ident with (varEnv, ident) in 
@@ -495,6 +499,8 @@ lang TestLang = MLangSym + SymCheck + MLangPrettyPrint
         _and (lam. nameHasSym l.ident) (_and 
              (lam. (forAll nameHasSym l.params))
              (isFullySymbolizedType l.tyIdent))
+    | DeclConDef l ->
+        _and (lam. nameHasSym l.ident) (isFullySymbolizedType l.tyIdent)
 
     sem isFullySymbolizedProgram : MLangProgram -> () -> Bool
     sem isFullySymbolizedProgram =
@@ -576,6 +582,18 @@ match l1 with DeclLang l in
 utest isFullySymbolizedDecl l1 () with true in 
 utest isFullySymbolized p.expr with true in 
 utest nameHasSym l.ident with true in
+
+-- Test DeclType wand DeclConDef with polymorhpic parameters
+let p : MLangProgram = {
+    decls = [
+        decl_type_ "Option" ["a"] (tyvariant_ []),
+        decl_condef_ "None" (tyall_ "a" (tyarrow_ tyunit_ (tyapp_ (tycon_ "Option") (tyvar_ "a")))),
+        decl_condef_ "Some" (tyall_ "a" (tyarrow_ (tyvar_ "a") (tyapp_ (tycon_ "Option") (tyvar_ "a"))))
+    ],
+    expr = uunit_
+} in 
+match symbolizeMLang symEnvDefault p with (_, p) in 
+utest isFullySymbolizedProgram p () with true in
 
 let p : MLangProgram = {
     decls = [
@@ -781,6 +799,19 @@ let p = {
     decls = [decl_lang_ "SomeLang" [
         decl_semty_ "id" (tyall_ "a" (tyarrow_ (tyvar_ "a") (tyvar_ "a"))) 
     ]],
+    expr = uunit_
+} in 
+match symbolizeMLang symEnvDefault p with (_, p) in 
+utest isFullySymbolizedProgram p () with true in
+
+-- Test usage of type defined outside of language used in language
+let p : MLangProgram = {
+    decls = [
+        decl_type_ "Foo" [] tyint_,
+        decl_lang_ "SomeListLang" [
+            decl_syn_ "MyList" [("Nil", tycon_ "Foo")] 
+        ]
+    ],
     expr = uunit_
 } in 
 match symbolizeMLang symEnvDefault p with (_, p) in 
