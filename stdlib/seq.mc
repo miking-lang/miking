@@ -472,6 +472,7 @@ utest filterOption [Some 3, Some 2, None (), Some 4] with [3, 2, 4] using eqSeq 
 utest filterOption [None (), None ()] with [] using eqSeq eqi
 utest filterOption [None (), Some 1, None (), Some 1] with [1, 1] using eqSeq eqi
 
+-- Find the first element in a sequence satisfying a predicate in a list.
 recursive
   let find : all a. (a -> Bool) -> [a] -> Option a = lam p. lam seq.
     if null seq then None ()
@@ -479,8 +480,44 @@ recursive
     else find p (tail seq)
 end
 
+let eqRec = lam lhs. lam rhs.and (eqi lhs.x rhs.x) (eqi lhs.y rhs.y)
+utest find (lam r. eqi r.x 1) [{x=1,y=1},{x=2,y=2},{x=1,y=-1}] 
+  with Some {x=1, y=1} using optionEq eqRec
 utest find (lam x. eqi x 2) [4,1,2] with Some 2 using optionEq eqi
 utest find (lam x. lti x 1) [4,1,2] with None () using optionEq eqi
+
+-- Find the last element in a sequence satisfying a predicate in a list.
+let findLast : all a. (a -> Bool) -> [a] -> Option a = lam p. lam seq.
+  find p (reverse seq)
+
+utest findLast (lam r. eqi r.x 1) [{x=1,y=1},{x=2,y=2},{x=1,y=-1}] 
+  with Some {x=1, y=-1} using optionEq eqRec
+utest findLast (lam x. lti x 1) [4,1,2] with None () using optionEq eqi
+
+-- Find the first index in a sequence whose element satisfies a predicate
+let findi : all a. (a -> Bool) -> [a] -> Option Int = lam p. lam seq.
+  recursive let work = lam p. lam seq. lam i.
+    if null seq then None ()
+    else if p (head seq) then Some i
+    else work p (tail seq) (addi i 1)
+  in
+  work p seq 0
+
+utest findi (lam x. eqi x 5) [4,5,2,5] with Some 1 using optionEq eqi
+utest findi (lam x. eqi x 0) [4,1,2] with None () using optionEq eqi
+
+-- Find the last index in a sequence whose element satisfies a predicate
+let findiLast : all a. (a -> Bool) -> [a] -> Option Int = lam p. lam seq.
+  recursive let work = lam p. lam seq. lam i.
+    if null seq then None ()
+    else if p (last seq) then Some i
+    else work p (init seq) (subi i 1)
+  in
+  work p seq (subi (length seq) 1)
+
+utest findiLast (lam x. eqi x 5) [4,5,2,5] with Some 3 using optionEq eqi
+utest findiLast (lam x. eqi x 0) [4,1,2] with None () using optionEq eqi
+
 
 recursive
   let findMap : all a. all b. (a -> Option b) -> [a] -> Option b = lam f. lam seq.
