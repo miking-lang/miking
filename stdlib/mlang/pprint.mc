@@ -34,6 +34,16 @@ lang UsePrettyPrint = PrettyPrint + UseAst + MLangIdentifierPrettyPrint
                 inexpr])
 end
 
+lang TyUsePrettyPrint = MExprPrettyPrint + TyUseAst + MLangIdentifierPrettyPrint
+  sem getTypeStringCode (indent : Int) (env : PprintEnv) =
+  | TyUse t -> 
+    match pprintLangName env t.ident with (env, ident) in
+    match getTypeStringCode indent env t.inty with (env, inty) in
+    (env, join ["use ", ident, pprintNewline indent,
+                "in", pprintNewline indent,
+                inty])
+end
+
 
 lang DeclPrettyPrint = PrettyPrint + MLangIdentifierPrettyPrint
   sem pprintDeclCode : Int -> PprintEnv -> Decl -> (PprintEnv, String)
@@ -242,14 +252,15 @@ end
 
 lang MLangPrettyPrint = MExprPrettyPrint +
 
-  -- Extended expressions
-  UsePrettyPrint +
+  -- Extended expressions and types
+  UsePrettyPrint + TyUsePrettyPrint + 
 
   -- Declarations
   DeclPrettyPrint + LangDeclPrettyPrint + SynDeclPrettyPrint +
   SemDeclPrettyPrint + LetDeclPrettyPrint + TypeDeclPrettyPrint +
   RecLetsDeclPrettyPrint + DataDeclPrettyPrint + UtestDeclPrettyPrint +
   ExtDeclPrettyPrint + IncludeDeclPrettyPrint + SynProdExtDeclAstPrettyPrint + 
+  
 
   -- Top-level pretty printer
   MLangTopLevelPrettyPrint

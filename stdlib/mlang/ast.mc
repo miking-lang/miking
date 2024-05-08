@@ -35,6 +35,19 @@ lang UseAst = Ast
     (acc, TmUse {t with inexpr = inexpr})
 end
 
+lang TyUseAst = Ast
+  syn Type = 
+  | TyUse {ident : Name,
+           info : Info,
+           inty : Type}
+
+  sem infoTy =
+  | TyUse {info = info} -> info
+
+  sem tyWithInfo info = 
+  | TyUse t -> TyUse {t with info = info}
+end
+
 -- Base fragment for MLang declarations --
 lang DeclAst = Ast
   syn Decl = -- intentionally left blank
@@ -203,6 +216,6 @@ lang MLangAst =
   -- Declarations
   + LangDeclAst + SynDeclAst + SemDeclAst + LetDeclAst + TypeDeclAst
   + SynProdExtDeclAst +RecLetsDeclAst + DataDeclAst + UtestDeclAst
-  + ExtDeclAst + IncludeDeclAst
+  + ExtDeclAst + IncludeDeclAst + TyUseAst
 
 end

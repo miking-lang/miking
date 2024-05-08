@@ -34,6 +34,19 @@ let use_ = use UseAst in
   lam s.
   nuse_ (nameNoSym s)
 
+--  Extended types --
+let ntyuse_ = use TyUseAst in 
+  lam n : Name. lam inty : Type. 
+  TyUse {ident = n,
+         info = NoInfo {},
+         inty = inty}
+
+let tyuse_ = use TyUseAst in 
+  lam s : String. lam inty : Type. 
+  TyUse {ident = nameNoSym s,
+         info = NoInfo {},
+         inty = inty}
+
 
 -- Declarations --
 

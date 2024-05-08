@@ -158,6 +158,12 @@ lang BootParserMLang = BootParser + MLangAst
            inexpr = gterm t 0,
            ty = tyunknown_,
            ident = gname t 0}
+
+  sem matchType t = 
+  | 214 ->
+    TyUse {ident = gname t 0,
+           info = ginfo t 0,
+           inty = gtype t 0}
 end
 
 mexpr
@@ -445,5 +451,17 @@ let str = strJoin "\n" [
 let p = parseProgram str in 
 match p.expr with TmUse u in 
 utest nameGetStr u.ident with "L" in 
+
+-- Test TyUse parsing
+let str = strJoin "\n" [
+  "lang L",
+  "  type Foo = Int",
+  "end",
+  "type Bar = use L in Foo",
+  "mexpr",
+  "use L in",
+  "()"
+] in
+let p = parseProgram str in 
 
 ()

@@ -130,6 +130,18 @@ lang MLangSym = MLangAst + MExprSym
                     {kind = "language", info = [t.info], allowFree = false}
                     t.ident
 
+    sem symbolizeType env = 
+    | TyUse t -> 
+        match mapLookup (nameGetStr t.ident) env.langEnv with Some langEnv 
+            then 
+                let langNameEnv = convertLangEnv langEnv in 
+                let env = {env with currentEnv = mergeNameEnv env.currentEnv langNameEnv} in 
+                symbolizeType env t.inty
+            else 
+                symLookupError 
+                    {kind = "language", info = [t.info], allowFree = false}
+                    t.ident
+
     sem symbolizeDecl : SymEnv -> Decl -> (SymEnv, Decl)
     sem symbolizeDecl env = 
     | DeclInclude r ->
@@ -502,6 +514,9 @@ lang TestLang = MLangSym + SymCheck + MLangPrettyPrint
     | DeclConDef l ->
         _and (lam. nameHasSym l.ident) (isFullySymbolizedType l.tyIdent)
 
+    sem isFullySymbolizedType =
+    | TyUse _ -> error "Symbolization should get rid of TyUse!"
+
     sem isFullySymbolizedProgram : MLangProgram -> () -> Bool
     sem isFullySymbolizedProgram =
     | prog -> 
@@ -811,6 +826,19 @@ let p : MLangProgram = {
         decl_lang_ "SomeListLang" [
             decl_syn_ "MyList" [("Nil", tycon_ "Foo")] 
         ]
+    ],
+    expr = uunit_
+} in 
+match symbolizeMLang symEnvDefault p with (_, p) in 
+utest isFullySymbolizedProgram p () with true in
+
+-- Test desugaring of TyUse
+let p : MLangProgram = {
+    decls = [
+        decl_lang_ "SomeLang" [
+            decl_type_ "Foo" [] tyint_
+        ],
+        decl_type_ "Bar" [] (tyuse_ "SomeLang" (tycon_ "Foo"))
     ],
     expr = uunit_
 } in 
