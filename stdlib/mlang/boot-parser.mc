@@ -84,7 +84,6 @@ lang BootParserMLang = BootParser + MLangAst
     let parseCase = lam i. 
       {pat = gpat d i, thn = gterm d i}
     in 
-
     let args = map 
       (lam i. {ident = gname d i, tyAnnot = gtype d i})
       (range 1 (addi 1 nArgs) 1) in 
@@ -366,6 +365,29 @@ utest nameGetStr s.ident with "f" in
 utest map (lam a. nameGetStr a.ident) s.args with ["x", "y"] using eqSeq eqString in 
 -- printLn (mlang2str p) ;
 
+-- Test semantic function with type params
+-- Test semantic function with multiple args
+let str = strJoin "\n" [
+  "lang IdLang",
+  "  sem id : all a. a -> a",
+  "  sem id =",
+  "  | x -> x",
+  "end",
+  "mexpr",
+  "()"
+] in
+let p = parseProgram str in 
+match head p.decls with DeclLang d in
+utest nameGetStr d.ident with "IdLang" in
+match head d.decls with DeclSem s in 
+utest nameGetStr s.ident with "id" in 
+match s.tyAnnot with TyAll tyall in 
+utest nameGetStr tyall.ident with "a" in
+match tyall.ty with TyArrow tyarrow in 
+match tyarrow.from with TyVar tyvar in 
+utest nameGetStr tyvar.ident with "a" in 
+match tyarrow.to with TyVar tyvar in 
+utest nameGetStr tyvar.ident with "a" in 
 -- Test type declaratin in langauge
 let str = strJoin "\n" [
   "lang MyLang",

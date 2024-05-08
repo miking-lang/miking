@@ -405,8 +405,8 @@ let getData = function
        | None -> 
          let pats = List.map fst cases in
          let tms = List.map snd cases in 
+         (idDeclSem, [fi], [List.length cases; 0], [ty], tms, [ident], [], [], [], pats, [], []))
  
-         (idDeclSem, [fi], [List.length cases], [ty], tms, [ident], [], [], [], pats, [], []))
   | PTreeDecl (Alias (fi, ident, params, ty)) ->
     (idDeclType, [fi], [List.length params], [ty], [], ident :: params, [], [], [], [], [], [])
   | _ ->
