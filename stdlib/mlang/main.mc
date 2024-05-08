@@ -1,5 +1,6 @@
-include "composition-check.mc"
 include "result.mc"
+include "fileutils.mc"
+include "sys.mc"
 
 include "compile.mc"
 include "boot-parser.mc"
@@ -23,7 +24,10 @@ lang MainLang = MLangCompiler + BootParserMLang +
 
   sem evalMLangFile : String -> Expr
   sem evalMLangFile =| filepath ->
-    let p = handleIncludesFile filepath in 
+    let dir = filepathConcat (sysGetCwd ()) (eraseFile filepath) in 
+    let libs = addCWDtoLibs (parseMCoreLibsEnv ()) in
+
+    let p = handleIncludesFile dir libs filepath in 
     let p = constTransformProgram builtin p in
     match symbolizeMLang symEnvDefault p with (_, p) in 
     match _consume (checkComposition p) with (_, res) in 
@@ -34,3 +38,8 @@ lang MainLang = MLangCompiler + BootParserMLang +
     match rhs with Right expr in
     myEval expr
 end
+
+mexpr
+use MainLang in 
+evalMLangFile "stdlib/seq.mc"; 
+()
