@@ -94,14 +94,13 @@ lang BootParserMLang = BootParser + MLangAst
              info = ginfo d 0}
   | 705 ->
     DeclType {ident = gname d 0,
-              params = map (gname d) (range 1 (glistlen d 0) 1),
+              params = map (gname d) (range 1 (addi 1 (glistlen d 0)) 1),
               tyIdent = gtype d 0,
               info = ginfo d 0}
 
   sem matchTop : Unknown -> Int -> Decl
   sem matchTop d = 
   | 701 -> 
-    -- Todo includes
     let nIncludes = glistlen d 0 in 
     let nDecls = glistlen d 1 in 
 
@@ -123,7 +122,7 @@ lang BootParserMLang = BootParser + MLangAst
              info = ginfo d 0}
   | 705 /-TmType-/ ->
     DeclType {ident = gname d 0,
-              params = map (gname d) (range 1 (glistlen d 0) 1),
+              params = map (gname d) (range 1 (addi 1 (glistlen d 0)) 1),
               tyIdent = gtype d 0,
               info = ginfo d 0}
   | 706 -> 
@@ -343,6 +342,31 @@ utest nameGetStr d.ident with "MyLang" in
 match head d.decls with DeclType s in 
 utest nameGetStr s.ident with "Point" in 
 -- printLn (mlang2str p) ;
+
+-- Test type declaration with params
+let str = strJoin "\n" [
+  "lang MyLang",
+  "  type Point a b = {x : Int, y : Int}",
+  "end",
+  "mexpr",
+  "()"
+] in
+let p = parseProgram str in 
+match head p.decls with DeclLang d in
+utest nameGetStr d.ident with "MyLang" in
+match head d.decls with DeclType s in 
+utest nameGetStr s.ident with "Point" in 
+utest map nameGetStr s.params with ["a", "b"] using eqSeq eqString in 
+
+let str = strJoin "\n" [
+  "type Point a b = {x : Int, y : Int}",
+  "mexpr",
+  "()"
+] in
+let p = parseProgram str in 
+match head p.decls with DeclType s in 
+utest nameGetStr s.ident with "Point" in 
+utest map nameGetStr s.params with ["a", "b"] using eqSeq eqString in 
 
 
 ()

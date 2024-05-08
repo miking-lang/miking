@@ -362,8 +362,7 @@ let getData = function
   | PTreeTop (TopLet (Let (fi, x, ty, tm))) -> 
       (idDeclLet, [fi], [], [ty], [tm], [x], [], [], [], [], [], [])
   | PTreeTop (TopType (Type (fi, x, params, ty))) ->
-      let len = List.length params + 1 in
-      (idDeclType, [fi], [len], [ty], [], x :: params, [], [], [], [], [], [])
+      (idDeclType, [fi], [List.length params], [ty], [], x :: params, [], [], [], [], [], [])
   | PTreeTop (TopRecLet (RecLet (fi, lst))) ->
       let len = List.length lst in
       let fis = fi :: List.map (fun (fi, _, _, _) -> fi) lst in
