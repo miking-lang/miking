@@ -775,4 +775,15 @@ let p : MLangProgram = {
 } in 
 match symbolizeMLang symEnvDefault p with (_, p) in 
 utest isFullySymbolizedProgram p () with true in
+
+-- Test sem with type variable
+let p = {
+    decls = [decl_lang_ "SomeLang" [
+        decl_semty_ "id" (tyall_ "a" (tyarrow_ (tyvar_ "a") (tyvar_ "a"))) 
+    ]],
+    expr = uunit_
+} in 
+match symbolizeMLang symEnvDefault p with (_, p) in 
+utest isFullySymbolizedProgram p () with true in
+
 ()
