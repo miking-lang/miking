@@ -92,7 +92,11 @@ lang BootParserMLang = BootParser + MLangAst
              cases = map parseCase (range 0 nCases 1),
              includes = [],
              info = ginfo d 0}
-
+  | 705 ->
+    DeclType {ident = gname d 0,
+              params = map (gname d) (range 1 (glistlen d 0) 1),
+              tyIdent = gtype d 0,
+              info = ginfo d 0}
 
   sem matchTop : Unknown -> Int -> Decl
   sem matchTop d = 
@@ -324,4 +328,21 @@ match head d.decls with DeclSem s in
 utest nameGetStr s.ident with "f" in 
 utest map (lam a. nameGetStr a.ident) s.args with ["x", "y"] using eqSeq eqString in 
 -- printLn (mlang2str p) ;
+
+-- Test type declaratin in langauge
+let str = strJoin "\n" [
+  "lang MyLang",
+  "  type Point = {x : Int, y : Int}",
+  "end",
+  "mexpr",
+  "()"
+] in
+let p = parseProgram str in 
+match head p.decls with DeclLang d in
+utest nameGetStr d.ident with "MyLang" in
+match head d.decls with DeclType s in 
+utest nameGetStr s.ident with "Point" in 
+-- printLn (mlang2str p) ;
+
+
 ()

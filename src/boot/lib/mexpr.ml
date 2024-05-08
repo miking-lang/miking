@@ -405,6 +405,8 @@ let getData = function
          let tms = List.map snd cases in 
  
          (idDeclSem, [fi], [List.length cases], [ty], tms, [ident], [], [], [], pats, [], []))
+  | PTreeDecl (Alias (fi, ident, params, ty)) ->
+    (idDeclType, [fi], [List.length params], [ty], [], ident :: params, [], [], [], [], [], [])
   | _ ->
       failwith "The AST node is unknown"
 
