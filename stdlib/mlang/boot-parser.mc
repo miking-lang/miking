@@ -62,7 +62,11 @@ lang BootParserMLang = BootParser + MLangAst
   sem matchDecl : Unknown -> Int -> Decl
   sem matchDecl d =
   | 702 -> 
+    -- TODO(voorberg, 08/05/2024): Elegantly handle the case in which nParams != 0,
+    -- but no constructors have been provided.
     let nCons = glistlen d 0 in 
+    let nParams = if eqi nCons 0 then 0 else glistlen d 1 in 
+
     let parseCon = lam i. 
       let ident = gname d (addi i 1) in 
       let ty = gtype d i in 
@@ -70,9 +74,9 @@ lang BootParserMLang = BootParser + MLangAst
     in 
 
     DeclSyn {ident = gname d 0,
-             params = [],
-             defs = map parseCon (range 0 nCons 1),
              includes = [],
+             defs = map parseCon (range 0 nCons 1),
+             params = map (lam i. gname d (addi (addi 1 nCons) i)) (range 0 nParams 1),
              info = ginfo d 0}
   | 703 -> 
     let nCases = glistlen d 0 in 
@@ -266,6 +270,40 @@ utest nameGetStr s.ident with "Expr" in
 utest nameGetStr (head s.defs).ident with "IntExpr" in 
 utest nameGetStr (get s.defs 1).ident with "AddExpr" in
 -- printLn (mlang2str p) ;
+
+-- Test syn with type parameters
+let str = strJoin "\n" [
+  "lang AVLTreeImpl",
+  "  syn AVL k v =",
+  "  | Leaf ()",
+  "  | Node {key : k, value : v, l : AVL k v, r : AVL k v, h : Int}",
+  "end",
+  "mexpr",
+  "()"
+] in
+let p = parseProgram str in 
+match head p.decls with DeclLang d in
+utest nameGetStr d.ident with "AVLTreeImpl" in
+match head d.decls with DeclSyn s in 
+utest nameGetStr s.ident with "AVL" in 
+utest map nameGetStr s.params with ["k", "v"] using eqSeq eqString in 
+
+
+-- Test syn with type parameters without constructors
+let str = strJoin "\n" [
+  "lang AVLTreeImpl",
+  "  syn AVL k v =",
+  "end",
+  "mexpr",
+  "()"
+] in
+let p = parseProgram str in 
+match head p.decls with DeclLang d in
+utest nameGetStr d.ident with "AVLTreeImpl" in
+match head d.decls with DeclSyn s in 
+utest nameGetStr s.ident with "AVL" in 
+-- TODO(voorberg, 08/05/2024): Figure out what the params are supposed to be
+-- in this case
 
 -- Test language with semantic function
 let str = strJoin "\n" [

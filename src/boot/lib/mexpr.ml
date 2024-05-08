@@ -383,13 +383,16 @@ let getData = function
   (* TODO(voorberg, 03-05-2024): Add support for 'with' extensions *)
   | PTreeTop (TopLang (Lang (fi, ident, includes, _, decls))) ->
       (idDeclLang, [fi], [List.length includes; List.length decls], [], [], ident :: includes, [], [], [], [], [], decls)
-  | PTreeDecl (Data (fi, ident, _, decls)) -> 
+  | PTreeDecl (Data (fi, ident, nParams, decls)) -> 
       let lst = List.map (fun x -> match x with CDecl (fi, params, con, ty) -> (fi, params, con, ty)) decls in 
       let allStr = List.map (fun (_, _, con, _) -> con) lst in
       let fis = fi :: List.map (fun (fi, _, _, _) -> fi) lst in 
       let tys = List.map (fun (_, _, _, ty) -> ty) lst in 
+      
+      let tyParams = if List.length lst = 0 then []
+        else List.hd (List.map (fun (_, params, _, _) -> params) lst) in
 
-      (idDeclSyn, fis, [List.length decls], tys, [], ident :: allStr, [], [], [], [], [], [])
+      (idDeclSyn, fis, [List.length decls ; nParams], tys, [], ident :: (List.concat [allStr; tyParams]) , [], [], [], [], [], [])
   | PTreeDecl (Inter (fi, ident, ty, paramListOpt, cases)) ->
       (match paramListOpt with Some (paramList) -> 
          let argIdents = List.map (fun x -> match x with Param (_, s, _) -> s) paramList in
