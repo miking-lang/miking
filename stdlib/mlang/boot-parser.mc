@@ -151,6 +151,13 @@ lang BootParserMLang = BootParser + MLangAst
              tyIdent = gtype d 0,
              effect = neqi (gint d 0) 0,
              info = ginfo d 0}
+
+  sem matchTerm t =
+  | 116 -> 
+    TmUse {info = ginfo t 0,
+           inexpr = gterm t 0,
+           ty = tyunknown_,
+           ident = gname t 0}
 end
 
 mexpr
@@ -428,5 +435,15 @@ match head p.decls with DeclType s in
 utest nameGetStr s.ident with "Point" in 
 utest map nameGetStr s.params with ["a", "b"] using eqSeq eqString in 
 
+-- Test TmUse parsing
+let str = strJoin "\n" [
+  "lang L end",
+  "mexpr",
+  "use L in",
+  "()"
+] in
+let p = parseProgram str in 
+match p.expr with TmUse u in 
+utest nameGetStr u.ident with "L" in 
 
 ()

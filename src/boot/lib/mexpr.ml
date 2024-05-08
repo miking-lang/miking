@@ -44,6 +44,8 @@ let idTmNever = 114
 
 let idTmExt = 115
 
+let idTmUse = 116
+
 (* Types *)
 let idTyUnknown = 200
 
@@ -198,6 +200,8 @@ let getData = function
       (idTmRecLets, fis, [len], tys, tms, strs, [], [], [], [], [], [])
   | PTreeTm (TmConst (fi, c)) ->
       (idTmConst, [fi], [], [], [], [], [], [], [c], [], [], [])
+  | PTreeTm (TmUse (fi, str, tm)) -> 
+      (idTmUse, [fi], [], [], [tm], [str], [], [], [], [], [], [])
   | PTreeTm (TmSeq (fi, ts)) ->
       let len = Mseq.length ts in
       let tms = Mseq.Helpers.to_list ts in
