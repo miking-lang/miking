@@ -99,7 +99,7 @@ let _eqCheck : Name -> Name -> BiNameMap -> BiNameMap -> Option BiNameMap =
 
 -- Convenience fragment containing the function eqExpr. Should be included in
 -- all fragments below.
-lang Eq
+lang Eq = ConstAst
   sem eqConst (lhs : Const) =
   | rhs /- : Const -/ -> eqConstH (lhs, rhs)
 
