@@ -14,16 +14,19 @@ include "result.mc"
 include "digraph.mc"
 
 type CompositionCheckEnv = {
+  nextId : Int,
   -- Mapping from the symbolized name of a syn or sem to their base declaration
   baseMap : Map Name Name,
   -- Mapping from symbolized name of a syn or sem to the amount of parameters
   paramMap : Map Name Int,
   -- Mapping from symbolized names of a sem to its cases that are ordered by
   -- the subset relation on the patterns. 
-  semPatMap : Map Name [{pat: use MLangAst in Pat, thn : use MLangAst in Expr}] 
+  -- We also introduce a unique id for each case. We need this id to be able 
+  -- to remove duplicate cases under languaage composition.
+  semPatMap : Map Name [use MLangAst in {pat: Pat, thn : Expr, id : Int}] 
 }
 
-let collectPats : CompositionCheckEnv -> [Name] -> [{pat: use MLangAst in Pat, thn : use MLangAst in Expr}] 
+let collectPats : CompositionCheckEnv -> [Name] -> [use MLangAst in {pat: Pat, thn : Expr, id : Int}]
   = lam env. lam includes.
   let incl2pats = lam i : Name. 
     match mapLookup i env.semPatMap with Some pats then
@@ -47,6 +50,7 @@ let indexPairs : Int -> [(Int, Int)] = lam n.
   filter pred pairs 
 
 let _emptyCompositionCheckEnv = {
+  nextId = 0,
   baseMap = mapEmpty nameCmp,
   paramMap = mapEmpty nameCmp,
   semPatMap = mapEmpty nameCmp
@@ -63,7 +67,7 @@ let insertParamMap : CompositionCheckEnv -> Name -> Int -> CompositionCheckEnv =
 let insertSemPatMap = lam env. lam k. lam v.
   {env with semPatMap = mapInsert k v env.semPatMap}
 
-lang MLangCompositionCheck = MLangAst + MExprPatAnalysis + MExprAst
+lang MLangCompositionCheck = MLangAst + MExprPatAnalysis + MExprAst + MExprPrettyPrint
   syn CompositionError =
   | DifferentBaseSyn {
     synIdent : Name,
@@ -226,7 +230,28 @@ lang MLangCompositionCheck = MLangAst + MExprPatAnalysis + MExprAst
 
   sem parseCases env = 
   | DeclSem s -> 
-    let pats = concat (collectPats env s.includes) s.cases in
+    -- Assign unique ids to each case based on nextId in env
+    let casesWithId = zipWith 
+      (lam c. lam id. {id = addi env.nextId id, thn = c.thn, pat = c.pat})
+      s.cases
+      (range 0 (length s.cases) 1)
+    in 
+    let env = {env with nextId = addi env.nextId (length s.cases)} in 
+
+    let pats = concat (collectPats env s.includes) casesWithId in
+
+    recursive let removeDups = lam seenIds : Set Int. lam cases. 
+      switch cases
+        case [h] ++ t then
+          if setMem h.id seenIds then
+            removeDups seenIds t
+          else 
+             cons h (removeDups (setInsert h.id seenIds) t)
+        case [] then []
+      end
+    in
+    let pats = removeDups (setEmpty subi) pats in 
+
     let normPats = map patToNormpat (map (lam c. c.pat) pats) in 
     let pairs = indexPairs (length normPats) in 
 
@@ -249,26 +274,37 @@ lang MLangCompositionCheck = MLangAst + MExprPatAnalysis + MExprAst
 
         let a_minus_b = normpatIntersect ap bn in
         let b_minus_a = normpatIntersect bp an in
+
+        -- printLn (match getPatStringCode 0 pprintEnvEmpty (get pats i).pat with (_, s) in s) ;
+        -- printLn (int2string (i)) ;
+        -- printLn (match getPatStringCode 0 pprintEnvEmpty (get pats j).pat with (_, s) in s) ;
+        -- printLn (int2string (j)) ;
+
         if and (null a_minus_b) (null b_minus_a) then 
           -- EQUAL
+          -- printLn "equal" ;
           _err (InvalidSemPatterns {
             semIdent = s.ident, 
             info = s.info
           })
         else if null a_minus_b then 
           -- SUBSET
+          -- printLn "subset" ;
           _ok (digraphAddEdge i j () g)
         else if null b_minus_a then 
           -- SUPERSET
+          -- printLn "superset" ;
           _ok (digraphAddEdge j i () g)
 
         else
           let overlapping = normpatIntersect ap bp in
           if null overlapping then 
             -- DISJOINT
+            -- printLn "disjoint" ;
             _ok g
           else
             -- OVERLAPPING
+            -- printLn "overlapping" ;
             _err (InvalidSemPatterns {
               semIdent = s.ident, 
               info = s.info
@@ -585,6 +621,31 @@ let p : MLangProgram = {
               (pvar_ "y", addi_ (var_ "x") (var_ "y"))
           ]
         ]
+    ],
+    expr = bind_ (use_ "L0") (int_ 10)
+} in 
+match symbolizeMLang symEnvDefault p with (_, p) in 
+assertValid (checkComposition p);
+
+-- Test that patterns which are included multiple times
+-- are only considered once during language composition. Since L1 and L2 
+-- both extend L0, they both include the case of L0. This case sould only be 
+-- considered once in L12.
+let p : MLangProgram = {
+    decls = [
+        decl_lang_ "L0" [
+          decl_syn_ "Foo" [],
+          decl_sem_ "f" [] [(pvarw_, int_ -1)]
+        ],
+        decl_langi_ "L1" ["L0"] [
+          decl_syn_ "Foo" [("Bar", tyunit_)],
+          decl_sem_ "f" [] [(pcon_ "Bar" pvarw_, int_ 0)]
+        ],
+        decl_langi_ "L2" ["L0"] [
+          decl_syn_ "Foo" [("Baz", tyunit_)],
+          decl_sem_ "f" [] [(pcon_ "Baz" pvarw_, int_ 1)]
+        ],
+        decl_langi_ "L12" ["L1", "L2"] []
     ],
     expr = bind_ (use_ "L0") (int_ 10)
 } in 

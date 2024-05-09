@@ -207,6 +207,7 @@ lang MLangCompiler = MLangAst + MExprAst
                 else error "CompositionCheckEnv must contain the ordered cases for all semantic functions!"
     in
     let cases = map (lam c. {c with thn = subTmVarSymbol subst c.thn}) cases in 
+    let cases = map (lam c. {thn = c.thn, pat = c.pat}) cases in
     let body = compileBody cases in 
     recursive let compileArgs = lam args. 
           match args with [h] ++ t then
