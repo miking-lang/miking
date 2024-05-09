@@ -64,6 +64,9 @@ lang MLangIncludeHandler = MLangAst + BootParserMLang
       case 1 then 
         head (setToSeq existingFilesAsSet)
       case _ then 
+        -- TODO(voorberg, 09/05/2024): This happens because we dont properly
+        -- deal with libraries yet. The code does not yet realise that 
+        -- some absolute path is equal to some relative path.
         warnSingle [info] "Multiple files found" ;
         head (setToSeq existingFilesAsSet)
     end
