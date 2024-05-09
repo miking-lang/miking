@@ -64,7 +64,8 @@ lang MLangIncludeHandler = MLangAst + BootParserMLang
       case 1 then 
         head (setToSeq existingFilesAsSet)
       case _ then 
-        errorSingle [info] "Mutliple files found"
+        warnSingle [info] "Multiple files found" ;
+        head (setToSeq existingFilesAsSet)
     end
 end
 
