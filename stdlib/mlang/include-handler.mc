@@ -9,6 +9,13 @@ include "fileutils.mc"
 include "sys.mc"
 
 lang MLangIncludeHandler = MLangAst + BootParserMLang
+  sem parseAndHandleIncludes : String -> MLangProgram
+  sem parseAndHandleIncludes =| path -> 
+    let dir = filepathConcat (sysGetCwd ()) (eraseFile path) in 
+    let libs = addCWDtoLibs (parseMCoreLibsEnv ()) in
+    let included = ref (setEmpty cmpString) in 
+    handleIncludesFile included dir libs path
+
   sem handleIncludesProgram : Ref (Set String) -> String -> Map String String -> MLangProgram -> MLangProgram 
   sem handleIncludesProgram included dir libs =| prog ->
     let f = lam decls. lam decl. 

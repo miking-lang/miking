@@ -24,22 +24,24 @@ lang MainLang = MLangCompiler + BootParserMLang +
 
   sem evalMLangFile : String -> Expr
   sem evalMLangFile =| filepath ->
-    let dir = filepathConcat (sysGetCwd ()) (eraseFile filepath) in 
-    let libs = addCWDtoLibs (parseMCoreLibsEnv ()) in
-
-    let p = handleIncludesFile dir libs filepath in 
+    let p = parseAndHandleIncludes filepath in 
     let p = constTransformProgram builtin p in
     match symbolizeMLang symEnvDefault p with (_, p) in 
     match _consume (checkComposition p) with (_, res) in 
-    match res with Right env in
-    let ctx = _emptyCompilationContext env in 
-    let res = _consume (compile ctx p) in 
-    match res with (_, rhs) in 
-    match rhs with Right expr in
-    myEval expr
+    switch res 
+      case Left errs then 
+        iter raiseError errs ;
+        never
+      case Right env then
+        let ctx = _emptyCompilationContext env in 
+        let res = _consume (compile ctx p) in 
+        match res with (_, rhs) in 
+        match rhs with Right expr in
+        myEval expr
+    end
 end
 
 mexpr
 use MainLang in 
-evalMLangFile "stdlib/seq.mc"; 
+evalMLangFile "stdlib/mexpr/ast.mc"; 
 ()
