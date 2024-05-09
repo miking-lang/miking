@@ -168,24 +168,7 @@ lang MLangCompositionCheck = MLangAst + MExprPatAnalysis + MExprAst
           info = s.info
         })
   | DeclSem s ->
-    -- The number of parameters of a sem is specified in one of two ways:
-    -- 1) There might be actual arguments present
-    -- 2) Through the type annotation
-    recursive let countParamsType : Type -> Int = lam t. 
-      switch t
-        case TyArrow arrow then addi 1 (countParamsType arrow.to)
-        case _ then 0
-      end
-    in 
-
-    -- NOTE(voorberg, 09/05/2024): We assume that the type annotation is correct
-    -- In other words, we don't check that the type annotation matches the 
-    -- amount of actual arguments as we assume this would be caught during type
-    -- checking.
-    let paramNum = (switch s.tyAnnot 
-      case TyUnknown _ then addi 1 (length s.args)
-      case ty then countParamsType ty
-    end) in 
+    let paramNum = countParams (DeclSem s) in 
 
     match s.includes with [] then 
       _ok (insertParamMap env s.ident paramNum)
@@ -571,8 +554,8 @@ let p : MLangProgram = {
 match symbolizeMLang symEnvDefault p with (_, p) in 
 assertInvalidSemParams (checkComposition p) ;
 
--- Test valid sem where we only specify a type in the base langauge
--- Test sem with invalid overlapping patterns
+-- Test that the check on the number of parameters also works when
+-- the number of parameters is specified through a type annotation. 
 let p : MLangProgram = {
     decls = [
         decl_lang_ "L0" [
@@ -588,12 +571,24 @@ let p : MLangProgram = {
 } in 
 match symbolizeMLang symEnvDefault p with (_, p) in 
 assertValid (checkComposition p);
--- match _consume (checkComposition p) with (_, errOrEnv) in 
--- (switch errOrEnv
---    case Left errs then
---      iter raiseError errs;
---      never
---    case Right env then
---      "Composition was valid!"
---  end);
+
+-- Test that the cehck on the number of parameters also works when 
+-- a semantic function is implicitly present in a language
+let p : MLangProgram = {
+    decls = [
+        decl_lang_ "L0" [
+            decl_semty_ "f" (tyarrow_ tyint_ (tyarrow_ tyint_ tyint_))
+        ],
+        decl_langi_ "L1" ["L0"] [],
+        decl_langi_ "L2" ["L1"] [
+          decl_sem_ "f" [("x", tyint_)] [
+              (pvar_ "y", addi_ (var_ "x") (var_ "y"))
+          ]
+        ]
+    ],
+    expr = bind_ (use_ "L0") (int_ 10)
+} in 
+match symbolizeMLang symEnvDefault p with (_, p) in 
+assertValid (checkComposition p);
+
 ()

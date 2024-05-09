@@ -116,6 +116,30 @@ lang SemDeclAst = DeclAst
   | DeclSem d -> d.info
 end
 
+-- Count parameters of a DeclSem
+-- The number of parameters of a sem is specified in one of two ways:
+-- 1) There might be actual arguments present
+-- 2) Through the type annotation
+let countParams : use SemDeclAst in Decl -> Int = lam decl. 
+  use MExprAst in 
+  use SemDeclAst in 
+  match decl with DeclSem s in 
+  recursive let countParamsType : Type -> Int = lam t. 
+    switch t
+      case TyArrow arrow then addi 1 (countParamsType arrow.to)
+      case _ then 0
+    end
+  in 
+
+  -- NOTE(voorberg, 09/05/2024): We assume that the type annotation is correct
+  -- In other words, we don't check that the type annotation matches the 
+  -- amount of actual arguments as we assume this would be caught during type
+  -- checking.
+  switch s.tyAnnot 
+    case TyUnknown _ then addi 1 (length s.args)
+    case ty then countParamsType ty
+  end
+
 -- DeclLet --
 lang LetDeclAst = DeclAst
   syn Decl =

@@ -384,10 +384,12 @@ lang MLangSym = MLangAst + MExprSym
             let incls = map fst ss in 
             let ident = nameSym ident in 
 
+            let nArgsToBeGenerated = subi (snd (head ss)) 1 in 
+            -- We need to copy the type annotation here!
             let decl = DeclSem {ident = ident,
                                 tyAnnot = TyUnknown {info = NoInfo ()},
                                 tyBody = TyUnknown {info = NoInfo ()},
-                                args = create (snd (head ss)) (lam. {ident = nameSym "tmp", tyAnnot = TyUnknown {info = NoInfo ()}}),
+                                args = create nArgsToBeGenerated (lam. {ident = nameSym "", tyAnnot = TyUnknown {info = NoInfo ()}}),
                                 cases = [],
                                 includes = incls,
                                 info = NoInfo ()} in
@@ -417,12 +419,13 @@ lang MLangSym = MLangAst + MExprSym
             let includes = map fst includes in 
 
             let decl = DeclSem {s with ident = ident,
-                                tyAnnot = tyAnnot,
-                                tyBody = tyBody,
-                                includes = includes} in 
-
+                                       tyAnnot = tyAnnot,
+                                       tyBody = tyBody,
+                                       includes = includes} in 
+        
+            let paramNum = countParams (DeclSem s) in 
             let langEnv = {langEnv with 
-                sems = mapInsert (nameGetStr s.ident) (ident, length s.args) langEnv.sems} in
+                sems = mapInsert (nameGetStr s.ident) (ident, paramNum) langEnv.sems} in
 
             (langEnv, decl)
         in 
