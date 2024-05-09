@@ -247,6 +247,8 @@ lang MLangSym = MLangAst + MExprSym
         in
         let includedTypes = foldl accIncludedTypes (mapEmpty cmpString) includedLangEnvs in 
 
+        let env = updateTyConEnv env (mapUnion env.currentEnv.tyConEnv includedTypes) in
+
         -- 1. Symbolize ident and params of SynDecls in this langauge
         let symSynIdentParams = lam langEnv : LangEnv. lam synDecl.
             match synDecl with DeclSyn s in
@@ -842,6 +844,22 @@ let p : MLangProgram = {
             decl_type_ "Foo" [] tyint_
         ],
         decl_type_ "Bar" [] (tyuse_ "SomeLang" (tycon_ "Foo"))
+    ],
+    expr = uunit_
+} in 
+match symbolizeMLang symEnvDefault p with (_, p) in 
+utest isFullySymbolizedProgram p () with true in
+
+-- Test that type declarations in a language are usuably in langauges that 
+-- extend said language.
+let p : MLangProgram = {
+    decls = [
+        decl_lang_ "SomeLang" [
+            decl_type_ "Foo" [] tyint_
+        ],
+        decl_langi_ "OtherLang" ["SomeLang"] [
+            decl_syn_ "Baz" [("Bar", tycon_ "Foo")] 
+        ]
     ],
     expr = uunit_
 } in 
