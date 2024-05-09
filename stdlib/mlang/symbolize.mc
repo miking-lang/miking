@@ -221,15 +221,25 @@ lang MLangSym = MLangAst + MExprSym
         let isTypeDecl = lam d. match d with DeclType _ then true else false in 
         let typeDecls = filter isTypeDecl t.decls in 
 
+        -- We include the direct includes of this language and the
+        -- languages that are included by those langauges transitively
         let symbIncludes = lam langEnvs : [LangEnv]. lam n : Name. 
             match mapLookup (nameGetStr n) env.langEnv with Some langEnv then 
-                ((cons langEnv langEnvs), langEnv.ident)
+                let transativeIncludes = map 
+                    (lam langStr. match mapLookup (langStr) env.langEnv with Some x in x)
+                    langEnv.includedLangEnvs in 
+                ((concat transativeIncludes (cons langEnv langEnvs)), langEnv.ident)
             else 
                 symLookupError 
                     {kind = "language", info = [t.info], allowFree = false}
                     t.ident
         in
         match mapAccumL symbIncludes [] t.includes with (includedLangEnvs, includes) in 
+
+        let includedLangStrs = join (map (lam langEnv. langEnv.includedLangEnvs) includedLangEnvs) in 
+        let includedLangStrs = concat includedLangStrs (map nameGetStr includes) in 
+        let includedLangStrs = setToSeq (setOfSeq cmpString includedLangStrs) in 
+        let langEnv = {langEnv with includedLangEnvs = includedLangStrs} in 
 
         let includedSyns = combineMaps (map (lam env. env.syns) includedLangEnvs) in 
         let includedSems = combineMaps (map (lam env. env.sems) includedLangEnvs) in 
@@ -247,6 +257,7 @@ lang MLangSym = MLangAst + MExprSym
         in
         let includedTypes = foldl accIncludedTypes (mapEmpty cmpString) includedLangEnvs in 
 
+        -- Add types to env
         let env = updateTyConEnv env (mapUnion env.currentEnv.tyConEnv includedTypes) in
 
         -- 1. Symbolize ident and params of SynDecls in this langauge
@@ -273,7 +284,6 @@ lang MLangSym = MLangAst + MExprSym
             let langEnv = {langEnv with 
                 includedConstructors = concat langEnv.includedConstructors includedConstructors,
                 syns = mapInsert (nameGetStr ident) (ident, []) langEnv.syns} in
-
             (langEnv, synn)
         in
         match mapAccumL symSynIdentParams langEnv synDecls with (langEnv, synDecls) in 
@@ -307,7 +317,6 @@ lang MLangSym = MLangAst + MExprSym
             let langEnv = {langEnv with 
                 includedConstructors = concat langEnv.includedConstructors includedCons,
                 syns = mapInsert (nameGetStr ident) (ident, []) langEnv.syns} in
-
             (langEnv, decl)
         in
 
@@ -859,6 +868,23 @@ let p : MLangProgram = {
         ],
         decl_langi_ "OtherLang" ["SomeLang"] [
             decl_syn_ "Baz" [("Bar", tycon_ "Foo")] 
+        ]
+    ],
+    expr = uunit_
+} in 
+match symbolizeMLang symEnvDefault p with (_, p) in 
+utest isFullySymbolizedProgram p () with true in
+
+-- Test transitive dependencies. In this case, L2 uses symbols that are 
+-- defined in L0. These should still be in scope in L2 because L1 extends L0. 
+let p : MLangProgram = {
+    decls = [
+        decl_lang_ "L0" [
+            decl_syn_ "Foo" [("Bar", tyint_)]
+        ],
+        decl_langi_ "L1" ["L0"] [],
+        decl_langi_ "L2" ["L1"] [
+            decl_sem_ "f" [] [(pcon_ "Bar" pvarw_, int_ 1)]
         ]
     ],
     expr = uunit_
