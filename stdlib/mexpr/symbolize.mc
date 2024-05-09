@@ -71,7 +71,8 @@ type LangEnv = {
   sems: Map String (Name, Int),
   definedTypes: Map String Name,
   includedTypes: Map String Name,
-  includedConstructors: [Name]
+  includedConstructors: [Name],
+  includedLangEnvs: [String]
 }
 
 let _langEnvEmpty : Name -> LangEnv = lam n. {
@@ -80,7 +81,8 @@ let _langEnvEmpty : Name -> LangEnv = lam n. {
   sems = mapEmpty cmpString,
   definedTypes = mapEmpty cmpString,
   includedTypes = mapEmpty cmpString,
-  includedConstructors = []
+  includedConstructors = [],
+  includedLangEnvs = []
 }
 
 type SymEnv = {
