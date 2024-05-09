@@ -2,43 +2,48 @@ include "ast.mc"
 include "boot-parser.mc"
 include "pprint.mc"
 
+include "error.mc"
 include "stdlib.mc"
+include "set.mc"
 include "fileutils.mc"
 include "sys.mc"
 
--- OPT(voorberg, 06/05/2024): This naively copy includes into the 
--- MLang program, even if they have already been included. There 
--- is obviously a lot of potential for improvement here.
 lang MLangIncludeHandler = MLangAst + BootParserMLang
-  sem handleIncludesProgram : String -> Map String String -> MLangProgram -> MLangProgram 
-  sem handleIncludesProgram dir libs =| prog ->
+  sem handleIncludesProgram : Ref (Set String) -> String -> Map String String -> MLangProgram -> MLangProgram 
+  sem handleIncludesProgram included dir libs =| prog ->
     let f = lam decls. lam decl. 
-      concat decls (flattenIncludes dir libs decl) in 
+      concat decls (flattenIncludes included dir libs decl) in 
     {prog with decls = foldl f [] prog.decls}
 
-  sem handleIncludesFile : String -> Map String String -> String -> MLangProgram
-  sem handleIncludesFile dir libs =| path ->
-    match _consume (parseMLangFile path) with (_, errOrProg) in
-    switch errOrProg
-      case Left err then error (join [
-        "File '",
-        path,
-        "' could not be parsed!"
-      ])
-      case Right prog then 
-        handleIncludesProgram dir libs prog
-    end
+  sem handleIncludesFile : Ref (Set String) -> String -> Map String String -> String -> MLangProgram
+  sem handleIncludesFile included dir libs =| path ->
+    let s = deref included in 
 
-  sem flattenIncludes : String -> Map String String -> Decl -> [Decl]
-  sem flattenIncludes dir libs =
-  | DeclInclude {path = path} ->
-    let path = findPath dir libs path in 
-    let prog = handleIncludesFile (eraseFile path) libs path in 
+    if setMem path s then 
+      {decls = [], expr = uunit_}
+    else 
+      match _consume (parseMLangFile path) with (_, errOrProg) in
+      switch errOrProg
+        case Left err then error (join [
+          "File '",
+          path,
+          "' could not be parsed!"
+        ])
+        case Right prog then 
+          modref included (setInsert path s);
+          handleIncludesProgram included dir libs prog
+      end
+
+  sem flattenIncludes : Ref (Set String) -> String -> Map String String -> Decl -> [Decl]
+  sem flattenIncludes included dir libs =
+  | DeclInclude {path = path, info = info} ->
+    let path = findPath dir libs info path in 
+    let prog = handleIncludesFile included (eraseFile path) libs path in 
     prog.decls
   | other -> [other]
 
-  sem findPath : String -> Map String String -> String -> String
-  sem findPath dir libs =| path ->
+  sem findPath : String -> Map String String -> Info -> String -> String
+  sem findPath dir libs info =| path ->
     let libs = mapInsert "current" dir libs in 
     let prefixes = mapValues libs in 
     let paths = map (lam prefix. filepathConcat prefix path) prefixes in 
@@ -48,15 +53,11 @@ lang MLangIncludeHandler = MLangAst + BootParserMLang
 
     switch (setSize existingFilesAsSet)
       case 0 then 
-        printLn path;
-        printLn dir;
-        error "File not found!"
-      case 1 then head (setToSeq existingFilesAsSet)
+        errorSingle [info] "File not found!"
+      case 1 then 
+        head (setToSeq existingFilesAsSet)
       case _ then 
-        printLn path;
-        iter printLn existingFiles;
-        printLn dir;
-        error "Multiple files were found!"
+        errorSingle [info] "Mutliple files found"
     end
 end
 
@@ -66,5 +67,9 @@ use MLangIncludeHandler in
 
 let dir = sysGetCwd () in 
 let libs = addCWDtoLibs (parseMCoreLibsEnv ()) in
+let included = ref (setEmpty cmpString) in 
 
-printLn (mlang2str (handleIncludesFile dir libs "stdlib/seq.mc"))
+let p = handleIncludesFile included "stdlib/mexpr" libs "stdlib/mexpr/ast.mc" in 
+
+printLn (mlang2str (p));
+()
