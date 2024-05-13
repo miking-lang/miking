@@ -272,10 +272,10 @@ lang MLangSym = MLangAst + MExprSym
 
             let env : SymEnv = convertNameEnv (convertLangEnv langEnv) in 
             match mapAccumL setSymbol env.currentEnv.tyVarEnv s.params with (_, params) in
-            let includes : [(Name, [Name])] = match mapLookup (nameGetStr ident) includedSyns 
+            let includes : [(Name, [Name], [Name])] = match mapLookup (nameGetStr ident) includedSyns 
                                               with Some xs then xs else [] in  
-            let includedConstructors : [Name] = join (map snd includes) in 
-            let includes : [Name] = map fst includes in 
+            let includedConstructors : [Name] = join (map (lam t. t.1) includes) in 
+            let includes : [Name] = map (lam t. t.0) includes in 
 
             let synn = DeclSyn {s with params = params,
                                        ident = ident,
@@ -283,7 +283,7 @@ lang MLangSym = MLangAst + MExprSym
 
             let langEnv = {langEnv with 
                 includedConstructors = concat langEnv.includedConstructors includedConstructors,
-                syns = mapInsert (nameGetStr ident) (ident, []) langEnv.syns} in
+                syns = mapInsert (nameGetStr ident) (ident, [], params) langEnv.syns} in
             (langEnv, synn)
         in
         match mapAccumL symSynIdentParams langEnv synDecls with (langEnv, synDecls) in 
@@ -305,18 +305,19 @@ lang MLangSym = MLangAst + MExprSym
             match pair with (ident, includedSyns) in 
             let ident = nameSym ident in 
 
-            let includes = map fst includedSyns in 
+            let includes = map (lam t. t.0) includedSyns in 
 
-            let includedCons = join (map snd includedSyns) in 
+            let includedCons = join (map (lam t. t.1) includedSyns) in 
+            let params = (head includedSyns).2 in 
             let decl = DeclSyn {ident = ident,
-                                params = [],
+                                params = params,
                                 defs = [],
                                 includes = includes,
                                 info = NoInfo ()} in
         
             let langEnv = {langEnv with 
                 includedConstructors = concat langEnv.includedConstructors includedCons,
-                syns = mapInsert (nameGetStr ident) (ident, []) langEnv.syns} in
+                syns = mapInsert (nameGetStr ident) (ident, [], params) langEnv.syns} in
             (langEnv, decl)
         in
 
@@ -380,7 +381,7 @@ lang MLangSym = MLangAst + MExprSym
             let decl = DeclSyn {s with defs = defs} in
             let constrs = map (lam d. d.ident) defs in 
             let langEnv = {langEnv with 
-                syns = mapInsert (nameGetStr s.ident) (s.ident, constrs) langEnv.syns} in
+                syns = mapInsert (nameGetStr s.ident) (s.ident, constrs, s.params) langEnv.syns} in
             (langEnv, decl)
         in 
         match mapAccumL symbSynConstructors langEnv synDecls with (langEnv, synDecls) in 

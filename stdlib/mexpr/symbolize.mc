@@ -64,10 +64,12 @@ type LangEnv = {
   -- Map from the string of a syn identifier to a tuple 
   -- in which the first element is the symbolized name of the syn identifier
   -- and the second element is a list of symbolized constructor names.
-  syns: Map String (Name, [Name]),
+  -- The third element is the parameter list of the syn. 
+  syns: Map String (Name, [Name], [Name]),
   -- Map from the string of a sem identifier to a tuple
-  -- in whic hteh first element is the symbolized name of the identifier
-  -- and the second element is the number of parameters
+  -- in which teh first element is the symbolized name of the identifier,
+  -- the second element is the number of parameters.
+  -- The third element is the type annotation.
   sems: Map String (Name, Int, use MExprAst in Type),
   definedTypes: Map String Name,
   includedTypes: Map String Name,

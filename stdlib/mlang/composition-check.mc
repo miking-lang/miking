@@ -652,4 +652,19 @@ let p : MLangProgram = {
 match symbolizeMLang symEnvDefault p with (_, p) in 
 assertValid (checkComposition p);
 
+-- Test syn with parameters
+let p : MLangProgram = {
+    decls = [
+        decl_lang_ "L0" [
+          decl_syn_params_ "Foo" ["a"] [
+            ("Bar", tyvar_ "a")
+          ]
+        ],
+        decl_langi_ "L1" ["L0"] []
+    ],
+    expr = uunit_
+} in 
+match symbolizeMLang symEnvDefault p with (_, p) in 
+assertValid (checkComposition p);
+
 ()
