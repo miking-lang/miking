@@ -64,7 +64,7 @@ end
 
 
 -- Top of the expression parser. Connects WSAC with parsing of other non terminals
-lang ExprParser = WSACParser
+lang ExprParser = WSACParser + Ast
   sem parseExpr (p: Pos) =
   | s ->
     let r1 : ParseResult Expr = parseExprMain p 0 s in
