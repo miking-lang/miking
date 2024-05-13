@@ -68,7 +68,7 @@ type LangEnv = {
   -- Map from the string of a sem identifier to a tuple
   -- in whic hteh first element is the symbolized name of the identifier
   -- and the second element is the number of parameters
-  sems: Map String (Name, Int),
+  sems: Map String (Name, Int, use MExprAst in Type),
   definedTypes: Map String Name,
   includedTypes: Map String Name,
   includedConstructors: [Name],

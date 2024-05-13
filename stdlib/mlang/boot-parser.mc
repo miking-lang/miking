@@ -57,7 +57,30 @@ lang BootParserMLang = BootParser + MLangAst
 
     {decls = concat includes decls,
      expr = matchTerm unparsedExpr (bootParserGetId unparsedExpr)}
-  | other -> error "We died here"
+
+  -- Semantic function declaration can be split into a type annotation and args + cases.
+  -- This function merges sems into a single declaration.
+  sem mergeSems : [Decl] -> [Decl]
+  sem mergeSems =| decls ->
+    let work = lam acc : ([Decl], Map String Decl). lam decl : Decl. 
+      match acc with (res, m) in 
+      match decl with DeclSem s1 then 
+        let str = nameGetStr s1.ident in 
+        match mapLookup str m with Some (DeclSem s2) then
+          match s1.tyAnnot with TyUnknown _ then
+            let m = mapRemove str m in 
+            (res, mapInsert str (DeclSem {s1 with tyAnnot = s2.tyAnnot}) m)
+          else 
+            let m = mapRemove str m in 
+            (res, mapInsert str (DeclSem {s1 with args = s2.args, cases = s2.cases}) m)
+        else 
+          (res, mapInsert str decl m)
+      else 
+        (cons decl res, m)
+    in 
+    match foldl work ([], mapEmpty cmpString) decls with (res, m) in 
+    concat res (mapValues m)
+
 
   sem matchDecl : Unknown -> Int -> Decl
   sem matchDecl d =
@@ -113,10 +136,15 @@ lang BootParserMLang = BootParser + MLangAst
       let a = bootParserGetDecl d i in 
       matchDecl a (bootParserGetId a)
     in
+
+    let decls = map parseDecl (range 0 nDecls 1) in 
+    let decls = reverse (mergeSems decls) in 
+
+
     DeclLang {ident = gname d 0,
               info = ginfo d 0,
               includes = includes,
-              decls = map parseDecl (range 0 nDecls 1)}
+              decls = decls}
   | 704 -> 
     DeclLet {ident = gname d 0,
              tyAnnot = gtype d 0,
@@ -227,6 +255,7 @@ let str = strJoin "\n" [
   "sum (Node (Leaf 10) (Leaf 20))"
 ] in
 let p = parseProgram str in 
+-- printLn (mlang2str p);
 match head p.decls with DeclType d in 
 utest d.ident with nameNoSym "Tree" using nameEqStr in 
 match get p.decls 1 with DeclConDef d in 
@@ -463,5 +492,28 @@ let str = strJoin "\n" [
   "()"
 ] in
 let p = parseProgram str in 
+
+let str = strJoin "\n" [
+  "lang L",
+  "  sem f : all a. a -> Int",
+  "  sem f a b =| x -> x",
+  "end",
+  "mexpr",
+  "()"
+] in
+let p = parseProgram str in 
+
+let res = _consume (parseMLangFile "stdlib/mexpr/shallow-patterns.mc") in 
+match res with (_, Right p) in 
+
+let printSemDecls = lam decl. match decl with DeclSem s then
+  printLn (nameGetStr s.ident)
+  -- ;
+  -- printLn (match pprintDeclCode 0 pprintEnvEmpty (DeclSem s) with (_, s) in s)
+   else () in 
+let printLang = lam decl. match decl with DeclLang l then
+  iter printSemDecls l.decls else () in 
+
+iter printLang p.decls;
 
 ()

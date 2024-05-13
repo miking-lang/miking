@@ -40,7 +40,7 @@ let name2pair : Name -> (String, Name) = lam n.
 let convertLangEnv : LangEnv -> NameEnv = lam langEnv. 
     use MLangAst in 
     -- let semIdents = map sem2ident (mapValues langEnv.sems) in 
-    let semPairs = map name2pair (map fst (mapValues langEnv.sems)) in 
+    let semPairs = map name2pair (map (lam t. t.0) (mapValues langEnv.sems)) in 
     let varEnv = mapFromSeq cmpString semPairs in 
 
     let synIdents = map (lam p. match p with (fst, _) in fst) (mapValues langEnv.syns) in 
@@ -326,17 +326,25 @@ lang MLangSym = MLangAst + MExprSym
         -- 2. Symbolize DeclType and params
         let symbDeclType = lam langEnv : LangEnv. lam typeDecl. 
             match typeDecl with DeclType t in 
+
+            -- Symbolize ident
             let ident = nameSym (nameGetStr t.ident) in 
 
+            -- Check for name conflicts with syns and other types.
             -- Throw an error if DeclType is included with the same identifier
             errorOnNameConflict includedTypes ident langIdent t.info ;
             -- Throw an error if a DeclSyn is  or defined with the same identifier
             errorOnNameConflict langEnv.syns ident langIdent t.info ; 
 
+            -- Symbolize parameters
             let env = updateEnv env langEnv in 
-            match mapAccumL setSymbol env.currentEnv.tyVarEnv t.params with (_, params) in
+            match mapAccumL setSymbol env.currentEnv.tyVarEnv t.params with (tyVarEnv, params) in
+
+            -- Symbolize type annotation
+            let tyAnnot = symbolizeType (updateTyVarEnv env tyVarEnv) t.tyIdent in
 
             let decl = DeclType {t with ident = ident,
+                                        tyIdent = tyAnnot,
                                         params = params} in 
 
             let langEnv = {langEnv with 
@@ -392,21 +400,30 @@ lang MLangSym = MLangAst + MExprSym
         -- let symbPairs : LangEnv -> (String, [Decl]) -> (LangEnv, Decl) = lam langEnv. lam pair. 
         let symbSemPairs = lam langEnv. lam pair. 
             match pair with (ident, ss) in 
-            let incls = map fst ss in 
+            let incls = map (lam t. t.0) ss in 
+            let tyAnnot = (head ss).2 in 
+
             let ident = nameSym ident in 
 
-            let nArgsToBeGenerated = subi (snd (head ss)) 1 in 
+            let nArgsToBeGenerated = subi ((lam t. t.1) (head ss)) 1 in 
+            (if lti nArgsToBeGenerated 0 then
+                errorMulti 
+                    [(NoInfo (), nameGetStr ident)]
+                    "The number of generated arguments for a semantic function can not be less than 0!"
+            else 
+                ());
+
             -- We need to copy the type annotation here!
             let decl = DeclSem {ident = ident,
-                                tyAnnot = TyUnknown {info = NoInfo ()},
-                                tyBody = TyUnknown {info = NoInfo ()},
+                                tyAnnot = tyAnnot,
+                                tyBody = tyunknown_,
                                 args = create nArgsToBeGenerated (lam. {ident = nameSym "", tyAnnot = TyUnknown {info = NoInfo ()}}),
                                 cases = [],
                                 includes = incls,
                                 info = NoInfo ()} in
         
             let langEnv = {langEnv with 
-                sems = mapInsert (nameGetStr ident) (ident, 0) langEnv.sems} in
+                sems = mapInsert (nameGetStr ident) (ident, 0, tyAnnot) langEnv.sems} in
 
             (langEnv, decl)
         in
@@ -422,21 +439,16 @@ lang MLangSym = MLangAst + MExprSym
 
             let env = updateEnv env langEnv in
 
-            let tyAnnot = symbolizeType env s.tyAnnot in 
-            let tyBody = symbolizeType env s.tyBody in 
-
             let includes = match mapLookup (nameGetStr s.ident) includedSems 
                            with Some xs then xs else [] in 
-            let includes = map fst includes in 
+            let includes = map (lam t. t.0) includes in 
 
             let decl = DeclSem {s with ident = ident,
-                                       tyAnnot = tyAnnot,
-                                       tyBody = tyBody,
                                        includes = includes} in 
         
             let paramNum = countParams (DeclSem s) in 
             let langEnv = {langEnv with 
-                sems = mapInsert (nameGetStr s.ident) (ident, paramNum) langEnv.sems} in
+                sems = mapInsert (nameGetStr s.ident) (ident, paramNum, s.tyAnnot) langEnv.sems} in
 
             (langEnv, decl)
         in 
@@ -445,17 +457,22 @@ lang MLangSym = MLangAst + MExprSym
 
 
         -- 5. Assign names to semantic bodies.
-        -- TODO: We must resymbolize the included cases as any recursive calls
-        -- now need to point to the new symbols.
         let symbSem2 = lam langEnv : LangEnv. lam declSem. 
             match declSem with DeclSem s in 
 
             let env = updateEnv env langEnv in
             
+            match symbolizeTyAnnot env s.tyAnnot with (tyVarEnv, tyAnnot) in 
+            let env = updateTyVarEnv env tyVarEnv in 
+            -- match symbolizeTyAnnot env s.tyBody with (tyVarEnv, tyBody) in 
+            -- let env = updateTyVarEnv env tyVarEnv in 
             let symbArg = lam env : SymEnv. lam arg : {ident : Name, tyAnnot : Type}. 
                 match setSymbol env.currentEnv.varEnv arg.ident with (varEnv, ident) in 
                 let env = updateVarEnv env varEnv in 
-                let tyAnnot = symbolizeType env arg.tyAnnot in 
+                match symbolizeTyAnnot env arg.tyAnnot with (tyVarEnv, tyAnnot) in 
+                let env = updateTyVarEnv env tyVarEnv in 
+
+
                 (env, {ident = ident, tyAnnot = tyAnnot})
             in
             match mapAccumL symbArg env s.args with (env, args) in 
@@ -469,6 +486,7 @@ lang MLangSym = MLangAst + MExprSym
             let cases = map symbCases s.cases in
 
             let decl = DeclSem {s with args = args,
+                                       tyAnnot = tyAnnot,
                                        cases = cases} in 
 
             (langEnv, decl)
@@ -890,6 +908,57 @@ let p : MLangProgram = {
     expr = uunit_
 } in 
 match symbolizeMLang symEnvDefault p with (_, p) in 
+utest isFullySymbolizedProgram p () with true in
+
+-- Test that a type parameter introduced in a semantic function type
+-- annotation can be used in the body of that semantic function.
+let p : MLangProgram = {
+    decls = [
+        decl_lang_ "L" [
+            decl_semty_cases_ "f" 
+                              (tyall_ "a" (tyarrow_ (tyvar_ "a") tyint_))
+                              [(pvarw_, let_ "x" 
+                                             (tyarrow_ (tyvar_ "a") tyint_)
+                                             (int_ 10))]
+        ]
+    ],
+    expr = uunit_
+} in 
+match symbolizeMLang symEnvDefault p with (_, p) in 
+utest isFullySymbolizedProgram p () with true in
+
+-- Test case related to type definitions in language fragments
+let p : MLangProgram = {
+    decls = [
+        decl_lang_ "L" [
+            decl_type_ "T" ["a"] (tyarrow_ (tyvar_ "a") tyint_),
+            decl_semty_cases_ "f" 
+                              (tyall_ "a" (tyarrow_ (tyvar_ "a") tyint_))
+                              [(pvarw_, let_ "x" 
+                                             (tyarrow_ (tyvar_ "a") (tyapp_ (tycon_ "T") (tyvar_ "a")))
+                                             (int_ 10))]
+        ]
+    ],
+    expr = uunit_
+} in 
+match symbolizeMLang symEnvDefault p with (_, p) in 
+utest isFullySymbolizedProgram p () with true in
+
+-- Test case related to type definitions in language fragments
+let p : MLangProgram = {
+    decls = [
+        decl_lang_ "L0" [
+            decl_semty_cases_ 
+                "f" 
+                (tyall_ "a" (tyarrow_ (tyvar_ "a") (tyvar_ "a")))
+                [(pvar_ "y", bind_ (let_ "x" (tyvar_ "a") uunit_) (var_ "y"))]
+        ],
+        decl_langi_ "L1" ["L0"] []
+    ],
+    expr = uunit_
+} in 
+match symbolizeMLang symEnvDefault p with (_, p) in 
+-- printLn (mlang2str p);
 utest isFullySymbolizedProgram p () with true in
 
 ()

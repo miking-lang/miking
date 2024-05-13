@@ -25,9 +25,13 @@ lang MainLang = MLangCompiler + BootParserMLang +
   sem evalMLangFile : String -> Expr
   sem evalMLangFile =| filepath ->
     let p = parseAndHandleIncludes filepath in 
+    printLn "Finished parsing and handling includes!";
     let p = constTransformProgram builtin p in
+    printLn "Finished const transformation!";
     match symbolizeMLang symEnvDefault p with (_, p) in 
+    printLn "Finished symbolization!";
     match _consume (checkComposition p) with (_, res) in 
+    printLn "Finished composition checks!";
     switch res 
       case Left errs then 
         iter raiseError errs ;
@@ -37,11 +41,14 @@ lang MainLang = MLangCompiler + BootParserMLang +
         let res = _consume (compile ctx p) in 
         match res with (_, rhs) in 
         match rhs with Right expr in
+        printLn "Finished compilation";
         myEval expr
     end
 end
 
 mexpr
 use MainLang in 
-evalMLangFile "stdlib/mexpr/ast.mc"; 
+-- evalMLangFile "stdlib/mexpr/ast.mc"; 
+-- evalMLangFile "stdlib/ocaml/external.mc"; 
+evalMLangFile "src/main/mi-lite.mc"; 
 ()

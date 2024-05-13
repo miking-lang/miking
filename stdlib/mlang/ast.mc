@@ -126,6 +126,7 @@ let countParams : use SemDeclAst in Decl -> Int = lam decl.
   match decl with DeclSem s in 
   recursive let countParamsType : Type -> Int = lam t. 
     switch t
+      case TyAll t then countParamsType t.ty
       case TyArrow arrow then addi 1 (countParamsType arrow.to)
       case _ then 0
     end
