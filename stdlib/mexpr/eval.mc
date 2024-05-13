@@ -203,7 +203,7 @@ lang ConstAppAst = ConstAst + PrettyPrint + Eq
     pprintCode indent env (appSeq_ (uconst_ r.const) r.args)
 end
 
-lang ConstDelta
+lang ConstDelta = ConstAst
   sem delta : Info -> (Const, [Expr]) -> Expr
 end
 

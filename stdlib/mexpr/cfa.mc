@@ -260,7 +260,7 @@ lang CFA = CFABase
 
   -- Base constraint generation function (must still be included manually in
   -- constraintGenFuns)
-  sem generateConstraints: GenFun
+  sem generateConstraints : GenFun
   sem generateConstraints graph =
   | t -> graph
 

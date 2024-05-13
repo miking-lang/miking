@@ -48,7 +48,7 @@ end
 
 mexpr
 use MainLang in 
--- evalMLangFile "stdlib/mexpr/ast.mc"; 
+evalMLangFile "stdlib/mexpr/cfa.mc"; 
 -- evalMLangFile "stdlib/ocaml/external.mc"; 
-evalMLangFile "src/main/mi-lite.mc"; 
+-- evalMLangFile "src/main/mi.mc"; 
 ()

@@ -18,7 +18,7 @@ include "cuda/intrinsics/tensor-slice.mc"
 include "cuda/intrinsics/tensor-sub.mc"
 include "pmexpr/extract.mc"
 
-lang CudaTranslate
+lang CudaTranslate = CudaAst
   sem generateIntrinsicExpr : CompileCEnv -> [CuTop] -> CExpr -> CExpr
                            -> ([CuTop], CStmt)
 

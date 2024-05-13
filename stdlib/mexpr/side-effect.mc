@@ -25,7 +25,7 @@ type SideEffectEnv = {
   arityId : Map Name Int
 }
 
-lang SideEffect
+lang SideEffect = Ast
   sem sideEffectEnvEmpty =
   | () -> {sideEffectId = setEmpty nameCmp, arityId = mapEmpty nameCmp}
 
