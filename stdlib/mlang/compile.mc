@@ -70,7 +70,8 @@ let createSubst = lam semSymbols. lam semNames. lam n.
   let s = nameGetStr n in 
   match mapLookup s semSymbols with Some xs then
     if optionIsSome (find (lam x. nameEqSym x n) xs) then
-      match mapLookup s semNames with Some res in res
+      match mapLookup s semNames with Some res then res
+      else n
     else
       n
   else 
