@@ -45,7 +45,7 @@ lang TyUsePrettyPrint = MExprPrettyPrint + TyUseAst + MLangIdentifierPrettyPrint
 end
 
 
-lang DeclPrettyPrint = PrettyPrint + MLangIdentifierPrettyPrint
+lang DeclPrettyPrint = PrettyPrint + MLangIdentifierPrettyPrint + DeclAst
   sem pprintDeclCode : Int -> PprintEnv -> Decl -> (PprintEnv, String)
   -- Intentionally left blank
 

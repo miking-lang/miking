@@ -168,7 +168,7 @@ changed.
 
 -/
 
-lang CarriedTypeBase
+lang CarriedTypeBase = Ast
   syn CarriedType =
 
   sem carriedRepr : CarriedType -> Type
