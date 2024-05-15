@@ -145,9 +145,10 @@ lang SemDeclPrettyPrint = DeclPrettyPrint + SemDeclAst + UnknownTypeAst
       else (env, None ())
     with (env, mDecl) in
     match
-      match (t.args, t.cases) with !([], []) then
+      match (t.args, t.cases) with !(None _, []) then
         -- sem impl
         match
+          match t.args with Some args in 
           mapAccumL (lam env. lam arg.
             match pprintEnvGetStr env arg.ident with (env, baseStr) in
             match arg.tyAnnot with TyUnknown _ then
@@ -155,7 +156,7 @@ lang SemDeclPrettyPrint = DeclPrettyPrint + SemDeclAst + UnknownTypeAst
             else
               match getTypeStringCode indent env arg.tyAnnot with (env, tyStr) in
               (env, join ["(", baseStr, " : ", tyStr, ")"])
-          ) env t.args
+          ) env args
         with (env, argStrs) in
         match
           mapAccumL (lam env. lam semcase.

@@ -235,7 +235,7 @@ lang CarriedTypeHelpers = CarriedTypeBase + SemDeclAst + PrettyPrint
           { ident = request.names.smapAccumL
           , tyAnnot = tyunknown_
           , tyBody = tyunknown_  -- TODO(vipa, 2023-03-09): Provide a proper type here
-          , args = [{ident = fName, tyAnnot = tyunknown_}, {ident = accName, tyAnnot = tyunknown_}]
+          , args = Some [{ident = fName, tyAnnot = tyunknown_}, {ident = accName, tyAnnot = tyunknown_}]
           , includes = []
           , cases =
             [ { pat = npcon_ constructor.name (npvar_ valName)
@@ -263,7 +263,7 @@ lang CarriedTypeHelpers = CarriedTypeBase + SemDeclAst + PrettyPrint
         { ident = request.names.get
         , tyAnnot = tyunknown_
         , tyBody = tyunknown_  -- TODO(vipa, 2023-03-09): provide a proper type here
-        , args = []
+        , args = Some []
         , includes = []
         , cases =
           [ { pat = npcon_ constructor.name (npvar_ targetName)
@@ -276,7 +276,7 @@ lang CarriedTypeHelpers = CarriedTypeBase + SemDeclAst + PrettyPrint
         { ident = request.names.set
         , tyAnnot = tyunknown_
         , tyBody = tyunknown_  -- TODO(vipa, 2023-03-09): provide a proper type here
-        , args = [{ident = valName, tyAnnot = tyunknown_}]
+        , args = Some [{ident = valName, tyAnnot = tyunknown_}]
         , includes = []
         , cases =
           [ { pat = npcon_ constructor.name (npvar_ targetName)
@@ -307,7 +307,7 @@ lang CarriedTypeHelpers = CarriedTypeBase + SemDeclAst + PrettyPrint
       , tyAnnot = ty
       , tyBody = ty
       , includes = []
-      , args =
+      , args = Some
         [ {ident = fName, tyAnnot = tyunknown_}
         , {ident = accName, tyAnnot = tyunknown_}
         ]
@@ -327,7 +327,7 @@ lang CarriedTypeHelpers = CarriedTypeBase + SemDeclAst + PrettyPrint
       , tyAnnot = ty
       , tyBody = ty
       , includes = []
-      , args =
+      , args = Some
         [ {ident = fName, tyAnnot = tyunknown_}
         ]
       , cases =
@@ -353,7 +353,7 @@ lang CarriedTypeHelpers = CarriedTypeBase + SemDeclAst + PrettyPrint
       , tyAnnot = ty
       , tyBody = ty
       , includes = []
-      , args =
+      , args = Some
         [ {ident = fName, tyAnnot = tyunknown_}
         , {ident = accName, tyAnnot = tyunknown_}
         ]
@@ -387,7 +387,7 @@ let _mkFieldStubs
       { ident = request.names.get
       , tyAnnot = ty
       , tyBody = ty
-      , args = []
+      , args = Some []
       , cases = []
       , includes = []
       , info = NoInfo ()
@@ -399,7 +399,7 @@ let _mkFieldStubs
       { ident = request.names.set
       , tyAnnot = ty
       , tyBody = ty
-      , args = [{ident = valName, tyAnnot = tyunknown_}]
+      , args = Some [{ident = valName, tyAnnot = tyunknown_}]
       , cases = []
       , includes = []
       , info = NoInfo ()
@@ -417,7 +417,7 @@ let _mkFieldStubs
       , tyAnnot = ty
       , includes = []
       , tyBody = ty
-      , args = [{ident = fName, tyAnnot = tyunknown_}, {ident = accName, tyAnnot = tyunknown_}]
+      , args = Some [{ident = fName, tyAnnot = tyunknown_}, {ident = accName, tyAnnot = tyunknown_}]
       , cases =
         [ { pat = npvar_ targetName
           , thn = match_
@@ -440,7 +440,7 @@ let _mkFieldStubs
       , tyAnnot = ty
       , includes = []
       , tyBody = ty
-      , args = [{ident = fName, tyAnnot = tyunknown_}]
+      , args = Some [{ident = fName, tyAnnot = tyunknown_}]
       , cases =
         [ { pat = npvar_ targetName
           , thn = setf_ (appf1_ (nvar_ fName) (getf_ (nvar_ targetName))) (nvar_ targetName)

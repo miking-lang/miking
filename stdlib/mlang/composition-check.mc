@@ -172,24 +172,7 @@ lang MLangCompositionCheck = MLangAst + MExprPatAnalysis + MExprAst + MExprPrett
           info = s.info
         })
   | DeclSem s ->
-    let paramNum = countParams (DeclSem s) in 
-
-    match s.includes with [] then 
-      _ok (insertParamMap env s.ident paramNum)
-    else 
-      let includeList = map 
-        (lam incl. match mapLookup incl env.paramMap with Some b in b) 
-        s.includes in 
-      let includeSet = setOfSeq subi includeList in 
-      let includeSet = setInsert paramNum includeSet in 
-
-      if eqi 1 (setSize includeSet) then
-        _ok (insertParamMap env s.ident paramNum)
-      else
-        _err (MismatchedSemParams {
-          semIdent = s.ident,
-          info = s.info
-        })
+    _ok env
 
   sem parseBase : CompositionCheckEnv -> 
                   Decl -> 

@@ -107,9 +107,13 @@ lang BootParserMLang = BootParser + MLangAst
     let parseCase = lam i. 
       {pat = gpat d i, thn = gterm d i}
     in 
-    let args = map 
-      (lam i. {ident = gname d i, tyAnnot = gtype d i})
-      (range 1 (addi 1 nArgs) 1) in 
+    let parseArg = (lam i. {ident = gname d i, tyAnnot = gtype d i}) in 
+
+    let args = if eqi nArgs -1 then 
+      None ()
+    else 
+      Some (map (lam i. {ident = gname d i, tyAnnot = gtype d i}) (range 1 (addi 1 nArgs) 1))
+    in
 
     DeclSem {ident = gname d 0,
              tyAnnot = gtype d 0,
@@ -404,7 +408,7 @@ match head p.decls with DeclLang d in
 utest nameGetStr d.ident with "IntArith" in
 match head d.decls with DeclSem s in 
 utest nameGetStr s.ident with "f" in 
-utest map (lam a. nameGetStr a.ident) s.args with ["x", "y"] using eqSeq eqString in 
+utest optionMap (map (lam a. nameGetStr a.ident)) s.args with Some (["x", "y"]) using optionEq (eqSeq eqString) in 
 -- printLn (mlang2str p) ;
 
 -- Test semantic function with type params
@@ -503,17 +507,17 @@ let str = strJoin "\n" [
 ] in
 let p = parseProgram str in 
 
-let res = _consume (parseMLangFile "stdlib/mexpr/shallow-patterns.mc") in 
-match res with (_, Right p) in 
+-- let res = _consume (parseMLangFile "stdlib/mexpr/shallow-patterns.mc") in 
+-- match res with (_, Right p) in 
 
-let printSemDecls = lam decl. match decl with DeclSem s then
-  printLn (nameGetStr s.ident)
-  -- ;
-  -- printLn (match pprintDeclCode 0 pprintEnvEmpty (DeclSem s) with (_, s) in s)
-   else () in 
-let printLang = lam decl. match decl with DeclLang l then
-  iter printSemDecls l.decls else () in 
+-- let printSemDecls = lam decl. match decl with DeclSem s then
+--   printLn (nameGetStr s.ident)
+--   -- ;
+--   -- printLn (match pprintDeclCode 0 pprintEnvEmpty (DeclSem s) with (_, s) in s)
+--    else () in 
+-- let printLang = lam decl. match decl with DeclLang l then
+--   iter printSemDecls l.decls else () in 
 
-iter printLang p.decls;
+-- iter printLang p.decls;
 
 ()

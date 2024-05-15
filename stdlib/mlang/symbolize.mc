@@ -404,27 +404,25 @@ lang MLangSym = MLangAst + MExprSym
             let incls = map (lam t. t.0) ss in 
             let tyAnnot = (head ss).2 in 
 
-            let ident = nameSym ident in 
+            let paramOpts : [Option [Name]] = map (lam t. t.1) ss in 
+            let params : [[Name]] = mapOption (lam x. x) paramOpts in 
+            let params = map (lam names. map (lam n. {ident = n, tyAnnot = tyunknown_}) names) params in 
+            -- -- Todo: check that they are all equal.
+            let args = if eqi (length params) 0 then None () else Some (head params) in 
 
-            let nArgsToBeGenerated = subi ((lam t. t.1) (head ss)) 1 in 
-            (if lti nArgsToBeGenerated 0 then
-                errorMulti 
-                    [(NoInfo (), nameGetStr ident)]
-                    "The number of generated arguments for a semantic function can not be less than 0!"
-            else 
-                ());
+            let ident = nameSym ident in 
 
             -- We need to copy the type annotation here!
             let decl = DeclSem {ident = ident,
                                 tyAnnot = tyAnnot,
                                 tyBody = tyunknown_,
-                                args = create nArgsToBeGenerated (lam. {ident = nameSym "", tyAnnot = TyUnknown {info = NoInfo ()}}),
+                                args = args,
                                 cases = [],
                                 includes = incls,
                                 info = NoInfo ()} in
         
             let langEnv = {langEnv with 
-                sems = mapInsert (nameGetStr ident) (ident, 0, tyAnnot) langEnv.sems} in
+                sems = mapInsert (nameGetStr ident) (ident, None (), tyAnnot) langEnv.sems} in
 
             (langEnv, decl)
         in
@@ -444,39 +442,45 @@ lang MLangSym = MLangAst + MExprSym
                            with Some xs then xs else [] in 
             let includes = map (lam t. t.0) includes in 
 
-            let decl = DeclSem {s with ident = ident,
-                                       includes = includes} in 
-        
-            let paramNum = countParams (DeclSem s) in 
-            let langEnv = {langEnv with 
-                sems = mapInsert (nameGetStr s.ident) (ident, paramNum, s.tyAnnot) langEnv.sems} in
-
-            (langEnv, decl)
-        in 
-        match mapAccumL symbSem langEnv semDecls with (langEnv, semDecls) in 
-
-
-
-        -- 5. Assign names to semantic bodies.
-        let symbSem2 = lam langEnv : LangEnv. lam declSem. 
-            match declSem with DeclSem s in 
-
-            let env = updateEnv env langEnv in
-            
-            match symbolizeTyAnnot env s.tyAnnot with (tyVarEnv, tyAnnot) in 
-            let env = updateTyVarEnv env tyVarEnv in 
-            -- match symbolizeTyAnnot env s.tyBody with (tyVarEnv, tyBody) in 
-            -- let env = updateTyVarEnv env tyVarEnv in 
             let symbArg = lam env : SymEnv. lam arg : {ident : Name, tyAnnot : Type}. 
                 match setSymbol env.currentEnv.varEnv arg.ident with (varEnv, ident) in 
                 let env = updateVarEnv env varEnv in 
                 match symbolizeTyAnnot env arg.tyAnnot with (tyVarEnv, tyAnnot) in 
                 let env = updateTyVarEnv env tyVarEnv in 
 
-
                 (env, {ident = ident, tyAnnot = tyAnnot})
             in
-            match mapAccumL symbArg env s.args with (env, args) in 
+            let result = match optionMap (lam a. mapAccumL symbArg env a) s.args with Some (env, args) 
+                         then (env, Some args) else (env, None ()) in 
+            match result with (env, args) in 
+
+            let decl = DeclSem {s with ident = ident,
+                                       includes = includes,
+                                       args = args} in 
+        
+            let langEnv = {langEnv with 
+                sems = mapInsert (nameGetStr s.ident) (ident, optionMap (map (lam a. a.ident)) args, s.tyAnnot) langEnv.sems} in
+
+            (langEnv, decl)
+        in 
+        match mapAccumL symbSem langEnv semDecls with (langEnv, semDecls) in 
+
+        -- 5. Assign names to semantic bodies.
+        let symbSem2 = lam langEnv : LangEnv. lam declSem. 
+            match declSem with DeclSem s in 
+
+            let env = updateEnv env langEnv in
+
+            match symbolizeTyAnnot env s.tyAnnot with (tyVarEnv, tyAnnot) in 
+            let env = updateTyVarEnv env tyVarEnv in 
+
+            let varEnv = match s.args with Some args then
+                let pairs = map (lam arg. (nameGetStr arg.ident, arg.ident)) args in 
+                mapUnion env.currentEnv.varEnv (mapFromSeq cmpString pairs)
+            else
+                env.currentEnv.varEnv
+            in 
+            let env = updateVarEnv env varEnv in 
 
             let symbCases = lam cas : {pat : Pat, thn : Expr}. 
                 match symbolizePat env (mapEmpty cmpString) cas.pat with (thnVarEnv, pat) in
@@ -486,9 +490,7 @@ lang MLangSym = MLangAst + MExprSym
             in
             let cases = map symbCases s.cases in
 
-            let decl = DeclSem {s with args = args,
-                                       tyAnnot = tyAnnot,
-                                       cases = cases} in 
+            let decl = DeclSem {s with cases = cases, tyAnnot = tyAnnot} in 
 
             (langEnv, decl)
         in
@@ -520,8 +522,9 @@ lang TestLang = MLangSym + SymCheck + MLangPrettyPrint
             (lam. (forAll nameHasSym (map (lam d. d.ident) l.defs)))
         )
     | DeclSem l -> 
-        let argIdents = map (lam a. a.ident) l.args in 
-        let argTys = map (lam a. a.tyAnnot) l.args in 
+        let args = optionGetOrElse (lam. []) l.args in 
+        let argIdents = map (lam a. a.ident) args in 
+        let argTys = map (lam a. a.tyAnnot) args in 
         let casePats = map (lam c. c.pat) l.cases in 
         let caseThns = map (lam c. c.thn) l.cases in 
 

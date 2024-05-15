@@ -119,7 +119,7 @@ let decl_nsemty_ = use MLangAst in
   lam n. lam ty.
   DeclSem {ident = n, tyAnnot = ty,
            tyBody = tyunknown_, includes = [],
-           args = [], cases = [], info = NoInfo {}}
+           args = Some [], cases = [], info = NoInfo {}}
 
 let decl_semty_ = use MLangAst in
   lam s. lam ty.
@@ -130,7 +130,7 @@ let decl_semty_cases_ = use MLangAst in
   let n = nameNoSym s in 
   DeclSem {ident = n, tyAnnot = ty,
            tyBody = tyunknown_, includes = [],
-           args = [],
+           args = Some [],
            cases = map (lam t. {pat = t.0, thn = t.1}) cases,
            info = NoInfo {}}
 
@@ -139,7 +139,7 @@ let decl_sem_args_ty_cases_ = use MLangAst in
   let n = nameNoSym s in 
   DeclSem {ident = n, tyAnnot = ty,
            tyBody = tyunknown_, includes = [],
-           args = map (lam t. {ident = nameNoSym t.0, tyAnnot = t.1}) args,
+           args = Some (map (lam t. {ident = nameNoSym t.0, tyAnnot = t.1}) args),
            cases = map (lam t. {pat = t.0, thn = t.1}) cases,
            info = NoInfo {}}
 
@@ -147,7 +147,7 @@ let decl_nsem_ = use MLangAst in
   lam n. lam nargs: [(Name, Type)]. lam cases: [(Pat, Expr)].
   DeclSem {ident = n, tyAnnot = tyunknown_,
            tyBody = tyunknown_, includes = [],
-           args = map (lam t. {ident = t.0, tyAnnot = t.1}) nargs,
+           args = Some (map (lam t. {ident = t.0, tyAnnot = t.1}) nargs),
            cases = map (lam t. {pat = t.0, thn = t.1}) cases,
            info = NoInfo {}}
 

@@ -226,7 +226,7 @@ lang MLangCompiler = MLangAst + MExprAst
                    ty = tyunknown_,
                    info = d.info}
     in 
-    let result = compileArgs d.args in 
+    let result = compileArgs (optionGetOrElse (lam. []) d.args) in 
     {ident = d.ident,
      tyAnnot = d.tyAnnot,
      tyBody = tyunknown_,
