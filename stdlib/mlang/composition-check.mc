@@ -17,8 +17,11 @@ type CompositionCheckEnv = {
   nextId : Int,
   -- Mapping from the symbolized name of a syn or sem to their base declaration
   baseMap : Map Name Name,
-  -- Mapping from symbolized name of a syn or sem to the amount of parameters
+  -- Mapping from symbolized name of a syn to the amount of parameters
   paramMap : Map Name Int,
+  -- Mapping form a symbolized sem name to the symbolized names of its arguments if they are defined.
+  semArgsMap : Map Name (Option [Name]),
+
   -- Mapping from symbolized names of a sem to its cases that are ordered by
   -- the subset relation on the patterns. 
   -- We also introduce a unique id for each case. We need this id to be able 
@@ -53,7 +56,8 @@ let _emptyCompositionCheckEnv = {
   nextId = 0,
   baseMap = mapEmpty nameCmp,
   paramMap = mapEmpty nameCmp,
-  semPatMap = mapEmpty nameCmp
+  semPatMap = mapEmpty nameCmp,
+  semArgsMap = mapEmpty nameCmp
 }
 
 let insertBaseMap : CompositionCheckEnv -> Name -> Name -> CompositionCheckEnv = 
@@ -63,6 +67,10 @@ let insertBaseMap : CompositionCheckEnv -> Name -> Name -> CompositionCheckEnv =
 let insertParamMap : CompositionCheckEnv -> Name -> Int -> CompositionCheckEnv = 
   lam env. lam k. lam v. 
     {env with paramMap = mapInsert k v env.paramMap}
+
+let insertArgsMap : CompositionCheckEnv -> Name -> Option [Name] -> CompositionCheckEnv =  
+  lam env. lam k. lam v.
+    {env with semArgsMap = mapInsert k v env.semArgsMap}
 
 let insertSemPatMap = lam env. lam k. lam v.
   {env with semPatMap = mapInsert k v env.semPatMap}
@@ -91,6 +99,12 @@ lang MLangCompositionCheck = MLangAst + MExprPatAnalysis + MExprAst + MExprPrett
   }
 
   syn CompositionWarning = 
+  | MismatchedSemArgNames {
+    semIdent : Name,
+    info : Info, 
+    args1 : [Name], 
+    args2 : [Name]
+  }
 
   sem raiseError : CompositionError -> ()
   sem raiseError = 
@@ -171,8 +185,43 @@ lang MLangCompositionCheck = MLangAst + MExprPatAnalysis + MExprAst + MExprPrett
           synIdent = s.ident,
           info = s.info
         })
+  | DeclSem {ident = ident, args = None _} ->
+    _ok (insertArgsMap env ident (None ()))
   | DeclSem s ->
-    _ok env
+    match s.args with Some args in 
+    let args = map (lam a. a.ident) args in 
+    let includeParams : [[Name]] = mapOption (lam incl. match mapLookup incl env.semArgsMap with Some res in res) s.includes in 
+
+    let errIfUnequalAmount : [Name] -> Option CompositionError = lam params.
+      if eqi (length params) (length args) then
+        None ()
+      else 
+        Some (MismatchedSemParams {
+          semIdent = s.ident,
+          info = s.info
+        })
+    in
+
+    let warnIfDifferentIdents : [Name] -> Option CompositionWarning = lam params.
+      if (eqSeq nameEqStr) params args then
+        None ()
+      else 
+        Some  (MismatchedSemArgNames {
+          semIdent = s.ident,
+          info = s.info,
+          args1 = args,
+          args2 = params
+        })
+    in
+
+    let errs = mapOption errIfUnequalAmount includeParams in 
+    let warnings = mapOption warnIfDifferentIdents includeParams in 
+
+    -- Todo: raise warnings here
+    if neqi (length errs) 0 then
+      _err (head errs)
+    else 
+       _ok (insertArgsMap env s.ident (Some args))
 
   sem parseBase : CompositionCheckEnv -> 
                   Decl -> 

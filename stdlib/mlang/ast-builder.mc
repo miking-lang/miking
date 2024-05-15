@@ -119,7 +119,7 @@ let decl_nsemty_ = use MLangAst in
   lam n. lam ty.
   DeclSem {ident = n, tyAnnot = ty,
            tyBody = tyunknown_, includes = [],
-           args = Some [], cases = [], info = NoInfo {}}
+           args = None (), cases = [], info = NoInfo {}}
 
 let decl_semty_ = use MLangAst in
   lam s. lam ty.
