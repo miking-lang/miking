@@ -507,6 +507,17 @@ let str = strJoin "\n" [
 ] in
 let p = parseProgram str in 
 
+let str = strJoin "\n" [
+  "lang L",
+  "  sem f : Int -> Int",
+  "end",
+  "mexpr",
+  "()"
+] in
+let p = parseProgram str in 
+match head p.decls with DeclLang l in 
+match head l.decls with DeclSem f in 
+match optionIsNone f.args with true in 
 -- let res = _consume (parseMLangFile "stdlib/mexpr/shallow-patterns.mc") in 
 -- match res with (_, Right p) in 
 

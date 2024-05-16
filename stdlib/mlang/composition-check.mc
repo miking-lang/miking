@@ -699,4 +699,20 @@ let p : MLangProgram = {
 match symbolizeMLang symEnvDefault p with (_, p) in 
 assertValid (checkComposition p);
 
+-- Test sem with arguments not defind on base definition
+printLn "\n\n\n\n\n\n";
+let p : MLangProgram = {
+    decls = [
+        decl_lang_ "L0" [
+          decl_semty_ "f" tyunknown_
+        ],
+        decl_langi_ "L1" ["L0"] [
+          decl_sem_ "f" [("x", tyint_)] []
+        ]
+    ],
+    expr = uunit_
+} in 
+match symbolizeMLang symEnvDefault p with (_, p) in 
+assertValid (checkComposition p);
+
 ()
