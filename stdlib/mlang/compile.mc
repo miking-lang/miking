@@ -186,6 +186,19 @@ lang MLangCompiler = MLangAst + MExprAst
   sem compileSem : CompilationContext -> Map String Name -> Decl -> RecLetBinding 
   sem compileSem ctx semNames = 
   | DeclSem d -> 
+    -- Create substitution function for param aliasing
+    let args = match d.args with Some args then args else [] in 
+    let paramAliases : [[Name]] = mapOption
+      (lam incl. match mapLookup incl ctx.compositionCheckEnv.semArgsMap with Some opt in opt)
+      d.includes 
+    in 
+    let argsIdents : [Name] = map (lam a. a.ident) args in 
+
+    let pairs = join (map (lam params. zip params argsIdents) paramAliases) in 
+    let paramAliasMap = mapFromSeq nameCmp pairs in 
+    let subst2 = lam n. mapLookupOrElse (lam. n) n paramAliasMap in
+
+    -- Create subst for recursive all semantic functions
     let subst = createSubst ctx.semSymbols semNames in 
     let targetName = nameSym "target" in 
     let target = nvar_ targetName in 
@@ -207,7 +220,7 @@ lang MLangCompiler = MLangAst + MExprAst
                 with Some x then x
                 else error "CompositionCheckEnv must contain the ordered cases for all semantic functions!"
     in
-    let cases = map (lam c. {c with thn = subTmVarSymbol subst c.thn}) cases in 
+    let cases = map (lam c. {c with thn = subTmVarSymbol subst2 (subTmVarSymbol subst c.thn)}) cases in 
     let cases = map (lam c. {thn = c.thn, pat = c.pat}) cases in
     let body = compileBody cases in 
     recursive let compileArgs = lam args. 
@@ -430,4 +443,19 @@ let p : MLangProgram = {
 } in 
 utest testEval p with int_ 23 using eqExpr in
 
+-- Test semantic function with different paremeter names
+let p : MLangProgram = {
+    decls = [
+        decl_lang_ "L0" [
+          decl_sem_ "f" [("x", tyunknown_)] [(pint_ 0, var_ "x")]
+        ],
+        decl_langi_ "L1" ["L0"] [
+          decl_sem_ "f" [("y", tyunknown_)] [(pint_ 1, muli_ (int_ -1) (var_ "y"))]
+        ]
+    ],
+    expr = bind_ (use_ "L1")
+                 (addi_ ((appf2_ (var_ "f") (int_ 10) (int_ 0)))
+                        ((appf2_ (var_ "f") (int_ 10) (int_ 1))))
+} in 
+utest testEval p with int_ 0 using eqExpr in
 ()
