@@ -167,6 +167,7 @@ lang UtestDeclAst = DeclAst
   | DeclUtest {test : Expr,
                expected : Expr,
                tusing : Option Expr,
+               tonfail : Option Expr,
                info : Info}
 
   sem infoDecl =
