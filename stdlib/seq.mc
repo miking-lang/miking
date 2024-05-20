@@ -78,6 +78,20 @@ with [] using eqSeq eqi
 utest mapOption (lam a. if gti a 3 then Some (addi a 30) else None ()) []
 with [] using eqSeq eqi
 
+let mapiOption
+  : all a. all b.
+     (Int -> a -> Option b)
+  -> [a]
+  -> [b]
+  = lam f.
+    recursive let work = lam idx. lam as.
+      match as with [a] ++ as then
+        match f idx a with Some b
+        then cons b (work (addi idx 1) as)
+        else work (addi idx 1) as
+      else []
+    in work 0
+
 let for_
   : all a.
      [a]

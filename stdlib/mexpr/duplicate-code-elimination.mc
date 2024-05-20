@@ -187,6 +187,39 @@ lang MExprEliminateDuplicateCode = MExprAst
     match smapAccumL_Pat_Pat (eliminateDuplicateCodePat env) replaced p with (replaced, p) in
     match eliminateDuplicateCodeType env replaced (tyPat p) with (replaced, patTy) in
     (replaced, withTypePat patTy p)
+
+  sem eliminateDuplicateExternalsWithSummary : Expr -> (Map Name Name, Expr)
+  sem eliminateDuplicateExternalsWithSummary =| tm ->
+    eliminateDuplicateExternalsExpr (mapEmpty cmpString) (mapEmpty nameCmp) tm
+
+  sem eliminateDuplicateExternals : Expr -> Expr
+  sem eliminateDuplicateExternals =| tm ->
+    (eliminateDuplicateExternalsWithSummary tm).1
+
+  sem eliminateDuplicateExternalsExpr
+    : Map String Name -> Map Name Name -> Expr -> (Map Name Name, Expr)
+  sem eliminateDuplicateExternalsExpr externals replaced =
+  | TmExt r ->
+    let identStr = nameGetStr r.ident in
+    optionMapOrElse
+      (lam.
+        let externals = mapInsert identStr r.ident externals in
+        match eliminateDuplicateExternalsExpr externals replaced r.inexpr
+          with (replaced, inexpr)
+        in
+        (replaced, TmExt { r with inexpr = inexpr }))
+      (lam ident.
+        eliminateDuplicateExternalsExpr
+          externals
+          (mapInsert r.ident ident replaced)
+          r.inexpr)
+      (mapLookup identStr externals)
+  | TmVar r ->
+    optionMapOr (replaced, TmVar r)
+      (lam ident. (replaced, TmVar { r with ident = ident }))
+      (mapLookup r.ident replaced)
+  | tm ->
+    smapAccumL_Expr_Expr (eliminateDuplicateExternalsExpr externals) replaced tm
 end
 
 lang TestLang = MExprEliminateDuplicateCode + MExprEq + MExprSym
@@ -324,5 +357,12 @@ let expected = symbolize (bindall_ [
   type_ "T2" [] (tyseq_ (tycon_ "T1"))
 ]) in
 utest expr2str (eliminateDuplicateCode t) with expr2str expected using eqString in
+
+-- Tests that eliminateDuplicateExternalsWithSummary works.
+let sinExt = withInfo (i 0) (ext_ "sin" false (tyarrow_ tyfloat_ tyfloat_)) in
+let t = bind_ sinExt sinExt in
+match eliminateDuplicateExternalsWithSummary t with (replaced, t) in
+utest mapSize replaced with 1 in
+utest eliminateDuplicateCode t with sinExt using eqExpr in
 
 ()

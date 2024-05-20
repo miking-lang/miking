@@ -18,6 +18,15 @@ utest optionEq eqi (Some 10) (Some 11) with false
 utest optionEq eqi (Some 10) (None ()) with false
 utest optionEq eqi (None ()) (None ()) with true
 
+let optionCmp : all a. (a -> a -> Int) -> Option a -> Option a -> Int =
+  lam cmp. lam o1. lam o2.
+    switch (o1, o2)
+    case (None _, None _) then 0
+    case (None _, Some _) then negi 1
+    case (Some _, None _) then 1
+    case (Some a, Some b) then cmp a b
+    end
+
 -- Applies a function to the contained value (if any).
 let optionMap: all a. all b. (a -> b) -> Option a -> Option b = lam f. lam o.
   match o with Some t then
@@ -160,6 +169,35 @@ let optionMapM: all a. all b. (a -> Option b) -> [a] -> Option [b] = lam f. lam 
 utest optionMapM (lam x. if gti x 2 then Some x else None ()) [3, 4, 5] with Some [3, 4, 5]
 utest optionMapM (lam x. if gti x 2 then Some x else None ()) [2, 3, 4] with None ()
 
+let optionMapAccumLM : all a. all b. all acc.
+  (acc -> a -> Option (acc, b))
+  -> acc
+  -> [a]
+  -> Option (acc, [b])
+  = lam f.
+    recursive let work = lam prefix. lam acc. lam l.
+      match l with [x] ++ l then
+        match f acc x with Some (acc, x) then
+          work (snoc prefix x) acc l
+        else None ()
+      else Some (acc, prefix)
+    in work []
+
+
+let optionMapiAccumLM : all a. all b. all acc.
+  (acc -> Int -> a -> Option (acc, b))
+  -> acc
+  -> [a]
+  -> Option (acc, [b])
+  = lam f.
+    recursive let work = lam prefix. lam idx. lam acc. lam l.
+      match l with [x] ++ l then
+        match f acc idx x with Some (acc, x) then
+          work (snoc prefix x) (addi idx 1) acc l
+        else None ()
+      else Some (acc, prefix)
+    in work [] 0
+
 -- 'optionFoldlM f acc list' folds over 'list' using 'f', starting with the value 'acc'.
 -- This is foldlM in the Option monad, i.e., if 'f' returns 'None' at any point the entire
 -- result is 'None'.
@@ -267,6 +305,14 @@ utest optionOr (Some 1) (Some 2) with (Some 1) using optionEq eqi
 utest optionOr (Some 1) (None ()) with (Some 1) using optionEq eqi
 utest optionOr (None ()) (Some 2) with (Some 2) using optionEq eqi
 utest optionOr (None ()) (None ()) with (None ()) using optionEq eqi
+
+-- Return the option if it contains a value, otherwise use the
+-- function to compute a value to return.
+let optionOrElse : all a. (() -> Option a) -> Option a -> Option a = lam f. lam o.
+  match o with Some _ then o else f ()
+
+utest optionOrElse (lam. Some 2) (Some 1) with (Some 1) using optionEq eqi
+utest optionOrElse (lam. Some 2) (None ()) with (Some 2) using optionEq eqi
 
 -- If exactly one option is `Some`, that option is returned,
 -- otherwise returns `None`.

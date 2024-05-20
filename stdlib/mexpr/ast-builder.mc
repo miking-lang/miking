@@ -596,7 +596,7 @@ let record_add = use MExprAst in
 
 let record_add_bindings : use Ast in [(String, Expr)] -> Expr -> Expr =
   lam bindings. lam record.
-  foldl (lam recacc. lam b : (String, use Ast in Expr). record_add b.0 b.1 recacc) record bindings
+  foldl (lam recacc. lam b. record_add b.0 b.1 recacc) record bindings
 
 -- Get an optional list of tuple expressions for a record. If the record does
 -- not represent a tuple, None () is returned.
