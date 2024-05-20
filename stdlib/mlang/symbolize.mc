@@ -426,7 +426,7 @@ lang MLangSym = MLangAst + MExprSym
             -- annotation and these are used in any of the cases, these must be updated
             -- if new symbols are introduced.
             let decl = DeclSem {ident = ident,
-                                tyAnnot = tyunknown_,
+                                tyAnnot = tyAnnot,
                                 tyBody = tyunknown_,
                                 args = args,
                                 cases = [],

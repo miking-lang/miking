@@ -85,8 +85,6 @@ lang BootParserMLang = BootParser + MLangAst
   sem matchDecl : Unknown -> Int -> Decl
   sem matchDecl d =
   | 702 -> 
-    -- TODO(voorberg, 08/05/2024): Elegantly handle the case in which nParams != 0,
-    -- but no constructors have been provided.
     let nCons = glistlen d 0 in 
     let nParams = if eqi nCons 0 then 0 else glistlen d 1 in 
 

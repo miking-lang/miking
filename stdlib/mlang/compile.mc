@@ -185,7 +185,8 @@ lang MLangCompiler = MLangAst + MExprAst
   sem compileSynTypes ctx =
   | DeclSyn s ->
     -- We only include a type definition if this is the base declaration of
-    -- a syntax type. 
+    -- a syntax type. To check that something is a base syn definition,
+    -- we check that it does not include any other definitions.
     if null s.includes then
       withExpr ctx (TmType {ident = s.ident,
                             params = s.params,
@@ -217,7 +218,6 @@ lang MLangCompiler = MLangAst + MExprAst
                               info = s.info}) in 
     let ctx = foldl compileDef ctx s.defs in 
     ctx
-    -- {ctx with synNameDefMap = mapInsert s.ident allDefs ctx.synNameDefMap}
   sem compileSem : CompilationContext -> Map String Name -> Map String Name -> Decl -> RecLetBinding 
   sem compileSem ctx semNames tyConNames = 
   | DeclSem d -> 
