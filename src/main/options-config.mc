@@ -140,5 +140,9 @@ let optionsConfig : ParseConfig Options = [
   ([("--to-wasm", "", "")],
     "Compile to WebAssembly",
     lam p: ArgPart Options.
-      let o: Options = p.options in {o with toWasm = true})
+      let o: Options = p.options in {o with toWasm = true}),
+  ([("--mlang-pipeline", "", "")],
+    "Compile using the MLang Pipeline. Note that this is an unstable, experimental feature!",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with mlangPipeline = true})
 ]

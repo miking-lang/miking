@@ -24,6 +24,7 @@ include "pmexpr/demote.mc"
 include "tuning/context-expansion.mc"
 include "tuning/tune-file.mc"
 include "jvm/compile.mc"
+include "mlang/main.mc"
 include "wasm/compile.mc"
 include "peval/compile.mc"
 
@@ -139,43 +140,49 @@ let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
 -- args: the program arguments to the executed program, if any
 let compile = lam files. lam options : Options. lam args.
   use MCoreCompile in
-  let compileFile = lam file.
-    let log = mkPhaseLogState options.debugPhases in
-    let ast = parseParseMCoreFile {
-      keepUtests = options.runTests,
-      pruneExternalUtests = not options.disablePruneExternalUtests,
-      pruneExternalUtestsWarning = not options.disablePruneExternalUtestsWarning,
-      findExternalsExclude = true,
-      eliminateDeadCode = not options.keepDeadCode,
-      keywords = mexprExtendedKeywords
-    } file in
-    endPhaseStats log "parsing" ast;
-    let ast = makeKeywords ast in
-    endPhaseStats log "make-keywords" ast;
 
-    -- Applies static and dynamic checks on the accelerated expressions, to
-    -- verify that the code within them are supported by the accelerate
-    -- backends.
-    -- TODO(larshum, 2022-06-29): Rewrite compilation so that we don't
-    -- duplicate symbolization and type-checking when compiling in debug mode.
-    let ast =
-      if options.debugAccelerate then
-        let ast = symbolizeExpr keywordsSymEnv ast in
-        let ast = typeCheck ast in
-        let ast = removeTypeAscription ast in
-        match checkWellFormedness options ast with (ast, _, _) in
-        demoteParallel ast
-      else demoteParallel ast in
-    endPhaseStats log "accelerate" ast;
+  if options.mlangPipeline then
+    printLn "WARNING: You are using an experimental, unstable pipeline.";
+    use MainLang in 
+    iter (compileMLangToOcaml options compileWithUtests) files
+  else
+    let compileFile = lam file.
+      let log = mkPhaseLogState options.debugPhases in
+      let ast = parseParseMCoreFile {
+        keepUtests = options.runTests,
+        pruneExternalUtests = not options.disablePruneExternalUtests,
+        pruneExternalUtestsWarning = not options.disablePruneExternalUtestsWarning,
+        findExternalsExclude = true,
+        eliminateDeadCode = not options.keepDeadCode,
+        keywords = mexprExtendedKeywords
+      } file in
+      endPhaseStats log "parsing" ast;
+      let ast = makeKeywords ast in
+      endPhaseStats log "make-keywords" ast;
 
-    -- Insert tuned values, or use default values if no .tune file present
-    let ast = insertTunedOrDefaults options ast file in
-    endPhaseStats log "tuning" ast;
+      -- Applies static and dynamic checks on the accelerated expressions, to
+      -- verify that the code within them are supported by the accelerate
+      -- backends.
+      -- TODO(larshum, 2022-06-29): Rewrite compilation so that we don't
+      -- duplicate symbolization and type-checking when compiling in debug mode.
+      let ast =
+        if options.debugAccelerate then
+          let ast = symbolizeExpr keywordsSymEnv ast in
+          let ast = typeCheck ast in
+          let ast = removeTypeAscription ast in
+          match checkWellFormedness options ast with (ast, _, _) in
+          demoteParallel ast
+        else demoteParallel ast in
+      endPhaseStats log "accelerate" ast;
 
-    -- If option --debug-parse, then pretty print the AST
-    (if options.debugParse then printLn (expr2str ast) else ());
+      -- Insert tuned values, or use default values if no .tune file present
+      let ast = insertTunedOrDefaults options ast file in
+      endPhaseStats log "tuning" ast;
 
-    compileWithUtests options file ast; ()
-  in
-  if options.accelerate then compileAccelerate files options args
-  else iter compileFile files
+      -- If option --debug-parse, then pretty print the AST
+      (if options.debugParse then printLn (expr2str ast) else ());
+
+      compileWithUtests options file ast; ()
+    in
+    if options.accelerate then compileAccelerate files options args
+    else iter compileFile files

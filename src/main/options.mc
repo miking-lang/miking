@@ -38,7 +38,8 @@ let optionsDefault : Options = {
   disableJsTCO = false,
   output = None (),
   tuneOptions = tuneOptionsDefault,
-  toWasm = false
+  toWasm = false,
+  mlangPipeline = false
 }
 
 -- Get the help string for options

@@ -35,5 +35,6 @@ type Options = {
   disableJsTCO : Bool,
   output : Option String,
   tuneOptions : TuneOptions,
-  toWasm: Bool
+  toWasm: Bool,
+  mlangPipeline : Bool
 }
