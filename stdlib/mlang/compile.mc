@@ -77,6 +77,17 @@ let createSubst = lam semSymbols. lam semNames. lam n.
   else 
     n
 
+let createSubst2 = lam semSymbols. lam semNames. lam n. 
+  let s = nameGetStr n in 
+  match mapLookup s semSymbols with Some xs then
+    if optionIsSome (find (lam x. nameEqStr x n) xs) then
+      match mapLookup s semNames with Some res then res
+      else n
+    else
+      n
+  else 
+    n
+
 type CompilationError
 con FoundIncludeError : {info : Info, path: String} -> CompilationError
 
@@ -115,13 +126,13 @@ lang MLangCompiler = MLangAst + MExprAst
                            tonfail = None (),
                            ty = tyunknown_,
                            info = d.info}))
-  | DeclType d -> _ok (
-    withExpr ctx (TmType {ident = d.ident,
-                          params = d.params,
-                          tyIdent = d.tyIdent,
-                          info = d.info,
-                          ty = tyunknown_,
-                          inexpr = uunit_}))
+  | DeclType d -> 
+    _ok (withExpr ctx (TmType {ident = d.ident,
+                               params = d.params,
+                               tyIdent = d.tyIdent,
+                               info = d.info,
+                               ty = tyunknown_,
+                               inexpr = uunit_}))
   | DeclConDef d -> _ok (
     withExpr ctx (TmConDef {ident = d.ident,
                             tyIdent = d.tyIdent,
@@ -145,46 +156,70 @@ lang MLangCompiler = MLangAst + MExprAst
 
     let nameSeq =  (map (lam s. match s with DeclSem s in (nameGetStr s.ident, s.ident)) semDecls) in 
     let semNames = mapFromSeq cmpString nameSeq in 
+
+    let typeNameSeq = (map (lam s. match s with DeclType s in (nameGetStr s.ident, s.ident)) typeDecls) in 
+    let synNameSeq = (map (lam s. match s with DeclSyn s in (nameGetStr s.ident, s.ident)) synDecls) in 
+    let tyConNames = mapFromSeq cmpString (concat typeNameSeq synNameSeq) in 
+
     let ctx = foldl withSemSymbol ctx (map (lam s. match s with DeclSem s in s.ident) semDecls) in 
 
     let res = _foldl compileDecl ctx typeDecls in 
-    let res = _bind res (lam ctx. _foldl compileDecl ctx synDecls) in 
+    let res = _map (lam ctx. foldl compileSynTypes ctx synDecls) res in 
+    let res = _map (lam ctx. foldl compileSynConstructors ctx synDecls) res in 
 
-    let compileSemToResult : CompilationContext -> [Decl] -> CompilationResult
+    let compileSemToResult : CompilationContext -> [Decl] -> CompilationContext
       = lam ctx. lam sems.
-        let bindings = map (compileSem ctx semNames) sems in 
-        _ok (withExpr ctx (TmRecLets {bindings = bindings,
-                                      inexpr = uunit_, 
-                                      ty = tyunknown_,
-                                      info = l.info}))
+        let bindings = map (compileSem ctx semNames tyConNames) sems in 
+        withExpr ctx (TmRecLets {bindings = bindings,
+                                 inexpr = uunit_, 
+                                 ty = tyunknown_,
+                                 info = l.info})
     in
-    _bind res (lam ctx. compileSemToResult ctx semDecls)
+    _map (lam ctx. compileSemToResult ctx semDecls) res
   | DeclSyn s -> 
-    let allDefs = concat s.defs (collectIncludedDefs ctx s.includes) in 
-
-    -- TODO(voorberg, 2024-04-23): Handle includes
-    -- NOTE(voorberg, 2024-04-23): We use the info field of the DeclSyn
-    --                             for the generated TmConDef.
-    let ctx = withExpr ctx (TmType {ident = s.ident,
-                                    params = s.params,
-                                    tyIdent = tyvariant_ [],
-                                    inexpr = uunit_,
-                                    ty = tyunknown_,
-                                    info = s.info}) in 
-    let compileDef = lam ctx. lam def : {ident : Name, tyIdent : Type}.
-      _ok (withExpr ctx (TmConDef {ident = def.ident,
-                                   tyIdent = def.tyIdent,
-                                   inexpr = uunit_,
-                                   ty = tyunknown_,
-                                   info = s.info}))
-    in
-    let res = _foldl compileDef ctx allDefs in 
-    _map (lam ctx. {ctx with synNameDefMap = mapInsert s.ident allDefs ctx.synNameDefMap}) res
+    error "Unexpected DeclSyn"
   | DeclSem s -> 
     error "Unexpected DeclSem!"
 
-  sem compileSem : CompilationContext -> Map String Name -> Decl -> RecLetBinding 
-  sem compileSem ctx semNames = 
+  sem compileSynTypes : CompilationContext -> Decl -> CompilationContext
+  sem compileSynTypes ctx =
+  | DeclSyn s ->
+    -- We only include a type definition if this is the base declaration of
+    -- a syntax type. 
+    if null s.includes then
+      withExpr ctx (TmType {ident = s.ident,
+                            params = s.params,
+                            tyIdent = tyvariant_ [],
+                            inexpr = uunit_,
+                            ty = tyunknown_,
+                            info = s.info})
+    else
+      ctx
+  
+  sem compileSynConstructors : CompilationContext -> Decl -> CompilationContext
+  sem compileSynConstructors ctx = 
+  | DeclSyn s ->
+    let baseIdent = (match mapLookup s.ident ctx.compositionCheckEnv.baseMap with Some ident in ident) in 
+
+    recursive let makeForallWrapper = lam params. lam ty. 
+      match params with [h] ++ t then
+        ntyall_ h (makeForallWrapper t ty)
+      else
+        ty
+    in 
+    let forallWrapper = makeForallWrapper s.params in 
+    let tyconApp = foldl (lam acc. lam n. tyapp_ acc (ntyvar_ n)) (ntycon_ baseIdent) s.params in 
+    let compileDef = lam ctx. lam def : {ident : Name, tyIdent : Type}.
+      withExpr ctx (TmConDef {ident = def.ident,
+                              tyIdent = forallWrapper (tyarrow_ def.tyIdent tyconApp),
+                              inexpr = uunit_,
+                              ty = tyunknown_,
+                              info = s.info}) in 
+    let ctx = foldl compileDef ctx s.defs in 
+    ctx
+    -- {ctx with synNameDefMap = mapInsert s.ident allDefs ctx.synNameDefMap}
+  sem compileSem : CompilationContext -> Map String Name -> Map String Name -> Decl -> RecLetBinding 
+  sem compileSem ctx semNames tyConNames = 
   | DeclSem d -> 
     -- Create substitution function for param aliasing
     let args = match d.args with Some args then args else [] in 
@@ -200,6 +235,7 @@ lang MLangCompiler = MLangAst + MExprAst
 
     -- Create subst for recursive all semantic functions
     let subst = createSubst ctx.semSymbols semNames in 
+
     let targetName = nameSym "target" in 
     let target = nvar_ targetName in 
 

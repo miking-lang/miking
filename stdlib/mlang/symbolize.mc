@@ -45,12 +45,13 @@ let convertLangEnv : LangEnv -> NameEnv = lam langEnv.
 
     let synIdents = map (lam p. match p with (fst, _) in fst) (mapValues langEnv.syns) in 
     let synPairs = map name2pair synIdents in 
-    let tyConEnv = mapFromSeq cmpString synPairs in
+    -- let tyConEnv = mapFromSeq cmpString synPairs in
 
     -- Todo: Detect duplicates in declared types, defined types and syns!
     let typeIdents = mapValues (mapUnion langEnv.includedTypes langEnv.definedTypes) in
     let typePairs = map name2pair typeIdents in
-    let tyConEnv = mapUnion tyConEnv (mapFromSeq cmpString typePairs) in
+    -- let tyConEnv = mapUnion tyConEnv (mapFromSeq cmpString typePairs) in
+    let tyConEnv = mapFromSeq cmpString typePairs in
 
     let conIdents = map
         (lam p. match p with (_, snd) in snd)
@@ -120,6 +121,7 @@ lang MLangSym = MLangAst + MExprSym
 
     sem symbolizeExpr env = 
     | TmUse t -> 
+        -- TODO: Prevent TmUse <lang> in that specific lang.
         match mapLookup (nameGetStr t.ident) env.langEnv with Some langEnv 
             then 
                 let langNameEnv = convertLangEnv langEnv in 
@@ -266,9 +268,9 @@ lang MLangSym = MLangAst + MExprSym
             let ident = nameSym (nameGetStr s.ident) in 
 
             -- Throw an error if DeclType is included with the same identifier
-            errorOnNameConflict includedTypes s.ident langIdent s.info ; 
+            -- errorOnNameConflict includedTypes s.ident langIdent s.info ; 
             -- throw an error if such a syn is already defined!
-            errorOnNameConflict langEnv.syns s.ident langIdent s.info ; 
+            -- errorOnNameConflict langEnv.syns s.ident langIdfent s.info ; 
 
             let env : SymEnv = convertNameEnv (convertLangEnv langEnv) in 
             match mapAccumL setSymbol env.currentEnv.tyVarEnv s.params with (_, params) in
@@ -281,7 +283,14 @@ lang MLangSym = MLangAst + MExprSym
                                        ident = ident,
                                        includes = includes} in 
 
+            let definedTypes = if eqi 0 (length includes) then
+                mapInsert (nameGetStr ident) ident langEnv.definedTypes
+            else 
+                langEnv.definedTypes
+            in
+
             let langEnv = {langEnv with 
+                definedTypes = definedTypes,
                 includedConstructors = concat langEnv.includedConstructors includedConstructors,
                 syns = mapInsert (nameGetStr ident) (ident, [], params) langEnv.syns} in
             (langEnv, synn)
@@ -412,9 +421,12 @@ lang MLangSym = MLangAst + MExprSym
 
             let ident = nameSym ident in 
 
-            -- We need to copy the type annotation here!
+            -- There are some complications here w.r.t. copying the type annotation
+            -- and type variables. If any type variables are introduced by the type
+            -- annotation and these are used in any of the cases, these must be updated
+            -- if new symbols are introduced.
             let decl = DeclSem {ident = ident,
-                                tyAnnot = tyAnnot,
+                                tyAnnot = tyunknown_,
                                 tyBody = tyunknown_,
                                 args = args,
                                 cases = [],
@@ -442,15 +454,15 @@ lang MLangSym = MLangAst + MExprSym
                            with Some xs then xs else [] in 
             let includes = map (lam t. t.0) includes in 
 
-            let symbArg = lam env : SymEnv. lam arg : {ident : Name, tyAnnot : Type}. 
+            let symbArgIdent = lam env : SymEnv. lam arg : {ident : Name, tyAnnot : Type}. 
                 match setSymbol env.currentEnv.varEnv arg.ident with (varEnv, ident) in 
                 let env = updateVarEnv env varEnv in 
-                match symbolizeTyAnnot env arg.tyAnnot with (tyVarEnv, tyAnnot) in 
-                let env = updateTyVarEnv env tyVarEnv in 
+                -- match symbolizeTyAnnot env arg.tyAnnot with (tyVarEnv, tyAnnot) in 
+                -- let env = updateTyVarEnv env tyVarEnv in 
 
-                (env, {ident = ident, tyAnnot = tyAnnot})
+                (env, {arg with ident = ident})
             in
-            let result = match optionMap (lam a. mapAccumL symbArg env a) s.args with Some (env, args) 
+            let result = match optionMap (lam a. mapAccumL symbArgIdent env a) s.args with Some (env, args) 
                          then (env, Some args) else (env, None ()) in 
             match result with (env, args) in 
 
@@ -474,6 +486,17 @@ lang MLangSym = MLangAst + MExprSym
             match symbolizeTyAnnot env s.tyAnnot with (tyVarEnv, tyAnnot) in 
             let env = updateTyVarEnv env tyVarEnv in 
 
+            let symbArgTy = lam env : SymEnv. lam arg : {ident : Name, tyAnnot : Type}. 
+                match symbolizeTyAnnot env arg.tyAnnot with (tyVarEnv, tyAnnot) in 
+                let env = updateTyVarEnv env tyVarEnv in 
+
+                (env, {arg with tyAnnot = tyAnnot})
+            in
+            let result = match optionMap (lam a. mapAccumL symbArgTy env a) s.args with Some (env, args) 
+                         then (env, Some args) else (env, None ()) in 
+            match result with (env, args) in 
+
+
             let varEnv = match s.args with Some args then
                 let pairs = map (lam arg. (nameGetStr arg.ident, arg.ident)) args in 
                 mapUnion env.currentEnv.varEnv (mapFromSeq cmpString pairs)
@@ -490,7 +513,7 @@ lang MLangSym = MLangAst + MExprSym
             in
             let cases = map symbCases s.cases in
 
-            let decl = DeclSem {s with cases = cases, tyAnnot = tyAnnot} in 
+            let decl = DeclSem {s with cases = cases, tyAnnot = tyAnnot, args = args} in 
 
             (langEnv, decl)
         in
@@ -812,9 +835,11 @@ let sugarSyn = decl_syn_ "Expr" [("IncrExpr", tycon_ "Expr")] in
 let sugarEval = decl_sem_ "eval" [] [(pcon_ "IncrExpr" (pvar_ "e"), addi_ (int_ 1) (appf1_ (var_ "eval") (var_ "e")))] in 
 let p : MLangProgram = {
     decls = [
-        decl_lang_ "MyIntArith" [baseSyn, baseSem],
+        decl_lang_ "MyIntArith" [baseSyn, baseSem]
+        ,
         decl_langi_ "SugaredIntArith" ["MyIntArith"] [sugarSyn, sugarEval]
     ],
+    -- expr = uunit_ 
     expr = bind_ (use_ "SugaredIntArith") 
                  (appf1_ (var_ "eval") 
                          (conapp_ "AddExpr" (utuple_ [(conapp_ "IncrExpr" (conapp_ "IntExpr" (int_ 21))),
