@@ -135,12 +135,6 @@ let optionsConfig : ParseConfig Options = [
     "Display this list of options",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with printHelp = true}),
-  -- TODO: I personally prefer the arg --wasm but to be consistent
-  -- I wrote --to-wasm
-  ([("--to-wasm", "", "")],
-    "Compile to WebAssembly",
-    lam p: ArgPart Options.
-      let o: Options = p.options in {o with toWasm = true}),
   ([("--mlang-pipeline", "", "")],
     "Compile using the MLang Pipeline. Note that this is an unstable, experimental feature!",
     lam p: ArgPart Options.

@@ -38,7 +38,6 @@ let optionsDefault : Options = {
   disableJsTCO = false,
   output = None (),
   tuneOptions = tuneOptionsDefault,
-  toWasm = false,
   mlangPipeline = false
 }
 
