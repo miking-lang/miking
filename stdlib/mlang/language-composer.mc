@@ -1,4 +1,4 @@
- include "ast.mc"
+include "ast.mc"
 include "ast-builder.mc"
 
 include "mexpr/info.mc"
@@ -13,26 +13,32 @@ include "map.mc"
 
 type DeclInfo
 con TypeInfo : use MLangAst in {ident : Name,
+                                orig : String,
                                 info : Info} -> DeclInfo
 con SemInfo : use MLangAst in {ident : Name,
                                info : Info,
+                               orig : String,
                                ty : Type,
                                args : Option [{ident : Name, tyAnnot: Type}]} -> DeclInfo
 con SynInfo : use MLangAst in {ident : Name,
                                info : Info,
+                               orig : String,
                                params : [Name]} -> DeclInfo
 
-let decl2info = lam d.
+let decl2info = lam orig. lam d.
   use MLangAst in 
   switch d
     case DeclSem s then SemInfo {ident = s.ident,
                                  info = s.info,
+                                 orig = orig,
                                  ty = s.tyAnnot,
                                  args = s.args}
     case DeclSyn s then SynInfo {ident = s.ident,
                                  info = s.info,
+                                 orig = orig,
                                  params = s.params}
     case DeclType t then TypeInfo {ident = t.ident,
+                                   orig = orig,
                                    info = t.info}     
   end                     
 
@@ -47,11 +53,11 @@ let extractInfoName : DeclInfo -> (Info, String) = lam info.
     case SynInfo s then (s.info, nameGetStr s.ident)
   end
 
-let projIdent : DeclInfo -> Name = lam info. 
+let projIdent = lam info. 
   switch info 
-    case TypeInfo t then t.ident
-    case SemInfo s then s.ident
-    case SynInfo s then s.ident
+    case TypeInfo t then (t.orig, nameGetStr t.ident)
+    case SemInfo t then (t.orig, nameGetStr t.ident)
+    case SynInfo t then (t.orig, nameGetStr t.ident)
   end
 
 
@@ -111,7 +117,7 @@ lang LanguageComposer = MLangAst
       let includedSems = filter isSemInfo foundIncludes in 
 
       let includes = map projIdent includedSems in 
-      (ctxWithDeclInfo ctx (langStr, nameGetStr d.ident) (decl2info decl), 
+      (ctxWithDeclInfo ctx (langStr, nameGetStr d.ident) (decl2info langStr decl), 
        DeclSem {d with includes = includes})
   | decl & DeclSyn d ->
     let identStr = nameGetStr d.ident in 
@@ -130,7 +136,7 @@ lang LanguageComposer = MLangAst
 
       let includes = map projIdent includedSyns in 
       let info = {ident = d.ident, info = d.info} in 
-      (ctxWithDeclInfo ctx (langStr, nameGetStr d.ident) (decl2info decl), 
+      (ctxWithDeclInfo ctx (langStr, nameGetStr d.ident) (decl2info langStr decl), 
        DeclSyn {d with includes = includes})
   | decl & DeclType d -> 
     let identStr = nameGetStr d.ident in 
@@ -143,7 +149,7 @@ lang LanguageComposer = MLangAst
     if not (null conflicts) then
       errorMulti errors "The declared type has an identifier that conflicts with included types or syns!"
     else
-      let info = decl2info decl in 
+      let info = decl2info langStr decl in 
       (ctxWithDeclInfo ctx (langStr, nameGetStr d.ident) info, decl)
   | _ -> error "Only Type, Syn, and Sem declarations can be contained inside of a langauge!"
 
@@ -173,8 +179,7 @@ lang LanguageComposer = MLangAst
     -- Iterate over the the toBeGenerated map and add the newly generated
     -- sem or syn to the context and list of decls.
     let gen = lam ctx. lam pairs : [((String, String), DeclInfo)].
-      let includes = map (lam p. match p with ((_, ident), _) in ident) pairs in 
-      let includes = map (nameNoSym) includes in 
+      let includes = map (lam p. match p with ((orig, ident), _) in (orig, ident)) pairs in 
 
       let pair = head pairs in 
       match pair with ((origLang, ident), info) in
@@ -186,7 +191,7 @@ lang LanguageComposer = MLangAst
                               defs = [],
                               includes = includes,
                               info = s.info} in 
-          let info = decl2info decl in 
+          let info = decl2info langStr decl in 
           (ctxWithDeclInfo ctx (langStr, nameGetStr s.ident) info, decl)
         case SemInfo s then
           let decl = DeclSem {ident = s.ident,
@@ -196,7 +201,7 @@ lang LanguageComposer = MLangAst
                               cases = [],
                               includes = includes,
                               info = s.info} in 
-          let info = decl2info decl in 
+          let info = decl2info langStr decl in 
           (ctxWithDeclInfo ctx (langStr, nameGetStr s.ident) info, decl)
       end 
     in 

@@ -3,6 +3,7 @@ include "./ast-builder.mc"
 include "./pprint.mc"
 include "./symbolize.mc"
 include "./composition-check.mc"
+include "./language-composer.mc"
 
 include "mexpr/eval.mc"
 include "mexpr/eq.mc"
@@ -21,9 +22,6 @@ type CompilationContext = use MLangAst in {
 
   compositionCheckEnv : CompositionCheckEnv,
 
-  -- A mapping from syn identifiers to their constructors
-  synNameDefMap : Map Name [{ident : Name, tyIdent : Type}],
-
   -- A map from identifier strings of semantic functions to the 
   -- symbolized names that the function has in different fragments.
   semSymbols : Map String [Name]
@@ -38,17 +36,10 @@ recursive let subTmVarSymbol = lam subst : (Name -> Name). lam expr.
   end
 end
 
-let collectIncludedDefs = lam ctx. lam includes. 
-  let getDefs = lam incl : Name. 
-    match mapLookup incl ctx.synNameDefMap with Some defs then defs 
-    else error "No definitions for included Syntax definition! This is illegal!"
-  in 
-  join (map getDefs includes)
 
 let _emptyCompilationContext : CompositionCheckEnv -> CompilationContext = lam env : CompositionCheckEnv. {
   exprs = [],
   compositionCheckEnv = env,
-  synNameDefMap = mapEmpty nameCmp,
   semSymbols = mapEmpty cmpString
 }
 
@@ -150,6 +141,8 @@ lang MLangCompiler = MLangAst + MExprAst
   -- TODO(voorberg, 2024-04-23): Add test case for error on DeclInclude
   | DeclInclude d -> _err (FoundIncludeError {info = d.info, path = d.path})
   | DeclLang l -> 
+    let langStr = nameGetStr l.ident in
+
     let typeDecls = filter isTypeDecl l.decls in 
     let synDecls = filter isSynDecl l.decls in 
     let semDecls = filter isSemDecl l.decls in 
@@ -165,11 +158,11 @@ lang MLangCompiler = MLangAst + MExprAst
 
     let res = _foldl compileDecl ctx typeDecls in 
     let res = _map (lam ctx. foldl compileSynTypes ctx synDecls) res in 
-    let res = _map (lam ctx. foldl compileSynConstructors ctx synDecls) res in 
+    let res = _map (lam ctx. foldl (compileSynConstructors langStr) ctx synDecls) res in 
 
     let compileSemToResult : CompilationContext -> [Decl] -> CompilationContext
       = lam ctx. lam sems.
-        let bindings = map (compileSem ctx semNames tyConNames) sems in 
+        let bindings = map (compileSem langStr ctx semNames) sems in 
         withExpr ctx (TmRecLets {bindings = bindings,
                                  inexpr = uunit_, 
                                  ty = tyunknown_,
@@ -197,10 +190,10 @@ lang MLangCompiler = MLangAst + MExprAst
     else
       ctx
   
-  sem compileSynConstructors : CompilationContext -> Decl -> CompilationContext
-  sem compileSynConstructors ctx = 
+  sem compileSynConstructors : String -> CompilationContext -> Decl -> CompilationContext
+  sem compileSynConstructors langStr ctx = 
   | DeclSyn s ->
-    let baseIdent = (match mapLookup s.ident ctx.compositionCheckEnv.baseMap with Some ident in ident) in 
+    let baseIdent = (match mapLookup (langStr, nameGetStr s.ident) ctx.compositionCheckEnv.baseMap with Some ident in ident) in 
 
     recursive let makeForallWrapper = lam params. lam ty. 
       match params with [h] ++ t then
@@ -218,8 +211,8 @@ lang MLangCompiler = MLangAst + MExprAst
                               info = s.info}) in 
     let ctx = foldl compileDef ctx s.defs in 
     ctx
-  sem compileSem : CompilationContext -> Map String Name -> Map String Name -> Decl -> RecLetBinding 
-  sem compileSem ctx semNames tyConNames = 
+  -- sem compileSem : CompilationContext -> Map String Name -> Map String Name -> Decl -> RecLetBinding 
+  sem compileSem langStr ctx semNames = 
   | DeclSem d -> 
     -- Create substitution function for param aliasing
     let args = match d.args with Some args then args else [] in 
@@ -252,7 +245,7 @@ lang MLangCompiler = MLangAst + MExprAst
                    info = d.info}
         else (error_ (str_ "Inexhaustive match!"))
     in 
-    let cases = match mapLookup d.ident ctx.compositionCheckEnv.semPatMap 
+    let cases = match mapLookup (langStr, nameGetStr d.ident) ctx.compositionCheckEnv.semPatMap 
                 with Some x then x
                 else error "CompositionCheckEnv must contain the ordered cases for all semantic functions!"
     in
@@ -303,10 +296,12 @@ lang TestLang = MLangCompiler + MLangSym + MLangCompositionCheck +
 
 mexpr
 use TestLang in 
+use LanguageComposer in 
 
 let simpleEval = lam e. eval (evalCtxEmpty ()) e in 
 
 let testCompile = lam p. 
+  let p = composeProgram p in 
   match symbolizeMLang symEnvDefault p with (_, p) in 
   match _consume (checkComposition p) with (_, res) in 
   match res with Right env in

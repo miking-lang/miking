@@ -2,6 +2,7 @@ include "./ast.mc"
 include "./ast-builder.mc"
 include "./pprint.mc"
 include "./symbolize.mc"
+include "./language-composer.mc"
 
 include "mexpr/pattern-analysis.mc"
 include "mexpr/ast-builder.mc"
@@ -16,22 +17,22 @@ include "digraph.mc"
 type CompositionCheckEnv = {
   nextId : Int,
   -- Mapping from the symbolized name of a syn or sem to their base declaration
-  baseMap : Map Name Name,
+  baseMap : Map (String, String) Name,
   -- Mapping from symbolized name of a syn to the amount of parameters
-  paramMap : Map Name Int,
+  paramMap : Map (String, String) Int,
   -- Mapping form a symbolized sem name to the symbolized names of its arguments if they are defined.
-  semArgsMap : Map Name (Option [Name]),
+  semArgsMap : Map (String, String) (Option [Name]),
 
   -- Mapping from symbolized names of a sem to its cases that are ordered by
   -- the subset relation on the patterns. 
   -- We also introduce a unique id for each case. We need this id to be able 
   -- to remove duplicate cases under languaage composition.
-  semPatMap : Map Name [use MLangAst in {pat: Pat, thn : Expr, id : Int}] 
+  semPatMap : Map (String, String) [use MLangAst in {pat: Pat, thn : Expr, id : Int}] 
 }
 
-let collectPats : CompositionCheckEnv -> [Name] -> [use MLangAst in {pat: Pat, thn : Expr, id : Int}]
+let collectPats : CompositionCheckEnv -> [(String, String)] -> [use MLangAst in {pat: Pat, thn : Expr, id : Int}]
   = lam env. lam includes.
-  let incl2pats = lam i : Name. 
+  let incl2pats = lam i : (String, String). 
     match mapLookup i env.semPatMap with Some pats then
       pats
     else error (concat 
@@ -52,23 +53,25 @@ let indexPairs : Int -> [(Int, Int)] = lam n.
   let pred = lam p. match p with (x, y) in and (neqi x y) (gti x y) in 
   filter pred pairs 
 
+let tupleStringCmp = tupleCmp2 cmpString cmpString
+
 let _emptyCompositionCheckEnv = {
   nextId = 0,
-  baseMap = mapEmpty nameCmp,
-  paramMap = mapEmpty nameCmp,
-  semPatMap = mapEmpty nameCmp,
-  semArgsMap = mapEmpty nameCmp
+  baseMap = mapEmpty tupleStringCmp,
+  paramMap = mapEmpty tupleStringCmp,
+  semPatMap = mapEmpty tupleStringCmp,
+  semArgsMap = mapEmpty tupleStringCmp
 }
 
-let insertBaseMap : CompositionCheckEnv -> Name -> Name -> CompositionCheckEnv = 
+let insertBaseMap : CompositionCheckEnv -> (String, String) -> Unknown -> CompositionCheckEnv = 
   lam env. lam k. lam v. 
     {env with baseMap = mapInsert k v env.baseMap}
     
-let insertParamMap : CompositionCheckEnv -> Name -> Int -> CompositionCheckEnv = 
+let insertParamMap : CompositionCheckEnv -> (String, String) -> Int -> CompositionCheckEnv = 
   lam env. lam k. lam v. 
     {env with paramMap = mapInsert k v env.paramMap}
 
-let insertArgsMap : CompositionCheckEnv -> Name -> Option [Name] -> CompositionCheckEnv =  
+let insertArgsMap : CompositionCheckEnv -> (String, String) -> Option [Name] -> CompositionCheckEnv =  
   lam env. lam k. lam v.
     {env with semArgsMap = mapInsert k v env.semArgsMap}
 
@@ -153,22 +156,27 @@ lang MLangCompositionCheck = MLangAst + MExprPatAnalysis + MExprAst + MExprPrett
                  Result CompositionWarning CompositionError CompositionCheckEnv
   sem parseAll env = 
   | DeclLang l -> 
-    _foldl parseAll env l.decls
-  | DeclSem s & d ->
-    _foldlfun env d [parseParams, parseBase, parseCases]
-  | DeclSyn s & d ->
-    _foldlfun env d [parseParams, parseBase]
+    _foldl (parseAllInner (nameGetStr l.ident)) env l.decls
   | other -> _ok env
 
-  sem parseParams : CompositionCheckEnv -> 
+  sem parseAllInner langStr env = 
+  | DeclSem s & d ->
+    _foldlfun env d [parseParams langStr, parseBase langStr, parseCases langStr]
+  | DeclSyn s & d ->
+    _foldlfun env d [parseParams langStr, parseBase langStr ]
+  | other -> _ok env
+
+  sem parseParams : String ->
+                    CompositionCheckEnv -> 
                     Decl -> 
                     Result CompositionWarning CompositionError CompositionCheckEnv
-  sem parseParams env = 
+  sem parseParams langStr env = 
   | DeclSyn s -> 
+    let str = nameGetStr s.ident in 
     let paramNum = length s.params in 
 
     match s.includes with [] then 
-      _ok (insertParamMap env s.ident paramNum)
+      _ok (insertParamMap env (langStr, str) paramNum)
     else 
       let paramNum = length s.params in 
 
@@ -179,14 +187,14 @@ lang MLangCompositionCheck = MLangAst + MExprPatAnalysis + MExprAst + MExprPrett
       let includeSet = setInsert paramNum includeSet in 
 
       if eqi 1 (setSize includeSet) then
-        _ok (insertParamMap env s.ident paramNum)
+        _ok (insertParamMap env (langStr, str) paramNum)
       else
         _err (MismatchedSynParams {
           synIdent = s.ident,
           info = s.info
         })
   | DeclSem {ident = ident, args = None _} ->
-    _ok (insertArgsMap env ident (None ()))
+    _ok (insertArgsMap env (langStr, nameGetStr ident) (None ()))
   | DeclSem s ->
     match s.args with Some args in 
     let args = map (lam a. a.ident) args in 
@@ -206,7 +214,7 @@ lang MLangCompositionCheck = MLangAst + MExprPatAnalysis + MExprAst + MExprPrett
       if (eqSeq nameEqStr) params args then
         None ()
       else 
-        Some  (MismatchedSemArgNames {
+        Some (MismatchedSemArgNames {
           semIdent = s.ident,
           info = s.info,
           args1 = args,
@@ -221,15 +229,16 @@ lang MLangCompositionCheck = MLangAst + MExprPatAnalysis + MExprAst + MExprPrett
     if neqi (length errs) 0 then
       _err (head errs)
     else 
-       _ok (insertArgsMap env s.ident (Some args))
+       _ok (insertArgsMap env (langStr, nameGetStr s.ident) (Some args))
 
-  sem parseBase : CompositionCheckEnv -> 
+  sem parseBase : String -> 
+                  CompositionCheckEnv -> 
                   Decl -> 
                   Result CompositionWarning CompositionError CompositionCheckEnv
-  sem parseBase env =
+  sem parseBase langStr env =
   | DeclSyn s -> 
     match s.includes with [] then 
-      _ok (insertBaseMap env s.ident s.ident)
+      _ok (insertBaseMap env (langStr, nameGetStr s.ident) s.ident)
     else 
       let includeList = map 
         (lam incl. match mapLookup incl env.baseMap with Some b in b) 
@@ -237,7 +246,7 @@ lang MLangCompositionCheck = MLangAst + MExprPatAnalysis + MExprAst + MExprPrett
       let includeSet = setOfSeq nameCmp includeList in 
 
       if eqi 1 (setSize includeSet) then
-        _ok (insertBaseMap env s.ident (head includeList))
+        _ok (insertBaseMap env (langStr, nameGetStr s.ident) (head includeList))
       else
         _err (DifferentBaseSyn {
           synIdent = s.ident,
@@ -245,7 +254,7 @@ lang MLangCompositionCheck = MLangAst + MExprPatAnalysis + MExprAst + MExprPrett
         })
   | DeclSem s ->
     match s.includes with [] then 
-      _ok (insertBaseMap env s.ident s.ident)
+      _ok (insertBaseMap env (langStr, nameGetStr s.ident)  s.ident)
     else 
       let includeList = map 
         (lam incl. match mapLookup incl env.baseMap with Some b in b) 
@@ -253,14 +262,14 @@ lang MLangCompositionCheck = MLangAst + MExprPatAnalysis + MExprAst + MExprPrett
       let includeSet = setOfSeq nameCmp includeList in 
 
       if eqi 1 (setSize includeSet) then
-        _ok (insertBaseMap env s.ident (head includeList))
+        _ok (insertBaseMap env (langStr, nameGetStr s.ident)  (head includeList))
       else
         _err (DifferentBaseSem {
           semIdent = s.ident, 
           info = s.info
         })
 
-  sem parseCases env = 
+  sem parseCases langStr env = 
   | DeclSem s -> 
     -- Assign unique ids to each case based on nextId in env
     let casesWithId = zipWith 
@@ -350,7 +359,7 @@ lang MLangCompositionCheck = MLangAst + MExprPatAnalysis + MExprAst + MExprPrett
     case Right graph then 
       let order = digraphTopologicalOrder graph in
       let orderedCases = map (lam i. get pats i) order in 
-      _ok (insertSemPatMap env s.ident orderedCases)
+      _ok (insertSemPatMap env (langStr, nameGetStr s.ident) orderedCases)
     end
 
 end
@@ -360,6 +369,7 @@ lang TestLang = MLangSym + MLangCompositionCheck end
 mexpr 
 use TestLang in 
 use MLangPrettyPrint in 
+use LanguageComposer in 
 
 let handleResult = lam res.
   switch _consume res 
@@ -426,6 +436,7 @@ let p : MLangProgram = {
     ],
     expr = bind_ (use_ "L2") (int_ 10)
 } in 
+let p = composeProgram p in
 match symbolizeMLang symEnvDefault p with (_, p) in 
 assertDifferentBaseSyn (checkComposition p) ;
 -- handleResult (checkComposition p) ;
@@ -445,6 +456,7 @@ let p : MLangProgram = {
     ],
     expr = bind_ (use_ "L2") (int_ 10)
 } in 
+let p = composeProgram p in
 match symbolizeMLang symEnvDefault p with (_, p) in 
 assertValid (checkComposition p) ;
 
@@ -463,6 +475,7 @@ let p : MLangProgram = {
     ],
     expr = bind_ (use_ "L2") (int_ 10)
 } in 
+let p = composeProgram p in
 match symbolizeMLang symEnvDefault p with (_, p) in 
 assertDifferentBaseSem (checkComposition p) ;
 
@@ -486,6 +499,7 @@ let p : MLangProgram = {
     ],
     expr = bind_ (use_ "L2") (int_ 10)
 } in 
+let p = composeProgram p in
 match symbolizeMLang symEnvDefault p with (_, p) in 
 assertValid (checkComposition p) ;
 
@@ -508,6 +522,7 @@ let p : MLangProgram = {
     ],
     expr = bind_ (use_ "L2") (int_ 10)
 } in 
+let p = composeProgram p in
 match symbolizeMLang symEnvDefault p with (_, p) in 
 assertValid (checkComposition p) ;
 
@@ -523,6 +538,7 @@ let p : MLangProgram = {
     ],
     expr = bind_ (use_ "L0") (int_ 10)
 } in 
+let p = composeProgram p in
 match symbolizeMLang symEnvDefault p with (_, p) in 
 assertValid (checkComposition p) ;
 
@@ -538,6 +554,7 @@ let p : MLangProgram = {
     ],
     expr = bind_ (use_ "L0") (int_ 10)
 } in 
+let p = composeProgram p in
 match symbolizeMLang symEnvDefault p with (_, p) in 
 assertMismatchedSemsParams (checkComposition p) ;
 
@@ -554,6 +571,7 @@ let p : MLangProgram = {
     ],
     expr = bind_ (use_ "L12") (appf1_ (var_ "f") (int_ 10))
 } in 
+let p = composeProgram p in
 match symbolizeMLang symEnvDefault p with (_, p) in 
 assertDifferentBaseSem (checkComposition p) ;
 
@@ -569,6 +587,7 @@ let p : MLangProgram = {
     ],
     expr = bind_ (use_ "L0") (int_ 10)
 } in 
+let p = composeProgram p in
 match symbolizeMLang symEnvDefault p with (_, p) in 
 assertValid (checkComposition p) ;
 
@@ -584,6 +603,7 @@ let p : MLangProgram = {
     ],
     expr = bind_ (use_ "L0") (int_ 10)
 } in 
+let p = composeProgram p in
 match symbolizeMLang symEnvDefault p with (_, p) in 
 assertInvalidSemParams (checkComposition p) ;
 
@@ -599,6 +619,7 @@ let p : MLangProgram = {
     ],
     expr = bind_ (use_ "L0") (int_ 10)
 } in 
+let p = composeProgram p in
 match symbolizeMLang symEnvDefault p with (_, p) in 
 assertInvalidSemParams (checkComposition p) ;
 
@@ -619,6 +640,7 @@ let p : MLangProgram = {
     ],
     expr = bind_ (use_ "L0") (int_ 10)
 } in 
+let p = composeProgram p in
 match symbolizeMLang symEnvDefault p with (_, p) in 
 assertInvalidSemParams (checkComposition p) ;
 
@@ -637,6 +659,7 @@ let p : MLangProgram = {
     ],
     expr = bind_ (use_ "L0") (int_ 10)
 } in 
+let p = composeProgram p in
 match symbolizeMLang symEnvDefault p with (_, p) in 
 assertValid (checkComposition p);
 
@@ -656,6 +679,7 @@ let p : MLangProgram = {
     ],
     expr = bind_ (use_ "L0") (int_ 10)
 } in 
+let p = composeProgram p in
 match symbolizeMLang symEnvDefault p with (_, p) in 
 assertValid (checkComposition p);
 
@@ -681,6 +705,7 @@ let p : MLangProgram = {
     ],
     expr = bind_ (use_ "L0") (int_ 10)
 } in 
+let p = composeProgram p in
 match symbolizeMLang symEnvDefault p with (_, p) in 
 assertValid (checkComposition p);
 
@@ -696,11 +721,11 @@ let p : MLangProgram = {
     ],
     expr = uunit_
 } in 
+let p = composeProgram p in
 match symbolizeMLang symEnvDefault p with (_, p) in 
 assertValid (checkComposition p);
 
 -- Test sem with arguments not defind on base definition
-printLn "\n\n\n\n\n\n";
 let p : MLangProgram = {
     decls = [
         decl_lang_ "L0" [
@@ -712,6 +737,7 @@ let p : MLangProgram = {
     ],
     expr = uunit_
 } in 
+let p = composeProgram p in
 match symbolizeMLang symEnvDefault p with (_, p) in 
 assertValid (checkComposition p);
 

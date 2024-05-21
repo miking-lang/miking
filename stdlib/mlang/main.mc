@@ -12,6 +12,7 @@ include "ast-builder.mc"
 include "symbolize.mc"
 include "composition-check.mc"
 include "include-handler.mc"
+include "language-composer.mc"
 include "const-transformer.mc"
 
 include "mexpr/eval.mc"
@@ -24,7 +25,7 @@ lang MainLang = MLangCompiler + BootParserMLang +
                 MLangSym + MLangCompositionCheck +
                 MExprPrettyPrint + MExprEval + MExprEq + 
                 MLangConstTransformer + MLangIncludeHandler +
-                PhaseStats
+                PhaseStats + LanguageComposer
 
   sem myEval : Expr -> Expr
   sem myEval =| e ->
@@ -68,6 +69,10 @@ lang MainLang = MLangCompiler + BootParserMLang +
 
     let p = constTransformProgram builtin p in
     endPhaseStats log "const-transformation" uunit_;
+
+    let p = composeProgram p in 
+    endPhaseStats log "language-inclusion-generation" uunit_;
+
 
     match symbolizeMLang symEnvDefault p with (_, p) in 
     endPhaseStats log "symbolization" uunit_;
