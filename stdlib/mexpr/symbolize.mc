@@ -58,39 +58,40 @@ let mergeNameEnv = lam l. lam r. {
   reprEnv = mapUnion l.reprEnv r.reprEnv
 }
 
-type LangEnv = {
-  ident : Name,
+-- type LangEnv = {
+--   ident : Name,
 
-  -- Map from the string of a syn identifier to a tuple 
-  -- in which the first element is the symbolized name of the syn identifier
-  -- and the second element is a list of symbolized constructor names.
-  -- The third element is the parameter list of the syn. 
-  syns: Map String (Name, [Name], [Name]),
-  -- Map from the string of a sem identifier to a tuple
-  -- in which teh first element is the list of parameters
-  -- The third element is the type annotation.
-  sems: Map String (Name, Option [Name], use MExprAst in Type),
-  definedTypes: Map String Name,
-  includedTypes: Map String Name,
-  includedConstructors: [Name],
-  includedLangEnvs: [String]
-}
+--   -- Map from the string of a syn identifier to a tuple 
+--   -- in which the first element is the symbolized name of the syn identifier
+--   -- and the second element is a list of symbolized constructor names.
+--   -- The third element is the parameter list of the syn. 
+--   syns: Map String (Name, [Name], [Name]),
+--   -- Map from the string of a sem identifier to a tuple
+--   -- in which teh first element is the list of parameters
+--   -- The third element is the type annotation.
+--   sems: Map String (Name, Option [Name], use MExprAst in Type),
+--   definedTypes: Map String Name,
+--   includedTypes: Map String Name,
+--   includedConstructors: [Name],
+--   includedLangEnvs: [String]
+-- }
 
-let _langEnvEmpty : Name -> LangEnv = lam n. {
-  ident = n,
-  syns = mapEmpty cmpString,
-  sems = mapEmpty cmpString,
-  definedTypes = mapEmpty cmpString,
-  includedTypes = mapEmpty cmpString,
-  includedConstructors = [],
-  includedLangEnvs = []
-}
+-- let _langEnvEmpty : Name -> LangEnv = lam n. {
+--   ident = n,
+--   syns = mapEmpty cmpString,
+--   sems = mapEmpty cmpString,
+--   definedTypes = mapEmpty cmpString,
+--   includedTypes = mapEmpty cmpString,
+--   includedConstructors = [],
+--   includedLangEnvs = []
+-- }
 
 type SymEnv = {
   allowFree : Bool, 
   ignoreExternals : Bool,
   currentEnv : NameEnv,
-  langEnv : Map String LangEnv
+  langEnv : Map String NameEnv,
+  namespaceEnv : Map String Name
 }
 
 let updateVarEnv = lam env : SymEnv . lam varEnv : Map String Name. 
@@ -112,7 +113,8 @@ let _symEnvEmpty : SymEnv = {
   allowFree = false,
   ignoreExternals = false,
   currentEnv = _nameEnvEmpty, 
-  langEnv = mapEmpty cmpString
+  langEnv = mapEmpty cmpString,
+  namespaceEnv = mapEmpty cmpString
 }
 
 let symEnvAddBuiltinTypes : all a. SymEnv -> [(String, a)] -> SymEnv

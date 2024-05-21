@@ -518,6 +518,12 @@ let findiLast : all a. (a -> Bool) -> [a] -> Option Int = lam p. lam seq.
 utest findiLast (lam x. eqi x 5) [4,5,2,5] with Some 3 using optionEq eqi
 utest findiLast (lam x. eqi x 0) [4,1,2] with None () using optionEq eqi
 
+let seqMem : all a. (a -> a -> Bool) -> [a] -> a -> Bool = lam eq. lam xs. lam x.
+  foldl or false (map (eq x) xs)
+
+utest seqMem eqi [1,2,3] 1 with true
+utest seqMem eqi [1,2,3] 0 with false
+utest seqMem eqi [] 0 with false
 
 recursive
   let findMap : all a. all b. (a -> Option b) -> [a] -> Option b = lam f. lam seq.
