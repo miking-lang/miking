@@ -36,6 +36,17 @@ recursive let subTmVarSymbol = lam subst : (Name -> Name). lam expr.
   end
 end
 
+recursive 
+  let subTyVar = lam subst : (Name -> Name). lam expr. 
+  use MExprAst in 
+  recursive let work = lam ty. switch ty 
+    case TyVar t then TyVar {t with ident = subst t.ident}
+    case other then smap_Type_Type work ty
+  end
+  in 
+  smap_Expr_Type work expr
+end
+
 
 let _emptyCompilationContext : CompositionCheckEnv -> CompilationContext = lam env : CompositionCheckEnv. {
   exprs = [],
@@ -68,16 +79,9 @@ let createSubst = lam semSymbols. lam semNames. lam n.
   else 
     n
 
-let createSubst2 = lam semSymbols. lam semNames. lam n. 
-  let s = nameGetStr n in 
-  match mapLookup s semSymbols with Some xs then
-    if optionIsSome (find (lam x. nameEqStr x n) xs) then
-      match mapLookup s semNames with Some res then res
-      else n
-    else
-      n
-  else 
-    n
+let createSubst2 : [Name] -> [Name] -> (Name -> Name) = lam orig. lam trgt.
+  let m = mapFromSeq nameCmp (zip orig trgt) in
+  lam n. mapLookupOrElse (lam. n) n m
 
 type CompilationError
 con FoundIncludeError : {info : Info, path: String} -> CompilationError
@@ -193,7 +197,7 @@ lang MLangCompiler = MLangAst + MExprAst
   sem compileSynConstructors : String -> CompilationContext -> Decl -> CompilationContext
   sem compileSynConstructors langStr ctx = 
   | DeclSyn s ->
-    let baseIdent = (match mapLookup (langStr, nameGetStr s.ident) ctx.compositionCheckEnv.baseMap with Some ident in ident) in 
+    let baseIdent = (match mapLookup (langStr, nameGetStr s.ident) ctx.compositionCheckEnv.baseMap with Some ident in ident) in
 
     recursive let makeForallWrapper = lam params. lam ty. 
       match params with [h] ++ t then
@@ -214,6 +218,10 @@ lang MLangCompiler = MLangAst + MExprAst
   -- sem compileSem : CompilationContext -> Map String Name -> Map String Name -> Decl -> RecLetBinding 
   sem compileSem langStr ctx semNames = 
   | DeclSem d -> 
+    let baseIdent = (match mapLookup (langStr, nameGetStr d.ident) ctx.compositionCheckEnv.baseMap with Some ident in ident) in
+    let baseTyAnnot = match mapLookup baseIdent ctx.compositionCheckEnv.semBaseToTyAnnot with Some ty in ty in 
+    let tyAnnot = match d.tyAnnot with TyUnknown _ then baseTyAnnot else d.tyAnnot in 
+
     -- Create substitution function for param aliasing
     let args = match d.args with Some args then args else [] in 
     let paramAliases : [[Name]] = mapOption
@@ -249,7 +257,27 @@ lang MLangCompiler = MLangAst + MExprAst
                 with Some x then x
                 else error "CompositionCheckEnv must contain the ordered cases for all semantic functions!"
     in
-    let cases = map (lam c. {c with thn = subTmVarSymbol subst2 (subTmVarSymbol subst c.thn)}) cases in 
+
+    -- Substitute parameters and sem symbols.
+    let work = lam c.
+      let origArgs : Option[Name] = match mapLookup c.orig ctx.compositionCheckEnv.semArgsMap with Some args in args in 
+      let origIdent : Name = match mapLookup c.orig ctx.compositionCheckEnv.semSymMap with Some ident in ident in 
+
+      let innerSubst = match origArgs with Some args then createSubst2 args argsIdents
+                       else (lam x. x) in 
+      let subst = (lam n. if nameEqSym n origIdent then d.ident else innerSubst n) in
+      {c with thn = subTmVarSymbol subst c.thn} in 
+    let cases = map work cases in
+
+    -- Substitute tyvars introduced by type signature.
+    -- Todo: handle case in which lengths are unequal.
+    let curSymbols = match mapLookup (langStr, nameGetStr d.ident) ctx.compositionCheckEnv.semTyVarMap with Some ns in ns in  
+    let work = lam c. 
+      let origSymbols = match mapLookup c.orig ctx.compositionCheckEnv.semTyVarMap with Some ns in ns in 
+      let subst = createSubst2 origSymbols curSymbols in 
+      {c with thn = subTyVar subst c.thn} in 
+    let cases = map work cases in 
+
     let cases = map (lam c. {thn = c.thn, pat = c.pat}) cases in
     let body = compileBody cases in 
     recursive let compileArgs = lam args. 
@@ -269,11 +297,18 @@ lang MLangCompiler = MLangAst + MExprAst
                    info = d.info}
     in 
     let result = compileArgs (optionGetOrElse (lam. []) d.args) in 
-    {ident = d.ident,
-     tyAnnot = d.tyAnnot,
-     tyBody = tyunknown_,
-     body = result,
-     info = d.info}
+    match d.args with Some _ then 
+      {ident = d.ident,
+      tyAnnot = tyAnnot,
+      tyBody = tyunknown_,
+      body = result,
+      info = d.info}
+    else 
+      {ident = d.ident,
+      tyAnnot = tyAnnot,
+      tyBody = tyunknown_,
+      body = (nulam_ (nameSym "") (semi_ (print_ (str_ langStr)) never_)),
+      info = d.info}
 
 
   sem compileProg : CompilationContext -> MLangProgram -> CompilationResult
@@ -489,4 +524,21 @@ let p : MLangProgram = {
                         ((appf2_ (var_ "f") (int_ 10) (int_ 1))))
 } in 
 utest testEval p with int_ 0 using eqExpr in
+
+-- Test language composition under quantified type variables
+let p : MLangProgram = {
+    decls = [
+        decl_lang_ "L0" [
+          decl_semty_cases_ 
+            "f" 
+            (tyall_ "a" (tyarrow_ (tyvar_ "a") (tyvar_ "a")))
+            [(pvar_ "x", bind_ (let_ "y" (tyvar_ "a") (var_ "x")) (var_ "y"))]
+        ],
+        decl_langi_ "L1" ["L0"] []
+    ],
+    expr = bind_ (use_ "L1") (appf1_ (var_ "f") (int_ 0))
+} in 
+utest testEval p with int_ 0 using eqExpr in
+let e = testCompile p in 
+printLn (expr2str (e));
 ()

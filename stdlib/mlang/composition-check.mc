@@ -22,16 +22,22 @@ type CompositionCheckEnv = {
   paramMap : Map (String, String) Int,
   -- Mapping form a symbolized sem name to the symbolized names of its arguments if they are defined.
   semArgsMap : Map (String, String) (Option [Name]),
+  -- ,
 
   -- Mapping from symbolized names of a sem to its cases that are ordered by
   -- the subset relation on the patterns. 
   -- We also introduce a unique id for each case. We need this id to be able 
   -- to remove duplicate cases under languaage composition.
-  semPatMap : Map (String, String) [use MLangAst in {pat: Pat, thn : Expr, id : Int}] 
+  semPatMap : Map (String, String) [use MLangAst in {pat: Pat, thn : Expr, id : Int, orig : (String, String)}],
+
+  semTyVarMap : Map (String, String) [Name],
+
+  semSymMap : Map (String, String) Name,
+
+  semBaseToTyAnnot : Map Name (use MExprAst in Type)
 }
 
-let collectPats : CompositionCheckEnv -> [(String, String)] -> [use MLangAst in {pat: Pat, thn : Expr, id : Int}]
-  = lam env. lam includes.
+let collectPats = lam env. lam includes.
   let incl2pats = lam i : (String, String). 
     match mapLookup i env.semPatMap with Some pats then
       pats
@@ -55,12 +61,15 @@ let indexPairs : Int -> [(Int, Int)] = lam n.
 
 let tupleStringCmp = tupleCmp2 cmpString cmpString
 
-let _emptyCompositionCheckEnv = {
+let _emptyCompositionCheckEnv : CompositionCheckEnv = {
   nextId = 0,
   baseMap = mapEmpty tupleStringCmp,
   paramMap = mapEmpty tupleStringCmp,
   semPatMap = mapEmpty tupleStringCmp,
-  semArgsMap = mapEmpty tupleStringCmp
+  semArgsMap = mapEmpty tupleStringCmp,
+  semTyVarMap = mapEmpty tupleStringCmp,
+  semSymMap = mapEmpty tupleStringCmp,
+  semBaseToTyAnnot = mapEmpty nameCmp
 }
 
 let insertBaseMap : CompositionCheckEnv -> (String, String) -> Unknown -> CompositionCheckEnv = 
@@ -253,7 +262,9 @@ lang MLangCompositionCheck = MLangAst + MExprPatAnalysis + MExprAst + MExprPrett
           info = s.info
         })
   | DeclSem s ->
+    let env = {env with semSymMap = mapInsert (langStr, nameGetStr s.ident) s.ident env.semSymMap} in 
     match s.includes with [] then 
+      let env = {env with semBaseToTyAnnot = mapInsert s.ident s.tyAnnot env.semBaseToTyAnnot} in 
       _ok (insertBaseMap env (langStr, nameGetStr s.ident)  s.ident)
     else 
       let includeList = map 
@@ -271,9 +282,20 @@ lang MLangCompositionCheck = MLangAst + MExprPatAnalysis + MExprAst + MExprPrett
 
   sem parseCases langStr env = 
   | DeclSem s -> 
+    recursive let gatherTyVars = lam ty. 
+      switch ty
+        case TyAll tyall then cons tyall.ident (gatherTyVars tyall.ty)
+        case _ then []
+      end
+    in 
+    let env = {env with semTyVarMap = mapInsert (langStr, nameGetStr s.ident) (gatherTyVars s.tyAnnot) env.semTyVarMap} in 
+
     -- Assign unique ids to each case based on nextId in env
     let casesWithId = zipWith 
-      (lam c. lam id. {id = addi env.nextId id, thn = c.thn, pat = c.pat})
+      (lam c. lam id. {orig = (langStr, nameGetStr s.ident),
+                       id = addi env.nextId id,
+                       thn = c.thn,
+                       pat = c.pat})
       s.cases
       (range 0 (length s.cases) 1)
     in 
