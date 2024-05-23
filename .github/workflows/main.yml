@@ -77,7 +77,7 @@ jobs:
           opam install -y dune linenoise pyml toml lwt owl ocamlformat.0.24.1
 
       - name: Build Miking
-        timeout-minutes: 10
+        timeout-minutes: 30
         run: |
           eval $(opam env)
           make install
