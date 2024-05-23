@@ -4,8 +4,8 @@ include "name.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/info.mc"
 include "mexpr/pprint.mc"
-include "./ast.mc"
-include "./ast-builder.mc"
+include "ast.mc"
+include "ast-builder.mc"
 
 -- Language fragment string parser translation
 let pprintLangString = lam str.
@@ -104,33 +104,6 @@ lang SynDeclPrettyPrint = DeclPrettyPrint + SynDeclAst + DataPrettyPrint
     with (env, defStrings) in
     (env, strJoin (pprintNewline indent)
                   (cons (join ["syn ", typeNameStr, params, " ="]) defStrings))
-end
-
-lang SynProdExtDeclAstPrettyPrint = DeclPrettyPrint + SynProdExtDeclAst
-  sem 
-  pprintDeclCode (indent : Int) (env : PprintEnv) = 
-  | DeclSynProdExt r -> 
-    match pprintTypeName env r.synIdent with (env, typeNameStr) in
-    match pprintTypeName env r.extIdent with (env, aliasStr) in
-    match getTypeStringCode (pprintIncr indent) env r.globalExt with (env, tyStr) in 
-    match
-      mapAccumL (lam env. lam syndef.
-        match pprintConName env syndef.ident with (env, str) in
-        match getTypeStringCode (pprintIncr indent) env syndef.tyIdent
-        with (env, ty) in
-        (env, join ["| extend ", str, " with ", ty])
-      ) env r.specificExt
-    with (env, defStrings) in
-    (env, concat (join [
-      pprintNewline indent,
-      "extend syn ",
-      typeNameStr,
-      " as ",
-      aliasStr,
-      " with ",
-      tyStr,
-      pprintNewline indent
-    ]) (strJoin (pprintNewline indent) defStrings))
 end
 
 lang SemDeclPrettyPrint = DeclPrettyPrint + SemDeclAst + UnknownTypeAst
@@ -260,7 +233,7 @@ lang MLangPrettyPrint = MExprPrettyPrint +
   DeclPrettyPrint + LangDeclPrettyPrint + SynDeclPrettyPrint +
   SemDeclPrettyPrint + LetDeclPrettyPrint + TypeDeclPrettyPrint +
   RecLetsDeclPrettyPrint + DataDeclPrettyPrint + UtestDeclPrettyPrint +
-  ExtDeclPrettyPrint + IncludeDeclPrettyPrint + SynProdExtDeclAstPrettyPrint + 
+  ExtDeclPrettyPrint + IncludeDeclPrettyPrint + 
   
 
   -- Top-level pretty printer
@@ -339,11 +312,6 @@ let prog2: MLangProgram = {
         ("Apple", tyint_),
         ("Pear", tyseq_ tyfloat_)
       ],
-      decl_syn_prod_ext_ 
-        "Bar"
-        "AExtension"
-        (tyrecord_ [("a", tyint_)])
-        [{ident = nameNoSym "Apple", tyIdent = (tyrecord_ [("b", tybool_)])}],
       decl_usem_ "getFruit" ["x"] [
         (pcon_ "Apple" (pvar_ "i"), appf1_ (var_ "int2string") (var_ "i")),
         (pcon_ "Pear" (pvar_ "fs"),
