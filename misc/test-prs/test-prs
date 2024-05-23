@@ -28,6 +28,8 @@ set -a options (fish_opt --short t --long test-target --required-val)
 set -a options (fish_opt --short b --long build-target --required-val)
 set -a options (fish_opt --short c --long clean-target --required-val)
 set -a options (fish_opt --short i --long install-target --required-val)
+set -a options (fish_opt --short x --long exit-code)
+set -a options (fish_opt --short l --long log-dir --required-val)
 set -a options (fish_opt --short h --long help)
 
 # Parse cmdline options
@@ -56,6 +58,8 @@ if set -q _flag_help
     echo "  -c --clean-target <target>   Make target to use for cleaning. Defaults to 'clean'."
     echo "  -i --install      <target>   Optional make target to run after testing succeeds for each repo state. Might run"
     echo "                               multiple times, last time in the maximally merged successful state."
+    echo "  -x --exit-code               Give non-zero exit code if a PR fails to merge, build, or test."
+    echo "  -l --log-dir      <dir>      Put logs from failed tests in this directory, don't prompt for interactive viewing."
     echo "  -h --help                    Show this help text."
 
     exit 0
@@ -135,12 +139,18 @@ function printFinalStatus
     end
     if test (count $test_fail) -gt 0
         echo "Test fail:  " $test_fail
-        echo
-        if read_confirm "Would you like to see the logs from failing tests? [Yn]:" y
-            if test -n "$PAGER"
-                $PAGER $tmpdir/$test_fail
-            else
-                less $tmpdir/$test_fail
+        if set -q _flag_l
+            mkdir -p $_flag_l
+            mv $tmpdir/$test_fail $_flag_l
+            echo "Moved failure logs to '$_flag_l'"
+        else
+            echo
+            if read_confirm "Would you like to see the logs from failing tests? [Yn]:" y
+                if test -n "$PAGER"
+                    $PAGER $tmpdir/$test_fail
+                else
+                    less $tmpdir/$test_fail
+                end
             end
         end
     end
@@ -232,3 +242,8 @@ cleanup
 doMerge "test" $allPrs
 printFinalStatus
 cleanup dir
+if set -q _flag_x && test (count $merge_fail) -gt 0 -o (count $test_fail) -gt 0
+    exit 1
+else
+    exit 0
+end
