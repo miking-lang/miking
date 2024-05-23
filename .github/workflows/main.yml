@@ -24,12 +24,6 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Cache opam packages
-        uses: actions/cache@v3
-        with:
-          path: ~/.opam
-          key: ${{ runner.os }}-opam-build
-
       - name: Install opam packages
         run: |
           # Install dependencies of owl
@@ -66,12 +60,6 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '17'
-
-      - name: Cache opam packages
-        uses: actions/cache@v3
-        with:
-          path: ~/.opam
-          key: ${{ runner.os }}-opam-build
 
       - name: Install opam packages
         run: |
