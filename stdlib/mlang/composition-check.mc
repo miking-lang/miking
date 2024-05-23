@@ -8,8 +8,7 @@
 -- (3) The number of type paramaters of a syntax declaration must be the same
 --     as that of the syntax declarations it includes.
 -- (4) The cases in a semantic function, including those that are included,
---     must form a directed acyclic graph in which edges between cases represent
---     the strict subset relation.
+--     can only overlap if they orderable by strict subset. 
 
 
 include "ast.mc"
