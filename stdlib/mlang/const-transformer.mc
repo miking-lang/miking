@@ -1,3 +1,13 @@
+-- Transform TmVar with identifiers that match the names of contants to TmConst
+--
+-- When parsing an MLang program using `boot-parser.mc`, constants such as 
+-- `addi`, `map` and `null` are reprsented in the AST as `TmVar`s with "addi",
+-- "map" and "null" as identifiers. This transformations converts such intrinsics
+-- to `CAddi`, `CMap`, and `CNull`. 
+--
+-- The transformation is done in accordance to a provided mapping from strings
+-- constants that is passed through the `builtins` parameter. The typical definition
+-- of this mapping can be found in `stdlib/mexper/builtin.mc`.
 include "ast.mc"
 
 include "string.mc"

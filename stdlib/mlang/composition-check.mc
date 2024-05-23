@@ -1,3 +1,17 @@
+-- Checks that the language composition in an MLang is valid. 
+-- 
+-- Language composition is valid if the following conditions are met: 
+-- (1) Each semantic function and syntax declaration that includes multiple
+--     other declarations, these declarations must share the same base.
+-- (2) The number of arguments to a semantic function must be the same as that 
+--     of the functions it includes.
+-- (3) The number of type paramaters of a syntax declaration must be the same
+--     as that of the syntax declarations it includes.
+-- (4) The cases in a semantic function, including those that are included,
+--     must form a directed acyclic graph in which edges between cases represent
+--     the strict subset relation.
+
+
 include "./ast.mc"
 include "./ast-builder.mc"
 include "./pprint.mc"

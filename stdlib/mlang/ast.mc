@@ -1,4 +1,17 @@
--- Language fragments for MLang, extending those of MExpr
+-- Language fragments for MLang, extending those of MExpr.
+--
+-- The Decl syntax fragment contains the top-level declarations in an
+-- MCore file such as DeclInclude, DeclUtest, DeclLang, but also
+-- declarations that must be inside language fragments (DeclSyn and DeclSem).
+-- As such it is possible to create invalid MCore ASTs using this fragment by,
+-- for example, putting a DeclInclude or DeclUtest inside of a DeclInclude or
+-- by putting a DeclSyn or DeclSem at the top-level.
+--
+-- This fragement also extends the MExpr Expr and Type syntax fragments
+-- by adding a TmUse and TyUse respectively. 
+--
+-- An MLang program consists of a list of Decls and the expression to be 
+-- evaluated.
 
 include "map.mc"
 include "name.mc"

@@ -1,3 +1,15 @@
+-- This language fragment BootParserMLang allows you to parse
+-- files or strings into MLang programs.
+--
+-- The parsing is done by calling the instrinsic functions 
+-- `bootParserParseMLangFile` and `bootParserMlangString` whose functionality
+-- is provided in boot. The result of a call to these intrinsics is the 
+-- opaque type CBootParserTree. We use various intrinsics, such as 
+-- `bootParserGetDecl` or `bootParserGetInt`, to inspect terms of this type.
+--
+-- BootParserMLang is built on top of the boot parser defined in 
+-- `stdlib/mexpr/boot-parser.mc`.
+
 include "ast.mc"
 include "ast-builder.mc"
 include "pprint.mc"
