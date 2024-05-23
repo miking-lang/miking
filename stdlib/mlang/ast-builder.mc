@@ -86,15 +86,6 @@ let decl_nsynn_ = use MLangAst in
            includes = [],
            info = NoInfo {}}
 
-let decl_syn_prod_ext_ = use MLangAst in 
-  lam s1. lam s2. lam t. lam se.
-    DeclSynProdExt {
-      synIdent = nameNoSym s1,
-      extIdent = nameNoSym s2,
-      globalExt = t,
-      specificExt = se
-    }
-
 let decl_nsyn_ = use MLangAst in
   lam n. lam defs: [(String, Type)].
   decl_nsynn_ n (map (lam t. (nameNoSym t.0, t.1)) defs)
