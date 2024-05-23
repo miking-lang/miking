@@ -42,7 +42,7 @@ lang UseAst = Ast
   sem withType (ty : Type) =
   | TmUse t -> TmUse {t with ty = ty}
 
-  sem smapAccumL_Expr_Expr (f : acc -> Expr -> (acc, Expr)) (acc : acc) =
+  sem smapAccumL_Expr_Expr f acc =
   | TmUse t ->
     match f acc t.inexpr with (acc, inexpr) in
     (acc, TmUse {t with inexpr = inexpr})

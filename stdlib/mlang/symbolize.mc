@@ -4,9 +4,9 @@ include "map.mc"
 include "name.mc"
 include "set.mc"
 
-include "./pprint.mc"
-include "./ast.mc"
-include "./language-composer.mc"
+include "pprint.mc"
+include "ast.mc"
+include "language-composer.mc"
 
 include "mexpr/symbolize.mc"
 include "mexpr/ast-builder.mc"

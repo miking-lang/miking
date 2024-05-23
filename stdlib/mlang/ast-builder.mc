@@ -2,7 +2,7 @@
 -- Functions for types are defined in ast.mc
 
 include "mexpr/ast-builder.mc"
-include "./ast.mc"
+include "ast.mc"
 
 
 -- Extending the bind function for mlang expressions

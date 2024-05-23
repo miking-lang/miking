@@ -23,12 +23,12 @@
 --     expressions based on the orderning that computed in `composition-check.mc`
 --     We also perform subtitution on the name of semantic functions, arguments,
 --     and type variables which are included from other language fragments.
-include "./ast.mc"
-include "./ast-builder.mc"
-include "./pprint.mc"
-include "./symbolize.mc"
-include "./composition-check.mc"
-include "./language-composer.mc"
+include "ast.mc"
+include "ast-builder.mc"
+include "pprint.mc"
+include "symbolize.mc"
+include "composition-check.mc"
+include "language-composer.mc"
 
 include "mexpr/eval.mc"
 include "mexpr/eq.mc"

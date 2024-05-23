@@ -12,11 +12,11 @@
 --     the strict subset relation.
 
 
-include "./ast.mc"
-include "./ast-builder.mc"
-include "./pprint.mc"
-include "./symbolize.mc"
-include "./language-composer.mc"
+include "ast.mc"
+include "ast-builder.mc"
+include "pprint.mc"
+include "symbolize.mc"
+include "language-composer.mc"
 
 include "mexpr/pattern-analysis.mc"
 include "mexpr/ast-builder.mc"
