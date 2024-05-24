@@ -1251,13 +1251,14 @@ lang RecLetsTypeCheck = TypeCheck + RecLetsAst + MetaVarDisableGeneralize + Prop
       {b with body = body}
     in
     let bindings = map typeCheckBinding bindings in
+    (if env.disableRecordPolymorphism then
+       iter (lam b. disableRecordGeneralize env.currentLvl b.tyBody) bindings
+     else ());
 
     -- Third: Produce a new environment with generalized types
     let envIteratee = lam acc. lam b : RecLetBinding.
       match
         if nonExpansive true b.body then
-          (if env.disableRecordPolymorphism then
-             disableRecordGeneralize env.currentLvl b.tyBody else ());
           gen env.currentLvl acc.1 b.tyBody
         else
           weakenMetaVars env.currentLvl b.tyBody;
