@@ -1214,18 +1214,19 @@ lang OpImplTypeCheck = OpImplAst + TypeCheck + ResolveType + PropagateTypeAnnot 
       errorSingle [x.info] msg
 end
 
-lang RecLetsTypeCheck = TypeCheck + RecLetsAst + MetaVarDisableGeneralize + PropagateTypeAnnot + SubstituteUnknown + ResolveType + NonExpansive + SubstituteNewReprs
+lang RecLetsTypeCheck = TypeCheck + RecLetsAst + MetaVarDisableGeneralize + PropagateTypeAnnot + SubstituteUnknown + ResolveType + SubstituteNewReprs
   sem typeCheckExpr env =
   | TmRecLets t ->
+    -- NOTE(aathn, 2024-05-24): This code assumes that each recursive let-binding
+    -- is a syntactic lambda, so that generalization is always safe.
     let newLvl = addi 1 env.currentLvl in
     -- First: Generate a new environment containing the recursive bindings
     let recLetEnvIteratee = lam acc. lam b: RecLetBinding.
       let tyAnnot = resolveType t.info env false b.tyAnnot in
       let tyAnnot = substituteNewReprs env tyAnnot in
       let tyBody = substituteUnknown t.info {env with currentLvl = newLvl} (Poly ()) tyAnnot in
-      let vars = if nonExpansive true b.body then (stripTyAll tyBody).0 else [] in
       let newEnv = _insertVar b.ident tyBody acc.0 in
-      let newTyVars = foldr (uncurry mapInsert) acc.1 vars in
+      let newTyVars = foldr (uncurry mapInsert) acc.1 (stripTyAll tyBody).0 in
       ((newEnv, newTyVars), {b with tyAnnot = tyAnnot, tyBody = tyBody})
     in
     match mapAccumL recLetEnvIteratee (env, mapEmpty nameCmp) t.bindings
@@ -1236,17 +1237,12 @@ lang RecLetsTypeCheck = TypeCheck + RecLetsAst + MetaVarDisableGeneralize + Prop
     -- Second: Type check the body of each binding in the new environment
     let typeCheckBinding = lam b: RecLetBinding.
       let body =
-        if nonExpansive true b.body then
-          let newEnv = {recLetEnv with currentLvl = newLvl, tyVarEnv = newTyVarEnv} in
-          match stripTyAll b.tyBody with (_, stripped) in
-          let body = typeCheckExpr newEnv (propagateTyAnnot (b.body, b.tyAnnot)) in
-          -- Unify the inferred type of the body with the annotated one
-          unify newEnv [infoTy b.tyAnnot, infoTm body] stripped (tyTm body);
-          body
-        else
-          let body = typeCheckExpr {recLetEnv with currentLvl = newLvl} b.body in
-          unify recLetEnv [infoTy b.tyAnnot, infoTm body] b.tyBody (tyTm body);
-          body
+        let newEnv = {recLetEnv with currentLvl = newLvl, tyVarEnv = newTyVarEnv} in
+        match stripTyAll b.tyBody with (_, stripped) in
+        let body = typeCheckExpr newEnv (propagateTyAnnot (b.body, b.tyAnnot)) in
+        -- Unify the inferred type of the body with the annotated one
+        unify newEnv [infoTy b.tyAnnot, infoTm body] stripped (tyTm body);
+        body
       in
       {b with body = body}
     in
@@ -1257,13 +1253,7 @@ lang RecLetsTypeCheck = TypeCheck + RecLetsAst + MetaVarDisableGeneralize + Prop
 
     -- Third: Produce a new environment with generalized types
     let envIteratee = lam acc. lam b : RecLetBinding.
-      match
-        if nonExpansive true b.body then
-          gen env.currentLvl acc.1 b.tyBody
-        else
-          weakenMetaVars env.currentLvl b.tyBody;
-          (b.tyBody, [])
-      with (tyBody, vars) in
+      match gen env.currentLvl acc.1 b.tyBody with (tyBody, vars) in
       let newEnv = _insertVar b.ident tyBody acc.0 in
       let newTyVars = foldr (uncurry mapInsert) acc.1 vars in
       ((newEnv, newTyVars), {b with tyBody = tyBody})
