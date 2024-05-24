@@ -2,9 +2,9 @@
 -- 
 -- Before the MLangCompiler can be used to lower MLang to MExpr, the following 
 -- transformations must have been performed (in order) as prerequisites:
--- (0) All constants that have been parsed as TmVars should be transformed
+-- (0) All `DeclInclude`s must have been handled by `include-handler.mc`.
+-- (1) All constants that have been parsed as TmVars should be transformed
 ---    into TmConst using `const-transformer.mc`.
--- (1) All `DeclInclude`s must have been handled by `include-handler.mc`.
 -- (2) The LanguageComposer in `language-composer.mc` must have been used
 --     to generate syns and sems under langauge composition.
 -- (3) The entire MLangProgram must have been symbolized using `symbolize.mc`.
@@ -107,6 +107,23 @@ let createSubst = lam semSymbols. lam semNames. lam n.
 let createSubst2 : [Name] -> [Name] -> (Name -> Name) = lam orig. lam trgt.
   let m = mapFromSeq nameCmp (zip orig trgt) in
   lam n. mapLookupOrElse (lam. n) n m
+
+let createSubst3 = lam env. lam origLang. lam targetLang. lam fallback. 
+  match mapLookup origLang env.compositionCheckEnv.langToSems with Some origNames in 
+  match mapLookup targetLang env.compositionCheckEnv.langToSems with Some targetNames in 
+
+  let origSet = setOfSeq nameCmp origNames in 
+  let targetPairs = map (lam n. (nameGetStr n, n)) targetNames in 
+  let targetMap = mapFromSeq cmpString targetPairs in 
+
+  lam n.
+    if setMem n origSet then
+      match mapLookup (nameGetStr n) targetMap with Some result in 
+      result 
+    else 
+      fallback n
+
+
 
 type CompilationError
 con FoundIncludeError : {info : Info, path: String} -> CompilationError
@@ -276,7 +293,10 @@ lang MLangCompiler = MLangAst + MExprAst
                    els = compileBody t,
                    ty = tyunknown_,
                    info = d.info}
-        else (error_ (str_ "Inexhaustive match!"))
+        -- else (error_ (str_ "Inexhaustive match!"))
+        else 
+          let s = join ["Inexhaustive match in ", langStr, ".", nameGetStr d.ident, "!\n"] in 
+          semi_ (print_ (str_ s)) never_
     in 
     let cases = match mapLookup (langStr, nameGetStr d.ident) ctx.compositionCheckEnv.semPatMap 
                 with Some x then x
@@ -288,9 +308,9 @@ lang MLangCompiler = MLangAst + MExprAst
       let origArgs : Option[Name] = match mapLookup c.orig ctx.compositionCheckEnv.semArgsMap with Some args in args in 
       let origIdent : Name = match mapLookup c.orig ctx.compositionCheckEnv.semSymMap with Some ident in ident in 
 
-      let innerSubst = match origArgs with Some args then createSubst2 args argsIdents
+      let fallback = match origArgs with Some args then createSubst2 args argsIdents
                        else (lam x. x) in 
-      let subst = (lam n. if nameEqSym n origIdent then d.ident else innerSubst n) in
+      let subst = createSubst3 ctx c.orig.0 langStr fallback in
       {c with thn = subTmVarSymbol subst c.thn} in 
     let cases = map work cases in
 
@@ -309,6 +329,7 @@ lang MLangCompiler = MLangAst + MExprAst
           match args with [h] ++ t then
             TmLam {ident = h.ident,
                    tyAnnot = h.tyAnnot,
+                  --  tyAnnot = tyunknown_,
                    tyParam = tyunknown_,
                    body = compileArgs t,
                    ty = tyunknown_,
@@ -564,6 +585,34 @@ let p : MLangProgram = {
     expr = bind_ (use_ "L1") (appf1_ (var_ "f") (int_ 0))
 } in 
 utest testEval p with int_ 0 using eqExpr in
-let e = testCompile p in 
-printLn (expr2str (e));
+
+-- Test language composition is correctly renaming bound recursive functions.
+let decls = [
+  decl_lang_ "L0" [
+    decl_sem_
+      "isodd" 
+      []
+      [(pvar_ "x", if_ (eqi_ (int_ 0) (var_ "x")) false_ (appf1_ (var_ "iseven") (subi_ (var_ "x") (int_ 1))))],
+    decl_sem_
+      "iseven"
+      []
+      []
+  ],
+  decl_langi_ "L1" ["L0"] [
+    decl_sem_
+      "iseven" 
+      []
+      [(pvar_ "x", if_ (eqi_ (int_ 0) (var_ "x")) true_ (appf1_ (var_ "isodd") (subi_ (var_ "x") (int_ 1))))]
+  ]
+] in 
+let p : MLangProgram = {
+    decls = decls,
+    expr = bind_ (use_ "L1") (appf1_ (var_ "iseven") (int_ 12))
+} in 
+utest testEval p with true_ using eqExpr in
+let p : MLangProgram = {
+    decls = decls,
+    expr = bind_ (use_ "L1") (appf1_ (var_ "iseven") (int_ 11))
+} in 
+utest testEval p with false_ using eqExpr in
 ()

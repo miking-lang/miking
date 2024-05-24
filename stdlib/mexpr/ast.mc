@@ -47,13 +47,13 @@ lang Ast
   sem smap_Expr_Expr : (Expr -> Expr) -> Expr -> Expr
   sem smap_Expr_Expr f =
   | p ->
-    let res: ((), Expr) = smapAccumL_Expr_Expr (lam. lam a. ((), f a)) () p in
+    let res = smapAccumL_Expr_Expr (lam. lam a. ((), f a)) () p in
     res.1
 
   sem sfold_Expr_Expr : all acc. (acc -> Expr -> acc) -> acc -> Expr -> acc
   sem sfold_Expr_Expr f acc =
   | p ->
-    let res: (acc, Expr) = smapAccumL_Expr_Expr (lam acc. lam a. (f acc a, a)) acc p in
+    let res = smapAccumL_Expr_Expr (lam acc. lam a. (f acc a, a)) acc p in
     res.0
 
   sem mapAccumLPre_Expr_Expr : all acc. (acc -> Expr -> (acc, Expr)) -> acc -> Expr -> (acc, Expr)
@@ -99,13 +99,13 @@ lang Ast
   sem smap_Expr_Type : (Type -> Type) -> Expr -> Expr
   sem smap_Expr_Type f =
   | p ->
-    let res: ((), Expr) = smapAccumL_Expr_Type (lam. lam a. ((), f a)) () p in
+    let res = smapAccumL_Expr_Type (lam. lam a. ((), f a)) () p in
     res.1
 
   sem sfold_Expr_Type : all acc. (acc -> Type -> acc) -> acc -> Expr -> acc
   sem sfold_Expr_Type f acc =
   | p ->
-    let res: (acc, Expr) = smapAccumL_Expr_Type (lam acc. lam a. (f acc a, a)) acc p in
+    let res = smapAccumL_Expr_Type (lam acc. lam a. (f acc a, a)) acc p in
     res.0
 
   -- NOTE(aathn, 2022-11-15): This function covers the compiler-added annotations
@@ -119,13 +119,13 @@ lang Ast
   sem smap_Expr_TypeLabel : (Type -> Type) -> Expr -> Expr
   sem smap_Expr_TypeLabel f =
   | p ->
-    let res: ((), Expr) = smapAccumL_Expr_TypeLabel (lam. lam a. ((), f a)) () p in
+    let res = smapAccumL_Expr_TypeLabel (lam. lam a. ((), f a)) () p in
     res.1
 
   sem sfold_Expr_TypeLabel : all acc. (acc -> Type -> acc) -> acc -> Expr -> acc
   sem sfold_Expr_TypeLabel f acc =
   | p ->
-    let res: (acc, Expr) = smapAccumL_Expr_TypeLabel (lam acc. lam a. (f acc a, a)) acc p in
+    let res = smapAccumL_Expr_TypeLabel (lam acc. lam a. (f acc a, a)) acc p in
     res.0
 
   sem smapAccumL_Expr_Pat : all acc. (acc -> Pat -> (acc, Pat)) -> acc -> Expr -> (acc, Expr)
@@ -151,13 +151,13 @@ lang Ast
   sem smap_Type_Type : (Type -> Type) -> Type -> Type
   sem smap_Type_Type f =
   | p ->
-    let res: ((), Type) = smapAccumL_Type_Type (lam. lam a. ((), f a)) () p in
+    let res = smapAccumL_Type_Type (lam. lam a. ((), f a)) () p in
     res.1
 
   sem sfold_Type_Type : all acc. (acc -> Type -> acc) -> acc -> Type -> acc
   sem sfold_Type_Type f acc =
   | p ->
-    let res: (acc, Type) = smapAccumL_Type_Type (lam acc. lam a. (f acc a, a)) acc p in
+    let res = smapAccumL_Type_Type (lam acc. lam a. (f acc a, a)) acc p in
     res.0
 
   -- Resolving application -- apply an accumulating function through links and aliases
@@ -166,7 +166,7 @@ lang Ast
 
   sem rapp_Type_Type : (Type -> Type) -> Type -> Type
   sem rapp_Type_Type f = | ty ->
-    let res : ((), Type) = rappAccumL_Type_Type (lam. lam t. ((), f t)) () ty in
+    let res  = rappAccumL_Type_Type (lam. lam t. ((), f t)) () ty in
     res.1
 
   -- Strip all-quantifiers and aliases to inspect the structure of the type
@@ -204,7 +204,7 @@ lang Ast
   sem sfold_Pat_Pat : all acc. (acc -> Pat -> acc) -> acc -> Pat -> acc
   sem sfold_Pat_Pat f acc =
   | p ->
-    let res: (acc, Pat) = smapAccumL_Pat_Pat (lam acc. lam a. (f acc a, a)) acc p in
+    let res = smapAccumL_Pat_Pat (lam acc. lam a. (f acc a, a)) acc p in
     res.0
 
   sem smapAccumL_Pat_Expr : all acc. (acc -> Expr -> (acc, Expr)) -> acc -> Pat -> (acc, Pat)

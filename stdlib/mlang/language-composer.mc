@@ -203,6 +203,7 @@ lang LanguageComposer = MLangAst
                               info = s.info} in 
           let info = decl2info langStr decl in 
           (ctxWithDeclInfo ctx (langStr, nameGetStr s.ident) info, decl)
+        case _ then never
       end 
     in 
     mapAccumL gen ctx (mapValues toBeGenerated)
