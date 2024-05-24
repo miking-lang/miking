@@ -1086,8 +1086,9 @@ lang LetTypeCheck =
     match
       if nonExpansive true t.body then
         match stripTyAll tyBody with (vars, stripped) in
-        let newTyVars = foldr (lam v. mapInsert v.0 (newLvl, v.1)) env.tyVarEnv vars in
-        let newEnv = {env with currentLvl = newLvl, tyVarEnv = newTyVars} in
+        let newTyVarEnv =
+          foldr (lam v. mapInsert v.0 (newLvl, v.1)) env.tyVarEnv vars in
+        let newEnv = {env with currentLvl = newLvl, tyVarEnv = newTyVarEnv} in
         let body = typeCheckExpr newEnv (propagateTyAnnot (t.body, tyAnnot)) in
         -- Unify the annotated type with the inferred one and generalize
         unify newEnv [infoTy t.tyAnnot, infoTm body] stripped (tyTm body);
@@ -1233,15 +1234,14 @@ lang RecLetsTypeCheck = TypeCheck + RecLetsAst + MetaVarDisableGeneralize + Prop
     with ((recLetEnv, tyVars), bindings) in
     let newTyVarEnv =
       mapFoldWithKey (lam vs. lam v. lam k. mapInsert v (newLvl, k) vs) recLetEnv.tyVarEnv tyVars in
+    let newEnv = {recLetEnv with currentLvl = newLvl, tyVarEnv = newTyVarEnv} in
 
     -- Second: Type check the body of each binding in the new environment
     let typeCheckBinding = lam b: RecLetBinding.
       let body =
-        let newEnv = {recLetEnv with currentLvl = newLvl, tyVarEnv = newTyVarEnv} in
-        match stripTyAll b.tyBody with (_, stripped) in
         let body = typeCheckExpr newEnv (propagateTyAnnot (b.body, b.tyAnnot)) in
         -- Unify the inferred type of the body with the annotated one
-        unify newEnv [infoTy b.tyAnnot, infoTm body] stripped (tyTm body);
+        unify newEnv [infoTy b.tyAnnot, infoTm body] (stripTyAll b.tyBody).1 (tyTm body);
         body
       in
       {b with body = body}
