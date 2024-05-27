@@ -1,3 +1,20 @@
+-- Parse an MLang program and handle insert the included declarations.
+--
+-- The semantic function `parseAndHandleIncludes` parses a MLang file
+-- at a specific filepath using the boot-parser. It then traverses it looks
+-- for any `DeclInclude`s in that program. When a `DeclInclude`, we first
+-- normalize the filepath. Then based on the normalized file path, one of 
+-- two things happen:
+-- (1) If this filepath has not yet been included, then we parse the program
+--     at this path and replace the DeclInclude with the top-level declarations
+--     in the included program. In this case, we also transitively include
+--     any files included by the included file in the same way.
+-- (2) If this filepath has already been included, then we get rid of it without
+--     adding any declarations. 
+-- 
+-- Note that this is a rather crude way of handling includes that can lead
+-- undesirable behavior in which the order of includes can cause significant
+-- changes to the behaviour of the program. 
 include "ast.mc"
 include "boot-parser.mc"
 include "pprint.mc"

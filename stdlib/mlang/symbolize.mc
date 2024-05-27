@@ -1,3 +1,9 @@
+-- Symbolization for MLang programs:
+-- (1) Assign names to all names introduced in MLang such as
+--     let-bindings, language fragments, syntax definitions, etc.
+-- (2) Desugar `TmUse` and `TyUse` by bringing the symbols defined in
+--     the specified langauge fragment into scope. 
+
 include "bool.mc"
 include "error.mc"
 include "map.mc"

@@ -1,3 +1,43 @@
+-- Establishes an inclusion relationship between the declarations of semantic 
+-- functions and syntax fragments.
+--
+-- The first purpose of this transformation is is to find any included syn or sem
+-- declarations when we have an explicit declaration. In the program below, 
+-- this transformation will establish the fact that L1.f and L2.f both 
+-- include L0.f and that L12.f includes both L1.f and L2.f. 
+-- ```
+-- lang L0 = 
+--   sem f = ...
+-- end
+-- lang L1 = L0
+--   sem f = ...
+-- end
+-- lang L2 = L0
+--   sem f = ...
+-- end
+-- lang L12 = L1 + L2 
+--   sem f = ...
+-- end
+-- ```
+-- 
+-- The second purpose of this transformation is to create explicit declarations
+-- for semantic functions and syntax fragements that are implicitly extended 
+-- through language composition. In the program below, this transformation
+-- will generate a semantic function declaration called L12.f that includes 
+-- L1.f and L2.f.
+-- lang L0 = 
+--   sem f = ...
+-- end
+-- lang L1 = L0
+--   sem f = ...
+-- end
+-- lang L2 = L0
+--   sem f = ...
+-- end
+-- lang L12 = L1 + L2 
+-- end
+-- ```
+
 include "ast.mc"
 include "ast-builder.mc"
 

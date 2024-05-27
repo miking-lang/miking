@@ -1,3 +1,8 @@
+-- The main file of the MLang pipline.
+-- The semantic function `compileMLangToOcaml`, takes a filepath as input. 
+-- It then puts the program at this file through the MLang pipeline and then
+-- compiles it to OCaml.
+
 include "result.mc"
 include "fileutils.mc"
 include "compile.mc"
@@ -66,18 +71,9 @@ lang MainLang = MLangCompiler + BootParserMLang +
         let expr = postprocess env.semSymMap expr in 
         endPhaseStats log "postprocess" expr;
 
-        printLn (expr2str expr);
+        -- printLn (expr2str expr);
 
         runner options filepath expr;
         ()
     end
 end
-
--- mexpr
--- use MainLang in 
--- evalMLangFile "stdlib/mexpr/cmp.mc"; 
--- compileMLangToOcaml "stdlib/mexpr/ast.mc"; 
-
--- evalMLangFile "stdlib/ocaml/external.mc"; 
--- evalMLangFile "src/main/mi.mc"; 
--- ()

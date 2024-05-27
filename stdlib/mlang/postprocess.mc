@@ -1,3 +1,11 @@
+-- This transformation converts the `Name`s of semantic functions to `Name`s 
+-- with the same symbol, but also have a unique string in the shape of 
+-- <LangName>_<SemName>. 
+-- 
+-- This transformation is added because some parts of the exising MExpr
+-- transformations to OCaml do not respect the symbols fully and also require
+-- the strings of names to be unique. 
+
 include "name.mc"
 include "map.mc"
 include "tuple.mc"
