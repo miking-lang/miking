@@ -53,7 +53,8 @@ utest 0.25 with 7.5 using neg geqf in
 utest 0.25 with 0.25 using geqf in
 utest 2.2 with 2.2 using eqf in          -- equal (float)
 utest 2.2 with 2.3 using neg eqf in
-utest subf 3.0 5.0 with negf 2.0 using eqf in
+utest subf 3.0 5.0 with negf 2.0
+      using eqf in
 utest subf 3.0 5.0 with negf 3.0
       using neg eqf in
 utest 0.25 with 0.25 using neg neqf in   -- not equal (float)
@@ -86,42 +87,39 @@ utest roundfi 1.5 with 2 in
 utest roundfi 0.75 with 1 in
 utest roundfi (negf 2.4) with negi 2 in
 utest roundfi (negf 2.0) with negi 2 in
-utest roundfi (negf 1.5) with negi 2 in
+utest roundfi (negf 2.5) with negi 3 in
 
--- utest negi (roundfi 2.5) with negi 3 in
--- `utest roundfi 2.5 with 3 in 
-
--- -- Conversion from Float to Int
--- -- Int-> Float
+-- Conversion from Float to Int
+-- Int-> Float
 utest int2float 0 with 0.0 using eqf in
 utest int2float 1 with 1.0 using eqf in
 utest int2float 17 with 17.0 using eqf in
 utest int2float (negi 10) with negf 10.0 using eqf in
 
--- -- Conversion from String to Float
--- utest stringIsFloat "42" with true in
--- utest stringIsFloat "3.14159" with true in
--- utest stringIsFloat "3.2e-2" with true in
--- utest stringIsFloat "3.2E-2" with true in
--- utest stringIsFloat "-3.2e2" with true in
--- utest stringIsFloat "a" with false in
--- -- String -> Float
--- utest string2float "42" with 42.0 using eqf in
--- utest string2float "3.14159" with 3.14159 using eqf in
--- utest string2float "3.2e-2" with 0.032 using eqf in
--- utest string2float "3.2e2" with 320.0 using eqf in
--- utest string2float "3e+2" with 300.0 using eqf in
--- -- Float -> String
+-- Conversion from String to Float
+utest stringIsFloat "42" with true in
+utest stringIsFloat "3.14159" with true in
+utest stringIsFloat "3.2e-2" with true in
+utest stringIsFloat "3.2E-2" with true in
+utest stringIsFloat "-3.2e2" with true in
+utest stringIsFloat "a" with false in
+-- String -> Float
+utest string2float "42" with 42.0 using eqf in
+utest string2float "3.14159" with 3.14159 using eqf in
+utest string2float "3.2e-2" with 0.032 using eqf in
+utest string2float "3.2e2" with 320.0 using eqf in
+utest string2float "3e+2" with 300.0 using eqf in
+-- Float -> String
 utest float2string 5.0e+25 with "5e+25" in
 utest float2string (negf 5.0e+25) with "-5e+25" in
 utest float2string (5.0e-5) with "5e-05" in
 utest float2string (negf 5.0e-5) with "-5e-05" in
 
--- -- Test: computing with floats
--- -- powf3 x = x^3
--- let powf3 = lam x. mulf x (mulf x x) in
--- let taxicab2_1 = addf (powf3 1.0) (powf3 12.0) in
--- let taxicab2_2 = addf (powf3 9.0) (powf3 10.0) in
--- utest taxicab2_1 with taxicab2_2 using eqf in
+-- Test: computing with floats
+-- powf3 x = x^3
+let powf3 = lam x. mulf x (mulf x x) in
+let taxicab2_1 = addf (powf3 1.0) (powf3 12.0) in
+let taxicab2_2 = addf (powf3 9.0) (powf3 10.0) in
+utest taxicab2_1 with taxicab2_2 using eqf in
 
 ()

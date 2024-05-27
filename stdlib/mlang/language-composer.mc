@@ -155,10 +155,10 @@ lang LanguageComposer = MLangAst
 
   sem addImplicitIncludes langStr includes definedSynsSems =
   | ctx ->
-    -- We are going to remove elements from the ctx.langMap that
-    -- (1) do not belong to an included langauge
-    -- (2) that have already been included explicitly through a syn or sem
-    -- (3) that are not Type declarations.
+    -- We are going to include elements from ctx.langMap that
+    -- (1) that are not Type declarations.
+    -- (2) belong to an included langauge
+    -- (3) that have not already been included explicitly through a syn or sem
     let pred = lam k. lam v. 
       match k with (origLang, ident) in 
         (and (not (isTypeInfo v))

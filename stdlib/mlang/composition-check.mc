@@ -54,6 +54,11 @@ type CompositionCheckEnv = {
   langToSems : Map String [Name]
 }
 
+let _foldlMfun : all w. all e. all a. all b.
+  a -> b -> [(a -> b -> Result w e a)] -> Result w e a
+  = lam a. lam b. lam fs. 
+    _foldlM (lam a. lam f. f a b) a fs
+
 let collectPats = lam env. lam includes.
   let incl2pats = lam i : (String, String). 
     match mapLookup i env.semPatMap with Some pats then
@@ -64,15 +69,9 @@ let collectPats = lam env. lam includes.
   in 
   join (map incl2pats includes)
 
-let carthesianProduct : all a. all b. [a] -> [b] -> [(a, b)] = lam xs. lam ys.
-  let work1 : a -> [b] -> [(a, b)] = lam x. lam ys. 
-    map (lam y. (x, y)) ys
-  in 
-  join (map (lam x. work1 x ys) xs)
-
 let indexPairs : Int -> [(Int, Int)] = lam n. 
   let indices = range 0 n 1 in 
-  let pairs = carthesianProduct indices indices in
+  let pairs = seqLiftA2 (lam a. lam b. (a, b)) indices indices in
   let pred = lam p. match p with (x, y) in and (neqi x y) (gti x y) in 
   filter pred pairs 
 
@@ -130,12 +129,6 @@ lang MLangCompositionCheck = MLangAst + MExprPatAnalysis + MExprAst + MExprPrett
   }
 
   syn CompositionWarning = 
-  | MismatchedSemArgNames {
-    semIdent : Name,
-    info : Info, 
-    args1 : [Name], 
-    args2 : [Name]
-  }
 
   sem raiseError : CompositionError -> ()
   sem raiseError = 
@@ -177,22 +170,22 @@ lang MLangCompositionCheck = MLangAst + MExprPatAnalysis + MExprAst + MExprPrett
 
   sem checkComposition : MLangProgram -> Result CompositionWarning CompositionError CompositionCheckEnv
   sem checkComposition =| prog -> 
-    _foldl parseAll _emptyCompositionCheckEnv prog.decls 
+    _foldlM parseAll _emptyCompositionCheckEnv prog.decls 
 
   sem parseAll : CompositionCheckEnv -> 
                  Decl -> 
                  Result CompositionWarning CompositionError CompositionCheckEnv
   sem parseAll env = 
   | DeclLang l -> 
-    _foldl (parseAllInner (nameGetStr l.ident)) env l.decls
-  | other -> _ok env
+    _foldlM (parseAllInner (nameGetStr l.ident)) env l.decls
+  | other -> result.ok env
 
   sem parseAllInner langStr env = 
   | DeclSem s & d ->
-    _foldlfun env d [parseParams langStr, parseBase langStr, parseCases langStr]
+    _foldlMfun env d [parseParams langStr, parseBase langStr, parseCases langStr]
   | DeclSyn s & d ->
-    _foldlfun env d [parseParams langStr, parseBase langStr ]
-  | other -> _ok env
+    _foldlMfun env d [parseParams langStr, parseBase langStr ]
+  | other -> result.ok env
 
   sem parseParams : String ->
                     CompositionCheckEnv -> 
@@ -204,7 +197,7 @@ lang MLangCompositionCheck = MLangAst + MExprPatAnalysis + MExprAst + MExprPrett
     let paramNum = length s.params in 
 
     match s.includes with [] then 
-      _ok (insertParamMap env (langStr, str) paramNum)
+      result.ok (insertParamMap env (langStr, str) paramNum)
     else 
       let paramNum = length s.params in 
 
@@ -215,14 +208,14 @@ lang MLangCompositionCheck = MLangAst + MExprPatAnalysis + MExprAst + MExprPrett
       let includeSet = setInsert paramNum includeSet in 
 
       if eqi 1 (setSize includeSet) then
-        _ok (insertParamMap env (langStr, str) paramNum)
+        result.ok (insertParamMap env (langStr, str) paramNum)
       else
-        _err (MismatchedSynParams {
+        result.err (MismatchedSynParams {
           synIdent = s.ident,
           info = s.info
         })
   | DeclSem {ident = ident, args = None _} ->
-    _ok (insertArgsMap env (langStr, nameGetStr ident) (None ()))
+    result.ok (insertArgsMap env (langStr, nameGetStr ident) (None ()))
   | DeclSem s ->
     match s.args with Some args in 
     let args = map (lam a. a.ident) args in 
@@ -238,26 +231,12 @@ lang MLangCompositionCheck = MLangAst + MExprPatAnalysis + MExprAst + MExprPrett
         })
     in
 
-    let warnIfDifferentIdents : [Name] -> Option CompositionWarning = lam params.
-      if (eqSeq nameEqStr) params args then
-        None ()
-      else 
-        Some (MismatchedSemArgNames {
-          semIdent = s.ident,
-          info = s.info,
-          args1 = args,
-          args2 = params
-        })
-    in
-
     let errs = mapOption errIfUnequalAmount includeParams in 
-    let warnings = mapOption warnIfDifferentIdents includeParams in 
 
-    -- Todo: raise warnings here
     if neqi (length errs) 0 then
-      _err (head errs)
+      result.err (head errs)
     else 
-       _ok (insertArgsMap env (langStr, nameGetStr s.ident) (Some args))
+       result.ok (insertArgsMap env (langStr, nameGetStr s.ident) (Some args))
 
   sem parseBase : String -> 
                   CompositionCheckEnv -> 
@@ -269,7 +248,7 @@ lang MLangCompositionCheck = MLangAst + MExprPatAnalysis + MExprAst + MExprPrett
 
 
     match s.includes with [] then 
-      _ok (insertBaseMap env (langStr, nameGetStr s.ident) s.ident)
+      result.ok (insertBaseMap env (langStr, nameGetStr s.ident) s.ident)
     else 
       let includeList = map 
         (lam incl. match mapLookup incl env.baseMap with Some b in b) 
@@ -277,19 +256,9 @@ lang MLangCompositionCheck = MLangAst + MExprPatAnalysis + MExprAst + MExprPrett
       let includeSet = setOfSeq nameCmp includeList in 
 
       if eqi 1 (setSize includeSet) then
-        _ok (insertBaseMap env (langStr, nameGetStr s.ident) (head includeList))
+        result.ok (insertBaseMap env (langStr, nameGetStr s.ident) (head includeList))
       else
-        printLn "Error on DifferentBaseSem with the following includes:";
-        let pprintIncl = lam incl : (String, String).
-          match incl with (l, s) in 
-          match mapLookup incl env.baseMap with Some b in 
-          match mapLookup b env.symToPair with Some (baseLang, baseSyn) in 
-          printLn (join ["\t(", l, ".", s, ") -> (", baseLang, ".", baseSyn, ")"])
-        in 
-        iter pprintIncl s.includes;
-        printLn "\n\n\nsetSize=";
-        printLn (int2string (setSize includeSet)) ; 
-        _err (DifferentBaseSyn {
+        result.err (DifferentBaseSyn {
           synIdent = s.ident,
           info = s.info
         })
@@ -299,7 +268,7 @@ lang MLangCompositionCheck = MLangAst + MExprPatAnalysis + MExprAst + MExprPrett
     } in 
     match s.includes with [] then 
       let env = {env with semBaseToTyAnnot = mapInsert s.ident s.tyAnnot env.semBaseToTyAnnot} in 
-      _ok (insertBaseMap env (langStr, nameGetStr s.ident)  s.ident)
+      result.ok (insertBaseMap env (langStr, nameGetStr s.ident)  s.ident)
     else 
       let includeList = map 
         (lam incl. match mapLookup incl env.baseMap with Some b in b) 
@@ -307,9 +276,9 @@ lang MLangCompositionCheck = MLangAst + MExprPatAnalysis + MExprAst + MExprPrett
       let includeSet = setOfSeq nameCmp includeList in 
 
       if eqi 1 (setSize includeSet) then
-        _ok (insertBaseMap env (langStr, nameGetStr s.ident)  (head includeList))
+        result.ok (insertBaseMap env (langStr, nameGetStr s.ident)  (head includeList))
       else
-        _err (DifferentBaseSem {
+        result.err (DifferentBaseSem {
           semIdent = s.ident, 
           info = s.info
         })
@@ -380,42 +349,42 @@ lang MLangCompositionCheck = MLangAst + MExprPatAnalysis + MExprAst + MExprPrett
         if and (null a_minus_b) (null b_minus_a) then 
           -- EQUAL
           -- printLn "equal" ;
-          _err (InvalidSemPatterns {
+          result.err (InvalidSemPatterns {
             semIdent = s.ident, 
             info = s.info
           })
         else if null a_minus_b then 
           -- SUBSET
           -- printLn "subset" ;
-          _ok (digraphAddEdge i j () g)
+          result.ok (digraphAddEdge i j () g)
         else if null b_minus_a then 
           -- SUPERSET
           -- printLn "superset" ;
-          _ok (digraphAddEdge j i () g)
+          result.ok (digraphAddEdge j i () g)
 
         else
           let overlapping = normpatIntersect ap bp in
           if null overlapping then 
             -- DISJOINT
             -- printLn "disjoint" ;
-            _ok g
+            result.ok g
           else
             -- OVERLAPPING
             -- printLn "overlapping" ;
-            _err (InvalidSemPatterns {
+            result.err (InvalidSemPatterns {
               semIdent = s.ident, 
               info = s.info
             })
     in 
-    let result = _foldl accGraph g pairs in 
+    let res = _foldlM accGraph g pairs in 
 
-    match _consume result with (_, errorsOrGraph) in
+    match result.consume res with (_, errorsOrGraph) in
     switch errorsOrGraph 
-    case Left errs then _err (head errs)
+    case Left errs then result.err (head errs)
     case Right graph then 
       let order = digraphTopologicalOrder graph in
       let orderedCases = map (lam i. get pats i) order in 
-      _ok (insertSemPatMap env (langStr, nameGetStr s.ident) orderedCases)
+      result.ok (insertSemPatMap env (langStr, nameGetStr s.ident) orderedCases)
     end
 
 end
@@ -428,14 +397,14 @@ use MLangPrettyPrint in
 use LanguageComposer in 
 
 let handleResult = lam res.
-  switch _consume res 
+  switch result.consume res 
     case (_, Left errors) then iter raiseError errors
     case (_, Right _) then printLn "Langauge composition is valid!"
     end
 in  
 
 let assertValid = lam res. 
-  switch _consume res 
+  switch result.consume res 
   case (_, Left errors) then 
     printLn "Expected language composition to be valid, but found the following errors:" ;
     iter raiseError errors
@@ -444,35 +413,35 @@ let assertValid = lam res.
 in
 
 let assertDifferentBaseSem = lam res. 
-  switch _consume res 
+  switch result.consume res 
   case (_, Left ([DifferentBaseSem _] ++ _)) then print "."
   case _ then error "Assertion failed!"
   end
 in
 
 let assertDifferentBaseSyn = lam res. 
-  switch _consume res 
+  switch result.consume res 
   case (_, Left ([DifferentBaseSyn _] ++ _)) then print "."
   case _ then error "Assertion failed!"
   end
 in
 
 let assertMismatchedSemsParams = lam res. 
-  switch _consume res 
+  switch result.consume res 
   case (_, Left ([MismatchedSemParams _] ++ _)) then print "."
   case _ then error "Assertion failed!"
   end
 in
 
 let assertMIsmatchedSynParams = lam res. 
-  switch _consume res 
+  switch result.consume res 
   case (_, Left ([MismatchedSynParams _] ++ _)) then print "."
   case _ then error "Assertion failed!"
   end
 in
 
 let assertInvalidSemParams = lam res. 
-  switch _consume res 
+  switch result.consume res 
   case (_, Left ([InvalidSemPatterns _] ++ _)) then print "."
   case _ then error "Assertion failed!"
   end

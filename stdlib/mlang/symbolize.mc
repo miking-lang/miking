@@ -186,7 +186,7 @@ lang MLangSym = MLangAst + MExprSym
         in
         match mapAccumL symbSynStep1 langEnv synDecls with (langEnv, synDecls) in 
 
-        -- 2. Symbolize DeclType and params
+        -- 2. Symbolize DeclType, params, and body.
         let symbDeclType = lam langEnv : NameEnv. lam typeDecl. 
             match typeDecl with DeclType t in 
 
@@ -289,9 +289,9 @@ lang MLangSym = MLangAst + MExprSym
                                        tyAnnot = tyAnnot,
                                        args = args} in 
 
-            (langEnv, decl)
+            decl
         in
-        match mapAccumL symbSem2 langEnv semDecls with (langEnv, semDecls) in 
+        let semDecls = map (symbSem2 langEnv) semDecls in
 
         let env = {env with langEnv = mapInsert (nameGetStr t.ident) langEnv env.langEnv} in 
         let t = {t with decls = join [typeDecls, synDecls, semDecls],

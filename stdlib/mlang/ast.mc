@@ -96,23 +96,6 @@ lang SynDeclAst = DeclAst
   | DeclSyn d -> d.info
 end
 
--- DeclSynProdExt
--- synIdent:    Name of the syntax to be extended
--- extIdent:    Name of this is extension
--- globalExt:   Extension to be added to every constructor
--- specificExt: Associated list of constructors and the specific
---              extension to be added to said constructor
-lang SynProdExtDeclAst = DeclAst
-  syn Decl = 
-  | DeclSynProdExt {synIdent : Name,
-                    extIdent : Name,
-                    globalExt : Type,
-                    specificExt : [{ident : Name, tyIdent : Type}],
-                    info : Info}
-
-  sem infoDecl = 
-  | DeclSynProdExt d -> d.info
-end
 -- DeclSem --
 lang SemDeclAst = DeclAst
   syn Decl =
@@ -231,7 +214,7 @@ lang MLangAst =
 
   -- Declarations
   + LangDeclAst + SynDeclAst + SemDeclAst + LetDeclAst + TypeDeclAst
-  + SynProdExtDeclAst +RecLetsDeclAst + DataDeclAst + UtestDeclAst
-  + ExtDeclAst + IncludeDeclAst + TyUseAst
+  + RecLetsDeclAst + DataDeclAst + UtestDeclAst + ExtDeclAst + IncludeDeclAst 
+  + TyUseAst
 
 end

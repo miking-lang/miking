@@ -202,7 +202,7 @@ lang MLangCompiler = MLangAst + MExprAst
 
     let ctx = foldl withSemSymbol ctx (map (lam s. match s with DeclSem s in s.ident) semDecls) in 
 
-    let res = _foldl compileDecl ctx typeDecls in 
+    let res = _foldlM compileDecl ctx typeDecls in 
     let res = _map (lam ctx. foldl compileSynTypes ctx synDecls) res in 
     let res = _map (lam ctx. foldl (compileSynConstructors langStr) ctx synDecls) res in 
 
@@ -360,7 +360,7 @@ lang MLangCompiler = MLangAst + MExprAst
   sem compileProg : CompilationContext -> MLangProgram -> CompilationResult
   sem compileProg ctx = 
   | prog -> 
-    let res = _foldl compileDecl ctx prog.decls in
+    let res = _foldlM compileDecl ctx prog.decls in
     _map (lam ctx. withExpr ctx prog.expr) res
 
   sem compile : CompilationContext -> MLangProgram -> Result CompilationWarning CompilationError Expr

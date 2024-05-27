@@ -348,7 +348,7 @@ utest
   ()
 with ()
 
-let _foldl : all w. all e. all a. all b.
+let _foldlM : all w. all e. all a. all b.
   (a -> b -> (Result w e a)) -> a -> [b] -> Result w e a
   = lam f. lam acc.
     recursive
@@ -360,23 +360,6 @@ let _foldl : all w. all e. all a. all b.
               workOK (mapUnion accWarn c.warnings) (c.value) tl
             case ResultErr c then
               ResultErr {c with warnings = mapUnion accWarn c.warnings }
-            end
-          else
-            ResultOk { warnings = accWarn, value = acc }
-    in workOK (_emptyMap ()) acc
-
-let _foldlfun : all w. all e. all a. all b.
-  a -> b -> [(a -> b -> Result w e a)] -> Result w e a
-  = lam acc. lam b.
-      recursive
-      let workOK : Map Symbol w -> a -> [(a -> b -> Result w e a)] -> Result w e a
-        = lam accWarn. lam acc. lam seq.
-          match seq with [hd] ++ tl then
-            switch hd acc b
-            case ResultOk c then
-              workOK (mapUnion accWarn c.warnings) (c.value) tl
-            case ResultErr c then
-              ResultErr {c with warnings = mapUnion accWarn c.warnings}
             end
           else
             ResultOk { warnings = accWarn, value = acc }
@@ -723,6 +706,7 @@ let result =
   , bindParallel2 = _bindParallel2
   , mapM = _mapM
   , mapAccumLM = _mapAccumLM
+  , foldlM = _foldlM
   -- Conditionals
   , orElse = _orElse
   , or = _or

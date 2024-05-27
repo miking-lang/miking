@@ -12,7 +12,7 @@ let parseMCoreLibs : String -> Map String String = lam str.
   let isValid = lam pair. 
     if neqi (length pair) 2 then 
       error (join [
-        "Invalid MCore_LIBS environment: '",
+        "Invalid $MCORE_LIBS environment: '",
         str,
         "'!"
       ])
@@ -32,6 +32,8 @@ utest parseMCoreLibs "stdlib=a/b/c:foo=bar"
   with mapFromSeq cmpString [("stdlib", "a/b/c"), ("foo", "bar")] 
   using mapEq eqString
 
+-- TODO(voorberg, 27-05-2024): Add a sensible default for $MCORE_LIBS to 
+--                             fall back on. 
 let parseMCoreLibsEnv : () -> Map String String = lam.
   match sysGetEnv "MCORE_LIBS" with Some s then
     parseMCoreLibs s

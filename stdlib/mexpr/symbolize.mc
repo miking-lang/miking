@@ -23,17 +23,6 @@ include "repr-ast.mc"
 -- The environment differs from boot in that we use strings directly (we do
 -- have SIDs available, however, if needed).
 
--- type SymEnv = {
---   varEnv: Map String Name,
---   conEnv: Map String Name,
---   tyVarEnv: Map String Name,
---   tyConEnv: Map String Name,
---   allowFree: Bool,
---   ignoreExternals: Bool,
---   reprEnv: Map String Name,
---   langEnv: Map String SymEnv
--- }
-
 type NameEnv = {
   varEnv : Map String Name,   -- sem f
   conEnv : Map String Name,   -- TmAdd, TmInt 
@@ -57,34 +46,6 @@ let mergeNameEnv = lam l. lam r. {
   tyConEnv = mapUnion l.tyConEnv r.tyConEnv,
   reprEnv = mapUnion l.reprEnv r.reprEnv
 }
-
--- type LangEnv = {
---   ident : Name,
-
---   -- Map from the string of a syn identifier to a tuple 
---   -- in which the first element is the symbolized name of the syn identifier
---   -- and the second element is a list of symbolized constructor names.
---   -- The third element is the parameter list of the syn. 
---   syns: Map String (Name, [Name], [Name]),
---   -- Map from the string of a sem identifier to a tuple
---   -- in which teh first element is the list of parameters
---   -- The third element is the type annotation.
---   sems: Map String (Name, Option [Name], use MExprAst in Type),
---   definedTypes: Map String Name,
---   includedTypes: Map String Name,
---   includedConstructors: [Name],
---   includedLangEnvs: [String]
--- }
-
--- let _langEnvEmpty : Name -> LangEnv = lam n. {
---   ident = n,
---   syns = mapEmpty cmpString,
---   sems = mapEmpty cmpString,
---   definedTypes = mapEmpty cmpString,
---   includedTypes = mapEmpty cmpString,
---   includedConstructors = [],
---   includedLangEnvs = []
--- }
 
 type SymEnv = {
   allowFree : Bool, 
@@ -157,19 +118,6 @@ lang SymLookup
       let ident = nameSetNewSym ident in
       (mapInsert (nameGetStr ident) ident env, ident)
 
-  -- Take an identifier that already has a symbol and add it to the env
-  -- without generating a new symbol
-  sem updateSymbol : Map String Name -> Name -> (Map String Name, Name)
-  sem updateSymbol env =| ident ->
-    if nameHasSym ident then
-      (mapInsert (nameGetStr ident) ident env, ident)
-    else 
-      error (join [
-        "When calling 'updateSymbol', the provided identifier MUST have a ",
-        "symbol, but the identifier '", 
-        nameGetStr ident,
-        "' does not!"
-      ])
   -- The general case, where we may have a richer return value than simply name or env.
   sem getSymbolWith
     : all a. all b.

@@ -1,9 +1,6 @@
 include "result.mc"
 include "fileutils.mc"
 include "compile.mc"
--- include "../../src/main/mi-lite.mc"
--- include "../../src/main/compile.mc"
--- include "../../src/main/options.mc"
 include "sys.mc"
 include "map.mc"
 
@@ -33,36 +30,9 @@ lang MainLang = MLangCompiler + BootParserMLang +
   sem myEval =| e ->
     eval (evalCtxEmpty ()) e 
 
+  -- TODO: re-add 'eval' through mlang-pipelineO
+
   -- TODO: add node count for MLang programs to phase-stats
-  -- sem evalMLangFile : String -> Expr
-  -- sem evalMLangFile =| filepath ->
-  --   let log = mkPhaseLogState true in
-
-  --   let p = parseAndHandleIncludes filepath in 
-  --   endPhaseStats log "parsing-include-handling" uunit_;
-
-  --   let p = constTransformProgram builtin p in
-  --   endPhaseStats log "const-transformation" uunit_;
-
-  --   match symbolizeMLang symEnvDefault p with (_, p) in 
-  --   endPhaseStats log "symbolization" uunit_;
-
-  --   match _consume (checkComposition p) with (_, res) in 
-  --   endPhaseStats log "composition-check" uunit_;
-
-  --   switch res 
-  --     case Left errs then 
-  --       iter raiseError errs ;
-  --       never
-  --     case Right env then
-  --       let ctx = _emptyCompilationContext env in 
-  --       let res = _consume (compile ctx p) in 
-  --       match res with (_, rhs) in 
-  --       match rhs with Right expr in
-  --       endPhaseStats log "mlang-mexpr-lower" expr;
-  --       myEval expr
-  --   end
-
   sem compileMLangToOcaml options runner =| filepath ->
     let log = mkPhaseLogState options.debugPhases in
 
@@ -93,7 +63,6 @@ lang MainLang = MLangCompiler + BootParserMLang +
         match rhs with Right expr in
         endPhaseStats log "mlang-mexpr-lower" expr;
 
-        printLn (int2string (mapSize env.semSymMap));
         let expr = postprocess env.semSymMap expr in 
         endPhaseStats log "postprocess" expr;
 
