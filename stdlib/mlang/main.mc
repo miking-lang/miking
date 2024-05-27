@@ -5,6 +5,7 @@ include "compile.mc"
 -- include "../../src/main/compile.mc"
 -- include "../../src/main/options.mc"
 include "sys.mc"
+include "map.mc"
 
 include "compile.mc"
 include "boot-parser.mc"
@@ -14,6 +15,7 @@ include "composition-check.mc"
 include "include-handler.mc"
 include "language-composer.mc"
 include "const-transformer.mc"
+include "postprocess.mc"
 
 include "mexpr/eval.mc"
 include "mexpr/builtin.mc"
@@ -25,7 +27,7 @@ lang MainLang = MLangCompiler + BootParserMLang +
                 MLangSym + MLangCompositionCheck +
                 MExprPrettyPrint + MExprEval + MExprEq + 
                 MLangConstTransformer + MLangIncludeHandler +
-                PhaseStats + LanguageComposer
+                PhaseStats + LanguageComposer + PostProcess
 
   sem myEval : Expr -> Expr
   sem myEval =| e ->
@@ -90,6 +92,10 @@ lang MainLang = MLangCompiler + BootParserMLang +
         match res with (_, rhs) in 
         match rhs with Right expr in
         endPhaseStats log "mlang-mexpr-lower" expr;
+
+        printLn (int2string (mapSize env.semSymMap));
+        let expr = postprocess env.semSymMap expr in 
+        endPhaseStats log "postprocess" expr;
 
         printLn (expr2str expr);
 

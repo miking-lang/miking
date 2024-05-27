@@ -353,7 +353,7 @@ lang MLangCompiler = MLangAst + MExprAst
       {ident = d.ident,
       tyAnnot = tyAnnot,
       tyBody = tyunknown_,
-      body = (nulam_ (nameSym "") (semi_ (print_ (str_ langStr)) never_)),
+      body = (nulam_ (nameSym "") (semi_ (print_ (str_ (join ["Semantic function without cases!: ", langStr, ".", nameGetStr d.ident]))) never_)),
       info = d.info}
 
 

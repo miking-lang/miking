@@ -47,6 +47,7 @@ end
 
 lang DeclPrettyPrint = PrettyPrint + MLangIdentifierPrettyPrint + DeclAst
   sem pprintDeclCode : Int -> PprintEnv -> Decl -> (PprintEnv, String)
+  sem pprintDeclCode indent env =
   -- Intentionally left blank
 
   sem pprintDeclSequenceCode : Int -> PprintEnv -> [Decl] -> (PprintEnv, String)
@@ -295,7 +296,7 @@ let prog: MLangProgram = {
                 (appf2_ (var_ "foo") (int_ 10) (float_ 0.5))
 } in
 
--- print (mlang2str prog); print "\n";
+print (mlang2str prog); print "\n";
 utest length (mlang2str prog) with 0 using geqi in
 
 let prog2: MLangProgram = {

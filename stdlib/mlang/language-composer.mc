@@ -181,6 +181,7 @@ lang LanguageComposer = MLangAst
     let gen = lam ctx. lam pairs : [((String, String), DeclInfo)].
       let includes = map (lam p. match p with ((orig, ident), _) in (orig, ident)) pairs in 
 
+
       let pair = head pairs in 
       match pair with ((origLang, ident), info) in
 
@@ -194,10 +195,17 @@ lang LanguageComposer = MLangAst
           let info = decl2info langStr decl in 
           (ctxWithDeclInfo ctx (langStr, nameGetStr s.ident) info, decl)
         case SemInfo s then
+          let include2args = lam incl.
+            match mapLookup incl ctx.langMap with Some info in 
+            match info with SemInfo semInfo in
+            semInfo.args
+          in 
+          let args = mapOption include2args includes in 
+          let args = if null args then None () else Some (head args) in 
           let decl = DeclSem {ident = s.ident,
                               tyAnnot = s.ty,
                               tyBody = tyunknown_,
-                              args = s.args,
+                              args = args,
                               cases = [],
                               includes = includes,
                               info = s.info} in 
