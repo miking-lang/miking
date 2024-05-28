@@ -47,17 +47,7 @@ let name2pair : Name -> (String, Name) = lam n.
 let updateEnv : SymEnv -> NameEnv -> SymEnv = lam symEnv. lam langEnv.
   {symEnv with currentEnv = mergeNameEnv (symEnv.currentEnv) langEnv}
 
-
-lang MLangSym = MLangAst + MExprSym 
-  sem symbolizeMLang : SymEnv -> MLangProgram -> (SymEnv, MLangProgram)
-  sem symbolizeMLang env =| prog -> 
-    match mapAccumL symbolizeDecl env prog.decls with (env, decls) in
-    let expr = symbolizeExpr env prog.expr in 
-    (env, {
-      decls = decls,
-      expr = expr
-    })
-
+lang TmUseSym = Sym + UseAst
   sem symbolizeExpr env = 
   | TmUse t -> 
     -- TODO: Prevent TmUse <lang> in that specific lang.
@@ -68,7 +58,9 @@ lang MLangSym = MLangAst + MExprSym
         symLookupError 
           {kind = "language", info = [t.info], allowFree = false}
           t.ident
+end
 
+lang TyUseSym = Sym + TyUseAst
   sem symbolizeType env = 
   | TyUse t -> 
     match mapLookup (nameGetStr t.ident) env.langEnv with Some langEnv 
@@ -78,11 +70,14 @@ lang MLangSym = MLangAst + MExprSym
         symLookupError 
           {kind = "language", info = [t.info], allowFree = false}
           t.ident
+end
 
+lang DeclSym = DeclAst + Sym
   sem symbolizeDecl : SymEnv -> Decl -> (SymEnv, Decl)
+end
+
+lang DeclLetSym = DeclSym + LetDeclAst + LetSym
   sem symbolizeDecl env = 
-  | DeclInclude r ->
-    error "Symbolization expects all DeclInclude to have been removed!"
   | DeclLet t ->  
     match symbolizeTyAnnot env t.tyAnnot with (tyVarEnv, tyAnnot) in
     match setSymbol env.currentEnv.varEnv t.ident with (varEnv, ident) in
@@ -92,6 +87,10 @@ lang MLangSym = MLangAst + MExprSym
                         tyAnnot = tyAnnot,
                         body = symbolizeExpr env t.body} in 
     (env, decl)
+end
+
+lang DeclTypeSym = DeclSym + TypeDeclAst
+  sem symbolizeDecl env = 
   | DeclType t -> 
     match setSymbol env.currentEnv.tyConEnv t.ident with (tyConEnv, ident) in
     let env = updateTyConEnv env tyConEnv in 
@@ -101,6 +100,11 @@ lang MLangSym = MLangAst + MExprSym
                                 tyIdent = symbolizeType (updateTyVarEnv env tyVarEnv) t.tyIdent} in 
     let env = updateTyVarEnv env tyVarEnv in 
     (env, decl)
+end
+
+
+lang DeclRecLetsSym = DeclSym + RecLetsDeclAst + LetSym
+  sem symbolizeDecl env = 
   | DeclRecLets t -> 
     -- Generate fresh symbols for all identifiers and add to the environment
     let setSymbolIdent = lam env. lam b.
@@ -118,6 +122,10 @@ lang MLangSym = MLangAst + MExprSym
                         tyAnnot = tyAnnot})  bindings in
 
     (newEnv, DeclRecLets {t with bindings = bindings})
+end
+
+lang DeclConDefSym = DeclSym + DataDeclAst
+  sem symbolizeDecl env = 
   | DeclConDef t -> 
     match setSymbol env.currentEnv.conEnv t.ident with (conEnv, ident) in
 
@@ -125,6 +133,10 @@ lang MLangSym = MLangAst + MExprSym
                                   tyIdent = symbolizeType env t.tyIdent} in 
     let env = updateConEnv env conEnv in 
     (env, decl)
+end
+
+lang DeclUtestSym = DeclSym + UtestDeclAst 
+  sem symbolizeDecl env = 
   | DeclUtest t -> 
     -- This can be rewritten to use a shallow map on declarations. E.g.
     -- smap (symbolizeExpr env) (DeclUtest t) 
@@ -132,6 +144,10 @@ lang MLangSym = MLangAst + MExprSym
                                   expected = symbolizeExpr env t.expected,
                                   tusing = optionMap (symbolizeExpr env) t.tusing} in 
     (env, decl)
+end
+
+lang DeclExtSym = DeclSym + ExtDeclAst 
+  sem symbolizeDecl env = 
   | DeclExt t -> 
       -- When ignoreExternals is set, the DeclExt should have been filtered
     -- out of the program before attempting to symbolize the declarations.
@@ -143,6 +159,11 @@ lang MLangSym = MLangAst + MExprSym
                                   tyIdent = symbolizeType env t.tyIdent} in 
       let env = updateVarEnv env varEnv in 
       (env, decl)
+end
+
+lang DeclLangSym = DeclSym + LangDeclAst + TypeDeclAst + SemDeclAst + 
+                   SynDeclAst + LetSym
+  sem symbolizeDecl env = 
   | DeclLang t -> 
     -- Symbolize the name of the language
     match setSymbol env.namespaceEnv t.ident with (namespaceEnv, ident) in 
@@ -305,6 +326,24 @@ lang MLangSym = MLangAst + MExprSym
                     ident = ident} in
 
     (env, DeclLang t)
+end
+
+lang MLangProgramSym = MLangTopLevel + DeclSym
+  sem symbolizeMLang : SymEnv -> MLangProgram -> (SymEnv, MLangProgram)
+  sem symbolizeMLang env =| prog -> 
+    match mapAccumL symbolizeDecl env prog.decls with (env, decls) in
+    let expr = symbolizeExpr env prog.expr in 
+    (env, {
+      decls = decls,
+      expr = expr
+    })
+end
+
+lang MLangSym = MLangAst + MExprSym + 
+                TmUseSym + TyUseSym + 
+                DeclLetSym + DeclTypeSym + DeclRecLetsSym +
+                DeclConDefSym + DeclUtestSym + DeclExtSym +
+                DeclLangSym + MLangProgramSym
 end
 
 lang TestLang = MLangSym + SymCheck + MLangPrettyPrint
