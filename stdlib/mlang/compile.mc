@@ -139,8 +139,11 @@ let isSynDecl = use MLangAst in
 let isSemDecl = use MLangAst in 
   lam d. match d with DeclSem _ then true else false
 
-lang MLangCompiler = MLangAst + MExprAst
+lang DeclCompiler = DeclAst + Ast
   sem compileDecl : CompilationContext -> Decl -> CompilationResult
+end
+
+lang LetDeclCompiler = DeclCompiler + LetDeclAst + LetAst
   sem compileDecl ctx = 
   | DeclLet d -> _ok (
     withExpr ctx (TmLet {ident = d.ident,
@@ -150,11 +153,19 @@ lang MLangCompiler = MLangAst + MExprAst
                          info = d.info,
                          ty = tyunknown_,
                          inexpr = uunit_}))
+end
+
+lang RecletsDeclCompiler = DeclCompiler + RecLetsDeclAst + RecLetsAst
+  sem compileDecl ctx = 
   | DeclRecLets d -> _ok (
     withExpr ctx (TmRecLets {bindings = d.bindings,
                              inexpr = uunit_,
                              ty = tyunknown_,
                              info = d.info}))
+end
+
+lang UtestDeclCompiler = DeclCompiler + UtestDeclAst + UtestAst
+  sem compileDecl ctx = 
   | DeclUtest d -> _ok (
     withExpr ctx (TmUtest {test = d.test,
                            expected = d.expected,
@@ -163,6 +174,10 @@ lang MLangCompiler = MLangAst + MExprAst
                            tonfail = None (),
                            ty = tyunknown_,
                            info = d.info}))
+end
+
+lang TypeDeclCompiler = DeclCompiler + TypeDeclAst + TypeAst
+  sem compileDecl ctx = 
   | DeclType d -> 
     _ok (withExpr ctx (TmType {ident = d.ident,
                                params = d.params,
@@ -170,12 +185,20 @@ lang MLangCompiler = MLangAst + MExprAst
                                info = d.info,
                                ty = tyunknown_,
                                inexpr = uunit_}))
+end
+
+lang ConDefDeclCompiler = DeclCompiler + DataDeclAst + DataAst
+  sem compileDecl ctx = 
   | DeclConDef d -> _ok (
     withExpr ctx (TmConDef {ident = d.ident,
                             tyIdent = d.tyIdent,
                             info = d.info,
                             ty = tyunknown_,
                             inexpr = uunit_}))
+end
+
+lang ExtDeclCompiler = DeclCompiler + ExtDeclAst + ExtAst
+  sem compileDecl ctx = 
   -- TODO(voorberg, 2024-04-23): Add test case for the compilation of externals.
   | DeclExt d -> _ok (
     withExpr ctx (TmExt {ident = d.ident,
@@ -184,8 +207,11 @@ lang MLangCompiler = MLangAst + MExprAst
                          info = d.info,
                          ty = tyunknown_,
                          inexpr = uunit_}))
-  -- TODO(voorberg, 2024-04-23): Add test case for error on DeclInclude
-  | DeclInclude d -> _err (FoundIncludeError {info = d.info, path = d.path})
+end
+
+lang LangDeclCompiler = DeclCompiler + LangDeclAst + MExprAst + SemDeclAst + 
+                        SynDeclAst + TypeDeclAst 
+  sem compileDecl ctx = 
   | DeclLang l -> 
     let langStr = nameGetStr l.ident in
 
@@ -351,14 +377,20 @@ lang MLangCompiler = MLangAst + MExprAst
       tyBody = tyunknown_,
       body = (nulam_ (nameSym "") (semi_ (print_ (str_ (join ["Semantic function without cases!: ", langStr, ".", nameGetStr d.ident]))) never_)),
       info = d.info}
+end 
 
-
+lang MLangTopLevelCompiler = MLangTopLevel + DeclCompiler
   sem compileProg : CompilationContext -> MLangProgram -> CompilationResult
   sem compileProg ctx = 
   | prog -> 
     let res = _foldlM compileDecl ctx prog.decls in
     _map (lam ctx. withExpr ctx prog.expr) res
+end
 
+lang MLangCompiler = MLangAst + MExprAst +
+                     MLangTopLevelCompiler + LangDeclCompiler + ExtDeclCompiler +
+                     ConDefDeclCompiler + TypeDeclCompiler + UtestDeclCompiler +
+                     RecletsDeclCompiler + LetDeclCompiler
   sem compile : CompilationContext -> MLangProgram -> Result CompilationWarning CompilationError Expr
   sem compile ctx =| prog -> 
     match _consume (compileProg ctx prog) with (_, res) in
