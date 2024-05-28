@@ -43,6 +43,7 @@ include "ast-builder.mc"
 
 include "mexpr/info.mc"
 
+-- include "set.mc"
 include "bool.mc"
 include "common.mc"
 include "error.mc"
@@ -51,6 +52,11 @@ include "name.mc"
 include "seq.mc"
 include "map.mc"
 
+-- This info type contains a subset of the data in a DeclSem, DeclSyn, or DeclType.\
+-- Specifically, they contain the data required for the creation of explicit
+-- declarations for implicitly included syns and sems. We create a special
+-- DeclInfo type for this so that we do not have to carry around the constructors
+-- and cases.
 type DeclInfo
 con TypeInfo : use MLangAst in {ident : Name,
                                 orig : String,
@@ -100,8 +106,6 @@ let projIdent = lam info.
     case SynInfo t then (t.orig, nameGetStr t.ident)
   end
 
-
-
 type ComposerContext = {
   langMap : Map (String, String) DeclInfo
 }
@@ -117,9 +121,7 @@ lang LanguageComposer = MLangAst
   sem composeProgram : MLangProgram -> MLangProgram 
   sem composeProgram =| p ->
     let ctx = emptyComposerContext in 
-
     match mapAccumL composeLang ctx p.decls with (_, decls) in 
-
     {p with decls = decls}
 
   sem composeLang : ComposerContext -> Decl -> (ComposerContext, Decl)
@@ -195,6 +197,8 @@ lang LanguageComposer = MLangAst
 
   sem addImplicitIncludes langStr includes definedSynsSems =
   | ctx ->
+    let includeSet = setOfSeq cmpString includes in 
+
     -- We are going to include elements from ctx.langMap that
     -- (1) that are not Type declarations.
     -- (2) belong to an included langauge
@@ -202,7 +206,7 @@ lang LanguageComposer = MLangAst
     let pred = lam k. lam v. 
       match k with (origLang, ident) in 
         (and (not (isTypeInfo v))
-             (and (seqMem eqString includes origLang)
+             (and (setMem origLang includeSet)
                   (not (seqMem eqString definedSynsSems ident))))
     in       
     let filteredCtx = mapFilterWithKey pred ctx.langMap in 

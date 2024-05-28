@@ -145,7 +145,7 @@ end
 
 lang LetDeclCompiler = DeclCompiler + LetDeclAst + LetAst
   sem compileDecl ctx = 
-  | DeclLet d -> _ok (
+  | DeclLet d -> result.ok (
     withExpr ctx (TmLet {ident = d.ident,
                          tyAnnot = d.tyAnnot,
                          tyBody = d.tyBody,
@@ -157,7 +157,7 @@ end
 
 lang RecletsDeclCompiler = DeclCompiler + RecLetsDeclAst + RecLetsAst
   sem compileDecl ctx = 
-  | DeclRecLets d -> _ok (
+  | DeclRecLets d -> result.ok (
     withExpr ctx (TmRecLets {bindings = d.bindings,
                              inexpr = uunit_,
                              ty = tyunknown_,
@@ -166,7 +166,7 @@ end
 
 lang UtestDeclCompiler = DeclCompiler + UtestDeclAst + UtestAst
   sem compileDecl ctx = 
-  | DeclUtest d -> _ok (
+  | DeclUtest d -> result.ok (
     withExpr ctx (TmUtest {test = d.test,
                            expected = d.expected,
                            next = uunit_,
@@ -179,7 +179,7 @@ end
 lang TypeDeclCompiler = DeclCompiler + TypeDeclAst + TypeAst
   sem compileDecl ctx = 
   | DeclType d -> 
-    _ok (withExpr ctx (TmType {ident = d.ident,
+    result.ok (withExpr ctx (TmType {ident = d.ident,
                                params = d.params,
                                tyIdent = d.tyIdent,
                                info = d.info,
@@ -189,7 +189,7 @@ end
 
 lang ConDefDeclCompiler = DeclCompiler + DataDeclAst + DataAst
   sem compileDecl ctx = 
-  | DeclConDef d -> _ok (
+  | DeclConDef d -> result.ok (
     withExpr ctx (TmConDef {ident = d.ident,
                             tyIdent = d.tyIdent,
                             info = d.info,
@@ -200,7 +200,7 @@ end
 lang ExtDeclCompiler = DeclCompiler + ExtDeclAst + ExtAst
   sem compileDecl ctx = 
   -- TODO(voorberg, 2024-04-23): Add test case for the compilation of externals.
-  | DeclExt d -> _ok (
+  | DeclExt d -> result.ok (
     withExpr ctx (TmExt {ident = d.ident,
                          tyIdent = d.tyIdent,
                          effect = d.effect,
@@ -224,9 +224,9 @@ lang LangDeclCompiler = DeclCompiler + LangDeclAst + MExprAst + SemDeclAst +
 
     let ctx = foldl withSemSymbol ctx (map (lam s. match s with DeclSem s in s.ident) semDecls) in 
 
-    let res = _foldlM compileDecl ctx typeDecls in 
-    let res = _map (lam ctx. foldl compileSynTypes ctx synDecls) res in 
-    let res = _map (lam ctx. foldl (compileSynConstructors langStr) ctx synDecls) res in 
+    let res = result.foldlM compileDecl ctx typeDecls in 
+    let res = result.map (lam ctx. foldl compileSynTypes ctx synDecls) res in 
+    let res = result.map (lam ctx. foldl (compileSynConstructors langStr) ctx synDecls) res in 
 
     let compileSemToResult : CompilationContext -> [Decl] -> CompilationContext
       = lam ctx. lam sems.
@@ -236,7 +236,7 @@ lang LangDeclCompiler = DeclCompiler + LangDeclAst + MExprAst + SemDeclAst +
                                  ty = tyunknown_,
                                  info = l.info})
     in
-    _map (lam ctx. compileSemToResult ctx semDecls) res
+    result.map (lam ctx. compileSemToResult ctx semDecls) res
   | DeclSyn s -> 
     error "Unexpected DeclSyn"
   | DeclSem s -> 
@@ -383,8 +383,8 @@ lang MLangTopLevelCompiler = MLangTopLevel + DeclCompiler
   sem compileProg : CompilationContext -> MLangProgram -> CompilationResult
   sem compileProg ctx = 
   | prog -> 
-    let res = _foldlM compileDecl ctx prog.decls in
-    _map (lam ctx. withExpr ctx prog.expr) res
+    let res = result.foldlM compileDecl ctx prog.decls in
+    result.map (lam ctx. withExpr ctx prog.expr) res
 end
 
 lang MLangCompiler = MLangAst + MExprAst +
@@ -395,8 +395,8 @@ lang MLangCompiler = MLangAst + MExprAst +
   sem compile ctx =| prog -> 
     match _consume (compileProg ctx prog) with (_, res) in
     switch res
-      case Left err then _err (head err)
-      case Right ctx then _ok (bindall_ ctx.exprs)
+      case Left err then result.err (head err)
+      case Right ctx then result.ok (bindall_ ctx.exprs)
     end
 end
 
