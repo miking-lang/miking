@@ -70,8 +70,8 @@ lang BootParserMLang = BootParser + MLangAst
     {decls = concat includes decls,
      expr = matchTerm unparsedExpr (bootParserGetId unparsedExpr)}
 
-  -- Semantic function declaration can be split into a type annotation and args + cases.
-  -- This function merges sems into a single declaration.
+  -- Semantic function declaration can be split into a type annotation and args
+  -- + cases. This function merges sems into a single declaration.
   sem mergeSems : [Decl] -> [Decl]
   sem mergeSems =| decls ->
     let work = lam acc : ([Decl], Map String Decl). lam decl : Decl. 

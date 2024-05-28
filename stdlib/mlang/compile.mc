@@ -196,10 +196,6 @@ lang MLangCompiler = MLangAst + MExprAst
     let nameSeq =  (map (lam s. match s with DeclSem s in (nameGetStr s.ident, s.ident)) semDecls) in 
     let semNames = mapFromSeq cmpString nameSeq in 
 
-    let typeNameSeq = (map (lam s. match s with DeclType s in (nameGetStr s.ident, s.ident)) typeDecls) in 
-    let synNameSeq = (map (lam s. match s with DeclSyn s in (nameGetStr s.ident, s.ident)) synDecls) in 
-    let tyConNames = mapFromSeq cmpString (concat typeNameSeq synNameSeq) in 
-
     let ctx = foldl withSemSymbol ctx (map (lam s. match s with DeclSem s in s.ident) semDecls) in 
 
     let res = _foldlM compileDecl ctx typeDecls in 
