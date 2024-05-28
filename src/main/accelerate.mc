@@ -83,7 +83,7 @@ let keywordsSymEnv : SymEnv =
   let newVarEnv = mapFromSeq cmpString 
     (map (lam s. (s, nameSym s)) mexprExtendedKeywords) in 
 
-  updateVarEnv symEnvDefault newVarEnv
+  symbolizeUpdateVarEnv symEnvDefault newVarEnv
 
 let pprintOCamlTops = use OCamlPrettyPrint in
   lam tops : [Top].

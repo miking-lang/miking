@@ -81,8 +81,8 @@ lang DeclLetSym = DeclSym + LetDeclAst + LetSym
   | DeclLet t ->  
     match symbolizeTyAnnot env t.tyAnnot with (tyVarEnv, tyAnnot) in
     match setSymbol env.currentEnv.varEnv t.ident with (varEnv, ident) in
-    let env = updateVarEnv env varEnv in 
-    let env = updateTyVarEnv env tyVarEnv in 
+    let env = symbolizeUpdateVarEnv env varEnv in 
+    let env = symbolizeUpdateTyVarEnv env tyVarEnv in 
     let decl = DeclLet {t with ident = ident,
                         tyAnnot = tyAnnot,
                         body = symbolizeExpr env t.body} in 
@@ -93,12 +93,12 @@ lang DeclTypeSym = DeclSym + TypeDeclAst
   sem symbolizeDecl env = 
   | DeclType t -> 
     match setSymbol env.currentEnv.tyConEnv t.ident with (tyConEnv, ident) in
-    let env = updateTyConEnv env tyConEnv in 
+    let env = symbolizeUpdateTyConEnv env tyConEnv in 
     match mapAccumL setSymbol env.currentEnv.tyVarEnv t.params with (tyVarEnv, params) in
     let decl = DeclType {t with ident = ident,
                                 params = params,
-                                tyIdent = symbolizeType (updateTyVarEnv env tyVarEnv) t.tyIdent} in 
-    let env = updateTyVarEnv env tyVarEnv in 
+                                tyIdent = symbolizeType (symbolizeUpdateTyVarEnv env tyVarEnv) t.tyIdent} in 
+    let env = symbolizeUpdateTyVarEnv env tyVarEnv in 
     (env, decl)
 end
 
@@ -113,12 +113,12 @@ lang DeclRecLetsSym = DeclSym + RecLetsDeclAst + LetSym
     in
 
     match mapAccumL setSymbolIdent env.currentEnv.varEnv t.bindings with (varEnv, bindings) in
-    let newEnv = updateVarEnv env varEnv in
+    let newEnv = symbolizeUpdateVarEnv env varEnv in
 
     -- Symbolize all bodies with the new environment
     let bindings =
     map (lam b. match symbolizeTyAnnot env b.tyAnnot with (tyVarEnv, tyAnnot) in
-                {b with body = symbolizeExpr (updateTyVarEnv newEnv tyVarEnv) b.body,
+                {b with body = symbolizeExpr (symbolizeUpdateTyVarEnv newEnv tyVarEnv) b.body,
                         tyAnnot = tyAnnot})  bindings in
 
     (newEnv, DeclRecLets {t with bindings = bindings})
@@ -131,7 +131,7 @@ lang DeclConDefSym = DeclSym + DataDeclAst
 
     let decl = DeclConDef {t with ident = ident,
                                   tyIdent = symbolizeType env t.tyIdent} in 
-    let env = updateConEnv env conEnv in 
+    let env = symbolizeUpdateConEnv env conEnv in 
     (env, decl)
 end
 
@@ -157,7 +157,7 @@ lang DeclExtSym = DeclSym + ExtDeclAst
       match setSymbol env.currentEnv.varEnv t.ident with (varEnv, ident) in
       let decl = DeclExt {t with ident = ident,
                                   tyIdent = symbolizeType env t.tyIdent} in 
-      let env = updateVarEnv env varEnv in 
+      let env = symbolizeUpdateVarEnv env varEnv in 
       (env, decl)
 end
 
@@ -231,7 +231,7 @@ lang DeclLangSym = DeclSym + LangDeclAst + TypeDeclAst + SemDeclAst +
       match mapAccumL setSymbol env.currentEnv.tyVarEnv t.params with (tyVarEnv, params) in
 
       -- Symbolize type annotation
-      let tyAnnot = symbolizeType (updateTyVarEnv env tyVarEnv) t.tyIdent in
+      let tyAnnot = symbolizeType (symbolizeUpdateTyVarEnv env tyVarEnv) t.tyIdent in
 
       let decl = DeclType {t with ident = ident,
                                   tyIdent = tyAnnot,
@@ -255,7 +255,7 @@ lang DeclLangSym = DeclSym + LangDeclAst + TypeDeclAst + SemDeclAst +
       let paramMap = mapFromSeq cmpString paramPairs in 
 
       let m = mapUnion env.currentEnv.tyVarEnv paramMap in 
-      let env = updateTyVarEnv env m in 
+      let env = symbolizeUpdateTyVarEnv env m in 
 
       let tyIdent = symbolizeType env def.tyIdent in
 
@@ -288,14 +288,14 @@ lang DeclLangSym = DeclSym + LangDeclAst + TypeDeclAst + SemDeclAst +
       let env = updateEnv env langEnv in
 
       match symbolizeTyAnnot env s.tyAnnot with (tyVarEnv, tyAnnot) in 
-      let env = updateTyVarEnv env tyVarEnv in 
+      let env = symbolizeUpdateTyVarEnv env tyVarEnv in 
 
       let symbArgTy = lam env : SymEnv. lam arg : {ident : Name, tyAnnot : Type}. 
           match setSymbol env.currentEnv.varEnv arg.ident with (varEnv, ident) in 
-          let env = updateVarEnv env varEnv in 
+          let env = symbolizeUpdateVarEnv env varEnv in 
 
           match symbolizeTyAnnot env arg.tyAnnot with (tyVarEnv, tyAnnot) in 
-          let env = updateTyVarEnv env tyVarEnv in 
+          let env = symbolizeUpdateTyVarEnv env tyVarEnv in 
 
           (env, {ident = ident, tyAnnot = tyAnnot})
       in
@@ -307,7 +307,7 @@ lang DeclLangSym = DeclSym + LangDeclAst + TypeDeclAst + SemDeclAst +
       let symbCases = lam cas : {pat : Pat, thn : Expr}. 
           match symbolizePat env (mapEmpty cmpString) cas.pat with (thnVarEnv, pat) in
           let varEnv = mapUnion env.currentEnv.varEnv thnVarEnv in 
-          let thn = symbolizeExpr (updateVarEnv env varEnv) cas.thn in
+          let thn = symbolizeExpr (symbolizeUpdateVarEnv env varEnv) cas.thn in
           {pat = pat, thn = thn}
       in
       let cases = map symbCases s.cases in
