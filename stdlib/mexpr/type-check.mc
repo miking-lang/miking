@@ -1975,7 +1975,8 @@ let typeOf = lam test : TypeTest.
   unwrapTypes
     (tyTm
        (typeCheckExpr {typcheckEnvDefault with varEnv = tyEnv}
-          (symbolizeExpr {symEnvDefault with varEnv = symEnv} test.tm)))
+          (symbolizeExpr (symbolizeUpdateVarEnv symEnvDefault symEnv) test.tm)))
+          -- (symbolizeExpr {symEnvDefault with varEnv = symEnv} test.tm)))
 in
 
 let runTest =
