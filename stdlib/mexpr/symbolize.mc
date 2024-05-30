@@ -271,8 +271,8 @@ lang RecLetsSym = Sym + RecLetsAst + LetSym
   sem addTopNames (env : SymEnv) =
   | TmRecLets t ->
     let varEnv =
-      foldr (lam b. mapInsert (nameGetStr b.ident) b.ident) env.varEnv t.bindings in
-    addTopNames {env with varEnv = varEnv} t.inexpr
+      foldr (lam b. mapInsert (nameGetStr b.ident) b.ident) env.currentEnv.varEnv t.bindings in
+    addTopNames (symbolizeUpdateVarEnv env varEnv) t.inexpr
 end
 
 lang ExtSym = Sym + ExtAst
@@ -348,7 +348,7 @@ lang OpImplSym = OpImplAst + Sym + LetSym
       , info = [x.info]
       , allowFree = env.allowFree
       }
-      env.varEnv
+      env.currentEnv.varEnv
       x.ident in
     match symbolizeTyAnnot env x.specType with (tyVarEnv, specType) in
     let body = symbolizeExpr (symbolizeUpdateTyVarEnv env tyVarEnv) x.body in
@@ -371,8 +371,8 @@ lang OpDeclSym = OpDeclAst + Sym + OpImplAst + ReprDeclAst + OpImplSym
         }
       in (reprEnv, res) in
 
-    match setSymbol env.varEnv x.ident with (varEnv, ident) in
-    let newEnv = {env with varEnv = varEnv} in
+    match setSymbol env.currentEnv.varEnv x.ident with (varEnv, ident) in
+    let newEnv = symbolizeUpdateVarEnv env varEnv in
     let inexpr = symbolizeExpr newEnv x.inexpr in
     TmOpDecl
       { x with ident = ident
@@ -385,12 +385,12 @@ end
 lang ReprTypeSym = Sym + ReprDeclAst
   sem symbolizeExpr env =
   | TmReprDecl x ->
-    match setSymbol env.reprEnv x.ident with (reprEnv, ident) in
+    match setSymbol env.currentEnv.reprEnv x.ident with (reprEnv, ident) in
     match mapAccumL setSymbol env.currentEnv.tyVarEnv x.vars with (tyVarEnv, vars) in
     let rhsEnv = (symbolizeUpdateTyVarEnv env tyVarEnv) in
     let pat = symbolizeType rhsEnv x.pat in
     let repr = symbolizeType rhsEnv x.repr in
-    let inexpr = symbolizeExpr {env with reprEnv = reprEnv} x.inexpr in
+    let inexpr = symbolizeExpr (symbolizeUpdateReprEnv env reprEnv) x.inexpr in
     TmReprDecl {x with ident = ident, pat = pat, repr = repr, vars = vars, inexpr = inexpr}
 end
 
@@ -402,7 +402,7 @@ lang OpVarSym = OpVarAst + Sym
       , info = [x.info]
       , allowFree = env.allowFree
       }
-      env.varEnv
+      env.currentEnv.varEnv
       x.ident in
     TmOpVar {x with ident = ident}
 end
@@ -506,7 +506,7 @@ lang ReprSubstSym = Sym + ReprSubstAst
       , info = [x.info]
       , allowFree = env.allowFree
       }
-      env.reprEnv
+      env.currentEnv.reprEnv
       x.subst in
     TySubst {x with arg = arg, subst = subst}
 end
