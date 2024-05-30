@@ -88,16 +88,3 @@ lang MLangIncludeHandler = MLangAst + BootParserMLang
         head (setToSeq existingFilesAsSet)
     end
 end
-
-mexpr
-use MLangPrettyPrint in 
-use MLangIncludeHandler in 
-
-let dir = sysGetCwd () in 
-let libs = addCWDtoLibs (parseMCoreLibsEnv ()) in
-let included = ref (setEmpty cmpString) in 
-
-let p = handleIncludesFile included "stdlib/mexpr" libs "stdlib/mexpr/ast.mc" in 
-
-printLn (mlang2str (p));
-()
