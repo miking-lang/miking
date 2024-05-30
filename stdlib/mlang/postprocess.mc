@@ -58,3 +58,4 @@ let e = nvar_ sym in
 let e = postprocess m e in 
 match e with TmVar {ident = ident} in 
 utest nameHasSym ident with true in 
+()
