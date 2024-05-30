@@ -214,7 +214,7 @@ use MLangPrettyPrint in
 use MExprEq in 
 
 let parseProgram = lam str.
-  match _consume (parseMLangString str) with (_, Right p) in p
+  match result.consume (parseMLangString str) with (_, Right p) in p
 in
 
 let getIncludeStrings : MLangProgram -> [String] = lam p.
@@ -528,17 +528,5 @@ let p = parseProgram str in
 match head p.decls with DeclLang l in 
 match head l.decls with DeclSem f in 
 match optionIsNone f.args with true in 
--- let res = _consume (parseMLangFile "stdlib/mexpr/shallow-patterns.mc") in 
--- match res with (_, Right p) in 
-
--- let printSemDecls = lam decl. match decl with DeclSem s then
---   printLn (nameGetStr s.ident)
---   -- ;
---   -- printLn (match pprintDeclCode 0 pprintEnvEmpty (DeclSem s) with (_, s) in s)
---    else () in 
--- let printLang = lam decl. match decl with DeclLang l then
---   iter printSemDecls l.decls else () in 
-
--- iter printLang p.decls;
 
 ()

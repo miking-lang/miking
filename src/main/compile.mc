@@ -141,7 +141,7 @@ let compile = lam files. lam options : Options. lam args.
 
   if options.mlangPipeline then
     printLn "WARNING: You are using an experimental, unstable pipeline.";
-    use MainLang in 
+    use MLangPipeline in 
     iter (compileMLangToOcaml options compileWithUtests) files
   else
     let compileFile = lam file.

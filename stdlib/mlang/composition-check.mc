@@ -57,7 +57,7 @@ type CompositionCheckEnv = {
 let _foldlMfun : all w. all e. all a. all b.
   a -> b -> [(a -> b -> Result w e a)] -> Result w e a
   = lam a. lam b. lam fs. 
-    _foldlM (lam a. lam f. f a b) a fs
+    result.foldlM (lam a. lam f. f a b) a fs
 
 let collectPats = lam env. lam includes.
   let incl2pats = lam i : (String, String). 
@@ -164,14 +164,14 @@ lang MLangCompositionCheck = MLangAst + MExprPatAnalysis + MExprAst + MExprPrett
 
   sem checkComposition : MLangProgram -> Result CompositionWarning CompositionError CompositionCheckEnv
   sem checkComposition =| prog -> 
-    _foldlM parseAll _emptyCompositionCheckEnv prog.decls 
+    result.foldlM parseAll _emptyCompositionCheckEnv prog.decls 
 
   sem parseAll : CompositionCheckEnv -> 
                  Decl -> 
                  Result CompositionWarning CompositionError CompositionCheckEnv
   sem parseAll env = 
   | DeclLang l -> 
-    _foldlM (parseAllInner (nameGetStr l.ident)) env l.decls
+    result.foldlM (parseAllInner (nameGetStr l.ident)) env l.decls
   | other -> result.ok env
 
   sem parseAllInner langStr env = 
@@ -370,7 +370,7 @@ lang MLangCompositionCheck = MLangAst + MExprPatAnalysis + MExprAst + MExprPrett
               info = s.info
             })
     in 
-    let res = _foldlM accGraph g pairs in 
+    let res = result.foldlM accGraph g pairs in 
 
     match result.consume res with (_, errorsOrGraph) in
     switch errorsOrGraph 

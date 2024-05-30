@@ -46,7 +46,7 @@ lang MLangIncludeHandler = MLangAst + BootParserMLang
     if setMem path s then 
       {decls = [], expr = uunit_}
     else 
-      match _consume (parseMLangFile path) with (_, errOrProg) in
+      match result.consume (parseMLangFile path) with (_, errOrProg) in
       switch errOrProg
         case Left err then error (join [
           "File '",

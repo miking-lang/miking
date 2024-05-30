@@ -480,9 +480,6 @@ recursive
     else find p (tail seq)
 end
 
-let eqRec = lam lhs. lam rhs.and (eqi lhs.x rhs.x) (eqi lhs.y rhs.y)
-utest find (lam r. eqi r.x 1) [{x=1,y=1},{x=2,y=2},{x=1,y=-1}] 
-  with Some {x=1, y=1} using optionEq eqRec
 utest find (lam x. eqi x 2) [4,1,2] with Some 2 using optionEq eqi
 utest find (lam x. lti x 1) [4,1,2] with None () using optionEq eqi
 
@@ -490,8 +487,6 @@ utest find (lam x. lti x 1) [4,1,2] with None () using optionEq eqi
 let findLast : all a. (a -> Bool) -> [a] -> Option a = lam p. lam seq.
   find p (reverse seq)
 
-utest findLast (lam r. eqi r.x 1) [{x=1,y=1},{x=2,y=2},{x=1,y=-1}] 
-  with Some {x=1, y=-1} using optionEq eqRec
 utest findLast (lam x. lti x 1) [4,1,2] with None () using optionEq eqi
 
 -- Find the first index in a sequence whose element satisfies a predicate

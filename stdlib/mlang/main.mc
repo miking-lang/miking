@@ -25,11 +25,11 @@ include "mexpr/ast-builder.mc"
 include "mexpr/phase-stats.mc"
 include "mexpr/pprint.mc"
 
-lang MainLang = MLangCompiler + BootParserMLang + 
-                MLangSym + MLangCompositionCheck +
-                MExprPrettyPrint + MExprEval + MExprEq + 
-                MLangConstTransformer + MLangIncludeHandler +
-                PhaseStats + LanguageComposer + PostProcess
+lang MLangPipeline = MLangCompiler + BootParserMLang + 
+                     MLangSym + MLangCompositionCheck +
+                     MExprPrettyPrint + MExprEval + MExprEq + 
+                     MLangConstTransformer + MLangIncludeHandler +
+                     PhaseStats + LanguageComposer + PostProcess
 
   sem myEval : Expr -> Expr
   sem myEval =| e ->
@@ -50,11 +50,10 @@ lang MainLang = MLangCompiler + BootParserMLang +
     let p = composeProgram p in 
     endPhaseStats log "language-inclusion-generation" uunit_;
 
-
     match symbolizeMLang symEnvDefault p with (_, p) in 
     endPhaseStats log "symbolization" uunit_;
 
-    match _consume (checkComposition p) with (_, res) in 
+    match result.consume (checkComposition p) with (_, res) in 
     endPhaseStats log "composition-check" uunit_;
 
     switch res 
@@ -63,7 +62,7 @@ lang MainLang = MLangCompiler + BootParserMLang +
         never
       case Right env then
         let ctx = _emptyCompilationContext env in 
-        let res = _consume (compile ctx p) in 
+        let res = result.consume (compile ctx p) in 
         match res with (_, rhs) in 
         match rhs with Right expr in
         endPhaseStats log "mlang-mexpr-lower" expr;
