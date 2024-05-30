@@ -840,6 +840,18 @@ utest permute "xy" [0, 1] with "xy"
 utest permute "abcd" [0, 3, 1, 2] with "acdb"
 utest permute [0, 1, 2] [2, 0, 1] with [1, 2, 0]
 
+-- Given a list xs, create a list of all pairs (xs[i], xs[j]) 
+-- where i < j.
+recursive let pairWithLater : all a. [a] -> [(a, a)] = lam lst.
+  match lst with [x] ++ xs then
+    concat (map (lam y. (x, y)) xs) (pair_with_later xs)
+  else 
+    []
+end
+utest pair_with_later [1,2,3] with [(1, 2), (1, 3), (2, 3)] using eqSeq (lam x. lam y. and (eqi x.0 y.0) (eqi x.1 y.1))
+utest pair_with_later [1] with [] using eqSeq (lam x. lam y. and (eqi x.0 y.0) (eqi x.1 y.1))
+utest pair_with_later [] with [] using eqSeq (lam x. lam y. and (eqi x.0 y.0) (eqi x.1 y.1))
+
 
 -- Concatenate a sequence of sequences [s1, s2, ..., sn], interleaving each
 -- sequence si on a delimiter

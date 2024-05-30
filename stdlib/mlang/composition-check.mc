@@ -69,12 +69,6 @@ let collectPats = lam env. lam includes.
   in 
   join (map incl2pats includes)
 
-let indexPairs : Int -> [(Int, Int)] = lam n. 
-  let indices = range 0 n 1 in 
-  let pairs = seqLiftA2 (lam a. lam b. (a, b)) indices indices in
-  let pred = lam p. match p with (x, y) in and (neqi x y) (gti x y) in 
-  filter pred pairs 
-
 let tupleStringCmp = tupleCmp2 cmpString cmpString
 
 let _emptyCompositionCheckEnv : CompositionCheckEnv = {
@@ -319,7 +313,7 @@ lang MLangCompositionCheck = MLangAst + MExprPatAnalysis + MExprAst + MExprPrett
     let pats = removeDups (setEmpty subi) pats in 
 
     let normPats = map patToNormpat (map (lam c. c.pat) pats) in 
-    let pairs = indexPairs (length normPats) in 
+    let pairs = pairWithLater (range 0 (length normPats) 1) in 
 
     let isStrictSubpat = lam pat1. lam pat2.
       null (normpatIntersect pat1 (normpatComplement pat2))
