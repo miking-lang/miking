@@ -348,7 +348,7 @@ let parse_mexpr_string ustring =
   Lexer.init (us "internal") tablength ;
   ustring |> Ustring.lexing_from_ustring |> Parser.main_mexpr_tm Lexer.main
 
-let parse_mlang_string ustring = 
+let parse_mlang_string ustring =
   Lexer.init (us "internal") tablength ;
   ustring |> Ustring.lexing_from_ustring |> Parser.main Lexer.main
 

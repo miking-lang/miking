@@ -136,14 +136,13 @@ let idDeclLet = 704
 
 let idDeclType = 705
 
-let idDeclRecLets = 706 
+let idDeclRecLets = 706
 
-let idDeclConDef = 707 
+let idDeclConDef = 707
 
-let idDeclUtest = 708 
+let idDeclUtest = 708
 
 let idDeclExt = 709
-
 
 let sym = Symb.gensym ()
 
@@ -186,7 +185,18 @@ let reportErrorAndExit err =
 let getData = function
   (* Terms *)
   | PTreeTm (TmVar (fi, x, _, _, frozen)) ->
-      (idTmVar, [fi], [], [], [], [x], [(if frozen then 1 else 0)], [], [], [], [], [])
+      ( idTmVar
+      , [fi]
+      , []
+      , []
+      , []
+      , [x]
+      , [(if frozen then 1 else 0)]
+      , []
+      , []
+      , []
+      , []
+      , [] )
   | PTreeTm (TmApp (fi, t1, t2)) ->
       (idTmApp, [fi], [], [], [t1; t2], [], [], [], [], [], [], [])
   | PTreeTm (TmLam (fi, x, _, _, ty, t)) ->
@@ -202,7 +212,7 @@ let getData = function
       (idTmRecLets, fis, [len], tys, tms, strs, [], [], [], [], [], [])
   | PTreeTm (TmConst (fi, c)) ->
       (idTmConst, [fi], [], [], [], [], [], [], [c], [], [], [])
-  | PTreeTm (TmUse (fi, str, tm)) -> 
+  | PTreeTm (TmUse (fi, str, tm)) ->
       (idTmUse, [fi], [], [], [tm], [str], [], [], [], [], [], [])
   | PTreeTm (TmSeq (fi, ts)) ->
       let len = Mseq.length ts in
@@ -210,7 +220,18 @@ let getData = function
       (idTmSeq, [fi], [len], [], tms, [], [], [], [], [], [], [])
   | PTreeTm (TmRecord (fi, tmmap)) ->
       let slst, tlst = tmmap |> Record.bindings |> List.split in
-      (idTmRecord, [fi], [List.length slst], [], tlst, slst, [], [], [], [], [], [])
+      ( idTmRecord
+      , [fi]
+      , [List.length slst]
+      , []
+      , tlst
+      , slst
+      , []
+      , []
+      , []
+      , []
+      , []
+      , [] )
   | PTreeTm (TmRecordUpdate (fi, t1, x, t2)) ->
       (idTmRecordUpdate, [fi], [], [], [t1; t2], [x], [], [], [], [], [], [])
   | PTreeTm (TmType (fi, x, params, ty, t)) ->
@@ -229,13 +250,35 @@ let getData = function
     | Some t4, None ->
         (idTmUtest, [fi], [4], [], [t1; t2; t3; t4], [], [], [], [], [], [], [])
     | Some t4, Some t5 ->
-        (idTmUtest, [fi], [5], [], [t1; t2; t3; t4; t5], [], [], [], [], [], [], [])
+        ( idTmUtest
+        , [fi]
+        , [5]
+        , []
+        , [t1; t2; t3; t4; t5]
+        , []
+        , []
+        , []
+        , []
+        , []
+        , []
+        , [] )
     | _, _ ->
         failwith "bootparser getData undefined" )
   | PTreeTm (TmNever fi) ->
       (idTmNever, [fi], [], [], [], [], [], [], [], [], [], [])
   | PTreeTm (TmExt (fi, x, _, e, ty, t)) ->
-      (idTmExt, [fi], [], [ty], [t], [x], [(if e then 1 else 0)], [], [], [], [], [])
+      ( idTmExt
+      , [fi]
+      , []
+      , [ty]
+      , [t]
+      , [x]
+      , [(if e then 1 else 0)]
+      , []
+      , []
+      , []
+      , []
+      , [] )
   (* Types *)
   | PTreeTy (TyUnknown fi) ->
       (idTyUnknown, [fi], [], [], [], [], [], [], [], [], [], [])
@@ -270,7 +313,18 @@ let getData = function
           data
       in
       let dlen = List.length klens + 1 in
-      (idTyAll, [fi], dlen :: klens, [ty], [], var :: ks, [1], [], [], [], [], [])
+      ( idTyAll
+      , [fi]
+      , dlen :: klens
+      , [ty]
+      , []
+      , var :: ks
+      , [1]
+      , []
+      , []
+      , []
+      , []
+      , [] )
   | PTreeTy (TySeq (fi, ty)) ->
       (idTySeq, [fi], [], [ty], [], [], [], [], [], [], [], [])
   | PTreeTy (TyTensor (fi, ty)) ->
@@ -329,7 +383,18 @@ let getData = function
       let len2 = Mseq.length pats2 in
       let ps2 = Mseq.Helpers.to_list pats2 in
       let x = patNameToStr px in
-      (idPatSeqEdge, [fi], [len1; len2], [], [], [x], [], [], [], ps1 @ ps2, [], [])
+      ( idPatSeqEdge
+      , [fi]
+      , [len1; len2]
+      , []
+      , []
+      , [x]
+      , []
+      , []
+      , []
+      , ps1 @ ps2
+      , []
+      , [] )
   | PTreePat (PatRecord (fi, pats)) ->
       let slst, plst = pats |> Record.bindings |> List.split in
       let len = List.length slst in
@@ -351,13 +416,24 @@ let getData = function
       (idPatNot, [fi], [], [], [], [], [], [], [], [p], [], [])
   (* MLang *)
   | PTreeProgram (Program (includes, tops, expr)) ->
-      let includeStrings = List.map 
-        (fun incl -> match incl with Include (_, s) -> s) 
-        includes in
-      let includeInfos = List.map 
-        (fun incl -> match incl with Include (i, _) -> i) 
-        includes in 
-      (idProgram, includeInfos, [List.length includes; List.length tops], [], [expr], includeStrings, [], [], [], [], tops, [])
+      let includeStrings =
+        List.map (fun incl -> match incl with Include (_, s) -> s) includes
+      in
+      let includeInfos =
+        List.map (fun incl -> match incl with Include (i, _) -> i) includes
+      in
+      ( idProgram
+      , includeInfos
+      , [List.length includes; List.length tops]
+      , []
+      , [expr]
+      , includeStrings
+      , []
+      , []
+      , []
+      , []
+      , tops
+      , [] )
   (* Info *)
   | PTreeInfo (Info (fn, r1, c1, r2, c2)) ->
       (idInfo, [], [], [], [], [fn], [r1; c1; r2; c2], [], [], [], [], [])
@@ -367,10 +443,21 @@ let getData = function
   | PTreeError es ->
       let fis, msgs = List.split es in
       (idError, fis, [List.length es], [], [], msgs, [], [], [], [], [], [])
-  | PTreeTop (TopLet (Let (fi, x, ty, tm))) -> 
+  | PTreeTop (TopLet (Let (fi, x, ty, tm))) ->
       (idDeclLet, [fi], [], [ty], [tm], [x], [], [], [], [], [], [])
   | PTreeTop (TopType (Type (fi, x, params, ty))) ->
-      (idDeclType, [fi], [List.length params], [ty], [], x :: params, [], [], [], [], [], [])
+      ( idDeclType
+      , [fi]
+      , [List.length params]
+      , [ty]
+      , []
+      , x :: params
+      , []
+      , []
+      , []
+      , []
+      , []
+      , [] )
   | PTreeTop (TopRecLet (RecLet (fi, lst))) ->
       let len = List.length lst in
       let fis = fi :: List.map (fun (fi, _, _, _) -> fi) lst in
@@ -380,45 +467,119 @@ let getData = function
       (idDeclRecLets, fis, [len], tys, tms, strs, [], [], [], [], [], [])
   | PTreeTop (TopCon (Con (fi, str, ty))) ->
       (idDeclConDef, [fi], [], [ty], [], [str], [], [], [], [], [], [])
-  | PTreeTop (TopUtest (Utest (fi, tm1, tm2, tmUsing, _))) -> 
-      (match tmUsing with 
-       Some tm ->
-         (idDeclUtest, [fi], [1], [], [tm1; tm2; tm], [], [], [], [], [], [], [])
-       | _ ->
-         (idDeclUtest, [fi], [0], [], [tm1; tm2], [], [], [], [], [], [], []))
+  | PTreeTop (TopUtest (Utest (fi, tm1, tm2, tmUsing, _))) -> (
+    match tmUsing with
+    | Some tm ->
+        (idDeclUtest, [fi], [1], [], [tm1; tm2; tm], [], [], [], [], [], [], [])
+    | _ ->
+        (idDeclUtest, [fi], [0], [], [tm1; tm2], [], [], [], [], [], [], []) )
   | PTreeTop (TopExt (Ext (fi, str, effect, ty))) ->
-      (idDeclExt, [fi], [], [ty], [], [str], [(if effect then 1 else 0)], [], [], [], [], [])
+      ( idDeclExt
+      , [fi]
+      , []
+      , [ty]
+      , []
+      , [str]
+      , [(if effect then 1 else 0)]
+      , []
+      , []
+      , []
+      , []
+      , [] )
   (* TODO(voorberg, 03-05-2024): Add support for 'with' extensions *)
   | PTreeTop (TopLang (Lang (fi, ident, includes, _, decls))) ->
-      (idDeclLang, [fi], [List.length includes; List.length decls], [], [], ident :: includes, [], [], [], [], [], decls)
-  | PTreeDecl (Data (fi, ident, nParams, decls)) -> 
-      let lst = List.map (fun x -> match x with CDecl (fi, params, con, ty) -> (fi, params, con, ty)) decls in 
+      ( idDeclLang
+      , [fi]
+      , [List.length includes; List.length decls]
+      , []
+      , []
+      , ident :: includes
+      , []
+      , []
+      , []
+      , []
+      , []
+      , decls )
+  | PTreeDecl (Data (fi, ident, nParams, decls)) ->
+      let lst =
+        List.map
+          (fun x ->
+            match x with CDecl (fi, params, con, ty) -> (fi, params, con, ty)
+            )
+          decls
+      in
       let allStr = List.map (fun (_, _, con, _) -> con) lst in
-      let fis = fi :: List.map (fun (fi, _, _, _) -> fi) lst in 
-      let tys = List.map (fun (_, _, _, ty) -> ty) lst in 
-      
-      let tyParams = if List.length lst = 0 then []
-        else List.hd (List.map (fun (_, params, _, _) -> params) lst) in
-
-      (idDeclSyn, fis, [List.length decls ; nParams], tys, [], ident :: (List.concat [allStr; tyParams]) , [], [], [], [], [], [])
-  | PTreeDecl (Inter (fi, ident, ty, paramListOpt, cases)) ->
-      (match paramListOpt with Some (paramList) -> 
-         let argIdents = List.map (fun x -> match x with Param (_, s, _) -> s) paramList in
-         let argTys = List.map (fun x -> match x with Param (_, _, ty) -> ty) paramList in
-
-         let pats = List.map fst cases in
-         let tms = List.map snd cases in 
- 
-         (idDeclSem, [fi], [List.length cases ; List.length paramList], ty :: argTys, tms, ident :: argIdents, [], [], [], pats, [], [])
-       | None -> 
-         let pats = List.map fst cases in
-         let tms = List.map snd cases in 
-         (* NOTE(15-05-2024, voorberg): If the amount of parameters has not
-            been specified by this definition, we send -1.  *)
-         (idDeclSem, [fi], [List.length cases; -1], [ty], tms, [ident], [], [], [], pats, [], []))
- 
+      let fis = fi :: List.map (fun (fi, _, _, _) -> fi) lst in
+      let tys = List.map (fun (_, _, _, ty) -> ty) lst in
+      let tyParams =
+        if List.length lst = 0 then []
+        else List.hd (List.map (fun (_, params, _, _) -> params) lst)
+      in
+      ( idDeclSyn
+      , fis
+      , [List.length decls; nParams]
+      , tys
+      , []
+      , ident :: List.concat [allStr; tyParams]
+      , []
+      , []
+      , []
+      , []
+      , []
+      , [] )
+  | PTreeDecl (Inter (fi, ident, ty, paramListOpt, cases)) -> (
+    match paramListOpt with
+    | Some paramList ->
+        let argIdents =
+          List.map (fun x -> match x with Param (_, s, _) -> s) paramList
+        in
+        let argTys =
+          List.map (fun x -> match x with Param (_, _, ty) -> ty) paramList
+        in
+        let pats = List.map fst cases in
+        let tms = List.map snd cases in
+        ( idDeclSem
+        , [fi]
+        , [List.length cases; List.length paramList]
+        , ty :: argTys
+        , tms
+        , ident :: argIdents
+        , []
+        , []
+        , []
+        , pats
+        , []
+        , [] )
+    | None ->
+        let pats = List.map fst cases in
+        let tms = List.map snd cases in
+        (* NOTE(15-05-2024, voorberg): If the amount of parameters has not
+           been specified by this definition, we send -1. *)
+        ( idDeclSem
+        , [fi]
+        , [List.length cases; -1]
+        , [ty]
+        , tms
+        , [ident]
+        , []
+        , []
+        , []
+        , pats
+        , []
+        , [] ) )
   | PTreeDecl (Alias (fi, ident, params, ty)) ->
-    (idDeclType, [fi], [List.length params], [ty], [], ident :: params, [], [], [], [], [], [])
+      ( idDeclType
+      , [fi]
+      , [List.length params]
+      , [ty]
+      , []
+      , ident :: params
+      , []
+      , []
+      , []
+      , []
+      , []
+      , [] )
   | _ ->
       failwith "The AST node is unknown"
 
@@ -852,13 +1013,13 @@ let arity = function
       2
   | CbootParserParseMExprString (_, Some _) ->
       1
-  | CbootParserParseMLangString None -> 
+  | CbootParserParseMLangString None ->
       1
-  | CbootParserParseMLangString Some _ -> 
+  | CbootParserParseMLangString (Some _) ->
       0
-  | CbootParserParseMLangFile None -> 
+  | CbootParserParseMLangFile None ->
       1
-  | CbootParserParseMLangFile Some _ -> 
+  | CbootParserParseMLangFile (Some _) ->
       0
   | CbootParserParseMCoreFile (None, None) ->
       3
@@ -1121,10 +1282,12 @@ let add_call fi ms =
     Hashtbl.replace runtimes fi (old_count + 1, old_time +. ms)
   else Hashtbl.add runtimes fi (1, ms)
 
-let parseMLangString str = 
+let parseMLangString str =
   try
-    let prog = str |> Intrinsics.Mseq.Helpers.to_ustring 
-                   |> Parserutils.parse_mlang_string in
+    let prog =
+      str |> Intrinsics.Mseq.Helpers.to_ustring
+      |> Parserutils.parse_mlang_string
+    in
     PTreeProgram prog
   with (Lexer.Lex_error _ | Msg.Error _ | Parser.Error) as e ->
     PTreeError
@@ -1134,12 +1297,12 @@ let parseMLangString str =
         | None ->
             (NoInfo, us (Printexc.to_string e)) ) ]
 
-let parseMLangFile filename = 
+let parseMLangFile filename =
   try
-    let prog = filename |> Intrinsics.Mseq.Helpers.to_ustring 
-                        |> Ustring.to_utf8 
-                        |> Utils.normalize_path 
-                        |> Parserutils.local_parse_mcore_file in 
+    let prog =
+      filename |> Intrinsics.Mseq.Helpers.to_ustring |> Ustring.to_utf8
+      |> Utils.normalize_path |> Parserutils.local_parse_mcore_file
+    in
     PTreeProgram prog
   with (Lexer.Lex_error _ | Msg.Error _ | Parser.Error) as e ->
     PTreeError
@@ -2131,21 +2294,17 @@ and delta (apply : info -> tm -> tm -> tm) fi c v =
       TmConst (fi, CbootParserTree t)
   | CbootParserParseMExprString _, _ ->
       fail_constapp fi
-  | CbootParserParseMLangString None, TmSeq (fi, seq)
-    ->
-      let s = tm_seq2int_seq fi seq in 
-      let t = parseMLangString s in 
+  | CbootParserParseMLangString None, TmSeq (fi, seq) ->
+      let s = tm_seq2int_seq fi seq in
+      let t = parseMLangString s in
       TmConst (fi, CbootParserTree t)
-  | CbootParserParseMLangString _, _ 
-    -> 
+  | CbootParserParseMLangString _, _ ->
       fail_constapp fi
-  | CbootParserParseMLangFile None, TmSeq (fi, seq)
-    ->
-      let s = tm_seq2int_seq fi seq in 
-      let t = parseMLangFile s in 
+  | CbootParserParseMLangFile None, TmSeq (fi, seq) ->
+      let s = tm_seq2int_seq fi seq in
+      let t = parseMLangFile s in
       TmConst (fi, CbootParserTree t)
-  | CbootParserParseMLangFile _, _ 
-    -> 
+  | CbootParserParseMLangFile _, _ ->
       fail_constapp fi
   | CbootParserParseMCoreFile (None, None), TmRecord (_, r) -> (
     try
@@ -2292,7 +2451,7 @@ and pt_seq env ps =
         let env'', ts' = work env' ts in
         (env'', h' :: ts')
     | [] ->
-        (env, [] )
+        (env, [])
   in
   let env', ps_list' = work env (Mseq.Helpers.to_list ps) in
   (env', Mseq.Helpers.of_list_list ps_list')
