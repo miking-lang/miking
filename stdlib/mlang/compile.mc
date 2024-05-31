@@ -393,7 +393,7 @@ lang MLangCompiler = MLangAst + MExprAst +
                      RecletsDeclCompiler + LetDeclCompiler
   sem compile : CompilationContext -> MLangProgram -> Result CompilationWarning CompilationError Expr
   sem compile ctx =| prog -> 
-    match _consume (compileProg ctx prog) with (_, res) in
+    match result.consume (compileProg ctx prog) with (_, res) in
     switch res
       case Left err then result.err (head err)
       case Right ctx then result.ok (bindall_ ctx.exprs)
@@ -412,20 +412,20 @@ let simpleEval = lam e. eval (evalCtxEmpty ()) e in
 let testCompile = lam p. 
   let p = composeProgram p in 
   match symbolizeMLang symEnvDefault p with (_, p) in 
-  match _consume (checkComposition p) with (_, res) in 
+  match result.consume (checkComposition p) with (_, res) in 
   match res with Right env in
   let ctx = _emptyCompilationContext env in 
-  let res = _consume (compile ctx p) in 
+  let res = result.consume (compile ctx p) in 
   match res with (_, rhs) in 
   match rhs with Right expr in expr
 in
 
 let testError = lam p. 
   match symbolizeMLang symEnvDefault p with (_, p) in 
-  match _consume (checkComposition p) with (_, res) in 
+  match result.consume (checkComposition p) with (_, res) in 
   match res with Right env in
   let ctx = _emptyCompilationContext env in 
-  let res = _consume (compile ctx p) in 
+  let res = result.consume (compile ctx p) in 
   match res with (_, rhs) in 
   match rhs with Left errs in errs
 in
