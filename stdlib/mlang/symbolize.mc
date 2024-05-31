@@ -23,12 +23,6 @@ let fst : all a. all b. (a, b) -> a = lam p.
 let snd : all a. all b. (a, b) -> b = lam p.
   match p with (_, res) in res
 
-
-let mapDisjoint : all a. all b. (Map String a) -> (Map String b) -> Bool = lam l. lam r.
-  let leftKeys = setOfSeq cmpString (mapKeys l) in 
-  let rightKeys = setOfSeq cmpString (mapKeys r) in 
-  setDisjoint leftKeys rightKeys
-
 let sem2ident = lam d.
   use MLangAst in 
   match d with DeclSem d in d.ident
@@ -148,15 +142,13 @@ end
 
 lang DeclExtSym = DeclSym + ExtDeclAst 
   sem symbolizeDecl env = 
-  | DeclExt t -> 
-      -- When ignoreExternals is set, the DeclExt should have been filtered
-    -- out of the program before attempting to symbolize the declarations.
+  | DeclExt t & d-> 
     if env.ignoreExternals then
-      error "DeclExt should have been removed when 'ignoreExternals' is true!"
+      (env, d)
     else 
       match setSymbol env.currentEnv.varEnv t.ident with (varEnv, ident) in
       let decl = DeclExt {t with ident = ident,
-                                  tyIdent = symbolizeType env t.tyIdent} in 
+                                 tyIdent = symbolizeType env t.tyIdent} in 
       let env = symbolizeUpdateVarEnv env varEnv in 
       (env, decl)
 end
