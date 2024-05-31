@@ -89,21 +89,6 @@ let withSemSymbol = lam ctx : CompilationContext. lam n : Name.
   in
   {ctx with semSymbols = mapInsert s newValue ctx.semSymbols}
 
--- Create a substitution function by partially applying the first two elements
--- This substitution function maps symbols belonging to semantic function in 
--- included language fragments to the symbol of the semantic function in the 
--- current fragment
-let createSubst = lam semSymbols. lam semNames. lam n. 
-  let s = nameGetStr n in 
-  match mapLookup s semSymbols with Some xs then
-    if optionIsSome (find (lam x. nameEqSym x n) xs) then
-      match mapLookup s semNames with Some res then res
-      else n
-    else
-      n
-  else 
-    n
-
 let createSubst2 : [Name] -> [Name] -> (Name -> Name) = lam orig. lam trgt.
   let m = mapFromSeq nameCmp (zip orig trgt) in
   lam n. mapLookupOrElse (lam. n) n m
@@ -288,18 +273,7 @@ lang LangDeclCompiler = DeclCompiler + LangDeclAst + MExprAst + SemDeclAst +
 
     -- Create substitution function for param aliasing
     let args = match d.args with Some args then args else [] in 
-    let paramAliases : [[Name]] = mapOption
-      (lam incl. match mapLookup incl ctx.compositionCheckEnv.semArgsMap with Some opt in opt)
-      d.includes 
-    in 
     let argsIdents : [Name] = map (lam a. a.ident) args in 
-
-    let pairs = join (map (lam params. zip params argsIdents) paramAliases) in 
-    let paramAliasMap = mapFromSeq nameCmp pairs in 
-    let subst2 = lam n. mapLookupOrElse (lam. n) n paramAliasMap in
-
-    -- Create subst for recursive all semantic functions
-    let subst = createSubst ctx.semSymbols semNames in 
 
     let targetName = nameSym "target" in 
     let target = nvar_ targetName in 
@@ -331,7 +305,7 @@ lang LangDeclCompiler = DeclCompiler + LangDeclAst + MExprAst + SemDeclAst +
       let origIdent : Name = match mapLookup c.orig ctx.compositionCheckEnv.semSymMap with Some ident in ident in 
 
       let fallback = match origArgs with Some args then createSubst2 args argsIdents
-                       else (lam x. x) in 
+                     else (lam x. x) in 
       let subst = createSubst3 ctx c.orig.0 langStr fallback in
       {c with thn = subTmVarSymbol subst c.thn} in 
     let cases = map work cases in
