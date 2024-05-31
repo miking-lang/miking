@@ -164,28 +164,28 @@ lang MLangCompositionCheck = MLangAst + MExprPatAnalysis + MExprAst + MExprPrett
 
   sem checkComposition : MLangProgram -> Result CompositionWarning CompositionError CompositionCheckEnv
   sem checkComposition =| prog -> 
-    result.foldlM parseAll _emptyCompositionCheckEnv prog.decls 
+    result.foldlM validateTopLevelComposition _emptyCompositionCheckEnv prog.decls 
 
-  sem parseAll : CompositionCheckEnv -> 
+  sem validateTopLevelComposition : CompositionCheckEnv -> 
                  Decl -> 
                  Result CompositionWarning CompositionError CompositionCheckEnv
-  sem parseAll env = 
+  sem validateTopLevelComposition env = 
   | DeclLang l -> 
-    result.foldlM (parseAllInner (nameGetStr l.ident)) env l.decls
+    result.foldlM (validateLangDeclComposition (nameGetStr l.ident)) env l.decls
   | other -> result.ok env
 
-  sem parseAllInner langStr env = 
+  sem validateLangDeclComposition langStr env = 
   | DeclSem s & d ->
-    _foldlMfun env d [parseParams langStr, parseBase langStr, parseCases langStr]
+    _foldlMfun env d [validateSynSemParams langStr, validateSynSemBase langStr, validateSemCaseOrdering langStr]
   | DeclSyn s & d ->
-    _foldlMfun env d [parseParams langStr, parseBase langStr ]
+    _foldlMfun env d [validateSynSemParams langStr, validateSynSemBase langStr ]
   | other -> result.ok env
 
-  sem parseParams : String ->
+  sem validateSynSemParams : String ->
                     CompositionCheckEnv -> 
                     Decl -> 
                     Result CompositionWarning CompositionError CompositionCheckEnv
-  sem parseParams langStr env = 
+  sem validateSynSemParams langStr env = 
   | DeclSyn s -> 
     let str = nameGetStr s.ident in 
     let paramNum = length s.params in 
@@ -232,11 +232,11 @@ lang MLangCompositionCheck = MLangAst + MExprPatAnalysis + MExprAst + MExprPrett
     else 
        result.ok (insertArgsMap env (langStr, nameGetStr s.ident) (Some args))
 
-  sem parseBase : String -> 
+  sem validateSynSemBase : String -> 
                   CompositionCheckEnv -> 
                   Decl -> 
                   Result CompositionWarning CompositionError CompositionCheckEnv
-  sem parseBase langStr env =
+  sem validateSynSemBase langStr env =
   | DeclSyn s -> 
     let env = {env with symToPair = mapInsert s.ident (langStr, nameGetStr s.ident) env.symToPair} in
 
@@ -277,7 +277,7 @@ lang MLangCompositionCheck = MLangAst + MExprPatAnalysis + MExprAst + MExprPrett
           info = s.info
         })
 
-  sem parseCases langStr env = 
+  sem validateSemCaseOrdering langStr env = 
   | DeclSem s -> 
     recursive let gatherTyVars = lam ty. 
       switch ty
