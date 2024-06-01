@@ -12,7 +12,7 @@ con PANode  : all a. (Int,Int,PA a,PA a,PA a,PA a,PA a,PA a,PA a,PA a,PA a,PA a)
 con PAEmpty : all a. () -> PA a
 con PANext  : all a. (PA a) -> PA a
 
-let empty = PAEmpty()
+let emptyPA = PAEmpty()
 
 -- Helper function for prettyPA, for generating a pretty print string for
 -- debugging
@@ -38,42 +38,40 @@ end
 -- The function returns a string.
 let prettyPA = workPrettyPA ""
 
+
 recursive
 let workAddPA = lam pa. lam y. lam l.
   match pa with PAEmpty() then
     if leqi l 1
       then PAData(1,y,y,y,y,y,y,y,y,y,y)
-      else PANode(0,l,workAddPA empty y (divi l 10),
-           empty,empty,empty,empty,empty,empty,empty,empty,empty)
+      else PANode(0,l,workAddPA emptyPA y (divi l 10),
+           emptyPA,emptyPA,emptyPA,emptyPA,emptyPA,emptyPA,
+           emptyPA,emptyPA,emptyPA)
   else
-  match pa with PAData(1,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9)
-           then PAData(2,x0,y ,x2,x3,x4,x5,x6,x7,x8,x9) else
-  match pa with PAData(2,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9)
-           then PAData(3,x0,x1,y ,x3,x4,x5,x6,x7,x8,x9) else
-  match pa with PAData(3,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9)
-           then PAData(4,x0,x1,x2,y ,x4,x5,x6,x7,x8,x9) else
-  match pa with PAData(4,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9)
-           then PAData(5,x0,x1,x2,x3,y ,x5,x6,x7,x8,x9) else
-  match pa with PAData(5,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9)
-           then PAData(6,x0,x1,x2,x3,x4,y ,x6,x7,x8,x9) else
-  match pa with PAData(6,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9)
-           then PAData(7,x0,x1,x2,x3,x4,x5,y ,x7,x8,x9) else
-  match pa with PAData(7,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9)
-           then PAData(8,x0,x1,x2,x3,x4,x5,x6,y ,x8,x9) else
-  match pa with PAData(8,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9)
-           then PAData(9,x0,x1,x2,x3,x4,x5,x6,x7,y ,x9) else
-  match pa with PAData(9,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9) then
-           if eqi l 0 then PANode(1,10,PAData(
-                   10,x0,x1,x2,x3,x4,x5,x6,x7,x8,y),
-                   empty,empty,empty,empty,empty,empty,empty,empty,empty)
+  match pa with PAData t then
+    switch t.0
+    case 1 then PAData{t with #label"0" = 2, #label"2" = y}
+    case 2 then PAData{t with #label"0" = 3, #label"3" = y}
+    case 3 then PAData{t with #label"0" = 4, #label"4" = y}
+    case 4 then PAData{t with #label"0" = 5, #label"5" = y}
+    case 5 then PAData{t with #label"0" = 6, #label"6" = y}
+    case 6 then PAData{t with #label"0" = 7, #label"7" = y}
+    case 7 then PAData{t with #label"0" = 8, #label"8" = y}
+    case 8 then PAData{t with #label"0" = 9, #label"9" = y}
+    case _ then
+           if eqi l 0 then PANode(1,10,
+             PAData{t with #label"0" = 10, #label"10" = y},
+                   emptyPA,emptyPA,emptyPA,emptyPA,emptyPA,
+                   emptyPA,emptyPA,emptyPA,emptyPA)
            else
-            PANext(PAData(10,x0,x1,x2,x3,x4,x5,x6,x7,x8,y)) else
-  match pa with PANode(i,l2,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9) in
-    let e = (match i with 0 then x0 else match i with 1 then x1 else
-             match i with 2 then x2 else match i with 3 then x3 else
-             match i with 4 then x4 else match i with 5 then x5 else
-             match i with 6 then x6 else match i with 7 then x7 else
-             match i with 8 then x8 else x9) in
+            PANext(PAData{t with #label"0" = 10, #label"10" = y})
+    end
+  else
+  match pa with PANode(i,l2,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9) then
+    let e = switch i
+            case 0 then x0 case 1 then x1 case 2 then x2
+            case 3 then x3 case 4 then x4 case 5 then x5
+            case 6 then x6 case 7 then x7 case 8 then x8 case _ then x9 end in
     let e2 = workAddPA e y (divi l2 10) in
     let setNode = lam e. lam i. lam i2.
       match i with 0 then PANode(i2,l2,e,x1,x2,x3,x4,x5,x6,x7,x8,x9) else
@@ -90,10 +88,12 @@ let workAddPA = lam pa. lam y. lam l.
       if eqi i 9 then
         if eqi l 0 then
             PANode(1, muli l2 10,setNode e3 i 10,
-              empty,empty,empty,empty,empty,empty,empty,empty,empty)
+              emptyPA,emptyPA,emptyPA,emptyPA,emptyPA,emptyPA,
+              emptyPA,emptyPA,emptyPA)
           else PANext (setNode e3 i 10)
       else setNode e3 i (addi i 1)
     else setNode e2 i i
+  else error "Cannot happen"
 end
 
 
@@ -106,132 +106,6 @@ let addPA = lam pa. lam y.
   workAddPA pa y 0
 
 
-
-/-
-recursive
-let addPA : all a. PA a -> a -> PA a = lam pa. lam y.
-  match pa with PAEmpty()
-           then PAData(1,y,y,y,y,y,y,y,y,y,y) else
-  match pa with PAData(1,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9)
-           then PAData(2,x0,y ,x2,x3,x4,x5,x6,x7,x8,x9) else
-  match pa with PAData(2,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9)
-           then PAData(3,x0,x1,y ,x3,x4,x5,x6,x7,x8,x9) else
-  match pa with PAData(3,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9)
-           then PAData(4,x0,x1,x2,y ,x4,x5,x6,x7,x8,x9) else
-  match pa with PAData(4,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9)
-           then PAData(5,x0,x1,x2,x3,y ,x5,x6,x7,x8,x9) else
-  match pa with PAData(5,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9)
-           then PAData(6,x0,x1,x2,x3,x4,y ,x6,x7,x8,x9) else
-  match pa with PAData(6,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9)
-           then PAData(7,x0,x1,x2,x3,x4,x5,y ,x7,x8,x9) else
-  match pa with PAData(7,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9)
-           then PAData(8,x0,x1,x2,x3,x4,x5,x6,y ,x8,x9) else
-  match pa with PAData(8,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9)
-           then PAData(9,x0,x1,x2,x3,x4,x5,x6,x7,y ,x9) else
-  match pa with PAData(9,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9)
-           then PAData(10,x0,x1,x2,x3,x4,x5,x6,x7,x8,y) else
-  match pa with PAData(10,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9)
-           then PANode(1,10,PAData(10,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9),
-                       PAData(1,y,y,y,y,y,y,y,y,y,y),
-                       PAEmpty(),PAEmpty(),PAEmpty(),PAEmpty(),PAEmpty(),
-                       PAEmpty(),PAEmpty(),PAEmpty()) else
-  match pa with PAData(1,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9)
-           then PAData(2,x0,y ,x2,x3,x4,x5,x6,x7,x8,x9) else
-  match pa with PAData(2,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9)
-           then PAData(3,x0,x1,y ,x3,x4,x5,x6,x7,x8,x9) else
-  match pa with PAData(3,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9)
-           then PAData(4,x0,x1,x2,y ,x4,x5,x6,x7,x8,x9) else
-  match pa with PAData(4,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9)
-           then PAData(5,x0,x1,x2,x3,y ,x5,x6,x7,x8,x9) else
-  match pa with PAData(5,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9)
-           then PAData(6,x0,x1,x2,x3,x4,y ,x6,x7,x8,x9) else
-  match pa with PAData(6,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9)
-           then PAData(7,x0,x1,x2,x3,x4,x5,y ,x7,x8,x9) else
-  match pa with PAData(7,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9)
-           then PAData(8,x0,x1,x2,x3,x4,x5,x6,y ,x8,x9) else
-  match pa with PAData(8,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9)
-           then PAData(9,x0,x1,x2,x3,x4,x5,x6,x7,y ,x9) else
-  match pa with PAData(9,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9)
-           then PAData(10,x0,x1,x2,x3,x4,x5,x6,x7,x8,y) else
-  match pa with PAData(10,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9)
-           then PANode(1,10,PAData(10,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9),
-  match pa with PANode(1,l,x0,
-                       PAData(10,z0,z1,z2,z3,z4,z5,z6,z7,z8,z9),
-                       x2,x3,x4,x5,x6,x7,x8,x9)
-           then PANode(2,l,x0,
-                       PAData(10,z0,z1,z2,z3,z4,z5,z6,z7,z8,z9),
-                       PAData(1,y,y,y,y,y,y,y,y,y,y),
-                       x3,x4,x5,x6,x7,x8,x9) else
-  match pa with PANode(2,l,x0,x1,
-                       PAData(10,z0,z1,z2,z3,z4,z5,z6,z7,z8,z9),
-                       x3,x4,x5,x6,x7,x8,x9)
-           then PANode(3,l,x0,x1,
-                       PAData(10,z0,z1,z2,z3,z4,z5,z6,z7,z8,z9),
-                       PAData(1,y,y,y,y,y,y,y,y,y,y),
-                       x4,x5,x6,x7,x8,x9) else
-  match pa with PANode(3,l,x0,x1,x2,
-                       PAData(10,z0,z1,z2,z3,z4,z5,z6,z7,z8,z9),
-                       x4,x5,x6,x7,x8,x9)
-           then PANode(4,l,x0,x1,x2,
-                       PAData(10,z0,z1,z2,z3,z4,z5,z6,z7,z8,z9),
-                       PAData(1,y,y,y,y,y,y,y,y,y,y),
-                       x5,x6,x7,x8,x9) else
-  match pa with PANode(4,l,x0,x1,x2,x3,
-                       PAData(10,z0,z1,z2,z3,z4,z5,z6,z7,z8,z9),
-                       x5,x6,x7,x8,x9)
-           then PANode(5,l,x0,x1,x2,x3,
-                       PAData(10,z0,z1,z2,z3,z4,z5,z6,z7,z8,z9),
-                       PAData(1,y,y,y,y,y,y,y,y,y,y),
-                       x6,x7,x8,x9) else
-  match pa with PANode(5,l,x0,x1,x2,x3,x4,
-                       PAData(10,z0,z1,z2,z3,z4,z5,z6,z7,z8,z9),
-                       x6,x7,x8,x9)
-           then PANode(6,l,x0,x1,x2,x3,x4,
-                       PAData(10,z0,z1,z2,z3,z4,z5,z6,z7,z8,z9),
-                       PAData(1,y,y,y,y,y,y,y,y,y,y),
-                       x7,x8,x9) else
-  match pa with PANode(6,l,x0,x1,x2,x3,x4,x5,
-                       PAData(10,z0,z1,z2,z3,z4,z5,z6,z7,z8,z9),
-                       x7,x8,x9)
-           then PANode(7,l,x0,x1,x2,x3,x4,x5,
-                       PAData(10,z0,z1,z2,z3,z4,z5,z6,z7,z8,z9),
-                       PAData(1,y,y,y,y,y,y,y,y,y,y),
-                       x8,x9) else
-  match pa with PANode(7,l,x0,x1,x2,x3,x4,x5,x6,
-                       PAData(10,z0,z1,z2,z3,z4,z5,z6,z7,z8,z9),
-                       x8,x9)
-           then PANode(8,l,x0,x1,x2,x3,x4,x5,x6,
-                       PAData(10,z0,z1,z2,z3,z4,z5,z6,z7,z8,z9),
-                       PAData(1,y,y,y,y,y,y,y,y,y,y),
-                       x9) else
-  match pa with PANode(8,l,x0,x1,x2,x3,x4,x5,x6,x7,
-                       PAData(10,z0,z1,z2,z3,z4,z5,z6,z7,z8,z9),
-                       x9)
-           then PANode(9,l,x0,x1,x2,x3,x4,x5,x6,x7,
-                       PAData(10,z0,z1,z2,z3,z4,z5,z6,z7,z8,z9),
-                       PAData(1,y,y,y,y,y,y,y,y,y,y)
-                       ) else
-  match pa with PANode(1,l,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9)
-           then PANode(1,l,x0,addPA x1 y,x2,x3,x4,x5,x6,x7,x8,x9) else
-  match pa with PANode(2,l,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9)
-           then PANode(2,l,x0,x1,addPA x2 y,x3,x4,x5,x6,x7,x8,x9) else
-  match pa with PANode(3,l,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9)
-           then PANode(3,l,x0,x1,x2,addPA x3 y,x4,x5,x6,x7,x8,x9) else
-  match pa with PANode(4,l,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9)
-           then PANode(4,l,x0,x1,x2,x3,addPA x4 y,x5,x6,x7,x8,x9) else
-  match pa with PANode(5,l,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9)
-           then PANode(5,l,x0,x1,x2,x3,x4,addPA x5 y,x6,x7,x8,x9) else
-  match pa with PANode(6,l,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9)
-           then PANode(6,l,x0,x1,x2,x3,x4,x5,addPA x6 y,x7,x8,x9) else
-  match pa with PANode(7,l,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9)
-           then PANode(7,l,x0,x1,x2,x3,x4,x5,x6,addPA x7 y,x8,x9) else
-  match pa with PANode(8,l,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9)
-           then PANode(8,l,x0,x1,x2,x3,x4,x5,x6,x7,addPA x8 y,x9) else
-  match pa with PANode(9,l,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9)
-           in PANode(9,l,x0,x1,x2,x3,x4,x5,x6,x7,x8,addPA x9 y)
-end
--/
-
 -- `getPA pa n` returns the element at position `n` from `pa`.
 -- The complexity of the function is O(log n) with a low constant factor
 recursive
@@ -239,28 +113,17 @@ let getPA = lam pa. lam n.
   match pa with PANode(_,l,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9) then
     let n2 = modi n l in
     let i = divi n l in
-    (match i with 0 then getPA x0 n2 else
-     match i with 1 then getPA x1 n2 else
-     match i with 2 then getPA x2 n2 else
-     match i with 3 then getPA x3 n2 else
-     match i with 4 then getPA x4 n2 else
-     match i with 5 then getPA x5 n2 else
-     match i with 6 then getPA x6 n2 else
-     match i with 7 then getPA x7 n2 else
-     match i with 8 then getPA x8 n2 else
-     match i with 9 in   getPA x9 n2)
+    (switch i case 0 then getPA x0 n2 case 1 then getPA x1 n2
+              case 2 then getPA x2 n2 case 3 then getPA x3 n2
+              case 4 then getPA x4 n2 case 5 then getPA x5 n2
+              case 6 then getPA x6 n2 case 7 then getPA x7 n2
+              case 8 then getPA x8 n2 case _ then getPA x9 n2 end)
      else
-  match pa with PAData(_,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9) in
-    (match n with 0 then x0 else
-     match n with 1 then x1 else
-     match n with 2 then x2 else
-     match n with 3 then x3 else
-     match n with 4 then x4 else
-     match n with 5 then x5 else
-     match n with 6 then x6 else
-     match n with 7 then x7 else
-     match n with 8 then x8 else
-     match n with 9 in   x9)
+  match pa with PAData(_,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9) then
+    (switch n case 0 then x0 case 1 then x1 case 2 then x2
+              case 3 then x3 case 4 then x4 case 5 then x5
+              case 6 then x6 case 7 then x7 case 8 then x8 case _ then x9 end)
+  else error "Should not happen"
 end
 
 -- `setPA pa n y` sets value (random access) `y` at index `n` using `pa`. Note that
@@ -280,7 +143,7 @@ let setPA = lam pa. lam n. lam y.
      match i2 with 6 then PANode(i,l,x0,x1,x2,x3,x4,x5,setPA x6 n2 y,x7,x8,x9) else
      match i2 with 7 then PANode(i,l,x0,x1,x2,x3,x4,x5,x6,setPA x7 n2 y,x8,x9) else
      match i2 with 8 then PANode(i,l,x0,x1,x2,x3,x4,x5,x6,x7,setPA x8 n2 y,x9) else
-     match i2 with 9 in   PANode(i,l,x0,x1,x2,x3,x4,x5,x6,x7,x8,setPA x9 n2 y))
+                          PANode(i,l,x0,x1,x2,x3,x4,x5,x6,x7,x8,setPA x9 n2 y))
      else
   match pa with PAData(k,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9) then
     (match n with 0 then PAData(k,y,x1,x2,x3,x4,x5,x6,x7,x8,x9) else
@@ -292,7 +155,7 @@ let setPA = lam pa. lam n. lam y.
      match n with 6 then PAData(k,x0,x1,x2,x3,x4,x5,y,x7,x8,x9) else
      match n with 7 then PAData(k,x0,x1,x2,x3,x4,x5,x6,y,x8,x9) else
      match n with 8 then PAData(k,x0,x1,x2,x3,x4,x5,x6,x7,y,x9) else
-     match n with 9 in   PAData(k,x0,x1,x2,x3,x4,x5,x6,x7,x8,y))
+                         PAData(k,x0,x1,x2,x3,x4,x5,x6,x7,x8,y))
   else pa
 end
 
@@ -307,7 +170,7 @@ end
 -- `makePA n f` creates a pure array of size `n`, where each element is
 -- initalized by calling function `f k`, where `k` is the index for the element
 let makePA = lam n. lam f.
-  workMakePA 0 n f empty
+  workMakePA 0 n f emptyPA
 
 -- `lengthPA pa` returns an integer giving the length of the pure array `pa`.
 recursive
@@ -322,7 +185,7 @@ let lengthPA = lam pa.
        match i with 6 then lengthPA x6 else
        match i with 7 then lengthPA x7 else
        match i with 8 then lengthPA x8 else
-       match i with 9 in   lengthPA x9)
+                           lengthPA x9)
     else
   match pa with PAData(i,_,_,_,_,_,_,_,_,_,_) then i
   else 0
@@ -367,3 +230,6 @@ with
   let ls2 =
     foldl (lam acc. lam x. match x with (i,v) in set acc i v) ls setlist in
   (testlen, ls2)
+
+-- Other tests
+utest lengthPA (makePA 100 (lam x.x)) with 100
