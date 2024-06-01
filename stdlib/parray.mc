@@ -233,12 +233,11 @@ with
   (testlen, ls2)
 
 -- Another large test, iterates throw all lengths
-
 utest
   let steps = 100 in
   let incv = 1000 in
   recursive
-  let getset = lam i. let l. lam pa.
+  let getset = lam i. lam l. lam pa.
     if eqi i l then pa
     else
       let v2 = addi (getPA pa i) incv in
@@ -253,12 +252,12 @@ utest
   let maintest = lam l.
     if eqi steps l then true
     else
-      let pa = makePa l (lam x.x) in
+      let pa = makePA l (lam x.x) in
       let pa2 = getset 0 l pa in
       if eqi (lengthPA pa2) l then
         if verify 0 l pa2 then maintest (addi l 1) else false
       else false
-  end
+  in
   maintest 0
 with true
 
