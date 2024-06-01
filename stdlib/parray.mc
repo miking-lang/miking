@@ -100,8 +100,9 @@ end
 
 -- `addPA pa y` adds an element `y` to the end of the
 -- pure array `pa` and returns a new pure array
--- Either keep track of the number of elements in your pure array in another
--- variable, or use `lengthPA` to get the current number of elements.
+-- Either you should keep track of the number of elements of your pure array
+-- in another  variable, or use `lengthPA` to get the current number
+-- of elements.
 let addPA = lam pa. lam y.
   workAddPA pa y 0
 
@@ -230,6 +231,36 @@ with
   let ls2 =
     foldl (lam acc. lam x. match x with (i,v) in set acc i v) ls setlist in
   (testlen, ls2)
+
+-- Another large test, iterates throw all lengths
+
+utest
+  let steps = 100 in
+  let incv = 1000 in
+  recursive
+  let getset = lam i. let l. lam pa.
+    if eqi i l then pa
+    else
+      let v2 = addi (getPA pa i) incv in
+      let pa2 = setPA pa i v2 in
+      getset (addi i 1) l pa2
+  let verify = lam i. lam l. lam pa2.
+    if eqi i l then true
+    else
+    if eqi (getPA pa2 i) (addi i incv) then
+      verify (addi i 1) l pa2
+    else false
+  let maintest = lam l.
+    if eqi steps l then true
+    else
+      let pa = makePa l (lam x.x) in
+      let pa2 = getset 0 l pa in
+      if eqi (lengthPA pa2) l then
+        if verify 0 l pa2 then maintest (addi l 1) else false
+      else false
+  end
+  maintest 0
+with true
 
 -- Other tests
 utest lengthPA (makePA 100 (lam x.x)) with 100
