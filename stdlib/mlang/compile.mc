@@ -32,6 +32,7 @@ include "language-composer.mc"
 
 include "mexpr/eval.mc"
 include "mexpr/eq.mc"
+include "mexpr/utils.mc"
 
 include "common.mc"
 include "option.mc"
@@ -52,27 +53,6 @@ type CompilationContext = use MLangAst in {
   semSymbols : Map String [Name]
 }
 
--- Substitute the identifier stored in a TmVar based on the provided substitution
-recursive let subTmVarSymbol = lam subst : (Name -> Name). lam expr. 
-  use MExprAst in 
-  switch expr
-    case TmVar tm then TmVar {tm with ident = subst tm.ident}
-    case other then smap_Expr_Expr (subTmVarSymbol subst) other
-  end
-end
-
-recursive 
-  let subTyVar = lam subst : (Name -> Name). lam expr. 
-  use MExprAst in 
-  recursive let work = lam ty. switch ty 
-    case TyVar t then TyVar {t with ident = subst t.ident}
-    case other then smap_Type_Type work ty
-  end
-  in 
-  smap_Expr_Type work expr
-end
-
-
 let _emptyCompilationContext : CompositionCheckEnv -> CompilationContext = lam env : CompositionCheckEnv. {
   exprs = [],
   compositionCheckEnv = env,
@@ -89,11 +69,7 @@ let withSemSymbol = lam ctx : CompilationContext. lam n : Name.
   in
   {ctx with semSymbols = mapInsert s newValue ctx.semSymbols}
 
-let createSubst2 : [Name] -> [Name] -> (Name -> Name) = lam orig. lam trgt.
-  let m = mapFromSeq nameCmp (zip orig trgt) in
-  lam n. mapLookupOrElse (lam. n) n m
-
-let createSubst3 = lam env. lam origLang. lam targetLang. lam fallback. 
+let createPairsForSubst = lam env. lam origLang. lam targetLang.  
   match mapLookup origLang env.compositionCheckEnv.langToSems with Some origNames in 
   match mapLookup targetLang env.compositionCheckEnv.langToSems with Some targetNames in 
 
@@ -101,14 +77,9 @@ let createSubst3 = lam env. lam origLang. lam targetLang. lam fallback.
   let targetPairs = map (lam n. (nameGetStr n, n)) targetNames in 
   let targetMap = mapFromSeq cmpString targetPairs in 
 
-  lam n.
-    if setMem n origSet then
-      match mapLookup (nameGetStr n) targetMap with Some result in 
-      result 
-    else 
-      fallback n
+  let origs = setToSeq origSet in 
 
-
+  map (lam n. (n, match mapLookup (nameGetStr n) targetMap with Some x in x)) origs
 
 type CompilationError
 con FoundIncludeError : {info : Info, path: String} -> CompilationError
@@ -124,7 +95,7 @@ let isSynDecl = use MLangAst in
 let isSemDecl = use MLangAst in 
   lam d. match d with DeclSem _ then true else false
 
-lang DeclCompiler = DeclAst + Ast
+lang DeclCompiler = DeclAst + Ast + MExprSubstitute
   sem compileDecl : CompilationContext -> Decl -> CompilationResult
 end
 
@@ -267,6 +238,8 @@ lang LangDeclCompiler = DeclCompiler + LangDeclAst + MExprAst + SemDeclAst +
   -- sem compileSem : CompilationContext -> Map String Name -> Map String Name -> Decl -> RecLetBinding 
   sem compileSem langStr ctx semNames = 
   | DeclSem d -> 
+    -- If this semantic function does not have a type annotation, copy the 
+    -- type annotation from the base semantic function.
     let baseIdent = (match mapLookup (langStr, nameGetStr d.ident) ctx.compositionCheckEnv.baseMap with Some ident in ident) in
     let baseTyAnnot = match mapLookup baseIdent ctx.compositionCheckEnv.semBaseToTyAnnot with Some ty in ty in 
     let tyAnnot = match d.tyAnnot with TyUnknown _ then baseTyAnnot else d.tyAnnot in 
@@ -299,25 +272,40 @@ lang LangDeclCompiler = DeclCompiler + LangDeclAst + MExprAst + SemDeclAst +
                 else error "CompositionCheckEnv must contain the ordered cases for all semantic functions!"
     in
 
-    -- Substitute parameters and sem symbols.
+    let curTyVarSymbols = match mapLookup (langStr, nameGetStr d.ident) ctx.compositionCheckEnv.semTyVarMap with Some ns in ns in  
+
+    -- Substitute parameters, sem symbols and type variables.
+    -- 
+    -- We substitute the parameters because semantic functions are allowed
+    -- to have different parameter names than the sems they include as long 
+    -- as the amount of parameters is the same (this is checked by 
+    -- composition-check.mc). To handle the case in which the parameter names
+    -- are different, we must perform a substitution.
+    -- 
+    -- For any included cases, we look at the origin language of this case. Any
+    -- sem names belonging to the origin language are substituted to the name
+    -- of the language fragment we are compiling. We do not just substitute the
+    -- name of the current sem, but of all sems in the langauge fragment in order
+    -- to properly handle mutual recursion. 
+    --
+    -- Since semantic funtions can have different type annotations introducing
+    -- different symbols, and these symbols may be used in the case bodies,
+    -- we also substitute these symbols.
     let work = lam c.
-      let origArgs : Option[Name] = match mapLookup c.orig ctx.compositionCheckEnv.semArgsMap with Some args in args in 
-      let origIdent : Name = match mapLookup c.orig ctx.compositionCheckEnv.semSymMap with Some ident in ident in 
+      let origArgs : Option [Name] = match mapLookup c.orig ctx.compositionCheckEnv.semArgsMap with Some args in args in 
+      let origArgs : [Name] = match origArgs with Some args then args else [] in
 
-      let fallback = match origArgs with Some args then createSubst2 args argsIdents
-                     else (lam x. x) in 
-      let subst = createSubst3 ctx c.orig.0 langStr fallback in
-      {c with thn = subTmVarSymbol subst c.thn} in 
+      let origTyVarSymbols = match mapLookup c.orig ctx.compositionCheckEnv.semTyVarMap with Some ns in ns in 
+
+      let pairs = join [
+        zip origArgs argsIdents,
+        createPairsForSubst ctx c.orig.0 langStr,
+        zip origTyVarSymbols curTyVarSymbols
+      ] in 
+
+      let subst = mapFromSeq nameCmp pairs in 
+      {c with thn = substituteIdentifiersExpr subst c.thn} in 
     let cases = map work cases in
-
-    -- Substitute tyvars introduced by type signature.
-    -- Todo: handle case in which lengths are unequal.
-    let curSymbols = match mapLookup (langStr, nameGetStr d.ident) ctx.compositionCheckEnv.semTyVarMap with Some ns in ns in  
-    let work = lam c. 
-      let origSymbols = match mapLookup c.orig ctx.compositionCheckEnv.semTyVarMap with Some ns in ns in 
-      let subst = createSubst2 origSymbols curSymbols in 
-      {c with thn = subTyVar subst c.thn} in 
-    let cases = map work cases in 
 
     let cases = map (lam c. {thn = c.thn, pat = c.pat}) cases in
     let body = compileBody cases in 
@@ -325,7 +313,6 @@ lang LangDeclCompiler = DeclCompiler + LangDeclAst + MExprAst + SemDeclAst +
           match args with [h] ++ t then
             TmLam {ident = h.ident,
                    tyAnnot = h.tyAnnot,
-                  --  tyAnnot = tyunknown_,
                    tyParam = tyunknown_,
                    body = compileArgs t,
                    ty = tyunknown_,
