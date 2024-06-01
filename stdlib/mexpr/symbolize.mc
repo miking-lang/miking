@@ -24,10 +24,10 @@ include "repr-ast.mc"
 -- have SIDs available, however, if needed).
 
 type NameEnv = {
-  varEnv : Map String Name,   -- sem f
-  conEnv : Map String Name,   -- TmAdd, TmInt 
-  tyVarEnv : Map String Name, -- forall <a>
-  tyConEnv : Map String Name, -- syn <Expr> ends up in here (uppercase types)
+  varEnv : Map String Name,   
+  conEnv : Map String Name,   
+  tyVarEnv : Map String Name, 
+  tyConEnv : Map String Name, 
   reprEnv : Map String Name
 }
 
