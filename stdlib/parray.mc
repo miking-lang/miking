@@ -178,7 +178,8 @@ recursive
 let lengthPA = lam pa.
   match pa with PANode(i,l,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9) then
     addi (muli i l)
-      (match i with 1 then lengthPA x1 else
+      (match i with 0 then lengthPA x0 else
+       match i with 1 then lengthPA x1 else
        match i with 2 then lengthPA x2 else
        match i with 3 then lengthPA x3 else
        match i with 4 then lengthPA x4 else
@@ -232,9 +233,9 @@ with
     foldl (lam acc. lam x. match x with (i,v) in set acc i v) ls setlist in
   (testlen, ls2)
 
--- Another large test, iterates throw all lengths
+-- Another large test, iterates over all lengths, tests all operations
 utest
-  let steps = 100 in
+  let steps = 1500 in
   let incv = 1000 in
   recursive
   let getset = lam i. lam l. lam pa.
@@ -250,7 +251,7 @@ utest
       verify (addi i 1) l pa2
     else false
   let maintest = lam l.
-    if eqi steps l then true
+    if eqi (addi steps 1) l then true
     else
       let pa = makePA l (lam x.x) in
       let pa2 = getset 0 l pa in
