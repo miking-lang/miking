@@ -1,14 +1,26 @@
 
 include "string.mc"
 
--- This file contains an implementation of pure arrays, a way to use random access in
--- arrays in a pure setting. The operations have low constant factor and a time complexity
--- of O(log n).
+-- This file contains an implementation of pure arrays, a way to use
+-- random access in arrays in a pure setting. The operations have low
+-- constant factor and a time complexity of O(log n).
+-- The main functions are (see specific documentation below):
+--   emptyPA   An empty pure array
+--   makePA    Creates a pure array of a given size, O(n log n)
+--   addPA     Increases the size of the array by 1, O(log n)
+--   setPA     Set an element in an array, O(log n)
+--   getPA     Get an element from an array, O(log n)
+--   lengthPA  Get the length of an array, O(log n)
+--   seq2pa    Converts a sequence to a pure array O(n log n)
+--   pa2seq    Converts a pure array to a sequence, O(n log n)
+--   prettyPA  Returns a pretty printed string of the internal structure
+--             of a pure array (for debugging purpose)
 
 -- Pure Array
 type PA a
 con PAData  : all a. (Int,a,a,a,a,a,a,a,a,a,a) -> PA a
-con PANode  : all a. (Int,Int,PA a,PA a,PA a,PA a,PA a,PA a,PA a,PA a,PA a,PA a) -> PA a
+con PANode  : all a. (Int,Int,PA a,PA a,PA a,PA a,PA a,
+                      PA a,PA a,PA a,PA a,PA a) -> PA a
 con PAEmpty : all a. () -> PA a
 con PANext  : all a. (PA a) -> PA a
 
@@ -135,28 +147,30 @@ let setPA = lam pa. lam n. lam y.
   match pa with PANode(i,l,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9) then
     let n2 = modi n l in
     let i2 = divi n l in
-    (match i2 with 0 then PANode(i,l,setPA x0 n2 y,x1,x2,x3,x4,x5,x6,x7,x8,x9) else
-     match i2 with 1 then PANode(i,l,x0,setPA x1 n2 y,x2,x3,x4,x5,x6,x7,x8,x9) else
-     match i2 with 2 then PANode(i,l,x0,x1,setPA x2 n2 y,x3,x4,x5,x6,x7,x8,x9) else
-     match i2 with 3 then PANode(i,l,x0,x1,x2,setPA x3 n2 y,x4,x5,x6,x7,x8,x9) else
-     match i2 with 4 then PANode(i,l,x0,x1,x2,x3,setPA x4 n2 y,x5,x6,x7,x8,x9) else
-     match i2 with 5 then PANode(i,l,x0,x1,x2,x3,x4,setPA x5 n2 y,x6,x7,x8,x9) else
-     match i2 with 6 then PANode(i,l,x0,x1,x2,x3,x4,x5,setPA x6 n2 y,x7,x8,x9) else
-     match i2 with 7 then PANode(i,l,x0,x1,x2,x3,x4,x5,x6,setPA x7 n2 y,x8,x9) else
-     match i2 with 8 then PANode(i,l,x0,x1,x2,x3,x4,x5,x6,x7,setPA x8 n2 y,x9) else
-                          PANode(i,l,x0,x1,x2,x3,x4,x5,x6,x7,x8,setPA x9 n2 y))
+    (switch i2
+     case 0 then PANode(i,l,setPA x0 n2 y,x1,x2,x3,x4,x5,x6,x7,x8,x9)
+     case 1 then PANode(i,l,x0,setPA x1 n2 y,x2,x3,x4,x5,x6,x7,x8,x9)
+     case 2 then PANode(i,l,x0,x1,setPA x2 n2 y,x3,x4,x5,x6,x7,x8,x9)
+     case 3 then PANode(i,l,x0,x1,x2,setPA x3 n2 y,x4,x5,x6,x7,x8,x9)
+     case 4 then PANode(i,l,x0,x1,x2,x3,setPA x4 n2 y,x5,x6,x7,x8,x9)
+     case 5 then PANode(i,l,x0,x1,x2,x3,x4,setPA x5 n2 y,x6,x7,x8,x9)
+     case 6 then PANode(i,l,x0,x1,x2,x3,x4,x5,setPA x6 n2 y,x7,x8,x9)
+     case 7 then PANode(i,l,x0,x1,x2,x3,x4,x5,x6,setPA x7 n2 y,x8,x9)
+     case 8 then PANode(i,l,x0,x1,x2,x3,x4,x5,x6,x7,setPA x8 n2 y,x9)
+     case _ then PANode(i,l,x0,x1,x2,x3,x4,x5,x6,x7,x8,setPA x9 n2 y) end)
      else
   match pa with PAData(k,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9) then
-    (match n with 0 then PAData(k,y,x1,x2,x3,x4,x5,x6,x7,x8,x9) else
-     match n with 1 then PAData(k,x0,y,x2,x3,x4,x5,x6,x7,x8,x9) else
-     match n with 2 then PAData(k,x0,x1,y,x3,x4,x5,x6,x7,x8,x9) else
-     match n with 3 then PAData(k,x0,x1,x2,y,x4,x5,x6,x7,x8,x9) else
-     match n with 4 then PAData(k,x0,x1,x2,x3,y,x5,x6,x7,x8,x9) else
-     match n with 5 then PAData(k,x0,x1,x2,x3,x4,y,x6,x7,x8,x9) else
-     match n with 6 then PAData(k,x0,x1,x2,x3,x4,x5,y,x7,x8,x9) else
-     match n with 7 then PAData(k,x0,x1,x2,x3,x4,x5,x6,y,x8,x9) else
-     match n with 8 then PAData(k,x0,x1,x2,x3,x4,x5,x6,x7,y,x9) else
-                         PAData(k,x0,x1,x2,x3,x4,x5,x6,x7,x8,y))
+    (switch n
+     case 0 then PAData(k,y,x1,x2,x3,x4,x5,x6,x7,x8,x9)
+     case 1 then PAData(k,x0,y,x2,x3,x4,x5,x6,x7,x8,x9)
+     case 2 then PAData(k,x0,x1,y,x3,x4,x5,x6,x7,x8,x9)
+     case 3 then PAData(k,x0,x1,x2,y,x4,x5,x6,x7,x8,x9)
+     case 4 then PAData(k,x0,x1,x2,x3,y,x5,x6,x7,x8,x9)
+     case 5 then PAData(k,x0,x1,x2,x3,x4,y,x6,x7,x8,x9)
+     case 6 then PAData(k,x0,x1,x2,x3,x4,x5,y,x7,x8,x9)
+     case 7 then PAData(k,x0,x1,x2,x3,x4,x5,x6,y,x8,x9)
+     case 8 then PAData(k,x0,x1,x2,x3,x4,x5,x6,x7,y,x9)
+     case _ then PAData(k,x0,x1,x2,x3,x4,x5,x6,x7,x8,y) end)
   else pa
 end
 
@@ -178,16 +192,12 @@ recursive
 let lengthPA = lam pa.
   match pa with PANode(i,l,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9) then
     addi (muli i l)
-      (match i with 0 then lengthPA x0 else
-       match i with 1 then lengthPA x1 else
-       match i with 2 then lengthPA x2 else
-       match i with 3 then lengthPA x3 else
-       match i with 4 then lengthPA x4 else
-       match i with 5 then lengthPA x5 else
-       match i with 6 then lengthPA x6 else
-       match i with 7 then lengthPA x7 else
-       match i with 8 then lengthPA x8 else
-                           lengthPA x9)
+      (switch i
+        case 0 then lengthPA x0 case 1 then lengthPA x1 case 2 then lengthPA x2
+        case 3 then lengthPA x3 case 4 then lengthPA x4 case 5 then lengthPA x5
+        case 6 then lengthPA x6 case 7 then lengthPA x7 case 8 then lengthPA x8
+        case _ then lengthPA x9
+      end)
     else
   match pa with PAData(i,_,_,_,_,_,_,_,_,_,_) then i
   else 0
@@ -204,6 +214,11 @@ end
 let pa2seq = lam pa.
   workPA2seq pa (subi (lengthPA pa) 1) []
 
+-- `seq2pa seq` converts a sequence to a pure array.
+let seq2pa = lam seq.
+  foldl (lam a. lam x. addPA a x) emptyPA seq
+
+
 -- ==== utests =====
 
 utest prettyPA (makePA 12 (lam x.x)) int2string with
@@ -218,6 +233,8 @@ utest lengthPA (makePA 12 (lam. 0)) with 12
 
 utest pa2seq (makePA 5 (lam x. muli x 2)) with [0,2,4,6,8]
 utest pa2seq (makePA 12 (lam x.x)) with [0,1,2,3,4,5,6,7,8,9,10,11]
+
+utest pa2seq (seq2pa [1,4,3,10]) with [1,4,3,10]
 
 -- One large test, including all functions
 let testlen = 1320
@@ -255,12 +272,11 @@ utest
     else
       let pa = makePA l (lam x.x) in
       let pa2 = getset 0 l pa in
-      if eqi (lengthPA pa2) l then
-        if verify 0 l pa2 then maintest (addi l 1) else false
+      let pa3 = seq2pa (pa2seq pa2) in
+      if eqi (lengthPA pa3) l then
+        if verify 0 l pa3 then maintest (addi l 1) else false
       else false
   in
   maintest 0
 with true
 
--- Other tests
-utest lengthPA (makePA 100 (lam x.x)) with 100
