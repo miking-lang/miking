@@ -30,5 +30,19 @@ let mathExtMap =
     ]),
     ("externalSqrt", [
       impl { expr = "Float.sqrt", ty = tyarrow_ tyfloat_ tyfloat_ }
+    ]),
+    ("externalLogGamma", [
+      { expr = "Owl_maths.loggamma ",
+        ty = tyarrows_ [tyfloat_, tyfloat_],
+        libraries = ["owl"],
+        cLibraries = []
+      }
+    ]),
+    ("externalLogCombination", [
+      { expr = "Owl_maths.log_combination ",
+        ty = tyarrows_ [tyint_, tyint_, tyfloat_],
+        libraries = ["owl"],
+        cLibraries = []
+      }
     ])
   ]
