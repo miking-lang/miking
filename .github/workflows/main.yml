@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Install OCaml and opam for Miking
         uses: ocaml/setup-ocaml@v2
@@ -19,16 +19,10 @@ jobs:
           ocaml-compiler: ocaml-base-compiler.5.0.0
 
       - name: Install Java
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
-
-      - name: Cache opam packages
-        uses: actions/cache@v3
-        with:
-          path: ~/.opam
-          key: ${{ runner.os }}-opam-build
 
       - name: Install opam packages
         run: |
@@ -51,10 +45,10 @@ jobs:
           make test-all
 
   build-and-test-mac-os:
-    runs-on: macos-latest
+    runs-on: macos-13
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Install OCaml and opam for Miking
         uses: ocaml/setup-ocaml@v2
@@ -62,21 +56,15 @@ jobs:
           ocaml-compiler: ocaml-base-compiler.5.0.0
 
       - name: Install Java
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Cache opam packages
-        uses: actions/cache@v3
-        with:
-          path: ~/.opam
-          key: ${{ runner.os }}-opam-build
-
       - name: Install opam packages
         run: |
           # Install dependencies of owl
-          brew install pkg-config
+          brew install pkg-config autoconf openblas
 
           # Export environment variable needed by openblas
           export PKG_CONFIG_PATH=$(brew --prefix openblas)/lib/pkgconfig
@@ -89,7 +77,7 @@ jobs:
           opam install -y dune linenoise pyml toml lwt owl ocamlformat.0.24.1
 
       - name: Build Miking
-        timeout-minutes: 10
+        timeout-minutes: 30
         run: |
           eval $(opam env)
           make install
