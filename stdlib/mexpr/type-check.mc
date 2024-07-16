@@ -252,7 +252,13 @@ lang TCUnify = Unify + AliasTypeAst + MetaVarTypeAst + DataKindAst + PrettyPrint
       (env, join ["these constructors required by one kind but not allowed in the other:\n",
                   strJoin " " diff, "\n"])
     else (env, "")
-  | Kinds _ -> (env, "kind inequality (pprint todo)")
+  | Kinds (l, r) ->
+    match getKindStringCode 0 env l with (env, l) in
+    match getKindStringCode 0 env r with (env, r) in
+    let msg = join
+      [ "kind inequality (", l, " != ", r, ")"
+      ] in
+    (env, msg)
 
 
   sem unificationError : [UnifyError] -> [Info] -> Type -> Type -> ()
