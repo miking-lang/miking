@@ -430,73 +430,73 @@ end
 
 lang ShallowInt = ShallowBase + IntPat
   syn SPat =
-  | SPatInt Int
+  | SPatInt {val : Int, info : Info}
 
   sem decompose name =
   | (SPatInt i, pat & PatInt x) ->
     -- TODO(vipa, 2022-05-20): Ideally we'd have a guard instead here
-    if eqi i x.val
+    if eqi i.val x.val
     then ([(_empty (), _empty ())], None ())
     else defaultDecomposition pat
 
   sem collectShallows =
-  | PatInt x -> _ssingleton (SPatInt x.val)
+  | PatInt x -> _ssingleton (SPatInt {val = x.val, info = x.info})
 
   sem mkMatch scrutinee t e =
-  | SPatInt i -> match_ (nvar_ scrutinee) (pint_ i) t e
+  | SPatInt i -> match_ (nvar_ scrutinee) (withTypePat tyint_ (withInfoPat i.info (pint_ i.val))) t e
 
   sem shallowCmp =
-  | (SPatInt l, SPatInt r) -> subi l r
+  | (SPatInt l, SPatInt r) -> subi l.val r.val
 end
 
 lang ShallowChar = ShallowBase + CharPat
   syn SPat =
-  | SPatChar Char
+  | SPatChar {val : Char, info : Info}
 
   sem decompose name =
   | (SPatChar i, pat & PatChar x) ->
     -- TODO(vipa, 2022-05-20): Ideally we'd have a guard instead here
-    if eqc i x.val
+    if eqc i.val x.val
     then ([(_empty (), _empty ())], None ())
     else defaultDecomposition pat
 
   sem collectShallows =
-  | PatChar x -> _ssingleton (SPatChar x.val)
+  | PatChar x -> _ssingleton (SPatChar {val = x.val, info = x.info})
 
   sem mkMatch scrutinee t e =
-  | SPatChar v -> match_ (nvar_ scrutinee) (pchar_ v) t e
+  | SPatChar v -> match_ (nvar_ scrutinee) (withTypePat tychar_ (withInfoPat v.info (pchar_ v.val))) t e
 
   sem shallowCmp =
-  | (SPatChar l, SPatChar r) -> cmpChar l r
+  | (SPatChar l, SPatChar r) -> cmpChar l.val r.val
 end
 
 lang ShallowBool = ShallowBase + BoolPat
   syn SPat =
-  | SPatBool Bool
+  | SPatBool {val : Bool, info : Info}
 
   sem decompose name =
   | (SPatBool i, pat & PatBool x) ->
     -- TODO(vipa, 2022-05-20): Ideally we'd have a guard instead here
-    if not (xor i x.val)
+    if not (xor i.val x.val)
     then ([(_empty (), _empty ())], None ())
     else defaultDecomposition pat
 
   sem collectShallows =
-  | PatBool x -> _ssingleton (SPatBool x.val)
+  | PatBool x -> _ssingleton (SPatBool {val = x.val, info = x.info})
 
   sem mkMatch scrutinee t e =
-  | SPatBool v -> match_ (nvar_ scrutinee) (pbool_ v) t e
+  | SPatBool v -> match_ (nvar_ scrutinee) (withTypePat tybool_ (withInfoPat v.info (pbool_ v.val))) t e
 
   sem shallowCmp =
-  | (SPatBool true, SPatBool true) -> 0
-  | (SPatBool true, SPatBool false) -> negi 1
-  | (SPatBool false, SPatBool true) -> 1
-  | (SPatBool false, SPatBool false) -> 0
+  | (SPatBool {val = true}, SPatBool {val = true}) -> 0
+  | (SPatBool {val = true}, SPatBool {val = false}) -> negi 1
+  | (SPatBool {val = false}, SPatBool {val = true}) -> 1
+  | (SPatBool {val = false}, SPatBool {val = false}) -> 0
 end
 
 lang ShallowRecord = ShallowBase + RecordPat + RecordTypeAst + PrettyPrint
   syn SPat =
-  | SPatRecord { bindings : Map SID Name, ty : Type }
+  | SPatRecord { bindings : Map SID Name, ty : Type, info : Info }
 
   sem decompose name =
   | (SPatRecord sx, PatRecord x) ->
@@ -509,7 +509,7 @@ lang ShallowRecord = ShallowBase + RecordPat + RecordTypeAst + PrettyPrint
   sem collectShallows =
   | PatRecord px ->
     match inspectType px.ty with TyRecord x then
-      _ssingleton (SPatRecord { bindings = mapMap (lam. nameSym "field") x.fields, ty = px.ty })
+      _ssingleton (SPatRecord { bindings = mapMap (lam. nameSym "field") x.fields, ty = px.ty, info = px.info })
     else errorSingle [px.info]
       (join ["I can't immediately see the record type of this pattern, it's a ", type2str px.ty])
 
@@ -518,7 +518,7 @@ lang ShallowRecord = ShallowBase + RecordPat + RecordTypeAst + PrettyPrint
     let pat = PatRecord
       { bindings = mapMap npvar_ x.bindings
       , ty = x.ty
-      , info = NoInfo ()
+      , info = x.info
       } in
     match_ (nvar_ scrutinee) pat t never_
 
@@ -541,12 +541,12 @@ let _getSliceName
 
 lang ShallowSeq = ShallowBase + SeqTotPat + SeqEdgePat
   syn SPat =
-  | SPatSeqTot {elements : [Name], slices : Ref (Map (Int, Int) Name)}
+  | SPatSeqTot {elements : [Name], slices : Ref (Map (Int, Int) Name), ty : Type, info : Info}
   -- NOTE(vipa, 2022-05-26): The translation strategy used matches
   -- sequence patterns longest first, i.e., if the compared pattern
   -- requires something longer than minLength then the compared
   -- pattern is dead.
-  | SPatSeqGE {minLength : Int, prefix : Ref [Name], postfix : Ref [Name], slices : Ref (Map (Int, Int) Name)}
+  | SPatSeqGE {minLength : Int, prefix : Ref [Name], postfix : Ref [Name], slices : Ref (Map (Int, Int) Name), ty : Type, info : Info}
 
   sem decompose name =
   | (SPatSeqTot tot, pat & PatSeqTot x) ->
@@ -599,7 +599,7 @@ lang ShallowSeq = ShallowBase + SeqTotPat + SeqEdgePat
   | (SPatSeqGE x1, SPatSeqGE x2) -> geqi x1.minLength x2.minLength
 
   sem processSPats spats =
-  | SPatSeqTot _ | SPatSeqGE _ ->
+  | SPatSeqTot {ty = ty, info = info} | SPatSeqGE {ty = ty, info = info} ->
     let getTotLen = lam acc. lam v.
       match v with SPatSeqTot es then setInsert (length es.elements) acc else acc in
     let totLens = setFold getTotLen (setEmpty subi) spats in
@@ -609,9 +609,9 @@ lang ShallowSeq = ShallowBase + SeqTotPat + SeqEdgePat
       match v with SPatSeqGE x then setInsert (getNextEmpty x.minLength) acc else acc in
     let geLens = setFold getGELen (setEmpty subi) spats in
     let mkTot = lam count.
-      SPatSeqTot {elements = create count (lam. nameSym "e"), slices = ref _emptySlices} in
+      SPatSeqTot {elements = create count (lam. nameSym "e"), slices = ref _emptySlices, ty = ty, info = info} in
     let mkGe = lam count.
-      SPatSeqGE {minLength = count, prefix = ref [], postfix = ref [], slices = ref _emptySlices} in
+      SPatSeqGE {minLength = count, prefix = ref [], postfix = ref [], slices = ref _emptySlices, ty = ty, info = info} in
     let spats = concat
       (map mkTot (setToSeq totLens))
       (map mkGe (setToSeq geLens)) in
@@ -625,8 +625,19 @@ lang ShallowSeq = ShallowBase + SeqTotPat + SeqEdgePat
     sort (lam l. lam r. subi (getLen r) (getLen l)) spats
 
   sem collectShallows =
-  | PatSeqTot x -> _ssingleton (SPatSeqTot {elements = map (lam. nameSym "elem") x.pats, slices = ref _emptySlices})
-  | PatSeqEdge x -> _ssingleton (SPatSeqGE { minLength = addi (length x.prefix) (length x.postfix), prefix = ref [], postfix = ref [], slices = ref _emptySlices })
+  | PatSeqTot x -> _ssingleton (SPatSeqTot
+    { elements = map (lam. nameSym "elem") x.pats
+    , slices = ref _emptySlices
+    , ty = x.ty
+    , info = x.info
+    })
+  | PatSeqEdge x -> _ssingleton (SPatSeqGE
+    { minLength = addi (length x.prefix) (length x.postfix)
+    , prefix = ref [], postfix = ref []
+    , slices = ref _emptySlices
+    , ty = x.ty
+    , info = x.info
+    })
 
   sem collectNames =
   | pat & PatSeqEdge x ->
@@ -643,20 +654,27 @@ lang ShallowSeq = ShallowBase + SeqTotPat + SeqEdgePat
         let expr = switch pair
           case (0, 0) then nvar_ scrutinee
           case (n, 0) then
+            -- TODO(vipa, 2024-07-19): tupleproj_ (and ast-builder in
+            -- general) inserts nodes without ty and info fields,
+            -- which is particularly an issue when what's inserted is
+            -- related to records
             tupleproj_ 1
               (withType
-                (tytuple_ [tyseq_ tyunknown_, tyseq_ tyunknown_])
+                (tytuple_ [x.ty, x.ty])
                 (splitat_ (nvar_ scrutinee) (int_ n)))
           case (0, n) then
             tupleproj_ 0
               (withType
-                (tytuple_ [tyseq_ tyunknown_, tyseq_ tyunknown_])
+                (tytuple_ [x.ty, x.ty])
                 (splitat_ (nvar_ scrutinee) (int_ (subi (length x.elements) n))))
           case (n, m) then
             subsequence_ (nvar_ scrutinee) (int_ n) (int_ (subi (length x.elements) (addi n m)))
           end
         in nulet_ name expr) in
-    match_ (nvar_ scrutinee) (pseqtot_ (map npvar_ x.elements)) (bindall_ (snoc slices t)) e
+    match_ (nvar_ scrutinee)
+      (withInfoPat x.info (withTypePat x.ty (pseqtot_ (map npvar_ x.elements))))
+      (bindall_ (snoc slices t))
+      e
   | SPatSeqGE x ->
     let letFrom_ = lam n. lam i. nulet_ n (get_ (nvar_ scrutinee) i) in
     let pres = mapi
@@ -675,13 +693,13 @@ lang ShallowSeq = ShallowBase + SeqTotPat + SeqEdgePat
           case (n, 0) then
             tupleproj_ 1
               (withType
-                (tytuple_ [tyseq_ tyunknown_, tyseq_ tyunknown_])
+                (tytuple_ [x.ty, x.ty])
                 (splitat_ (nvar_ scrutinee) (int_ n)))
           case (0, n) then
             modref needLen true;
             tupleproj_ 0
               (withType
-                (tytuple_ [tyseq_ tyunknown_, tyseq_ tyunknown_])
+                (tytuple_ [x.ty, x.ty])
                 (splitat_ (nvar_ scrutinee) (subi_ (nvar_ lenName) (int_ n))))
           case (n, m) then
             modref needLen true;
@@ -689,7 +707,7 @@ lang ShallowSeq = ShallowBase + SeqTotPat + SeqEdgePat
           end
         in nulet_ name expr) in
     let len = if deref needLen then [nulet_ lenName (length_ (nvar_ scrutinee))] else [] in
-    match_ (nvar_ scrutinee) (pseqedgew_ (make x.minLength pvarw_) [])
+    match_ (nvar_ scrutinee) (withInfoPat x.info (withTypePat x.ty (pseqedgew_ (make x.minLength pvarw_) [])))
       (bindall_ (join [pres, len, slices, posts, [t]]))
       e
 
@@ -703,7 +721,7 @@ end
 
 lang ShallowCon = ShallowBase + DataPat
   syn SPat =
-  | SPatCon {conName : Name, subName : Name}
+  | SPatCon {conName : Name, subName : Name, ty : Type, info : Info}
 
   sem decompose name =
   | (SPatCon shallow, pat & PatCon x) ->
@@ -712,10 +730,12 @@ lang ShallowCon = ShallowBase + DataPat
     else defaultDecomposition pat
 
   sem collectShallows =
-  | PatCon x -> _ssingleton (SPatCon {conName = x.ident, subName = nameSym "carried"})
+  | PatCon x -> _ssingleton (SPatCon {conName = x.ident, subName = nameSym "carried", ty = x.ty, info = x.info})
 
   sem mkMatch scrutinee t e =
-  | SPatCon x -> match_ (nvar_ scrutinee) (npcon_ x.conName (npvar_ x.subName)) t e
+  | SPatCon x -> match_ (nvar_ scrutinee)
+    (withTypePat x.ty (withInfoPat x.info (npcon_ x.conName (npvar_ x.subName))))
+    t e
 
   sem shallowCmp =
   | (SPatCon l, SPatCon r) -> nameCmp l.conName r.conName
