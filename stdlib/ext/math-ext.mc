@@ -41,3 +41,11 @@ utest pow 3. 2. with 9. using eqf
 external externalSqrt : Float -> Float
 let sqrt: Float -> Float = lam x. externalSqrt x
 utest sqrt 9. with 3. using eqf
+
+external externalLogGamma : Float -> Float
+let logGamma: Float -> Float = lam x. externalLogGamma x
+utest logGamma 3. with log 2. using eqf
+
+external externalLogCombination : Int -> Int -> Float
+let logCombination: Int -> Int -> Float = lam n. lam c. externalLogCombination n c
+utest logCombination 4 2 with log 6. using _eqf
