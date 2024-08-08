@@ -25,7 +25,7 @@ type SideEffectEnv = {
   arityId : Map Name Int
 }
 
-lang SideEffect
+lang SideEffect = Ast
   sem sideEffectEnvEmpty =
   | () -> {sideEffectId = setEmpty nameCmp, arityId = mapEmpty nameCmp}
 
@@ -93,7 +93,8 @@ lang ConstSideEffect = ConstSideEffectBase + MExprAst
   | CTensorReshapeExn _ | CTensorCopy _ | CTensorTransposeExn _
   | CTensorSliceExn _ | CTensorSubExn _ | CTensorIterSlice _ |  CTensorEq _
   | CTensorToString _ -> true
-  | CBootParserParseMExprString _ | CBootParserParseMCoreFile _
+  | CBootParserParseMExprString _ | CBootParserParseMCoreFile _ | CBootParserParseMLangFile _
+  | CBootParserParseMLangString _ | CBootParserGetTop _ | CBootParserGetDecl _
   | CBootParserGetId _ | CBootParserGetTerm _ | CBootParserGetType _
   | CBootParserGetString _ | CBootParserGetInt _ | CBootParserGetFloat _
   | CBootParserGetListLength _ | CBootParserGetConst _ | CBootParserGetPat _

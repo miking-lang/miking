@@ -260,7 +260,7 @@ lang CFA = CFABase
 
   -- Base constraint generation function (must still be included manually in
   -- constraintGenFuns)
-  sem generateConstraints: GenFun
+  sem generateConstraints : GenFun
   sem generateConstraints graph =
   | t -> graph
 
@@ -1564,9 +1564,13 @@ end
 lang BootParserCFA = CFA + ConstCFA + BootParserAst
   sem generateConstraintsConst graph info ident =
   | CBootParserParseMExprString _ -> graph
+  | CBootParserParseMLangString _ -> graph
+  | CBootParserParseMLangFile _ -> graph
   | CBootParserParseMCoreFile _ -> graph
   | CBootParserGetId _ -> graph
   | CBootParserGetTerm _ -> graph
+  | CBootParserGetTop _ -> graph
+  | CBootParserGetDecl _ -> graph
   | CBootParserGetType _ -> graph
   | CBootParserGetString _ -> graph
   | CBootParserGetInt _ -> graph

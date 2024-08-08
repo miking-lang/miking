@@ -348,6 +348,23 @@ utest
   ()
 with ()
 
+let _foldlM : all w. all e. all a. all b.
+  (a -> b -> (Result w e a)) -> a -> [b] -> Result w e a
+  = lam f. lam acc.
+    recursive
+      let workOK : Map Symbol w -> a -> [b] -> Result w e a
+        = lam accWarn. lam acc. lam seq.
+          match seq with [hd] ++ tl then
+            switch f acc hd
+            case ResultOk c then
+              workOK (mapUnion accWarn c.warnings) (c.value) tl
+            case ResultErr c then
+              ResultErr {c with warnings = mapUnion accWarn c.warnings }
+            end
+          else
+            ResultOk { warnings = accWarn, value = acc }
+    in workOK (_emptyMap ()) acc
+
 -- Perform a computation on the values of a sequence while simultaneously
 -- folding an accumulator over the sequence from the left. Produces a non-error
 -- only if all individual computations produce a non-error. All errors and
@@ -689,6 +706,7 @@ let result =
   , bindParallel2 = _bindParallel2
   , mapM = _mapM
   , mapAccumLM = _mapAccumLM
+  , foldlM = _foldlM
   -- Conditionals
   , orElse = _orElse
   , or = _or

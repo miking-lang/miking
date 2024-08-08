@@ -34,5 +34,6 @@ type Options = {
   disableJsGeneralOptimizations : Bool,
   disableJsTCO : Bool,
   output : Option String,
-  tuneOptions : TuneOptions
+  tuneOptions : TuneOptions,
+  mlangPipeline : Bool
 }

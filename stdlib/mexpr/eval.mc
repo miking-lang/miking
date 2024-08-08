@@ -203,7 +203,7 @@ lang ConstAppAst = ConstAst + PrettyPrint + Eq
     pprintCode indent env (appSeq_ (uconst_ r.const) r.args)
 end
 
-lang ConstDelta
+lang ConstDelta = ConstAst
   sem delta : Info -> (Const, [Expr]) -> Expr
 end
 
@@ -1007,6 +1007,20 @@ lang BootParserEval =
     else
       errorSingle [info]
         "First argument to bootParserParseMExprString incorrect record"
+  | (CBootParserParseMLangString _, [TmSeq {tms = seq}]) ->
+    let t = bootParserParseMLangString (_evalSeqOfCharsToString info seq) in
+    TmConst {
+        val = CBootParserTree {val = t},
+        ty = TyUnknown {info = NoInfo ()},
+        info = NoInfo ()
+    }
+  | (CBootParserParseMLangFile _, [TmSeq {tms = seq}]) ->
+    let t = bootParserParseMLangFile (_evalSeqOfCharsToString info seq) in
+    TmConst {
+        val = CBootParserTree {val = t},
+        ty = TyUnknown {info = NoInfo ()},
+        info = NoInfo ()
+    }
   | (CBootParserParseMCoreFile _, [
     TmRecord {bindings = bs}, TmSeq {tms = keywords}, TmSeq {tms = filename}
   ]) ->
@@ -1071,6 +1085,18 @@ lang BootParserEval =
     TmConst {val = CInt {val = n}}
   ]) ->
     TmConst {val = CBootParserTree {val = bootParserGetTerm ptree n},
+             ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
+  | (CBootParserGetTop _, [
+    TmConst {val = CBootParserTree {val = ptree}},
+    TmConst {val = CInt {val = n}}
+  ]) ->
+    TmConst {val = CBootParserTree {val = bootParserGetTop ptree n},
+             ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
+  | (CBootParserGetDecl _, [
+    TmConst {val = CBootParserTree {val = ptree}},
+    TmConst {val = CInt {val = n}}
+  ]) ->
+    TmConst {val = CBootParserTree {val = bootParserGetDecl ptree n},
              ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}
   | (CBootParserGetType _, [
     TmConst {val = CBootParserTree {val = ptree}},

@@ -3,6 +3,7 @@
 --
 -- File miking.mi is the main file of the Miking tool chain.
 
+include "parser/tool.mc"
 include "accelerate.mc"
 include "compile.mc"
 include "seq.mc"
@@ -14,7 +15,6 @@ include "options.mc"
 include "options-config.mc"
 include "tune.mc"
 include "tune-config.mc"
-include "parser/tool.mc"
 
 mexpr
 

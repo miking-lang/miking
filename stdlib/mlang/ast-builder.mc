@@ -2,7 +2,7 @@
 -- Functions for types are defined in ast.mc
 
 include "mexpr/ast-builder.mc"
-include "./ast.mc"
+include "ast.mc"
 
 
 -- Extending the bind function for mlang expressions
@@ -33,6 +33,19 @@ let nuse_ = use UseAst in
 let use_ = use UseAst in
   lam s.
   nuse_ (nameNoSym s)
+
+--  Extended types --
+let ntyuse_ = use TyUseAst in 
+  lam n : Name. lam inty : Type. 
+  TyUse {ident = n,
+         info = NoInfo {},
+         inty = inty}
+
+let tyuse_ = use TyUseAst in 
+  lam s : String. lam inty : Type. 
+  TyUse {ident = nameNoSym s,
+         info = NoInfo {},
+         inty = inty}
 
 
 -- Declarations --
@@ -70,6 +83,7 @@ let decl_nsynn_ = use MLangAst in
   DeclSyn {ident = n,
            defs = map (lam t. {ident = t.0, tyIdent = t.1}) ndefs,
            params = [],
+           includes = [],
            info = NoInfo {}}
 
 let decl_nsyn_ = use MLangAst in
@@ -84,22 +98,47 @@ let decl_syn_ = use MLangAst in
   lam s. lam defs: [(String, Type)].
   decl_nsyn_ (nameNoSym s) defs
 
+let decl_syn_params_ = use MLangAst in 
+  lam s : String. lam ss : [String]. lam defs : [(String, Type)].
+  DeclSyn {ident = nameNoSym s,
+           defs = map (lam t. {ident = nameNoSym t.0, tyIdent = t.1}) defs,
+           params = map nameNoSym ss,
+           includes = [],
+           info = NoInfo {}}
 
 let decl_nsemty_ = use MLangAst in
   lam n. lam ty.
   DeclSem {ident = n, tyAnnot = ty,
-           tyBody = tyunknown_,
-           args = [], cases = [], info = NoInfo {}}
+           tyBody = tyunknown_, includes = [],
+           args = None (), cases = [], info = NoInfo {}}
 
 let decl_semty_ = use MLangAst in
   lam s. lam ty.
   decl_nsemty_ (nameNoSym s) ty
 
+let decl_semty_cases_ = use MLangAst in 
+  lam s. lam ty. lam cases.
+  let n = nameNoSym s in 
+  DeclSem {ident = n, tyAnnot = ty,
+           tyBody = tyunknown_, includes = [],
+           args = Some [],
+           cases = map (lam t. {pat = t.0, thn = t.1}) cases,
+           info = NoInfo {}}
+
+let decl_sem_args_ty_cases_ = use MLangAst in 
+  lam s : String. lam args : [(String, Type)]. lam ty : Type. lam cases.
+  let n = nameNoSym s in 
+  DeclSem {ident = n, tyAnnot = ty,
+           tyBody = tyunknown_, includes = [],
+           args = Some (map (lam t. {ident = nameNoSym t.0, tyAnnot = t.1}) args),
+           cases = map (lam t. {pat = t.0, thn = t.1}) cases,
+           info = NoInfo {}}
+
 let decl_nsem_ = use MLangAst in
   lam n. lam nargs: [(Name, Type)]. lam cases: [(Pat, Expr)].
   DeclSem {ident = n, tyAnnot = tyunknown_,
-           tyBody = tyunknown_,
-           args = map (lam t. {ident = t.0, tyAnnot = t.1}) nargs,
+           tyBody = tyunknown_, includes = [],
+           args = Some (map (lam t. {ident = t.0, tyAnnot = t.1}) nargs),
            cases = map (lam t. {pat = t.0, thn = t.1}) cases,
            info = NoInfo {}}
 

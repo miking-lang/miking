@@ -116,7 +116,7 @@ lang FutharkPatternGenerate = MExprAst + FutharkAst + FutharkTypeGenerate
     errorSingle [infoPat p] "Pattern is not supported by Futhark backend"
 end
 
-lang FutharkGenerate
+lang FutharkGenerate = Ast + FutharkExprAst
   sem generateExpr : FutharkGenerateEnv -> Expr -> FutExpr
 end
 

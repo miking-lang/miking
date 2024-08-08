@@ -8,7 +8,7 @@ include "repr-ast.mc"
 -- BASE FRAGMENT --
 -------------------
 
-lang Cmp = Ast
+lang Cmp = ConstAst
 
   sem cmpExpr (lhs: Expr) =
   | rhs /- : Expr -/ -> cmpExprH (lhs, rhs)
