@@ -467,12 +467,38 @@ let getData = function
       (idDeclRecLets, fis, [len], tys, tms, strs, [], [], [], [], [], [])
   | PTreeTop (TopCon (Con (fi, str, ty))) ->
       (idDeclConDef, [fi], [], [ty], [], [str], [], [], [], [], [], [])
-  | PTreeTop (TopUtest (Utest (fi, tm1, tm2, tmUsing, _))) -> (
-    match tmUsing with
-    | Some tm ->
-        (idDeclUtest, [fi], [1], [], [tm1; tm2; tm], [], [], [], [], [], [], [])
-    | _ ->
-        (idDeclUtest, [fi], [0], [], [tm1; tm2], [], [], [], [], [], [], []) )
+  | PTreeTop (TopUtest (Utest (fi, tm1, tm2, tmUsing, tmOnFail))) -> (
+    match (tmUsing, tmOnFail) with
+    | None, None ->
+        (idDeclUtest, [fi], [2], [], [tm1; tm2], [], [], [], [], [], [], [])
+    | Some tmUsing, None ->
+        ( idDeclUtest
+        , [fi]
+        , [3]
+        , []
+        , [tm1; tm2; tmUsing]
+        , []
+        , []
+        , []
+        , []
+        , []
+        , []
+        , [] )
+    | Some tmUsing, Some tmOnFail ->
+        ( idDeclUtest
+        , [fi]
+        , [4]
+        , []
+        , [tm1; tm2; tmUsing; tmOnFail]
+        , []
+        , []
+        , []
+        , []
+        , []
+        , []
+        , [] )
+    | _, _ ->
+        failwith "bootparser getData undefined" )
   | PTreeTop (TopExt (Ext (fi, str, effect, ty))) ->
       ( idDeclExt
       , [fi]

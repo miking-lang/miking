@@ -234,13 +234,21 @@ let decl_ucondef_ = use MLangAst in
   decl_condef_ s tyunknown_
 
 
+let decl_utestuf_ = use MLangAst in
+  lam t. lam e. lam u. lam f.
+  DeclUtest {test = t, expected = e, tusing = Some u, tonfail = Some f, info = NoInfo ()}
+
 let decl_utestu_ = use MLangAst in
   lam t. lam e. lam u.
-  DeclUtest {test = t, expected = e, tusing = Some u, info = NoInfo ()}
+  DeclUtest {test = t, expected = e, tusing = Some u, tonfail = None (), info = NoInfo ()}
+
+let decl_utestf_ = use MLangAst in
+  lam t. lam e. lam f.
+  DeclUtest {test = t, expected = e, tusing = None (), tonfail = Some f, info = NoInfo ()}
 
 let decl_utest_ = use MLangAst in
   lam t. lam e.
-  DeclUtest {test = t, expected = e, tusing = None (), info = NoInfo ()}
+  DeclUtest {test = t, expected = e, tusing = None (), tonfail = None (), info = NoInfo ()}
 
 
 let decl_next_ = use MLangAst in

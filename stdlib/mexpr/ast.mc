@@ -999,7 +999,7 @@ type PatName
 con PName : Name -> PatName
 con PWildcard : () -> PatName
 
-lang NamedPat = MatchAst
+lang NamedPat = Ast
   syn Pat =
   | PatNamed {ident : PatName,
               info : Info,
@@ -1018,7 +1018,7 @@ lang NamedPat = MatchAst
   | PatNamed r -> PatNamed {r with ty = ty}
 end
 
-lang SeqTotPat = MatchAst
+lang SeqTotPat = Ast
   syn Pat =
   | PatSeqTot {pats : [Pat],
                info : Info,
@@ -1043,7 +1043,7 @@ lang SeqTotPat = MatchAst
     else never
 end
 
-lang SeqEdgePat = MatchAst
+lang SeqEdgePat = Ast
   syn Pat =
   | PatSeqEdge {prefix : [Pat],
                 middle: PatName,
@@ -1072,7 +1072,7 @@ lang SeqEdgePat = MatchAst
     else never
 end
 
-lang RecordPat = MatchAst
+lang RecordPat = Ast
   syn Pat =
   | PatRecord {bindings : Map SID Pat,
                info: Info,
@@ -1097,7 +1097,7 @@ lang RecordPat = MatchAst
     else never
 end
 
-lang DataPat = MatchAst + DataAst
+lang DataPat = Ast + DataAst
   syn Pat =
   | PatCon {ident : Name,
             subpat : Pat,
@@ -1123,7 +1123,7 @@ lang DataPat = MatchAst + DataAst
     else never
 end
 
-lang IntPat = MatchAst + IntAst
+lang IntPat = Ast + IntAst
   syn Pat =
   | PatInt {val : Int,
             info : Info,
@@ -1142,7 +1142,7 @@ lang IntPat = MatchAst + IntAst
   | PatInt r -> PatInt {r with ty = ty}
 end
 
-lang CharPat = MatchAst
+lang CharPat = Ast
   syn Pat =
   | PatChar {val : Char,
              info : Info,
@@ -1161,7 +1161,7 @@ lang CharPat = MatchAst
   | PatChar r -> PatChar {r with ty = ty}
 end
 
-lang BoolPat = MatchAst + BoolAst
+lang BoolPat = Ast + BoolAst
   syn Pat =
   | PatBool {val : Bool,
              info : Info,
@@ -1180,7 +1180,7 @@ lang BoolPat = MatchAst + BoolAst
   | PatBool r -> PatBool {r with ty = ty}
 end
 
-lang AndPat = MatchAst
+lang AndPat = Ast
   syn Pat =
   | PatAnd {lpat : Pat,
             rpat : Pat,
@@ -1208,7 +1208,7 @@ lang AndPat = MatchAst
     else never
 end
 
-lang OrPat = MatchAst
+lang OrPat = Ast
   syn Pat =
   | PatOr {lpat : Pat,
            rpat : Pat,
@@ -1236,7 +1236,7 @@ lang OrPat = MatchAst
     else never
 end
 
-lang NotPat = MatchAst
+lang NotPat = Ast
   syn Pat =
   | PatNot {subpat : Pat,
             info : Info,

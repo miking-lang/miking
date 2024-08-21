@@ -979,7 +979,7 @@ lang VarTypeCheck = TypeCheck + VarAst
       errorSingle [t.info] msg
 end
 
-lang OpVarTypeCheck = TypeCheck + OpVarAst + RepTypesHelpers + SubstituteNewReprs + NeverAst + NamedPat + RecordPat + VarAst
+lang OpVarTypeCheck = TypeCheck + OpVarAst + RepTypesHelpers + SubstituteNewReprs + NeverAst + NamedPat + RecordPat + VarAst + MatchAst
   sem typeCheckExpr env =
   | TmOpVar x ->
     match mapLookup x.ident env.varEnv with Some ty then
