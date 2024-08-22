@@ -233,9 +233,13 @@ end
 lang BootParserDep = ConstDep + BootParserAst
   sem constDep =
   | CBootParserParseMExprString _ -> []
+  | CBootParserParseMLangString _ -> []
+  | CBootParserParseMLangFile _ -> []
   | CBootParserParseMCoreFile _ -> []
   | CBootParserGetId _ -> []
   | CBootParserGetTerm _ -> []
+  | CBootParserGetTop _ -> []
+  | CBootParserGetDecl _ -> []
   | CBootParserGetType _ -> []
   | CBootParserGetString _ -> []
   | CBootParserGetInt _ -> []

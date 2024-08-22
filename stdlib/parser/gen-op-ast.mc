@@ -168,7 +168,8 @@ let _mkBaseFragment
       { ident = desc.functions.topAllowed
       , tyBody = ty
       , tyAnnot = ty
-      , args = []
+      , args = Some []
+      , includes = []
       , cases = [{pat = pvarw_, thn = true_}]
       , info = NoInfo ()
       }
@@ -181,7 +182,8 @@ let _mkBaseFragment
       { ident = desc.functions.leftAllowed
       , tyAnnot = ty
       , tyBody = ty
-      , args = []
+      , args = Some []
+      , includes = []
       , cases = [{pat = pvarw_, thn = true_}]
       , info = NoInfo ()
       }
@@ -194,7 +196,8 @@ let _mkBaseFragment
       { ident = desc.functions.rightAllowed
       , tyAnnot = ty
       , tyBody = ty
-      , args = []
+      , args = Some []
+      , includes = []
       , cases = [{pat = pvarw_, thn = true_}]
       , info = NoInfo ()
       }
@@ -205,7 +208,8 @@ let _mkBaseFragment
       { ident = desc.functions.groupingsAllowed
       , tyAnnot = ty
       , tyBody = ty
-      , args = []
+      , args = Some []
+      , includes = []
       , cases = [{pat = pvarw_, thn = _geither}]
       , info = NoInfo ()
       }
@@ -216,7 +220,8 @@ let _mkBaseFragment
       { ident = desc.functions.parenAllowed
       , tyAnnot = ty
       , tyBody = ty
-      , args = []
+      , args = Some []
+      , includes = []
       , cases = [{pat = pvarw_, thn = _geither}]
       , info = NoInfo ()
       }
@@ -228,7 +233,8 @@ let _mkBaseFragment
       , tyAnnot = ty
       , tyBody = ty
       , cases = []
-      , args = []
+      , args = Some []
+      , includes = []
       , info = NoInfo ()
       }
     in
@@ -239,7 +245,8 @@ let _mkBaseFragment
       , tyAnnot = ty
       , tyBody = ty
       , cases = []
-      , args = []
+      , args = Some []
+      , includes = []
       , info = NoInfo ()
       }
     in
@@ -249,8 +256,9 @@ let _mkBaseFragment
       { ident = desc.functions.unsplit
       , tyAnnot = ty
       , tyBody = ty
-      , args = []
+      , args = Some []
       , cases = []
+      , includes = []
       , info = NoInfo ()
       }
     in
@@ -258,7 +266,7 @@ let _mkBaseFragment
     { ident = desc.baseOpFragmentName
     , includes = [desc.baseFragmentName]
     , decls =
-      [ DeclSyn {ident = synName, params = [nameNoSym "lstyle", nameNoSym "rstyle"], defs = [], info = NoInfo ()}
+      [ DeclSyn {ident = synName, params = [nameNoSym "lstyle", nameNoSym "rstyle"], defs = [], includes = [], info = NoInfo ()}
       , topAllowed, leftAllowed, rightAllowed, groupingsAllowed
       , parenAllowed, getInfo, getTerms, unsplit
       ]
@@ -282,7 +290,8 @@ lang GenOpAstLang = SynDeclAst + SemDeclAst + LangDeclAst
       { ident = desc.functions.getInfo
       , tyAnnot = tyunknown_
       , tyBody = tyunknown_
-      , args = []
+      , args = Some []
+      , includes = []
       , cases = [{pat = npcon_ conName (npvar_ x), thn = recordproj_ labels.info (nvar_ x)}]
       , info = NoInfo ()
       } in
@@ -292,7 +301,8 @@ lang GenOpAstLang = SynDeclAst + SemDeclAst + LangDeclAst
       { ident = desc.functions.getTerms
       , tyAnnot = tyunknown_
       , tyBody = tyunknown_
-      , args = []
+      , args = Some []
+      , includes = []
       , cases = [{pat = npcon_ conName (npvar_ x), thn = recordproj_ labels.terms (nvar_ x)}]
       , info = NoInfo ()
       } in
@@ -378,7 +388,8 @@ lang GenOpAstLang = SynDeclAst + SemDeclAst + LangDeclAst
       { ident = desc.functions.unsplit
       , tyAnnot = tyunknown_
       , tyBody = tyunknown_
-      , args = []
+      , args = Some []
+      , includes = []
       , cases = [arm]
       , info = NoInfo ()
       } in
@@ -387,7 +398,8 @@ lang GenOpAstLang = SynDeclAst + SemDeclAst + LangDeclAst
         { ident = desc.functions.groupingsAllowed
         , tyAnnot = tyunknown_
         , tyBody = tyunknown_
-        , args = []
+        , args = Some []
+        , includes = []
         , cases =
           [ { pat = ptuple_ [npcon_ op.opConstructorName pvarw_, npcon_ op.opConstructorName pvarw_]
             , thn = match op.assoc with LAssoc _ then nconapp_ _incNames.c.gleft unit_ else nconapp_ _incNames.c.gright unit_
@@ -404,6 +416,7 @@ lang GenOpAstLang = SynDeclAst + SemDeclAst + LangDeclAst
       [ DeclSyn
         { ident = synName
         , params = [nameNoSym "lstyle", nameNoSym "rstyle"]
+        , includes = []
         , defs = [{ident = conName, tyIdent = op.carried}]
         , info = NoInfo ()
         }
@@ -453,7 +466,8 @@ let _mkGroupingSem
     { ident = desc.functions.groupingsAllowed
     , tyAnnot = tyunknown_
     , tyBody = tyunknown_
-    , args = []
+    , args = Some []
+    , includes = []
     , cases = join (map mkCases (mapBindings desc.precedence))
     , info = NoInfo ()
     }

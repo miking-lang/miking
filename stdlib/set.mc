@@ -37,6 +37,11 @@ let setUnion : all a. Set a -> Set a -> Set a = lam s1. lam s2. mapUnion s1 s2
 let setIntersect : all a. Set a -> Set a -> Set a = lam s1. lam s2.
   mapIntersectWith (lam. lam. ()) s1 s2
 
+-- `setDisjoint s1 s2` returns true if `s1` and `s2` are disjoint, 
+--false otherwise.
+let setDisjoint : all a. Set a -> Set a -> Bool = lam s1. lam s2. 
+  setIsEmpty (setIntersect s1 s2)
+
 -- `setSubtract s1 s2` is the relative complement of set `s2` in `s1` (set
 -- difference, i.e., s1 - s2).
 let setSubtract : all a. Set a -> Set a -> Set a = lam s1. lam s2.

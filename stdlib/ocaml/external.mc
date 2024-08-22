@@ -14,7 +14,7 @@ let _tupleConversionCost = 1
 let _recordConversionCost = 1
 let _seqtostringcost = 2
 
-lang OCamlChooseExternalImpl
+lang OCamlChooseExternalImpl = Ast
   -- `chooseExternalImpls impls env t` chooses external definitions from
   -- `impls` for each external in `t` and adds these to `env`.
   sem chooseExternalImpls

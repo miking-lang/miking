@@ -168,7 +168,7 @@ changed.
 
 -/
 
-lang CarriedTypeBase
+lang CarriedTypeBase = Ast
   syn CarriedType =
 
   sem carriedRepr : CarriedType -> Type
@@ -235,7 +235,8 @@ lang CarriedTypeHelpers = CarriedTypeBase + SemDeclAst + PrettyPrint
           { ident = request.names.smapAccumL
           , tyAnnot = tyunknown_
           , tyBody = tyunknown_  -- TODO(vipa, 2023-03-09): Provide a proper type here
-          , args = [{ident = fName, tyAnnot = tyunknown_}, {ident = accName, tyAnnot = tyunknown_}]
+          , args = Some [{ident = fName, tyAnnot = tyunknown_}, {ident = accName, tyAnnot = tyunknown_}]
+          , includes = []
           , cases =
             [ { pat = npcon_ constructor.name (npvar_ valName)
               , thn = match_
@@ -262,7 +263,8 @@ lang CarriedTypeHelpers = CarriedTypeBase + SemDeclAst + PrettyPrint
         { ident = request.names.get
         , tyAnnot = tyunknown_
         , tyBody = tyunknown_  -- TODO(vipa, 2023-03-09): provide a proper type here
-        , args = []
+        , args = Some []
+        , includes = []
         , cases =
           [ { pat = npcon_ constructor.name (npvar_ targetName)
             , thn = recordproj_ request.field (nvar_ targetName)
@@ -274,7 +276,8 @@ lang CarriedTypeHelpers = CarriedTypeBase + SemDeclAst + PrettyPrint
         { ident = request.names.set
         , tyAnnot = tyunknown_
         , tyBody = tyunknown_  -- TODO(vipa, 2023-03-09): provide a proper type here
-        , args = [{ident = valName, tyAnnot = tyunknown_}]
+        , args = Some [{ident = valName, tyAnnot = tyunknown_}]
+        , includes = []
         , cases =
           [ { pat = npcon_ constructor.name (npvar_ targetName)
             , thn = nconapp_ constructor.name (recordupdate_ (nvar_ targetName) request.field (nvar_ valName))
@@ -303,7 +306,8 @@ lang CarriedTypeHelpers = CarriedTypeBase + SemDeclAst + PrettyPrint
       { ident = request.names.smapAccumL
       , tyAnnot = ty
       , tyBody = ty
-      , args =
+      , includes = []
+      , args = Some
         [ {ident = fName, tyAnnot = tyunknown_}
         , {ident = accName, tyAnnot = tyunknown_}
         ]
@@ -322,7 +326,8 @@ lang CarriedTypeHelpers = CarriedTypeBase + SemDeclAst + PrettyPrint
       { ident = request.names.smap
       , tyAnnot = ty
       , tyBody = ty
-      , args =
+      , includes = []
+      , args = Some
         [ {ident = fName, tyAnnot = tyunknown_}
         ]
       , cases =
@@ -347,7 +352,8 @@ lang CarriedTypeHelpers = CarriedTypeBase + SemDeclAst + PrettyPrint
       { ident = request.names.sfold
       , tyAnnot = ty
       , tyBody = ty
-      , args =
+      , includes = []
+      , args = Some
         [ {ident = fName, tyAnnot = tyunknown_}
         , {ident = accName, tyAnnot = tyunknown_}
         ]
@@ -381,8 +387,9 @@ let _mkFieldStubs
       { ident = request.names.get
       , tyAnnot = ty
       , tyBody = ty
-      , args = []
+      , args = Some []
       , cases = []
+      , includes = []
       , info = NoInfo ()
       } in
     let getf_ = appf1_ (nvar_ request.names.get) in
@@ -392,8 +399,9 @@ let _mkFieldStubs
       { ident = request.names.set
       , tyAnnot = ty
       , tyBody = ty
-      , args = [{ident = valName, tyAnnot = tyunknown_}]
+      , args = Some [{ident = valName, tyAnnot = tyunknown_}]
       , cases = []
+      , includes = []
       , info = NoInfo ()
       } in
     let setf_ = appf2_ (nvar_ request.names.set) in
@@ -407,8 +415,9 @@ let _mkFieldStubs
       in DeclSem
       { ident = request.names.mapAccum
       , tyAnnot = ty
+      , includes = []
       , tyBody = ty
-      , args = [{ident = fName, tyAnnot = tyunknown_}, {ident = accName, tyAnnot = tyunknown_}]
+      , args = Some [{ident = fName, tyAnnot = tyunknown_}, {ident = accName, tyAnnot = tyunknown_}]
       , cases =
         [ { pat = npvar_ targetName
           , thn = match_
@@ -429,8 +438,9 @@ let _mkFieldStubs
       in DeclSem
       { ident = request.names.map
       , tyAnnot = ty
+      , includes = []
       , tyBody = ty
-      , args = [{ident = fName, tyAnnot = tyunknown_}]
+      , args = Some [{ident = fName, tyAnnot = tyunknown_}]
       , cases =
         [ { pat = npvar_ targetName
           , thn = setf_ (appf1_ (nvar_ fName) (getf_ (nvar_ targetName))) (nvar_ targetName)
@@ -593,7 +603,7 @@ lang CarriedTypeGenerate = CarriedTypeHelpers + LangDeclAst + TypeDeclAst + SynD
       (setEmpty nameCmp)
       input.constructors in
     let synTypes = setFold
-      (lam acc. lam synType. cons (DeclSyn {ident = synType, params = [], defs = [], info = NoInfo ()}) acc)
+      (lam acc. lam synType. cons (DeclSyn {ident = synType, includes = [], params = [], defs = [], info = NoInfo ()}) acc)
       []
       synTypes in
     type DeclLangRec =
@@ -626,7 +636,7 @@ lang CarriedTypeGenerate = CarriedTypeHelpers + LangDeclAst + TypeDeclAst + SynD
         , decls =
           join
             [ [ DeclType {ident = recordTyName, params = [], tyIdent = carriedRepr carried, info = NoInfo ()}
-              , DeclSyn {ident = synType, params = [], defs = [{ident = name, tyIdent = ntycon_ recordTyName}], info = NoInfo ()}
+              , DeclSyn {ident = synType, includes = [], params = [], defs = [{ident = name, tyIdent = ntycon_ recordTyName}], info = NoInfo ()}
               ]
             , sfunctions
             , join accessors

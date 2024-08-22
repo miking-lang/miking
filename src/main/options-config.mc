@@ -134,5 +134,9 @@ let optionsConfig : ParseConfig Options = [
   ([("--help", "", "")],
     "Display this list of options",
     lam p: ArgPart Options.
-      let o: Options = p.options in {o with printHelp = true})
+      let o: Options = p.options in {o with printHelp = true}),
+  ([("--mlang-pipeline", "", "")],
+    "Compile using the MLang Pipeline. Note that this is an unstable, experimental feature!",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with mlangPipeline = true})
 ]

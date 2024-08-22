@@ -63,6 +63,7 @@ lang MExprExtract = MExprAst + MExprCallGraph
         or (setMem t.ident used) (setMem varTyId used)
       else setMem t.ident used in
     match extractAstH used t.inexpr with (used, inexpr) in
+    let used = collectIdentifiersType used t.tyIdent in
     if constructorIsUsed used then (used, TmConDef {t with inexpr = inexpr})
     else (used, inexpr)
   | TmUtest t -> extractAstH used t.next
@@ -95,7 +96,10 @@ lang MExprExtract = MExprAst + MExprCallGraph
     let used = collectIdentifiersExprH bound used t.thn in
     collectIdentifiersExprH bound used t.els
   | TmConApp t ->
-    if setMem t.ident bound then used else setInsert t.ident used
+    let used =
+      if setMem t.ident bound then used else setInsert t.ident used
+    in
+    collectIdentifiersExprH bound used t.body
   | ast -> sfold_Expr_Expr (collectIdentifiersExprH bound) used ast
 
   sem collectIdentifiersType : Set Name -> Type -> Set Name
@@ -240,7 +244,7 @@ utest extractAst (setOfSeq [t1, t2]) multipleDependOnSame with extracted using e
 -- NOTE(larshum, 2023-05-30): This test checks that the type referred to only
 -- by an external is included, even if type-checking has not ran yet (meaning
 -- there are no other references to the type in the expression).
-let extTypeDependency = symbolize (bindall_ [
+let extTypeDependency = preprocess (bindall_ [
   type_ "t" [] (tyvariant_ []),
   ext_ "fun" false (tyarrow_ tyint_ (tycon_ "t")),
   nulet_ f (ulam_ "x" (app_ (var_ "fun") (var_ "x"))),
@@ -248,5 +252,27 @@ let extTypeDependency = symbolize (bindall_ [
 ]) in
 utest expr2str (extractAst (setOfSeq [f]) extTypeDependency)
 with expr2str extTypeDependency using eqString in
+
+-- NOTE(larshum, 2024-04-17): We only run symbolization, to expose a (now
+-- fixed) bug in the collection of type identifiers in constructor definitions.
+let extConApp = symbolize (bindall_ [
+  type_ "T" [] (tyvariant_ []),
+  condef_ "Con" (tyarrow_ tyint_ (tycon_ "T")),
+  nulet_ f (ulam_ "x" (var_ "x")),
+  nulet_ g (ulam_ "y" (conapp_ "Con" (app_ (nvar_ f) (var_ "y")))),
+  int_ 0
+]) in
+utest expr2str (extractAst (setOfSeq [g]) extConApp)
+with expr2str extConApp using eqString in
+
+let multiConExtract = preprocess (bindall_ [
+  type_ "T" [] (tyvariant_ []),
+  condef_ "A" (tyarrow_ tyint_ (tycon_ "T")),
+  condef_ "B" (tyarrow_ tyint_ (tycon_ "T")),
+  nlet_ f (tyarrow_ tyint_ (tycon_ "T")) (ulam_ "x" (conapp_ "A" (var_ "x"))),
+  int_ 0
+]) in
+utest expr2str (extractAst (setOfSeq [f]) multiConExtract)
+with expr2str multiConExtract using eqString in
 
 ()

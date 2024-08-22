@@ -84,7 +84,7 @@ lang MetaVarTypeCmp = Cmp + MetaVarTypeAst
     else error "cmpTypeH reached non-unwrapped MetaVar!"
 end
 
-lang MetaVarTypePrettyPrint = PrettyPrint + MetaVarTypeAst
+lang MetaVarTypePrettyPrint = PrettyPrint + MetaVarTypeAst + MonoKindAst
   sem typePrecedence =
   | TyMetaVar t ->
     switch deref t.contents
@@ -96,8 +96,11 @@ lang MetaVarTypePrettyPrint = PrettyPrint + MetaVarTypeAst
   sem getTypeStringCode (indent : Int) (env : PprintEnv) =
   | TyMetaVar t ->
     switch deref t.contents
-    case Unbound t then pprintVarName env t.ident
-    case Link ty then getTypeStringCode indent env ty
+    case Unbound t then
+      match pprintVarName env t.ident with (env, idstr) in
+      (env, cons '_' idstr)
+    case Link ty then
+      getTypeStringCode indent env ty
     end
 end
 
@@ -153,7 +156,9 @@ lang VarTypeSubstitute = VarTypeAst + MetaVarTypeAst
   | TyMetaVar t & ty ->
     switch deref t.contents
     case Unbound r then
-      match mapLookup r.ident subst with Some tyvar then tyvar else ty
+      match mapLookup r.ident subst with Some tyvar
+      then tyvar
+      else smap_Type_Type (substituteMetaVars subst) ty
     case Link to then
       substituteMetaVars subst to
     end

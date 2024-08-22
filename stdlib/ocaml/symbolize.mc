@@ -14,7 +14,7 @@ lang OCamlSym =
     let symbArm = lam arm.
       match arm with (pat, expr) in
       match symbolizePat env (mapEmpty cmpString) pat with (patEnv, pat) in
-      let thnEnv = {env with varEnv = mapUnion env.varEnv patEnv} in
+      let thnEnv = symbolizeUpdateVarEnv env patEnv in
       (pat, symbolizeExpr thnEnv expr)
     in
     OTmMatch { target = symbolizeExpr env target, arms = map symbArm arms }
@@ -23,7 +23,7 @@ lang OCamlSym =
       getSymbol {kind = "constructor",
                  info = [],
                  allowFree = env.allowFree}
-        env.conEnv t.ident
+        env.currentEnv.conEnv t.ident
     in
     let args = map (symbolizeExpr env) t.args in
     OTmConApp {t with ident = ident,
@@ -35,7 +35,7 @@ lang OCamlSym =
       getSymbol {kind = "constructor",
                  info = [],
                  allowFree = env.allowFree}
-        env.conEnv t.ident
+        env.currentEnv.conEnv t.ident
     in
     match mapAccumL (symbolizePat env) patEnv t.args with (patEnv, args) in
     (patEnv, OPatCon {t with ident = ident,

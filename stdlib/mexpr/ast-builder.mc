@@ -341,6 +341,8 @@ recursive let bindF_ = use MExprAst in
     TmType {t with inexpr = bindF_ f t.inexpr expr}
   else match letexpr with TmExt t then
     TmExt {t with inexpr = bindF_ f t.inexpr expr}
+  else match letexpr with TmUtest t then
+    TmUtest {t with next = bindF_ f t.next expr}
   else
     f letexpr expr -- Insert at the end of the chain
 end
@@ -594,7 +596,7 @@ let record_add = use MExprAst in
 
 let record_add_bindings : use Ast in [(String, Expr)] -> Expr -> Expr =
   lam bindings. lam record.
-  foldl (lam recacc. lam b : (String, Expr). record_add b.0 b.1 recacc) record bindings
+  foldl (lam recacc. lam b. record_add b.0 b.1 recacc) record bindings
 
 -- Get an optional list of tuple expressions for a record. If the record does
 -- not represent a tuple, None () is returned.

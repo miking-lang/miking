@@ -37,7 +37,8 @@ let optionsDefault : Options = {
   disableJsGeneralOptimizations = false,
   disableJsTCO = false,
   output = None (),
-  tuneOptions = tuneOptionsDefault
+  tuneOptions = tuneOptionsDefault,
+  mlangPipeline = false
 }
 
 -- Get the help string for options

@@ -206,11 +206,15 @@ and const =
   (* MCore intrinsics: Boot parser *)
   | CbootParserTree of ptree
   | CbootParserParseMExprString of bool option * int Mseq.t Mseq.t option
+  | CbootParserParseMLangString of int Mseq.t option
+  | CbootParserParseMLangFile of int Mseq.t option
   | CbootParserParseMCoreFile of
       (bool * bool * int Mseq.t Mseq.t * bool * bool * bool) option
       * int Mseq.t Mseq.t option
   | CbootParserGetId
   | CbootParserGetTerm of tm option
+  | CbootParserGetTop of tm option
+  | CbootParserGetDecl of tm option
   | CbootParserGetType of tm option
   | CbootParserGetString of tm option
   | CbootParserGetInt of tm option
@@ -230,6 +234,9 @@ and ptree =
   | PTreeConst of const
   | PTreeInfo of info
   | PTreeError of (info * ustring) list
+  | PTreeProgram of program
+  | PTreeTop of top
+  | PTreeDecl of decl
 
 (* Terms in MLang *)
 and cdecl =
@@ -873,9 +880,13 @@ let const_has_side_effect = function
   (* MCore Boot parser *)
   | CbootParserTree _
   | CbootParserParseMExprString _
+  | CbootParserParseMLangString _
+  | CbootParserParseMLangFile _
   | CbootParserParseMCoreFile _
   | CbootParserGetId
   | CbootParserGetTerm _
+  | CbootParserGetTop _
+  | CbootParserGetDecl _
   | CbootParserGetType _
   | CbootParserGetString _
   | CbootParserGetInt _

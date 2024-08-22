@@ -7,7 +7,7 @@ include "pmexpr/ast.mc"
 
 -- An extensible language fragment for defining well-formedness rules on
 -- expressions.
-lang WellFormed
+lang WellFormed = Ast
   syn WFError =
 
   -- Defines a name for the well-formedness backend. This is used when

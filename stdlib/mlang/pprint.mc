@@ -1,11 +1,12 @@
+-- Pretty Printing for MLang programs.
 
 include "bool.mc"
 include "name.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/info.mc"
 include "mexpr/pprint.mc"
-include "./ast.mc"
-include "./ast-builder.mc"
+include "ast.mc"
+include "ast-builder.mc"
 
 -- Language fragment string parser translation
 let pprintLangString = lam str.
@@ -34,9 +35,20 @@ lang UsePrettyPrint = PrettyPrint + UseAst + MLangIdentifierPrettyPrint
                 inexpr])
 end
 
+lang TyUsePrettyPrint = MExprPrettyPrint + TyUseAst + MLangIdentifierPrettyPrint
+  sem getTypeStringCode (indent : Int) (env : PprintEnv) =
+  | TyUse t -> 
+    match pprintLangName env t.ident with (env, ident) in
+    match getTypeStringCode indent env t.inty with (env, inty) in
+    (env, join ["use ", ident, pprintNewline indent,
+                "in", pprintNewline indent,
+                inty])
+end
 
-lang DeclPrettyPrint = PrettyPrint + MLangIdentifierPrettyPrint
+
+lang DeclPrettyPrint = PrettyPrint + MLangIdentifierPrettyPrint + DeclAst
   sem pprintDeclCode : Int -> PprintEnv -> Decl -> (PprintEnv, String)
+  sem pprintDeclCode indent env =
   -- Intentionally left blank
 
   sem pprintDeclSequenceCode : Int -> PprintEnv -> [Decl] -> (PprintEnv, String)
@@ -96,7 +108,6 @@ lang SynDeclPrettyPrint = DeclPrettyPrint + SynDeclAst + DataPrettyPrint
                   (cons (join ["syn ", typeNameStr, params, " ="]) defStrings))
 end
 
-
 lang SemDeclPrettyPrint = DeclPrettyPrint + SemDeclAst + UnknownTypeAst
   sem pprintDeclCode (indent : Int) (env : PprintEnv) =
   | DeclSem t ->
@@ -109,9 +120,10 @@ lang SemDeclPrettyPrint = DeclPrettyPrint + SemDeclAst + UnknownTypeAst
       else (env, None ())
     with (env, mDecl) in
     match
-      match (t.args, t.cases) with !([], []) then
+      match (t.args, t.cases) with !(None _, []) then
         -- sem impl
         match
+          match t.args with Some args in 
           mapAccumL (lam env. lam arg.
             match pprintEnvGetStr env arg.ident with (env, baseStr) in
             match arg.tyAnnot with TyUnknown _ then
@@ -119,7 +131,7 @@ lang SemDeclPrettyPrint = DeclPrettyPrint + SemDeclAst + UnknownTypeAst
             else
               match getTypeStringCode indent env arg.tyAnnot with (env, tyStr) in
               (env, join ["(", baseStr, " : ", tyStr, ")"])
-          ) env t.args
+          ) env args
         with (env, argStrs) in
         match
           mapAccumL (lam env. lam semcase.
@@ -216,14 +228,15 @@ end
 
 lang MLangPrettyPrint = MExprPrettyPrint +
 
-  -- Extended expressions
-  UsePrettyPrint +
+  -- Extended expressions and types
+  UsePrettyPrint + TyUsePrettyPrint + 
 
   -- Declarations
   DeclPrettyPrint + LangDeclPrettyPrint + SynDeclPrettyPrint +
   SemDeclPrettyPrint + LetDeclPrettyPrint + TypeDeclPrettyPrint +
   RecLetsDeclPrettyPrint + DataDeclPrettyPrint + UtestDeclPrettyPrint +
-  ExtDeclPrettyPrint + IncludeDeclPrettyPrint +
+  ExtDeclPrettyPrint + IncludeDeclPrettyPrint + 
+  
 
   -- Top-level pretty printer
   MLangTopLevelPrettyPrint
@@ -284,7 +297,58 @@ let prog: MLangProgram = {
                 (appf2_ (var_ "foo") (int_ 10) (float_ 0.5))
 } in
 
---print (mlang2str prog); print "\n";
+print (mlang2str prog); print "\n";
 utest length (mlang2str prog) with 0 using geqi in
+
+let prog2: MLangProgram = {
+  decls = [
+    decl_include_ "common.mc",
+    decl_include_ "string.mc",
+    decl_langi_ "Test1" [] [],
+    decl_langi_ "test2" ["Test1"] [],
+    decl_langi_ "The 3rd Test" ["Test1", "test2"] [],
+    decl_ext_ "my_external" false (tyarrow_ tyfloat_ tystr_),
+    decl_ext_ "my_external2" true (tyarrow_ tyint_ tystr_),
+    decl_lang_ "Foo" [
+      decl_syn_ "Bar" [
+        ("Apple", tyint_),
+        ("Pear", tyseq_ tyfloat_)
+      ],
+      decl_usem_ "getFruit" ["x"] [
+        (pcon_ "Apple" (pvar_ "i"), appf1_ (var_ "int2string") (var_ "i")),
+        (pcon_ "Pear" (pvar_ "fs"),
+         bindall_ [
+           ulet_ "strJoin" (unit_),
+           appf2_ (var_ "strJoin")
+                  (var_ "x")
+                  (appf2_ (var_ "map") (var_ "float2string") (var_ "fs"))
+         ])
+      ]
+    ],
+    decl_type_ "MyType" ["x"] tyunknown_,
+    decl_condef_ "MyCon" (tyall_ "x" (tyarrows_ [tyseq_ (tyvar_ "x"), tyapp_ (tycon_ "MyType") (tyvar_ "x")])),
+    decl_ureclets_ [
+      ("rec_foo", ulams_ ["x"] (appf1_ (var_ "printLn") (var_ "x"))),
+      ("rec_bar", ulams_ ["y"] (appf2_ (var_ "concat") (var_ "y") (var_ "y")))
+    ],
+    decl_ureclets_ [
+      ("rec_babar", ulams_ ["z"] (seq_ [var_ "z"]))
+    ],
+    decl_ureclets_ [],
+    decl_utest_ (appf1_ (var_ "rec_babar") (int_ 5)) (seq_ [int_ 5]),
+    decl_ulet_ "foo" (
+      ulams_ ["x", "y"] (bindall_ [
+        use_ "Foo",
+        concat_ (appf1_ (var_ "getFruit")
+                        (conapp_ "Apple" (var_ "x")))
+                (appf1_ (var_ "float2string") (var_ "y"))
+      ])
+    )
+  ],
+  expr = appf1_ (var_ "printLn")
+                (appf2_ (var_ "foo") (int_ 10) (float_ 0.5))
+} in
+
+print (mlang2str prog2); print "\n";
 
 ()

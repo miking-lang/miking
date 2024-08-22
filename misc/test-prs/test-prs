@@ -19,14 +19,60 @@
 # trying to find the first PR in the sequence that makes the tests
 # fail.
 
-# Note that everything that does not look like a PR (i.e., just
-# digits) is passed through directly to `make`
+# Setup cmdline options
+set -l options --name (status basename)
+set -a options (fish_opt --short r --long remote --required-val)
+set -a options (fish_opt --short j --required-val)
+set -a options (fish_opt --short m --long make-arg --multiple-vals)
+set -a options (fish_opt --short t --long test-target --required-val)
+set -a options (fish_opt --short b --long build-target --required-val)
+set -a options (fish_opt --short c --long clean-target --required-val)
+set -a options (fish_opt --short i --long install-target --required-val)
+set -a options (fish_opt --short x --long exit-code)
+set -a options (fish_opt --short l --long log-dir --required-val)
+set -a options (fish_opt --short h --long help)
 
+# Parse cmdline options
+argparse $options -- $argv
+
+# Apply defaults to missing cmdline options
+set -q _flag_remote || set _flag_remote origin
+set -q _flag_t || set _flag_t test
+set -q _flag_c || set _flag_c clean
+set makeFlags -j$_flag_j $_flag_m
+
+set -q _flag_i && set install_dash "-" || set install_dash ""
+set -q _flag_i && set install_question "?" || set install_question ""
+
+if set -q _flag_help
+    echo (status basename) "[options] [PR-NUM ...]"
+    echo
+    echo "Try to merge a series of PRs, running 'make clean && make && make build' for each."
+    echo
+    echo "Valid options:"
+    echo "  -r --remote       <remote>   The git remote to pull PRs from. Defaults to 'origin'."
+    echo "  -j                <num-jobs> Flag passed through to 'make', as a short-hand for --make-arg..."
+    echo "  -m --make-arg     <arg>      Argument to be passed through to 'make'. May be specified multiple times."
+    echo "  -t --test-target  <target>   Make target to use for testing. Defaults to 'test'."
+    echo "  -b --build-target <target>   Make target to use for building. Defaults to nothing, i.e., the default make target."
+    echo "  -c --clean-target <target>   Make target to use for cleaning. Defaults to 'clean'."
+    echo "  -i --install      <target>   Optional make target to run after testing succeeds for each repo state. Might run"
+    echo "                               multiple times, last time in the maximally merged successful state."
+    echo "  -x --exit-code               Give non-zero exit code if a PR fails to merge, build, or test."
+    echo "  -l --log-dir      <dir>      Put logs from failed tests in this directory, don't prompt for interactive viewing."
+    echo "  -h --help                    Show this help text."
+
+    exit 0
+end
+
+if not git diff-index --quiet HEAD --
+    echo "Git index doesn't seem to be clean, refusing to run"
+    exit 1
+end
+
+set allPrs $argv
 
 set branch tmp-testing-branch
-
-set makeFlags (string match --regex '^\\d+$' --invert -- $argv)
-set allPrs (string match --regex '^\\d+$' -- $argv)
 
 set commit (git symbolic-ref --short HEAD)
 set prs $allPrs
@@ -37,7 +83,7 @@ set statuses
 set current
 set tmpdir (mktemp -d)
 
-set miking_url https://github.com/miking-lang/miking.git
+set remote_url (git remote get-url $_flag_remote)
 
 function cleanup -a dir
     git reset --merge >/dev/null 2>&1
@@ -82,7 +128,7 @@ function read_confirm -a msg default
 end
 
 function printMergeStatus
-    echo -ne "\33[2K\r" $statuses $current "??"$prs
+    echo -ne "\33[2K\r" $statuses $current "??"$install_question$prs
 end
 
 function printFinalStatus
@@ -93,64 +139,83 @@ function printFinalStatus
     end
     if test (count $test_fail) -gt 0
         echo "Test fail:  " $test_fail
-        echo
-        if read_confirm "Would you like to see the logs from failing tests? [Yn]:" y
-            if test -n "$PAGER"
-                $PAGER $tmpdir/$test_fail
-            else
-                less $tmpdir/$test_fail
+        if set -q _flag_l
+            mkdir -p $_flag_l
+            mv $tmpdir/$test_fail $_flag_l
+            echo "Moved failure logs to '$_flag_l'"
+        else
+            echo
+            if read_confirm "Would you like to see the logs from failing tests? [Yn]:" y
+                if test -n "$PAGER"
+                    $PAGER $tmpdir/$test_fail
+                else
+                    less $tmpdir/$test_fail
+                end
             end
         end
     end
 end
 
-echo "Legend:            Example:"
-echo " ? Todo             ╭ Merge status"
-echo " * Running          │╭ Test status "
-echo " ✓ Success          ││"
-echo " ✗ Failure          ✓?123"
+echo "Legend:             ╭ Merge status"
+echo " ? Todo             │╭ Test status "
+echo " * Running          ││╭ Install status (if -i given)"
+echo " ✓ Success          |||"
+echo " ✗ Failure          ✓??123"
 
-function doMerge -a runTest
+function doMerge --no-scope-shadowing -a runTest
     init $argv[2..-1]
     for pr in $prs
         set --erase prs[1]
-        set current "*?"$pr
+        set current "*?"$install_question$pr
         printMergeStatus
-        if git pull --ff --squash "$miking_url" pull/"$pr"/head >/dev/null 2>&1 && git commit -m "Squashed $pr" >/dev/null 2>&1
+        if git pull --ff --squash "$remote_url" pull/"$pr"/head &>/dev/null && git commit -m "Squashed $pr" &>/dev/null
             if test -n "$runTest"
                 test (count $prs) -eq 0 -a (count $test_fail) -eq 0
                 set -l fail_already_known $status
-                set current "✓*"$pr
+                set current "✓*"$install_question$pr
                 printMergeStatus
-                if test "$fail_already_known" -ne 0 && make clean && make test-all $makeFlags >$tmpdir/$pr 2>&1
+                if test "$fail_already_known" -ne 0 && make $_flag_c $makeFlags &>$tmpdir/$pr && make $_flag_b $makeFlags &>>$tmpdir/$pr && make $_flag_t $makeFlags &>>$tmpdir/$pr
                     set current
-                    set statuses $statuses "✓✓"$pr
+                    if set -q _flag_i
+                        set current "✓✓*"$pr
+                        printMergeStatus
+                        if make $_flag_i $makeFlags &>>$tmpdir/$pr
+                            set statuses $statuses "✓✓✓"$pr
+                        else
+                            set statuses $statuses "✓✓✗"$pr
+                        end
+                    else
+                        set statuses $statuses "✓✓"$pr
+                    end
                     set picked $picked $pr
                 else
                     set current
-                    set statuses $statuses "✓✗"$pr
+                    set statuses $statuses "✓✗"$install_dash$pr
                     set test_fail $test_fail $pr
-                    git reset --hard $branch~1 >/dev/null 2>&1 # Drop the commit that fails
+                    git reset --hard $branch~1 &>/dev/null # Drop the commit that fails
                 end
             else
                 set current
-                set statuses $statuses "✓?"$pr
+                set statuses $statuses "✓?"$install_question$pr
                 set picked $picked $pr
             end
         else
             set current
-            set statuses $statuses "✗-"$pr
+            set statuses $statuses "✗-"$install_dash$pr
             set merge_fail $merge_fail $pr
-            git reset --merge >/dev/null 2>&1
+            git reset --merge &>/dev/null
         end
         printMergeStatus
     end
 end
 
 echo
+echo "Git remote url:" $remote_url
+echo "Make targets:" "clean=$_flag_c" "build=$_flag_b" "test=$_flag_t"
 if test (count $makeFlags) -gt 0
     echo "Make flags:" $makeFlags
 end
+echo
 echo "Merging PRs:"
 doMerge "" $allPrs
 if test (count $picked) -eq 0
@@ -161,8 +226,13 @@ if test (count $picked) -eq 0
 end
 echo -e "\nTesting all merged PRs together (happy path)"
 
-if make clean && make test-all $makeFlags >$tmpdir/$allPrs[-1] 2>&1
+if make $_flag_c $makeFlags &>$tmpdir/$allPrs[-1] && make $_flag_b $makeFlags &>>$tmpdir/$allPrs[-1] && make $_flag_t $makeFlags &>>$tmpdir/$allPrs[-1]
     printFinalStatus
+    if set -q _flag_i
+      if not make $_flag_i $makeFlags &>>$tmpdir/$allPrs[-1]
+          echo "WARNING: install target failed"
+      end
+    end
     cleanup dir
     exit 0
 end
@@ -172,3 +242,8 @@ cleanup
 doMerge "test" $allPrs
 printFinalStatus
 cleanup dir
+if set -q _flag_x && test (count $merge_fail) -gt 0 -o (count $test_fail) -gt 0
+    exit 1
+else
+    exit 0
+end

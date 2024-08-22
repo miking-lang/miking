@@ -78,6 +78,20 @@ with [] using eqSeq eqi
 utest mapOption (lam a. if gti a 3 then Some (addi a 30) else None ()) []
 with [] using eqSeq eqi
 
+let mapiOption
+  : all a. all b.
+     (Int -> a -> Option b)
+  -> [a]
+  -> [b]
+  = lam f.
+    recursive let work = lam idx. lam as.
+      match as with [a] ++ as then
+        match f idx a with Some b
+        then cons b (work (addi idx 1) as)
+        else work (addi idx 1) as
+      else []
+    in work 0
+
 let for_
   : all a.
      [a]
@@ -458,6 +472,7 @@ utest filterOption [Some 3, Some 2, None (), Some 4] with [3, 2, 4] using eqSeq 
 utest filterOption [None (), None ()] with [] using eqSeq eqi
 utest filterOption [None (), Some 1, None (), Some 1] with [1, 1] using eqSeq eqi
 
+-- Find the first element in a sequence satisfying a predicate in a list.
 recursive
   let find : all a. (a -> Bool) -> [a] -> Option a = lam p. lam seq.
     if null seq then None ()
@@ -467,6 +482,43 @@ end
 
 utest find (lam x. eqi x 2) [4,1,2] with Some 2 using optionEq eqi
 utest find (lam x. lti x 1) [4,1,2] with None () using optionEq eqi
+
+-- Find the last element in a sequence satisfying a predicate in a list.
+let findLast : all a. (a -> Bool) -> [a] -> Option a = lam p. lam seq.
+  find p (reverse seq)
+
+utest findLast (lam x. lti x 1) [4,1,2] with None () using optionEq eqi
+
+-- Find the first index in a sequence whose element satisfies a predicate
+let findi : all a. (a -> Bool) -> [a] -> Option Int = lam p. lam seq.
+  recursive let work = lam p. lam seq. lam i.
+    if null seq then None ()
+    else if p (head seq) then Some i
+    else work p (tail seq) (addi i 1)
+  in
+  work p seq 0
+
+utest findi (lam x. eqi x 5) [4,5,2,5] with Some 1 using optionEq eqi
+utest findi (lam x. eqi x 0) [4,1,2] with None () using optionEq eqi
+
+-- Find the last index in a sequence whose element satisfies a predicate
+let findiLast : all a. (a -> Bool) -> [a] -> Option Int = lam p. lam seq.
+  recursive let work = lam p. lam seq. lam i.
+    if null seq then None ()
+    else if p (last seq) then Some i
+    else work p (init seq) (subi i 1)
+  in
+  work p seq (subi (length seq) 1)
+
+utest findiLast (lam x. eqi x 5) [4,5,2,5] with Some 3 using optionEq eqi
+utest findiLast (lam x. eqi x 0) [4,1,2] with None () using optionEq eqi
+
+let seqMem : all a. (a -> a -> Bool) -> [a] -> a -> Bool = lam eq. lam xs. lam x.
+  foldl or false (map (eq x) xs)
+
+utest seqMem eqi [1,2,3] 1 with true
+utest seqMem eqi [1,2,3] 0 with false
+utest seqMem eqi [] 0 with false
 
 recursive
   let findMap : all a. all b. (a -> Option b) -> [a] -> Option b = lam f. lam seq.
@@ -782,6 +834,18 @@ utest permute "abc" [1, 2, 0] with "cab"
 utest permute "xy" [0, 1] with "xy"
 utest permute "abcd" [0, 3, 1, 2] with "acdb"
 utest permute [0, 1, 2] [2, 0, 1] with [1, 2, 0]
+
+-- Given a list xs, create a list of all pairs (xs[i], xs[j]) 
+-- where i < j.
+recursive let pairWithLater : all a. [a] -> [(a, a)] = lam lst.
+  match lst with [x] ++ xs then
+    concat (map (lam y. (x, y)) xs) (pairWithLater xs)
+  else 
+    []
+end
+utest pairWithLater [1,2,3] with [(1, 2), (1, 3), (2, 3)] using eqSeq (lam x. lam y. and (eqi x.0 y.0) (eqi x.1 y.1))
+utest pairWithLater [1] with [] using eqSeq (lam x. lam y. and (eqi x.0 y.0) (eqi x.1 y.1))
+utest pairWithLater [] with [] using eqSeq (lam x. lam y. and (eqi x.0 y.0) (eqi x.1 y.1))
 
 
 -- Concatenate a sequence of sequences [s1, s2, ..., sn], interleaving each
