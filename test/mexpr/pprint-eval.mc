@@ -51,7 +51,7 @@ let symeval: Expr -> Expr = lam e: Expr.
 in
 
 foldl (lam. lam sourceAst: Expr.
-  let parseResult = parseMExprString (_defaultBootParserParseMExprStringArg ())
+  let parseResult = parseMExprString defaultBootParserParseMExprStringArg
                                      (expr2str sourceAst)
   in (
     match parseResult with ResultOk {value = parsedAst} then
