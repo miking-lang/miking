@@ -610,44 +610,29 @@ let typestest = _cps "
 utest mexprToString typestest with
 "external e : Float -> Float
 in
-let e =
-  lam k11.
+let e = lam k11.
     lam a1.
-      k11
-        (e
-           a1)
-in
-let f: (Float -> Unknown) -> Float -> Unknown =
-  lam k2.
+      k11 (e a1) in
+let f: (Float -> Unknown) -> Float -> Unknown = lam k2.
     lam x: Float.
-      e
-        k2
-        x
+      e k2 x
 in
 let g: (Float -> Unknown) -> ((Float -> Unknown) -> Float -> Unknown) -> Unknown =
   lam k1.
     lam h: (Float -> Unknown) -> Float -> Unknown.
-      let t =
-        1.
-      in
-      h
-        k1
-        t
+      let t = 1. in
+      h k1 t
 in
 recursive
-  let h: all a. (a -> Unknown) -> a -> Unknown =
-    lam k.
+  let h: all a. (a -> Unknown) -> a -> Unknown = lam k.
       lam y: a.
-        k
-          y
+        k y
 in
 type T
 in
 con C: (all x. (x -> Unknown) -> x -> Unknown) -> T in
-g
-  (lam x.
-     x)
-  f"
+g (lam x.
+     x) f"
 in
 
 ----------------------------

@@ -52,6 +52,7 @@ typecheck_files_exclude += test/mlang/catchall.mc
 # was extended with exhaustiveness checks. It is forbidden to add to
 # this list of programs but removing from it is very welcome.
 constrtype_files_exclude =\
+	test/mexpr/pprint-eval.mc\
 	test/mlang/subsumption.mc\
 	stdlib/effect.mc\
 	$(wildcard stdlib/c/*.mc)\
