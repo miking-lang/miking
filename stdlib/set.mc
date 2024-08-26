@@ -52,13 +52,13 @@ let setOfSeq : all a. (a -> a -> Int) -> [a] -> Set a =
 lam cmp. lam seq.
   foldr setInsert (setEmpty cmp) seq
 
--- `singletonSet cmp x` creates a set containing only the element x
-let singletonSet : all a. (a -> a -> Int) -> a -> Set a 
+-- `setSingleton cmp x` creates a set containing only the element x
+let setSingleton : all a. (a -> a -> Int) -> a -> Set a 
   = lam cmp. lam x.
     setInsert x (setEmpty cmp)
 
-utest setSize (singletonSet subi 1) with 1 
-utest setMem 1 (singletonSet subi 1) with true
+utest setSize (setSingleton subi 1) with 1 
+utest setMem 1 (setSingleton subi 1) with true
 
 -- `setFold f acc s` folds over the values of s with the given function and
 -- initial accumulator
