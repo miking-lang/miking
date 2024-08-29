@@ -66,8 +66,14 @@ let setFold : all a. all acc. (acc -> a -> acc) -> acc -> Set a -> acc =
   lam f. lam acc. lam s.
     mapFoldWithKey (lam acc. lam k. lam. f acc k) acc s
 
+-- Two sets are equal, where equality is determined by the compare function.
+-- Both sets are assumed to have the same equality function.
+let setEq : all a. Set a -> Set a -> Bool = lam m1. lam m2. mapEq (lam. lam. true) m1 m2
+
 -- `setMap cmp f s` maps over the values of s and creates a new set from the 
--- results
+-- results. 
+-- Note that the size of the set can change when multiple 'a's get mapped
+-- to the same 'b'.
 let setMap : all a. all b. (b -> b -> Int) -> (a -> b) -> Set a -> Set b = 
   lam cmp. lam f. lam s.
     mapFoldWithKey 
@@ -76,13 +82,11 @@ let setMap : all a. all b. (b -> b -> Int) -> (a -> b) -> Set a -> Set b =
       s
 
 utest setFold addi 0 (setMap subi (lam x. muli x 2) (setOfSeq subi [1,2,3])) with 12
+utest setMap subi (lam x. x) (setEmpty subi) with setEmpty subi using setEq
+utest setMap subi (lam. 0) (setOfSeq subi [1,2,3]) with setSingleton subi 0 using setEq
 
 -- Transform a set to a sequence.
 let setToSeq : all a. Set a -> [a] = lam s. mapKeys s
-
--- Two sets are equal, where equality is determined by the compare function.
--- Both sets are assumed to have the same equality function.
-let setEq : all a. Set a -> Set a -> Bool = lam m1. lam m2. mapEq (lam. lam. true) m1 m2
 
 -- `setCmp` provides comparison over sets.
 let setCmp : all a. Set a -> Set a -> Int = lam m1. lam m2. mapCmp (lam. lam. 0) m1 m2
