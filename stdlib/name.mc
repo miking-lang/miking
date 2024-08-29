@@ -122,6 +122,13 @@ let _s = gensym ()
 utest nameEqSym _t2 (nameSetSym _t1 _s) with false
 utest nameEqSym (nameSetSym _t2 _s) (nameSetSym _t1 _s) with true
 
+-- `nameRemoveSym` returns a name wit the same string as the argument, but
+-- without an associated symbol.
+let nameRemoveSym : Name -> Name = lam n. (n.0, _noSymbol)
+
+let _t1 = nameSym "Foo"
+utest nameHasSym (nameRemoveSym _t1) with false
+
 
 -- 'nameSetStr n str' returns a new name with string 'str' and
 -- with the symbol of 'n', if it has a symbol.
