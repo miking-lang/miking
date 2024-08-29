@@ -128,7 +128,7 @@ let distExtMap =
     ]),
     ("externalLomaxLogPdf", [
       { expr = "Owl_stats.lomax_logpdf",
-        ty = tyarrows_ [tyfloat_, otylabel_ "scale" tyfloat_, otylabel_ "shape" tyfloat_, tyfloat_],
+        ty = tyarrows_ [tyfloat_, otylabel_ "shape" tyfloat_, otylabel_ "scale" tyfloat_, tyfloat_],
         libraries = ["owl"],
         cLibraries = []
       }
