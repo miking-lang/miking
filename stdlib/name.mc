@@ -127,8 +127,10 @@ utest nameEqSym (nameSetSym _t2 _s) (nameSetSym _t1 _s) with true
 let nameRemoveSym : Name -> Name = lam n. (n.0, _noSymbol)
 
 let _t1 = nameSym "Foo"
+let _t2 = nameNoSym "Foo"
 utest nameHasSym (nameRemoveSym _t1) with false
-
+utest nameEq _t1 _t2 with false 
+utest nameEq (nameRemoveSym _t1) _t2 with true
 
 -- 'nameSetStr n str' returns a new name with string 'str' and
 -- with the symbol of 'n', if it has a symbol.
