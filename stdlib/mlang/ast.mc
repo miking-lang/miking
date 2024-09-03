@@ -330,12 +330,6 @@ lang MLangTopLevel = DeclAst
     decls : [Decl],
     expr : Expr
   }
-
-  sem smap_Prog_Decl : all acc. (acc -> Decl -> (acc, Decl)) -> acc -> MLangProgram -> (acc, MLangProgram)
-  sem smap_Prog_Decl f acc =
-  | prog -> 
-    match mapAccumL f acc prog.decls with (acc, decls) in 
-    (acc, {prog with decls = decls})
 end
 
 
