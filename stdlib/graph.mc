@@ -90,6 +90,59 @@ let graphRemoveVertex: all v. all l. v -> Graph v l -> Graph v l = lam v. lam g.
   -- Remove 'v' itself
   {g with adj = mapRemove v g.adj}
 
+-- Finds the maximal cliques of a given graph using the Bron Kerbosch
+-- algorithm: https://en.wikipedia.org/wiki/Bron%E2%80%93Kerbosch_algorithm.
+-- NOTE(larshum, 2024-05-09): This algorithm solves an NP-hard problem, so it
+-- runs in exponential time.
+let bronKerbosch : all v. all l. Graph v l -> [Set v] = lam g.
+  let cmpv = graphCmpv g in
+  recursive let helper : [Set v] -> Set v -> Set v -> Set v -> [Set v] =
+    lam cliques. lam r. lam p. lam x.
+    if and (setIsEmpty p) (setIsEmpty x) then cons r cliques
+    else
+      let u =
+        match setChoose p with Some u then u
+        else match setChoose x with Some u then u
+        else error "BronKerbosch: Impossible case"
+      in
+      let pmnu = setSubtract p (setOfSeq cmpv (graphNeighbors u g)) in
+      let acc =
+        setFold
+          (lam acc. lam v.
+            match acc with (cliques, p, x) in
+            let nv = setOfSeq cmpv (graphNeighbors v g) in
+            let cliques =
+              helper cliques (setInsert v r) (setIntersect p nv) (setIntersect x nv)
+            in
+            (cliques, setRemove v p, setInsert v x))
+          (cliques, p, x) pmnu
+      in
+      acc.0
+  in
+
+  -- Order the graph vertices by degree, so we can repeatedly select the vertex
+  -- with the minimum degree.
+  let #var"V" = graphVertices g in
+  let vertexDegrees =
+    mapFromSeq cmpv (map (lam v. (v, length (graphNeighbors v g))) #var"V")
+  in
+  let deg = lam v.
+    match mapLookup v vertexDegrees with Some d then d
+    else error "BronKerbosch: Could not find vertex"
+  in
+  let degord = sort (lam v1. lam v2. subi (deg v1) (deg v2)) #var"V" in
+  let acc =
+    foldl
+      (lam acc. lam v.
+        match acc with (cliques, p, x) in
+        let nv = setOfSeq cmpv (graphNeighbors v g) in
+        let r = setOfSeq cmpv [v] in
+        let cliques = helper cliques r (setIntersect p nv) (setIntersect x nv) in
+        (cliques, setRemove v p, setInsert v x))
+      ([], setOfSeq cmpv #var"V", setEmpty cmpv) degord
+  in
+  acc.0
+
 mexpr
 
 let empty = graphEmpty subi eqsym in
@@ -196,5 +249,69 @@ utest
   let g = graphRemoveVertex 0 g in
   (graphVertices g, graphCountEdges g, graphIsAdjacent 1 2 g)
 with ([1,2], 1, true) in
+
+-- Bron Kerbosch tests
+let ppSets = lam l. lam r.
+  let pp = lam s.
+    strJoin ", "
+      (map
+        (lam is. join ["{", strJoin " " (map int2string (setToSeq is)), "}"])
+        (setToSeq s))
+  in
+  join [
+    "  LHS: ", pp l, "\n",
+    "  RHS: ", pp r
+  ]
+in
+
+let g = graphEmpty subi (lam. lam. true) in
+let g = graphAddVertices [1,2,3,4,5,6] g in
+let g = graphAddEdges [
+  (1, 2, ()),
+  (1, 5, ()),
+  (2, 3, ()),
+  (2, 5, ()),
+  (3, 4, ()),
+  (4, 5, ()),
+  (4, 6, ())
+] g in
+let out = setOfSeq setCmp (bronKerbosch g) in
+let expected = setOfSeq setCmp [
+  setOfSeq subi [2, 3],
+  setOfSeq subi [3, 4],
+  setOfSeq subi [4, 5],
+  setOfSeq subi [4, 6],
+  setOfSeq subi [1, 2, 5]
+] in
+utest out with expected using setEq else ppSets in
+
+let g = graphEmpty subi (lam. lam. true) in
+let g = graphAddVertices [1,2,3,4,5,6,7,8,9] g in
+let g = graphAddEdges [
+  (1, 2, ()),
+  (1, 3, ()),
+  (1, 4, ()),
+  (2, 3, ()),
+  (2, 4, ()),
+  (2, 6, ()),
+  (2, 7, ()),
+  (3, 4, ()),
+  (4, 6, ()),
+  (5, 6, ()),
+  (5, 7, ()),
+  (5, 8, ()),
+  (6, 7, ()),
+  (8, 9, ())
+] g in
+let out = setOfSeq setCmp (bronKerbosch g) in
+let expected = setOfSeq setCmp [
+  setOfSeq subi [1,2,3,4],
+  setOfSeq subi [5,6,7],
+  setOfSeq subi [2,6,7],
+  setOfSeq subi [2,4,6],
+  setOfSeq subi [5,8],
+  setOfSeq subi [8,9]
+] in
+utest out with expected using setEq else ppSets in
 
 ()
