@@ -22,6 +22,14 @@ utest and true false with false
 utest and false true with false
 utest and false false with false
 
+-- Logical AND of sequence
+let allb : [Bool] -> Bool = foldl and true
+
+utest allb [true, true, true] with true
+utest allb [false, true, true] with false
+utest allb [true] with true
+utest allb [false] with false
+utest allb [] with true
 
 -- Logical OR
 let or: Bool -> Bool -> Bool =
@@ -31,6 +39,15 @@ utest or true true with true
 utest or true false with true
 utest or false true with true
 utest or false false with false
+
+-- Logical OR of sequence
+let someb : [Bool] -> Bool = foldl or false
+
+utest someb [false, false, false] with false
+utest someb [false, true, true] with true
+utest someb [true] with true
+utest someb [false] with false
+utest someb [] with false
 
 
 -- Logical XOR
