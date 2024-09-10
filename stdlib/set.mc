@@ -87,6 +87,17 @@ let setAny: all a. (a -> Bool) -> Set a -> Bool = lam p. lam s.
 -- `setOfKeys m` returns the keys of `m` as a set.
 let setOfKeys : all k. all v. Map k v -> Set k = lam m. mapMap (lam. ()) m
 
+-- `setFilter p s` creates a new set containing exactly those elements in set `s`
+-- that satisfy predicate `p`.
+let setFilter : all a. (a -> Bool) -> Set a -> Set a = 
+  lam p. lam s. 
+    mapFilterWithKey (lam k. lam. p k) s
+
+utest setFilter (lam. true) (setOfSeq subi [1,2,3]) with (setOfSeq subi [1,2,3]) using setEq 
+utest setIsEmpty (setFilter (lam. false) (setOfSeq subi [1,2,3])) with true 
+utest (setFilter (lam x. eqi (modi x 2) 0) (setOfSeq subi [1,2,3,4,5,6])) 
+  with (setOfSeq subi [2, 4, 6]) using setEq
+
 mexpr
 
 let s = setEmpty subi in
