@@ -235,6 +235,40 @@ utest strTrim " aaaa   " with "aaaa"
 utest strTrim "   bbbbb  bbb " with "bbbbb  bbb"
 utest strTrim "ccccc c\t   \n" with "ccccc c"
 
+-- `strEndsWith str suffix` returns true if `str` ends with the provided `suffix`
+let strEndsWith : String -> String -> Bool
+  = lam str. lam suffix. 
+    let strLen = length str in 
+    let suffixLen = length suffix in 
+    if lti strLen suffixLen then
+      false
+    else
+      eqString (subsequence str (subi strLen suffixLen) strLen) suffix
+
+utest strEndsWith "Something" "thing" with true
+utest strEndsWith "Somethin" "thing" with false
+utest strEndsWith "Kunglinga Tekniska Hogskolan" "an" with true
+utest strEndsWith "short" "muchlonger" with false
+utest strEndsWith "" "xs" with false
+utest strEndsWith "xs" "" with true
+
+
+-- `strStartswith str prefix` returns true if `str` starts with the provided `prefix`
+let strStartsWith : String -> String -> Bool
+  = lam str. lam prefix. 
+    let strLen = length str in 
+    let prefixLen = length prefix in 
+    if lti strLen prefixLen then
+      false
+    else
+      eqString (subsequence str 0 prefixLen) prefix
+
+utest strStartsWith "Something" "Some" with true
+utest strStartsWith "Somethin" "thing" with false
+utest strStartsWith "Kunglinga Tekniska Hogskolan" "K" with true
+utest strStartsWith "short" "muchlonger" with false
+utest strStartsWith "" "xs" with false
+utest strStartsWith "xs" "" with true
 
 
 let stringIsInt = lam s.
