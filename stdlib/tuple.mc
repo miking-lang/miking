@@ -1,3 +1,5 @@
+include "bool.mc"
+
 /-
         This file contains utility functions that operate on tuples.
  -/
@@ -65,3 +67,19 @@ utest
   utest testCmp3 eqi (1, 1, 1) (1, 1, 1) with true in
   ()
   with ()
+
+let fst : all a. all b. (a, b) -> a = lam p. p.0
+utest fst (1, 2) with 1
+utest fst ("whatever", 2) with "whatever"
+
+let snd : all a. all b. (a, b) -> b = lam p. p.1
+utest snd (1, 2) with 2
+utest snd ([1, 2, 3], "whatever") with "whatever"
+
+let tupleEq2 : all a. all b. (a -> a -> Bool) -> (b -> b -> Bool) -> (a, b) -> (a, b) -> Bool
+  = lam eqFst. lam eqSnd. lam lhs. lam rhs. 
+    and (eqFst lhs.0 rhs.0) (eqSnd lhs.1 rhs.1)
+
+utest (tupleEq2 eqf eqi) (1.0, 1) (1.0, 1) with true 
+utest (tupleEq2 eqf eqi) (1.0, 1) (1.0, 12) with false
+utest (tupleEq2 eqf eqi) (1.2, 1) (1.0, 12) with false
