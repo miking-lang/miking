@@ -387,6 +387,12 @@ end
 
 mexpr
 
+-- NOTE(johnwikman, 2024-09-11): Test cases below make use of randIntU within
+-- simulated annealing. Had one of those tests below randomly fail in a manner
+-- which I cannot reproduce, so explicitly setting seed to 0 to make tests
+-- below deterministic.
+setRandSeed 0;
+
 type SearchState = use LocalSearchBase in SearchState in
 type MetaState = use LocalSearchBase in MetaState in
 
