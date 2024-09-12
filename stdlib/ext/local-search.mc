@@ -391,7 +391,7 @@ mexpr
 -- simulated annealing. Had one of those tests below randomly fail in a manner
 -- which I cannot reproduce, so explicitly setting seed to 0 to make tests
 -- below deterministic.
-setRandSeed 0;
+randSetSeed 0;
 
 type SearchState = use LocalSearchBase in SearchState in
 type MetaState = use LocalSearchBase in MetaState in
