@@ -11,6 +11,17 @@ src_files_all_tmp =\
 python_files += stdlib/python/python.mc
 python_files += $(wildcard test/py/*.mc)
 
+# These test cases should eventually include all mcore files.
+# However, since the pipeline is still slow this would add an unacceptable
+# amount of runtime to the tests. Furthermore, the current version still
+# has some issues when compiling certain files.
+mlang_pipeline_files = $(wildcard stdlib/bool.mc)
+mlang_pipeline_files += stdlib/option.mc
+mlang_pipeline_files += stdlib/char.mc
+mlang_pipeline_files += stdlib/seq.mc
+mlang_pipeline_files += stdlib/map.mc
+mlang_pipeline_files += stdlib/mexpr/symbolize.mc
+
 # Exclude the tests in the JVM directory, as they depend on Java being
 # installed.
 # NOTE(larshum, 2023-11-14): Also temporarily exclude the Python boot tests
