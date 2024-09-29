@@ -8,13 +8,14 @@
 -- by putting a DeclSyn or DeclSem at the top-level.
 --
 -- This fragement also extends the MExpr Expr and Type syntax fragments
--- by adding a TmUse and TyUse respectively. 
+-- by adding a TmUse and TyUse respectively.
 --
--- An MLang program consists of a list of Decls and the expression to be 
+-- An MLang program consists of a list of Decls and the expression to be
 -- evaluated.
 
 include "map.mc"
 include "name.mc"
+include "seq.mc"
 include "option.mc"
 include "string.mc"
 include "stringid.mc"
@@ -49,7 +50,7 @@ lang UseAst = Ast
 end
 
 lang TyUseAst = Ast
-  syn Type = 
+  syn Type =
   | TyUse {ident : Name,
            info : Info,
            inty : Type}
@@ -57,7 +58,7 @@ lang TyUseAst = Ast
   sem infoTy =
   | TyUse {info = info} -> info
 
-  sem tyWithInfo info = 
+  sem tyWithInfo info =
   | TyUse t -> TyUse {t with info = info}
 end
 
@@ -65,7 +66,32 @@ end
 lang DeclAst = Ast
   syn Decl = -- intentionally left blank
 
-  sem infoDecl = 
+  sem infoDecl =
+
+  sem smapAccumL_Decl_Decl : all acc. (acc -> Decl -> (acc, Decl)) -> acc -> Decl -> (acc, Decl)
+  sem smapAccumL_Decl_Decl f acc = | d -> (acc, d)
+  sem smapAccumL_Decl_Expr : all acc. (acc -> Expr -> (acc, Expr)) -> acc -> Decl -> (acc, Decl)
+  sem smapAccumL_Decl_Expr f acc = | d -> (acc, d)
+  sem smapAccumL_Decl_Type : all acc. (acc -> Type -> (acc, Type)) -> acc -> Decl -> (acc, Decl)
+  sem smapAccumL_Decl_Type f acc = | d -> (acc, d)
+
+  sem smap_Decl_Decl : (Decl -> Decl) -> Decl -> Decl
+  sem smap_Decl_Decl f = | d -> (smapAccumL_Decl_Decl (lam. lam a. ((), f a)) () d).1
+
+  sem sfold_Decl_Decl : all acc. (acc -> Decl -> acc) -> acc -> Decl -> acc
+  sem sfold_Decl_Decl f acc = | d -> (smapAccumL_Decl_Decl (lam acc. lam a. (f acc a, a)) acc d).0
+
+  sem smap_Decl_Expr : (Expr -> Expr) -> Decl -> Decl
+  sem smap_Decl_Expr f = | d -> (smapAccumL_Decl_Expr (lam. lam a. ((), f a)) () d).1
+
+  sem sfold_Decl_Expr : all acc. (acc -> Expr -> acc) -> acc -> Decl -> acc
+  sem sfold_Decl_Expr f acc = | d -> (smapAccumL_Decl_Expr (lam acc. lam a. (f acc a, a)) acc d).0
+
+  sem smap_Decl_Type : (Type -> Type) -> Decl -> Decl
+  sem smap_Decl_Type f = | d -> (smapAccumL_Decl_Type (lam. lam a. ((), f a)) () d).1
+
+  sem sfold_Decl_Type : all acc. (acc -> Type -> acc) -> acc -> Decl -> acc
+  sem sfold_Decl_Type f acc = | d -> (smapAccumL_Decl_Type (lam acc. lam a. (f acc a, a)) acc d).0
 end
 
 -- DeclLang --
@@ -76,8 +102,13 @@ lang LangDeclAst = DeclAst
               decls : [Decl],
               info : Info}
 
-  sem infoDecl = 
+  sem infoDecl =
   | DeclLang d -> d.info
+
+  sem smapAccumL_Decl_Decl f acc =
+  | DeclLang x ->
+    match mapAccumL f acc x.decls with (acc, decls) in
+    (acc, DeclLang {x with decls = decls})
 end
 
 -- DeclSyn --
@@ -92,10 +123,39 @@ lang SynDeclAst = DeclAst
              includes : [(String, String)],
              info : Info}
 
-  sem infoDecl = 
+  sem infoDecl =
   | DeclSyn d -> d.info
+
+  sem smapAccumL_Decl_Type f acc =
+  | DeclSyn x ->
+    let f = lam acc. lam def.
+      match f acc def.tyIdent with (acc, tyIdent) in
+      (acc, {def with tyIdent = tyIdent}) in
+    match mapAccumL f acc x.defs with (acc, defs) in
+    (acc, DeclSyn {x with defs = defs})
 end
 
+lang SynProdExtDeclAst = DeclAst 
+  syn Decl = 
+  | SynDeclProdExt {ident : Name,
+                    extIdent : Name,
+                    params : [Name],
+                    globalExt : Option Type, 
+                    individualExts : [{ident : Name, tyIdent : Type}],
+                    includes : [(String, String)],
+                    info : Info}
+
+  sem infoDecl =
+  | SynDeclProdExt {info = info} -> info
+
+  sem smapAccumL_Decl_Type f acc =
+  | SynDeclProdExt x ->
+    let f = lam acc. lam def.
+      match f acc def.tyIdent with (acc, tyIdent) in
+      (acc, {def with tyIdent = tyIdent}) in
+    match mapAccumL f acc x.individualExts with (acc, individualExts) in
+    (acc, SynDeclProdExt {x with individualExts = individualExts})
+end
 -- DeclSem --
 lang SemDeclAst = DeclAst
   syn Decl =
@@ -110,8 +170,26 @@ lang SemDeclAst = DeclAst
              includes : [(String, String)],
              info : Info}
 
-  sem infoDecl = 
+  sem infoDecl =
   | DeclSem d -> d.info
+
+  sem smapAccumL_Decl_Type f acc =
+  | DeclSem x ->
+    let farg = lam acc. lam def.
+      match f acc def.tyAnnot with (acc, tyAnnot) in
+      (acc, {def with tyAnnot = tyAnnot}) in
+    match f acc x.tyAnnot with (acc, tyAnnot) in
+    match f acc x.tyBody with (acc, tyBody) in
+    match optionMapAccum (mapAccumL farg) acc x.args with (acc, args) in
+    (acc, DeclSem {x with args = args, tyAnnot = tyAnnot, tyBody = tyBody})
+
+  sem smapAccumL_Decl_Expr f acc =
+  | DeclSem x ->
+    let fcase = lam acc. lam c.
+      match f acc c.thn with (acc, thn) in
+      (acc, {c with thn = thn}) in
+    match mapAccumL fcase acc x.cases with (acc, cases) in
+    (acc, DeclSem {x with cases = cases})
 end
 
 
@@ -124,8 +202,19 @@ lang LetDeclAst = DeclAst
              body : Expr,
              info: Info}
 
-  sem infoDecl = 
+  sem infoDecl =
   | DeclLet d -> d.info
+
+  sem smapAccumL_Decl_Expr f acc =
+  | DeclLet x ->
+    match f acc x.body with (acc, body) in
+    (acc, DeclLet {x with body = body})
+
+  sem smapAccumL_Decl_Type f acc =
+  | DeclLet x ->
+    match f acc x.tyAnnot with (acc, tyAnnot) in
+    match f acc x.tyBody with (acc, tyBody) in
+    (acc, DeclLet {x with tyAnnot = tyAnnot, tyBody = tyBody})
 end
 
 -- DeclType --
@@ -136,8 +225,13 @@ lang TypeDeclAst = DeclAst
               tyIdent : Type,
               info : Info}
 
-  sem infoDecl = 
+  sem infoDecl =
   | DeclType d -> d.info
+
+  sem smapAccumL_Decl_Type f acc =
+  | DeclType x ->
+    match f acc x.tyIdent with (acc, tyIdent) in
+    (acc, DeclType {x with tyIdent = tyIdent})
 end
 
 -- DeclRecLets --
@@ -146,8 +240,25 @@ lang RecLetsDeclAst = DeclAst + RecLetsAst
   | DeclRecLets {bindings : [RecLetBinding],
                  info : Info}
 
-  sem infoDecl = 
-  | DeclRecLets d -> d.info          
+  sem infoDecl =
+  | DeclRecLets d -> d.info
+
+  sem smapAccumL_Decl_Type f acc =
+  | DeclRecLets x ->
+    let fbinding = lam acc. lam b.
+      match f acc b.tyAnnot with (acc, tyAnnot) in
+      match f acc b.tyBody with (acc, tyBody) in
+      (acc, {b with tyAnnot = tyAnnot, tyBody = tyBody}) in
+    match mapAccumL fbinding acc x.bindings with (acc, bindings) in
+    (acc, DeclRecLets {x with bindings = bindings})
+
+  sem smapAccumL_Decl_Expr f acc =
+  | DeclRecLets x ->
+    let fbinding = lam acc. lam b.
+      match f acc b.body with (acc, body) in
+      (acc, {b with body = body}) in
+    match mapAccumL fbinding acc x.bindings with (acc, bindings) in
+    (acc, DeclRecLets {x with bindings = bindings})
 end
 
 -- DeclConDef --
@@ -157,8 +268,13 @@ lang DataDeclAst = DeclAst
                 tyIdent : Type,
                 info : Info}
 
-  sem infoDecl = 
+  sem infoDecl =
   | DeclConDef d -> d.info
+
+  sem smapAccumL_Decl_Type f acc =
+  | DeclConDef x ->
+    match f acc x.tyIdent with (acc, tyIdent) in
+    (acc, DeclConDef {x with tyIdent = tyIdent})
 end
 
 -- DeclUtest --
@@ -172,6 +288,13 @@ lang UtestDeclAst = DeclAst
 
   sem infoDecl =
   | DeclUtest d -> d.info
+
+  sem smapAccumL_Decl_Expr f acc =
+  | DeclUtest x ->
+    match f acc x.test with (acc, test) in
+    match f acc x.expected with (acc, expected) in
+    match optionMapAccum f acc x.tusing with (acc, tusing) in
+    (acc, DeclUtest {x with test = test, expected = expected, tusing = tusing})
 end
 
 -- DeclExt --
@@ -183,7 +306,12 @@ lang ExtDeclAst = DeclAst
              info : Info}
 
   sem infoDecl =
-  | DeclExt d -> d.info             
+  | DeclExt d -> d.info
+
+  sem smapAccumL_Decl_Type f acc =
+  | DeclExt x ->
+    match f acc x.tyIdent with (acc, tyIdent) in
+    (acc, DeclExt {x with tyIdent = tyIdent})
 end
 
 -- DeclInclude --
@@ -193,7 +321,7 @@ lang IncludeDeclAst = DeclAst
                  info : Info}
 
   sem infoDecl =
-  | DeclInclude d -> d.info         
+  | DeclInclude d -> d.info
 end
 
 
@@ -215,7 +343,7 @@ lang MLangAst =
 
   -- Declarations
   + LangDeclAst + SynDeclAst + SemDeclAst + LetDeclAst + TypeDeclAst
-  + RecLetsDeclAst + DataDeclAst + UtestDeclAst + ExtDeclAst + IncludeDeclAst 
-  + TyUseAst
+  + RecLetsDeclAst + DataDeclAst + UtestDeclAst + ExtDeclAst + IncludeDeclAst
+  + TyUseAst + SynProdExtDeclAst
 
 end
