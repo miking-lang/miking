@@ -246,11 +246,18 @@ lang PrettyPrint = IdentifierPrettyPrint
   | ty ->
     match getTypeStringCode 0 env ty with (_,str) in str
 
+  sem kindToString env =
+  | kind ->
+    match getKindStringCode 0 env kind with (_, str) in str
+
   sem expr2str =
   | expr -> exprToString pprintEnvEmpty expr
 
   sem type2str =
   | ty -> typeToString pprintEnvEmpty ty
+
+  sem kind2str = 
+  | kind -> kindToString pprintEnvEmpty kind
 
   -- Helper function for printing parentheses
   sem printParen (indent : Int) (env: PprintEnv) =
