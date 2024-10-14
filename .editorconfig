@@ -1,0 +1,19 @@
+# EditorConfig is awesome: https://editorconfig.org
+
+# top-most EditorConfig file
+root = true
+
+# Default rules
+[*]
+indent_style = space
+indent_size = 2
+end_of_line = lf                # Use Unix line endings
+charset = utf-8
+trim_trailing_whitespace = true
+insert_final_newline = true
+max_line_length = 80            # A line should not have more than this amount
+                                # of chars (not supported by all plugins)
+
+# Makefiles require tabs
+[{Makefile,**.mk}]
+indent_style = tab
