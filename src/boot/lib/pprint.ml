@@ -442,6 +442,8 @@ let rec print_const fmt = function
       fprintf fmt "dprint"
   | CreadLine ->
       fprintf fmt "readLine"
+  | CreadBytes _ ->
+      fprintf fmt "readBytes"
   | CreadBytesAsString ->
       fprintf fmt "readBytesAsString"
   | CreadFile ->

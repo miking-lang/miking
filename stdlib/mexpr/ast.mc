@@ -913,6 +913,7 @@ lang IOAst = ConstAst
   | CFlushStdout {}
   | CFlushStderr {}
   | CReadLine {}
+  | CReadBytes {}
   | CReadBytesAsString {}
 end
 

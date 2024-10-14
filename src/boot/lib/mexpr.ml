@@ -908,6 +908,10 @@ let arity = function
       1
   | CreadLine ->
       1
+  | CreadBytes None ->
+      2
+  | CreadBytes (Some _) ->
+      1
   | CreadBytesAsString ->
       1
   | CreadFile ->
@@ -1880,6 +1884,21 @@ and delta (apply : info -> tm -> tm -> tm) fi c v =
       let tms = Mseq.map (fun n -> TmConst (fi, CChar n)) line in
       TmSeq (fi, tms)
   | CreadLine, _ ->
+      fail_constapp fi
+  | CreadBytes (Some TmRecord (_, r)), TmConst (_, CInt v) ->
+      if v < 0 then
+        raise_error fi
+          "The argument to CreadBytes must be a positive integer"
+      else
+        let str = try really_input_string r v with End_of_file -> "" in
+        let ustr =
+          try Ustring.from_utf8 str
+          with Invalid_argument _ -> raise_error fi "Received invalid UTF-8"
+        in
+        tuple2record fi
+          [ TmSeq (fi, ustring2tmseq fi ustr)
+          ; TmConst (fi, CInt (String.length str)) ]
+  | CreadBytes _, _ ->
       fail_constapp fi
   | CreadBytesAsString, TmConst (_, CInt v) ->
       if v < 0 then

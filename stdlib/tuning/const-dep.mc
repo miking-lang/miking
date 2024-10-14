@@ -168,6 +168,7 @@ lang IODep = ConstDep + IOAst
   | CFlushStdout _ -> [_constDepNone]
   | CFlushStderr _ -> [_constDepNone]
   | CReadLine _ -> [_constDepNone]
+  | CReadBytes _ -> [_constDepData]
   | CReadBytesAsString _ -> [_constDepData]
 end
 

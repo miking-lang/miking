@@ -95,6 +95,7 @@ let builtin =
   ; ("printError", f CprintError)
   ; ("dprint", f Cdprint)
   ; ("readLine", f CreadLine)
+  ; ("readBytes", f (CreadBytes None))
   ; ("readBytesAsString", f CreadBytesAsString)
   ; ( "argv"
     , TmSeq

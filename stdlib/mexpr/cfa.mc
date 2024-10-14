@@ -1381,6 +1381,7 @@ lang IOCFA = CFA + ConstCFA + IOAst
   | CFlushStdout _ -> graph
   | CFlushStderr _ -> graph
   | CReadLine _ -> graph
+  | CReadBytes _ -> graph
   | CReadBytesAsString _ -> graph
 end
 

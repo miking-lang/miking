@@ -898,6 +898,7 @@ lang IOPrettyPrint = IOAst + ConstPrettyPrint
   | CFlushStdout _ -> "flushStdout"
   | CFlushStderr _ -> "flushStderr"
   | CReadLine _ -> "readLine"
+  | CReadBytes _ -> "readBytes"
   | CReadBytesAsString _ -> "readBytesAsString"
 end
 

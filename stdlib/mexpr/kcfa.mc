@@ -1534,6 +1534,7 @@ lang IOKCFA = KCFA + ConstKCFA + IOAst
   | CFlushStdout _ -> []
   | CFlushStderr _ -> []
   | CReadLine _ -> []
+  | CReadBytes _ -> []
   | CReadBytesAsString _ -> []
 end
 

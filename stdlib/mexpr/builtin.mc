@@ -82,6 +82,7 @@ let builtin = use MExprAst in
   , ("flushStdout", CFlushStdout ())
   , ("flushStderr", CFlushStderr ())
   , ("readLine", CReadLine ())
+  , ("readBytes", CReadBytes ())
   , ("readBytesAsString", CReadBytesAsString ())
   , ("argv", CArgv ())
   , ("readFile", CFileRead ())

@@ -54,6 +54,12 @@ external readLine ! : ReadChannel -> (String, Bool)
 let readLine : ReadChannel -> Option String =
   lam rc. match readLine rc with (s, false) then Some s else None ()
 
+-- Reads a given number of bytes from the file.
+-- Returns None if end of file.
+external readBytes ! : ReadChannel -> (String, Bool)
+let readBytes : ReadChannel -> Int -> Option String =
+  lam rc. lam len. match readBytes rc len with (s, false) then Some s else None ()
+
 -- Reads everything in a file and returns the content as a string.
 -- Should support Unicode in the future.
 external readString ! : ReadChannel -> String

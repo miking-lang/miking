@@ -196,6 +196,7 @@ lang IOTypeAst = TyConst + IOAst
   | CFlushStdout _ -> tyarrow_ tyunit_ tyunit_
   | CFlushStderr _ -> tyarrow_ tyunit_ tyunit_
   | CReadLine _ -> tyarrow_ tyunit_ tystr_
+  | CReadBytes _ -> tyarrow_ tyunit_ tyint_ tystr_
   | CReadBytesAsString _ -> tyarrow_ tyint_ (tytuple_ [tystr_, tystr_])
 end
 

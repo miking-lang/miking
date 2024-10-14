@@ -162,6 +162,7 @@ and const =
   | CprintError
   | Cdprint
   | CreadLine
+  | CreadBytes of int Mseq.t option
   | CreadBytesAsString
   | CreadFile
   | CwriteFile of int Mseq.t option
@@ -836,6 +837,7 @@ let const_has_side_effect = function
   | CprintError
   | Cdprint
   | CreadLine
+  | CreadBytes _
   | CreadBytesAsString
   | CreadFile
   | CwriteFile _

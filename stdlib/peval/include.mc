@@ -94,6 +94,7 @@ let builtinsMapping = mapFromSeq cmpString [
     ("flushStdout", "IOAst_CFlushStdout"),
     ("flushStderr", "IOAst_CFlushStderr"),
     ("readLine", "IOAst_CReadLine"),
+    ("readBytes", "IOAst_CReadBytes"),
     ("readBytesAsString", "IOAst_CReadBytesAsString"),
     ("argv", "SysAst_CArgv"),
     ("readFile", "FileOpAst_CFileRead"),

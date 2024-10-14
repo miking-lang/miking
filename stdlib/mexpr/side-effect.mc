@@ -80,7 +80,7 @@ lang ConstSideEffect = ConstSideEffectBase + MExprAst
   | CSplitAt _ | CSubsequence _ -> false
   | CFileRead _ | CFileWrite _ | CFileExists _ | CFileDelete _ -> true
   | CPrint _ | CPrintError _ | CDPrint _ | CFlushStdout _ | CFlushStderr _
-  | CReadLine _ | CReadBytesAsString _ -> true
+  | CReadLine _ | CReadBytes _ __ | CReadBytesAsString _ -> true
   | CRandIntU _ | CRandSetSeed _ -> true
   | CExit _ | CError _ | CArgv _ | CCommand _ -> true
   | CWallTimeMs _ | CSleepMs _ -> true

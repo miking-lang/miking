@@ -792,6 +792,7 @@ utest cmpConst (CDPrint {}) (CDPrint {}) with 0 in
 utest cmpConst (CFlushStdout {}) (CFlushStdout {}) with 0 in
 utest cmpConst (CFlushStderr {}) (CFlushStderr {}) with 0 in
 utest cmpConst (CReadLine {}) (CReadLine {}) with 0 in
+utest cmpConst (CReadBytes {}) (CReadBytes {}) with 0 in
 utest cmpConst (CReadBytesAsString {}) (CReadBytesAsString {}) with 0 in
 
 utest cmpConst (CRandIntU {}) (CRandIntU {}) with 0 in

@@ -156,6 +156,7 @@ lang IOArity = ConstArity + IOAst
   | CFlushStdout _ -> 1
   | CFlushStderr _ -> 1
   | CReadLine _ -> 1
+  | CReadBytes _ -> 2
   | CReadBytesAsString _ -> 1
 end
 
