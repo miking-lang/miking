@@ -54,8 +54,11 @@ external readLine ! : ReadChannel -> (String, Bool)
 let readLine : ReadChannel -> Option String =
   lam rc. match readLine rc with (s, false) then Some s else None ()
 
--- Reads a given number of bytes from the file.
--- Returns None if there is no more content and end of file.
+-- Read the provided number of bytes from a `ReadChannel`.
+-- If there is no more content, `None` is returned.
+-- If the number of remaining bytes is smaller than `len`, 
+-- all remaining bytes are returned. Subsequent calls to `readBytes`
+-- will return `None`.
 external readBytes ! : ReadChannel -> Int -> (String, Bool)
 let readBytes : ReadChannel -> Int -> Option String =
   lam rc. lam len. switch readBytes rc len
