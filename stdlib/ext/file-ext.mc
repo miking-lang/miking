@@ -115,19 +115,19 @@ utest
 with ("Hello", "Next string", "Final", "EOF") in
 
 -- Test reading x amount of characters from the file
-utest
-  match readOpen filename with Some rc then
-    let l1 = match readBytes rc 3 with Some s in s in
-    let l2 = match readBytes rc 4 with Some s in s in
-    let l3 = match readBytes rc 0 with Some s in s in
-    let l4 = match readBytes rc 1 with Some s in s in
-    let l5 = match readBytes rc 1000 with Some s in s in
-    let _end = match readBytes rc 1000 with None () in () in
-    let _end = match readBytes rc 1000 with None () in () in
-    readClose rc;
-    (l1,l2,l3,l4,l5)
-  else error "Error reading file"
-with ("Hel", "lo\nN", "", "e", "xt string\nFinal") in
+match readOpen filename with Some rc then
+  utest readBytes rc 3 with Some "Hel" using optionEq eqString in
+  utest readBytes rc 4 with Some "lo\nN" using optionEq eqString in 
+  utest readBytes rc 0 with Some "" using optionEq eqString in 
+  utest readBytes rc 1 with Some "e" using optionEq eqString in 
+  -- If there are fewer bytes remaining than we requested, all remaining bytes
+  -- are returned.
+  utest readBytes rc 1000 with Some "xt string\nFinal" using optionEq eqString in
+  utest readBytes rc 1000 with None () using optionEq eqString in 
+  utest readBytes rc 1000 with None () using optionEq eqString in 
+  ()
+else 
+  error "File could not be read in tests for readBytes"
 
 -- Check that the file size is correct
 utest fileSize filename with 23 in
