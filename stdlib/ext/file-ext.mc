@@ -55,10 +55,13 @@ let readLine : ReadChannel -> Option String =
   lam rc. match readLine rc with (s, false) then Some s else None ()
 
 -- Reads a given number of bytes from the file.
--- Returns None if end of file.
+-- Returns None if there is no more content and end of file.
 external readBytes ! : ReadChannel -> Int -> (String, Bool)
 let readBytes : ReadChannel -> Int -> Option String =
-  lam rc. lam len. match readBytes rc len with (s, false) then Some s else None ()
+  lam rc. lam len. switch readBytes rc len
+    case ("", true) then None ()
+    case (s, _) then Some s
+  end
 
 -- Reads everything in a file and returns the content as a string.
 -- Should support Unicode in the future.
@@ -114,14 +117,17 @@ with ("Hello", "Next string", "Final", "EOF") in
 -- Test reading x amount of characters from the file
 utest
   match readOpen filename with Some rc then
-    let l1 = match readBytes rc 3 with Some s then s else "" in
-    let l2 = match readBytes rc 4 with Some s then s else "" in
-    let l3 = match readBytes rc 0 with Some s then s else "" in
-    let l4 = match readBytes rc 1 with Some s then s else "" in
+    let l1 = match readBytes rc 3 with Some s in s in
+    let l2 = match readBytes rc 4 with Some s in s in
+    let l3 = match readBytes rc 0 with Some s in s in
+    let l4 = match readBytes rc 1 with Some s in s in
+    let l5 = match readBytes rc 1000 with Some s in s in
+    let _end = match readBytes rc 1000 with None () in () in
+    let _end = match readBytes rc 1000 with None () in () in
     readClose rc;
-    (l1,l2,l3,l4)
-  else ("Error reading file","","","")
-with ("Hel", "lo\nN", "", "e") in
+    (l1,l2,l3,l4,l5)
+  else error "Error reading file"
+with ("Hel", "lo\nN", "", "e", "xt string\nFinal") in
 
 -- Check that the file size is correct
 utest fileSize filename with 23 in
