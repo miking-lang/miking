@@ -143,6 +143,8 @@ utest match readOpen filename with Some rc then
   utest readBytesBuffered rc 0 with Some "" using optionEq eqString in 
   utest readBytesBuffered rc 1 with Some "e" using optionEq eqString in 
   utest readBytesBuffered rc 15 with Some "xt string\nFinal" using optionEq eqString in
+  utest readBytesBuffered rc 1 with None () using optionEq eqString in
+  utest readBytesBuffered rc 1000 with None () using optionEq eqString in
   ()
 else
   error "File could not be read in tests for readBytes"
@@ -152,6 +154,8 @@ with () in
 utest match readOpen filename with Some rc then
   utest readBytesBuffered rc 8 with Some "Hello\nNe" using optionEq eqString in 
   utest readBytesBuffered rc 16 with None () using optionEq eqString in
+  utest readBytesBuffered rc 1 with None () using optionEq eqString in
+  utest readBytesBuffered rc 1000 with None () using optionEq eqString in
   ()
 else 
   error "File could not be read in tests for readBytes"
