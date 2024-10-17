@@ -1,5 +1,6 @@
 
 include "option.mc"
+include "seq.mc"
 
 type WriteChannel
 type ReadChannel
@@ -54,6 +55,36 @@ external readLine ! : ReadChannel -> (String, Bool)
 let readLine : ReadChannel -> Option String =
   lam rc. match readLine rc with (s, false) then Some s else None ()
 
+-- Read the provided number of bytes from a `ReadChannel`.
+-- If there is no more content, `None` is returned.
+-- If the number of remaining bytes is smaller than `len`, 
+-- all remaining bytes are returned. Subsequent calls to `readBytes`
+-- will return `None`.
+external readBytes ! : ReadChannel -> Int -> (String, Int, Bool, Bool)
+-- returns: Option (content, length of content)
+let readBytes : ReadChannel -> Int -> Option (String, Int) = 
+  lam rc. lam len. switch readBytes rc len
+    -- tuple: (Content, length of content, reached EOF, had error)
+    case ("", 0, true, _) then None () -- EOF
+    case (s, l, _, false) then Some (s, l) -- Success
+    case (_, _, _, _) then None () -- Error
+  end
+
+-- returns Option content if the requested number of bytes could be read
+-- otherwise, None is returned
+recursive
+  let readBytesBuffered : ReadChannel -> Int -> Option String =
+    lam rc. lam len. switch readBytes rc len
+      case Some (s, l) then (
+        if eqi l len then Some s
+        else match readBytesBuffered rc (subi len l)
+          with Some s2 then (join [s, s2])
+          else None ()
+      )
+      case None () then None ()
+    end
+  end
+
 -- Reads everything in a file and returns the content as a string.
 -- Should support Unicode in the future.
 external readString ! : ReadChannel -> String
@@ -104,6 +135,31 @@ utest
     (l1,l2,l3,l4)
   else ("Error reading file","","","")
 with ("Hello", "Next string", "Final", "EOF") in
+
+-- Test reading x amount of characters from the file
+(match readOpen filename with Some rc then
+  utest readBytesBuffered rc 3 with Some "Hel" using optionEq eqString in 
+  utest readBytesBuffered rc 4 with Some "lo\nN" using optionEq eqString in 
+  utest readBytesBuffered rc 0 with Some "" using optionEq eqString in 
+  utest readBytesBuffered rc 1 with Some "e" using optionEq eqString in 
+  utest readBytesBuffered rc 15 with Some "xt string\nFinal" using optionEq eqString in
+  utest readBytesBuffered rc 1 with None () using optionEq eqString in
+  utest readBytesBuffered rc 1000 with None () using optionEq eqString in
+  ()
+else
+  error "File could not be read in tests for readBytes"
+);
+
+-- Test reading x amount of characters from the file, but there are fewer characters left than requested
+(match readOpen filename with Some rc then
+  utest readBytesBuffered rc 8 with Some "Hello\nNe" using optionEq eqString in 
+  utest readBytesBuffered rc 16 with None () using optionEq eqString in
+  utest readBytesBuffered rc 1 with None () using optionEq eqString in
+  utest readBytesBuffered rc 1000 with None () using optionEq eqString in
+  ()
+else 
+  error "File could not be read in tests for readBytes"
+);
 
 -- Check that the file size is correct
 utest fileSize filename with 23 in
