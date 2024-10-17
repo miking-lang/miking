@@ -65,8 +65,9 @@ external readBytes ! : ReadChannel -> Int -> (String, Int, Bool, Bool)
 let readBytes : ReadChannel -> Int -> Option (String, Int) = 
   lam rc. lam len. switch readBytes rc len
     -- tuple: (Content, length of content, reached EOF, had error)
-    case (s, l, false, false) then Some (s, l)
-    case (_, _, _, _) then None ()
+    case ("", 0, true, _) then None () -- EOF
+    case (s, l, _, false) then Some (s, l) -- Success
+    case (_, _, _, _) then None () -- Error
   end
 
 -- returns Option content if the requested number of bytes could be read
@@ -135,17 +136,26 @@ utest
   else ("Error reading file","","","")
 with ("Hello", "Next string", "Final", "EOF") in
 
--- Test reading x amount of characters (buffered) from the file
-match readOpen filename with Some rc then
+-- Test reading x amount of characters from the file
+utest match readOpen filename with Some rc then
   utest readBytesBuffered rc 3 with Some "Hel" using optionEq eqString in 
   utest readBytesBuffered rc 4 with Some "lo\nN" using optionEq eqString in 
   utest readBytesBuffered rc 0 with Some "" using optionEq eqString in 
   utest readBytesBuffered rc 1 with Some "e" using optionEq eqString in 
-  -- If there are fewer bytes remaining than we requested, we should get None
-  utest readBytesBuffered rc 1000 with None () using optionEq eqString in
+  utest readBytesBuffered rc 15 with Some "xt string\nFinal" using optionEq eqString in
+  ()
+else
+  error "File could not be read in tests for readBytes"
+with () in
+
+-- Test reading x amount of characters from the file, but there are fewer characters left than requested
+utest match readOpen filename with Some rc then
+  utest readBytesBuffered rc 8 with Some "Hello\nNe" using optionEq eqString in 
+  utest readBytesBuffered rc 16 with None () using optionEq eqString in
   ()
 else 
-  error "File could not be read in tests for readBytes";
+  error "File could not be read in tests for readBytes"
+with () in
 
 -- Check that the file size is correct
 utest fileSize filename with 23 in
