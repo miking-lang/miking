@@ -1,5 +1,6 @@
 
 include "option.mc"
+include "seq.mc"
 
 type WriteChannel
 type ReadChannel
@@ -59,11 +60,28 @@ let readLine : ReadChannel -> Option String =
 -- If the number of remaining bytes is smaller than `len`, 
 -- all remaining bytes are returned. Subsequent calls to `readBytes`
 -- will return `None`.
-external readBytes ! : ReadChannel -> Int -> (String, Bool)
-let readBytes : ReadChannel -> Int -> Option String =
+external readBytes ! : ReadChannel -> Int -> (String, Int, Bool, Bool)
+-- returns: Option (content, length of content)
+let readBytes : ReadChannel -> Int -> Option (String, Int) = 
   lam rc. lam len. switch readBytes rc len
-    case ("", true) then None ()
-    case (s, _) then Some s
+    -- tuple: (Content, length of content, reached EOF, had error)
+    case (s, l, false, false) then Some (s, l)
+    case (_, _, _, _) then None ()
+  end
+
+-- returns Option content if the requested number of bytes could be read
+-- otherwise, None is returned
+recursive
+  let readBytesBuffered : ReadChannel -> Int -> Option String =
+    lam rc. lam len. switch readBytes rc len
+      case Some (s, l) then (
+        if eqi l len then Some s
+        else match readBytesBuffered rc (subi len l)
+          with Some s2 then (join [s, s2])
+          else None ()
+      )
+      case None () then None ()
+    end
   end
 
 -- Reads everything in a file and returns the content as a string.
@@ -117,20 +135,17 @@ utest
   else ("Error reading file","","","")
 with ("Hello", "Next string", "Final", "EOF") in
 
--- Test reading x amount of characters from the file
+-- Test reading x amount of characters (buffered) from the file
 match readOpen filename with Some rc then
-  utest readBytes rc 3 with Some "Hel" using optionEq eqString in
-  utest readBytes rc 4 with Some "lo\nN" using optionEq eqString in 
-  utest readBytes rc 0 with Some "" using optionEq eqString in 
-  utest readBytes rc 1 with Some "e" using optionEq eqString in 
-  -- If there are fewer bytes remaining than we requested, all remaining bytes
-  -- are returned.
-  utest readBytes rc 1000 with Some "xt string\nFinal" using optionEq eqString in
-  utest readBytes rc 1000 with None () using optionEq eqString in 
-  utest readBytes rc 1000 with None () using optionEq eqString in 
+  utest readBytesBuffered rc 3 with Some "Hel" using optionEq eqString in 
+  utest readBytesBuffered rc 4 with Some "lo\nN" using optionEq eqString in 
+  utest readBytesBuffered rc 0 with Some "" using optionEq eqString in 
+  utest readBytesBuffered rc 1 with Some "e" using optionEq eqString in 
+  -- If there are fewer bytes remaining than we requested, we should get None
+  utest readBytesBuffered rc 1000 with None () using optionEq eqString in
   ()
 else 
-  error "File could not be read in tests for readBytes"
+  error "File could not be read in tests for readBytes";
 
 -- Check that the file size is correct
 utest fileSize filename with 23 in
