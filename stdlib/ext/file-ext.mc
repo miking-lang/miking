@@ -137,7 +137,7 @@ utest
 with ("Hello", "Next string", "Final", "EOF") in
 
 -- Test reading x amount of characters from the file
-utest match readOpen filename with Some rc then
+(match readOpen filename with Some rc then
   utest readBytesBuffered rc 3 with Some "Hel" using optionEq eqString in 
   utest readBytesBuffered rc 4 with Some "lo\nN" using optionEq eqString in 
   utest readBytesBuffered rc 0 with Some "" using optionEq eqString in 
@@ -148,10 +148,10 @@ utest match readOpen filename with Some rc then
   ()
 else
   error "File could not be read in tests for readBytes"
-with () in
+);
 
 -- Test reading x amount of characters from the file, but there are fewer characters left than requested
-utest match readOpen filename with Some rc then
+(match readOpen filename with Some rc then
   utest readBytesBuffered rc 8 with Some "Hello\nNe" using optionEq eqString in 
   utest readBytesBuffered rc 16 with None () using optionEq eqString in
   utest readBytesBuffered rc 1 with None () using optionEq eqString in
@@ -159,7 +159,7 @@ utest match readOpen filename with Some rc then
   ()
 else 
   error "File could not be read in tests for readBytes"
-with () in
+);
 
 -- Check that the file size is correct
 utest fileSize filename with 23 in
