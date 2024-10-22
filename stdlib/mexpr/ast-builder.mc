@@ -10,6 +10,9 @@ include "map.mc"
 
 -- Types --
 
+let ityint_ = use IntTypeAst in
+  lam i. TyInt {info = i}
+
 let tyint_ = use IntTypeAst in
   TyInt {info = NoInfo ()}
 
@@ -18,6 +21,9 @@ let ityfloat_ = use FloatTypeAst in
 
 let tyfloat_ = use FloatTypeAst in
   TyFloat {info = NoInfo ()}
+
+let itybool_ = use BoolTypeAst in
+  lam i. TyBool {info = i}
 
 let tybool_ = use BoolTypeAst in
   TyBool {info = NoInfo ()}
@@ -68,6 +74,9 @@ let tyRecord : Info -> [(String, use Ast in Type)] -> use Ast in Type =
   }
 
 let tyrecord_ = tyRecord (NoInfo ())
+
+let itytuple_ = lam i. lam tys.
+  tyRecord i (mapi (lam i. lam ty. (int2string i, ty)) tys)
 
 let tytuple_ = lam tys.
   tyrecord_ (mapi (lam i. lam ty. (int2string i, ty)) tys)
@@ -297,6 +306,10 @@ let ptuple_ = lam ps. patTuple ps (NoInfo ())
 let pseqtot_ = use MExprAst in
   lam ps.
   PatSeqTot {pats = ps, info = NoInfo(), ty = tyunknown_}
+
+let ipseqtot_ = use MExprAst in
+  lam i. lam ps.
+  PatSeqTot {pats = ps, info = i, ty = tyunknown_}
 
 let pstr_ = use MExprAst in
   lam str.
