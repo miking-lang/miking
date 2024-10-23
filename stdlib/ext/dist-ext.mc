@@ -286,6 +286,7 @@ utest geometricSample 0.3 with 0 using geqi in
 -- Testing Beta-Binomial
 utest betabinLogPmf 5 1. 1. 2 with -1.79175946923 using _eqf in
 utest exp (betabinLogPmf 5 1. 1. 3) with 0.166666666667 using _eqf in
+utest betabinPmf 5 1. 1. 3 with 0.166666666667 using _eqf in
 utest betabinSample 20 1. 1. with 0 using intRange 0 20 in
 
 -- Testing seed
