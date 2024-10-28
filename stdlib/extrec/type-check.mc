@@ -117,7 +117,7 @@ lang ExtRecordTypeCheck = TypeCheck + ExtRecordAst +
                               tyConEnv = newTyConEnv,
                               reptypes = env.reptypes} t.inexpr in
     unify env [t.info, infoTm inexpr] (newpolyvar env.currentLvl t.info) (tyTm inexpr);
-    TmRecType {t with inexpr = typeCheckExpr env t.inexpr, 
+    TmRecType {t with inexpr = inexpr, 
                       ty =  tyTm inexpr}
   | TmExtRecord t ->
     match mapLookup t.ident env.extRecordType.defs with Some labelToType in 
