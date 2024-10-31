@@ -5,7 +5,9 @@ lang OptionLang
 
   sem myMap f = 
   | None _ -> None {}
-  | Some s -> Some {val = f s.val}
+  | Some s -> 
+    let val = f s.val in 
+    Some {val = val}
 end
 
 mexpr

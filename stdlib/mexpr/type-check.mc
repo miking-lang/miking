@@ -1415,11 +1415,13 @@ lang DataTypeCheck = TypeCheck + DataAst + FunTypeAst + ResolveType + Substitute
     -- printLn (type2str ty);
     match inspectType ty with TyArrow {to = to} then
       match getTypeArgs to with (TyCon target, _) then
-        if or true disableConstructorTypes then (target.ident, setOfSeq nameCmp [target.ident], ty)
+        -- if or true disableConstructorTypes then (target.ident, setOfSeq nameCmp [target.ident], ty)
+        if disableConstructorTypes then (target.ident, setOfSeq nameCmp [target.ident], ty)
         else
           recursive let substituteData = lam v. lam acc. lam x.
             switch x
-            case TyCon (t & {data = TyUnknown _}) then
+            case TyCon t then
+            -- case TyCon (t & {data = TyUnknown _}) then
               (setInsert t.ident acc, TyCon { t with data = v })
             case TyAlias t then
               match substituteData v acc t.content with (acc, content) in
@@ -1450,6 +1452,9 @@ lang DataTypeCheck = TypeCheck + DataAst + FunTypeAst + ResolveType + Substitute
     let tyIdent = substituteNewReprs env tyIdent in
     match _makeConstructorType t.info env.disableConstructorTypes t.ident tyIdent
     with (target, tydeps, tyIdent) in
+
+    -- printLn (type2str tyIdent);
+
     let tydeps =
       mapInsert target tydeps
         (setFold (lam m. lam t. mapInsert t (setOfSeq nameCmp [target]) m)

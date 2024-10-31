@@ -292,6 +292,8 @@ lang BigPipeline = BigIncludeHandler +
 
     match symbolizeMLang symEnvDefault p with (_, p) in 
 
+    let p = handleConappSugar p in 
+
 
     let res = result.consume (checkCompositionWithOptions defaultCompositionCheckOptions p) in 
     let compositionCheckEnv = 

@@ -3,6 +3,7 @@ include "mexpr/ast.mc"
 
 include "name.mc"
 include "set.mc"
+include "map.mc"
 
 let implicitParamIdent = nameSym "M"
 
@@ -34,9 +35,6 @@ lang InsertImplictRecursionVar = MLangAst + MExprAst
       TyCon {t with data = intyvar_ t.info implicitParamIdent}   
     else if setMem t.ident ctx.sumTypeNames then
       TyCon {t with data = intyvar_ t.info implicitParamIdent}   
-      -- TyApp {info = t.info, 
-            --  lhs = TyCon {t with data = intyvar_ t.info implicitParamIdent},
-            --  rhs = intyvar_ t.info implicitParamIdent}
     else
       ty 
   | ty -> 
@@ -44,6 +42,13 @@ lang InsertImplictRecursionVar = MLangAst + MExprAst
 
   sem insertImplicitParam_Decl : ExtensibleNamesCtx -> Decl -> Decl
   sem insertImplicitParam_Decl ctx =
+  | DeclConDef d -> 
+    let tyIdent = TyAll {info = infoTy d.tyIdent,
+                         ident = implicitParamIdent,
+                         kind = Data {types = mapEmpty nameCmp},
+                         ty = d.tyIdent} in
+    let tyIdent = insertImplicitParam_Type ctx tyIdent in 
+    DeclConDef {d with tyIdent = tyIdent}
   | DeclCosyn d ->
     DeclCosyn {d with params = cons implicitParamIdent d.params,
                       ty = insertImplicitParam_Type ctx d.ty}
