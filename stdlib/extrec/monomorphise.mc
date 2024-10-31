@@ -20,6 +20,9 @@ lang ExtRecMonomorphise = RecordAst + ExtRecordAst + MatchAst +
     let fields = mapFoldWithKey 
       (lam acc. lam label. lam pair.
         match pair with (_, TyAbs {body = ty}) in 
+        recursive let work = lam ty.
+          match ty with TyAbs t then work t.body else ty in 
+        let ty = work ty in 
         let ty = removeExtRecTypes_Type () ty in 
         let ty = TyArrow {info = NoInfo (),
                           from = tyunit_,

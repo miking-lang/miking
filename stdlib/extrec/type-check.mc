@@ -15,6 +15,24 @@ lang TypeAbsAppResolver = TypeAbsAppAst + TypeAbsAst + VarTypeAst
   | ty ->
     smap_Type_Type (_subst name replacement) ty
 
+  sem resolveAll ty =
+  | args -> 
+    foldl 
+      (lam ty. lam mv. resolveTyAbsApp (TyAbsApp {lhs = ty, rhs = mv}))
+      ty
+      args
+
+  sem newParamMetaVars env =
+  | ident ->
+    match mapLookup ident env.tyConEnv with Some (_, params, _) in 
+
+    -- Remove param for recursion var 
+    let params = tail params in 
+
+    map 
+      (lam p. newnmetavar (concat "_" (nameGetStr p)) (Mono ()) env.currentLvl (NoInfo ())) 
+      params
+
   sem resolveTyAbsApp =
   | TyAbsApp {lhs = TyAbs tyAbs, rhs = rhs} ->
     _subst tyAbs.ident rhs tyAbs.body
@@ -154,11 +172,7 @@ lang ExtRecordTypeCheck = TypeCheck + ExtRecordAst +
     let kind = Data {types = kindMap} in 
     let r = newnmetavar "r" kind env.currentLvl (NoInfo ()) in 
 
-    match mapLookup t.ident env.tyConEnv with Some (_, params, _) in 
-    let params = tail params in 
-    let paramMetaVars = map 
-      (lam p. newnmetavar (concat "_" (nameGetStr p)) (Mono ()) env.currentLvl (NoInfo ())) 
-      params in 
+    let paramMetaVars = newParamMetaVars env t.ident in 
 
     let paramMetaVars = cons r paramMetaVars in 
 
@@ -174,8 +188,7 @@ lang ExtRecordTypeCheck = TypeCheck + ExtRecordAst +
                     nameGetStr t.ident,
                     "'!"
                   ]) in 
-      let expectedTy = resolveTyAbsApp (TyAbsApp {lhs = tyAbs, rhs = r}) in
-      let expectedTy = foldl (lam ty. lam mv. resolveTyAbsApp (TyAbsApp {lhs = ty, rhs = mv})) tyAbs paramMetaVars in 
+      let expectedTy = resolveAll tyAbs paramMetaVars in 
       let expectedTy = resolveType t.info env false expectedTy in 
 
       unify env [t.info] (tyTm expr) expectedTy ;
@@ -371,6 +384,9 @@ lang ExtRecordTypeCheck = TypeCheck + ExtRecordAst +
       let typeCheckBinding = lam patEnv. lam. lam pat. typeCheckPat env patEnv pat in 
       match mapMapAccum typeCheckBinding (mapEmpty nameCmp) p.bindings with (patEnv, bindings) in 
 
+      let paramMetaVars = newParamMetaVars env extRec.ident in
+      let paramMetaVars = cons extRec.data paramMetaVars in 
+
       let bindingPairs = mapToSeq bindings in 
       let tcPair = lam accBound. lam pair.
         match pair with (labelSid, pat) in 
@@ -384,7 +400,8 @@ lang ExtRecordTypeCheck = TypeCheck + ExtRecordAst +
                       nameGetStr extRec.ident,
                       "'!"
                      ]) in 
-        let expectedTy = resolveTyAbsApp (TyAbsApp {lhs = tyAbs, rhs = extRec.data}) in 
+        -- let expectedTy = resolveTyAbsApp (TyAbsApp {lhs = tyAbs, rhs = extRec.data}) in 
+        let expectedTy = resolveAll tyAbs paramMetaVars in 
         let expectedTy = resolveType (NoInfo ()) env false expectedTy in 
         unify env [NoInfo ()] ty expectedTy ;
 
@@ -397,12 +414,9 @@ lang ExtRecordTypeCheck = TypeCheck + ExtRecordAst +
       let kind = Data {types = kindMap} in 
       let r = newnmetavar "r" kind env.currentLvl (NoInfo ()) in 
       let ty = TyCon {info = noinfo_, ident = extRec.ident, data = r} in 
+
+      let ty = foldl tyapp_ ty (tail paramMetaVars) in 
       
-      match mapLookup extRec.ident env.tyConEnv with Some (_, params, _) in 
-      let ty = _wrapWithParams env ty (tail params) in 
-
-
-
       (patEnv, PatRecord {p with bindings = bindings, ty = ty})
     in
 
