@@ -300,6 +300,9 @@ lang LangDeclCompiler = DeclCompiler + LangDeclAst + MExprAst + SemDeclAst +
         nstyall_ (head s.params) (data_ baseIdent) ty 
     in
 
+    let conappWrapper : Type -> Type = lam ty.
+      foldl tyapp_ ty (map ntyvar_ (tail s.params)) in 
+
     let tyconApp = TyCon {info = s.info, ident = baseIdent, data = intyvar_ s.info (head s.params)} in 
     -- let tyconApp = foldl (lam acc. lam n. tyapp_ acc (intyvar_ s.info n)) (ntycon_ baseIdent) s.params in 
 
@@ -320,7 +323,7 @@ lang LangDeclCompiler = DeclCompiler + LangDeclAst + MExprAst + SemDeclAst +
                                            info = infoTy def.tyIdent}) in 
         let work = lam ctx. lam sid. lam ty. 
           let label = sidToString sid in 
-          let tyIdent = tyarrow_ (ntycon_ recIdent) ty in 
+          let tyIdent = tyarrow_ (conappWrapper (ntycon_ recIdent)) ty in 
           withExpr ctx (TmRecField {label = label,
                                     tyIdent = forallWrapper tyIdent,
                                     inexpr = uunit_,
@@ -331,7 +334,7 @@ lang LangDeclCompiler = DeclCompiler + LangDeclAst + MExprAst + SemDeclAst +
                          ident = recIdent,
                          data = intyvar_ s.info (head s.params)} in 
         withExpr ctx (TmConDef {ident = def.ident,
-                                tyIdent = forallWrapper (tyarrow_ lhs tyconApp),
+                                tyIdent = forallWrapper (tyarrow_ (conappWrapper lhs) (conappWrapper tyconApp)),
                                 inexpr = uunit_,
                                 ty = tyunknown_,
                                 info = s.info})

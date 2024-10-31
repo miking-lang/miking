@@ -45,7 +45,16 @@ lang ExtRecCollectEnv = MExprAst + ExtRecordAst + MExprPrettyPrint +
       in 
       match work [] tyAll.ty with (params, ty) in 
 
+      recursive let work2 = lam ty. 
+        match ty with TyApp {lhs = lhs} then 
+          work2 lhs 
+        else 
+          ty 
+      in
+
       match ty with TyArrow {from = lhs, to = rhs} then
+        let lhs = work2 lhs in 
+
         match lhs with TyCon {ident = ident} then 
           match mapLookup ident env.defs with Some labelTypeMap then
             -- Update defs
