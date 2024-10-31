@@ -18,6 +18,12 @@ lang TypeAbsAppResolver = TypeAbsAppAst + TypeAbsAst + VarTypeAst
   sem resolveTyAbsApp =
   | TyAbsApp {lhs = TyAbs tyAbs, rhs = rhs} ->
     _subst tyAbs.ident rhs tyAbs.body
+  | ty ->
+    errorSingle [] (join [
+      " * Attempting to resolve a type where the lhs is not a TyAbs, but:\n",
+      " * ",
+      type2str ty
+    ])
 end
 
 lang ExtRecordTypeCheck = TypeCheck + ExtRecordAst + 
@@ -34,8 +40,16 @@ lang ExtRecordTypeCheck = TypeCheck + ExtRecordAst +
   sem _inspectTyWithinAlias : Type -> Type
   sem _inspectTyWithinAlias = 
   | TyAlias {content = content} -> _inspectTyWithinAlias content
+  | TyApp t -> _inspectTyWithinAlias t.lhs
   | ty -> ty
 
+  sem _wrapWithParams env ty = 
+  | [] -> 
+    ty
+  | [h] ++ t ->
+    let var = newnmetavar (nameGetStr h) (Mono ()) env.currentLvl (NoInfo ()) in 
+    _wrapWithParams env (tyapp_ ty var) t
+  
 
   sem _relevantExtensions : TCEnv -> Name -> Set Name
   sem _relevantExtensions env = 
@@ -140,6 +154,14 @@ lang ExtRecordTypeCheck = TypeCheck + ExtRecordAst +
     let kind = Data {types = kindMap} in 
     let r = newnmetavar "r" kind env.currentLvl (NoInfo ()) in 
 
+    match mapLookup t.ident env.tyConEnv with Some (_, params, _) in 
+    let params = tail params in 
+    let paramMetaVars = map 
+      (lam p. newnmetavar (concat "_" (nameGetStr p)) (Mono ()) env.currentLvl (NoInfo ())) 
+      params in 
+
+    let paramMetaVars = cons r paramMetaVars in 
+
     let typeCheckBinding = lam label. lam expr.
       let expr = typeCheckExpr env expr in 
 
@@ -153,6 +175,7 @@ lang ExtRecordTypeCheck = TypeCheck + ExtRecordAst +
                     "'!"
                   ]) in 
       let expectedTy = resolveTyAbsApp (TyAbsApp {lhs = tyAbs, rhs = r}) in
+      let expectedTy = foldl (lam ty. lam mv. resolveTyAbsApp (TyAbsApp {lhs = ty, rhs = mv})) tyAbs paramMetaVars in 
       let expectedTy = resolveType t.info env false expectedTy in 
 
       unify env [t.info] (tyTm expr) expectedTy ;
@@ -166,48 +189,11 @@ lang ExtRecordTypeCheck = TypeCheck + ExtRecordAst +
                     ident = t.ident,
                     data = r} in 
 
+
+    let ty = foldl tyapp_ ty (tail paramMetaVars) in 
+
     TmExtRecord {t with ty = ty,
                         bindings = bindings}
-  | TmExtProject t -> 
-    match mapLookup t.ident env.extRecordType.defs with Some labelToType in 
-    match mapLookup t.ident env.extRecordType.tyDeps with Some tydeps in 
-
-
-    let lhs = typeCheckExpr env t.e in 
-    let actualTy = tyTm lhs in 
-
-    (match mapLookup t.label labelToType with Some _ then 
-       () 
-     else 
-       errorSingle [t.info] (join [
-        "The label '",
-        t.label,
-        "' is not a defined field of the type '",
-        nameGetStr t.ident,
-        "'!"])) ;
-
-    
-    let kindMap = mapMap (lam. {lower = setEmpty nameCmp, upper = None ()}) tydeps in 
-    let kindMap = mapUpdate t.ident (lam. Some {lower = setSingleton nameCmp (nameNoSym t.label), upper = None ()}) kindMap in 
-    -- let kindMap = mapUpdate t.ident (lam. Some {lower = setEmpty nameCmp, upper = Some (setSingleton nameCmp (nameNoSym t.label))}) kindMap in 
-
-    let kind = Data {types = kindMap} in 
-    let r = newnmetavar "r" kind env.currentLvl (NoInfo ()) in 
-
-    let expectedTy = TyCon {ident = t.ident,
-                            data = r, 
-                            info = noinfo_} in 
-
-    unify env [t.info] expectedTy actualTy ;
-
-    match mapLookup t.label labelToType with Some (_, tyAbs) in 
-
-    let ty = resolveTyAbsApp (TyAbsApp {lhs = tyAbs, rhs = r}) in 
-    let ty = resolveType t.info env false ty in
-    
-    printLn (type2str ty) ;
-
-    TmExtProject {t with ty = ty, e = lhs}
   | TmExtExtend t ->
     let e = typeCheckExpr env t.e in 
 
@@ -411,6 +397,12 @@ lang ExtRecordTypeCheck = TypeCheck + ExtRecordAst +
       let kind = Data {types = kindMap} in 
       let r = newnmetavar "r" kind env.currentLvl (NoInfo ()) in 
       let ty = TyCon {info = noinfo_, ident = extRec.ident, data = r} in 
+      
+      match mapLookup extRec.ident env.tyConEnv with Some (_, params, _) in 
+      let ty = _wrapWithParams env ty (tail params) in 
+
+
+
       (patEnv, PatRecord {p with bindings = bindings, ty = ty})
     in
 

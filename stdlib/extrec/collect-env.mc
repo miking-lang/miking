@@ -57,18 +57,18 @@ lang ExtRecCollectEnv = MExprAst + ExtRecordAst + MExprPrettyPrint +
 
         match lhs with TyCon {ident = ident} then 
           match mapLookup ident env.defs with Some labelTypeMap then
-            -- Update defs
-
             let work = lam ty. lam triple.
-              TyAll {info = triple.0,
-                     ident = triple.1,
-                     kind = triple.2,
-                     ty = ty} in 
-            let rhs = foldl work rhs params in 
+              TyAbs {ident = triple.1, 
+                     kind  = triple.2,
+                     body  = ty} in 
 
-            let ty = TyAbs {ident = tyAll.ident,
-                            kind = Mono (),
-                            body = rhs} in 
+            let params = cons (NoInfo(), tyAll.ident, Mono()) params in 
+
+            let ty = foldl work rhs (reverse params) in 
+
+            -- let ty = TyAbs {ident = tyAll.ident,
+            --                 kind = Mono (),
+            --                 body = rhs} in 
             let labelTypeMap = mapInsert t.label (nameNoSym "", ty) labelTypeMap in 
 
             let env = {env with defs = mapInsert ident labelTypeMap env.defs} in 
