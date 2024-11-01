@@ -48,26 +48,39 @@ lang AVLTreeImpl
 
   sem avlRotateRightLeft : all k. all v. k -> v -> AVL k v -> AVL k v -> AVL k v
   sem avlRotateRightLeft k v l =
-  | Node (rt & {l = Node rlt, r = rr}) ->
-    avlCreate rlt.key rlt.value
-      (avlCreate k v l rlt.l)
-      (avlCreate rt.key rt.value rlt.r rr)
-  | Node _ -> error "avlRotateRightLeft: invalid shape of tree"
+  -- | Node (rt & {l = Node rlt, r = rr}) ->
+  | Node rt ->
+    match rt.l with Node rlt then
+      let rr = rt.r in 
+      avlCreate rlt.key rlt.value
+        (avlCreate k v l rlt.l)
+        (avlCreate rt.key rt.value rlt.r rr)
+    else 
+      error "avlRotateRightLeft: invalid shape of tree"
   | Leaf _ -> error "avlRotateRightLeft: empty tree"
 
   sem avlRotateRight : all k. all v. k -> v -> AVL k v -> AVL k v -> AVL k v
   sem avlRotateRight k v r =
-  | Node (lt & {l = ll, r = lr}) ->
+  | Node lt ->
+    let ll = lt.l in 
+    let lr = lt.r in 
     avlCreate lt.key lt.value ll (avlCreate k v lr r)
   | Leaf _ -> error "avlRotateRight: empty tree"
 
   sem avlRotateLeftRight : all k. all v. k -> v -> AVL k v -> AVL k v -> AVL k v
   sem avlRotateLeftRight k v r =
-  | Node (lt & {l = ll, r = Node lrt}) ->
-    avlCreate lrt.key lrt.value
-      (avlCreate lt.key lt.value ll lrt.l)
-      (avlCreate k v lrt.r r)
-  | Node _ -> error "avlRotateLeftRight: invalid shape of tree"
+  | Node lt ->
+    match lt.r with Node lrt then
+      let ll = lt.l in 
+      avlCreate lrt.key lrt.value
+        (avlCreate lt.key lt.value ll lrt.l)
+        (avlCreate k v lrt.r r)
+    else 
+      error "avlRotateLeftRight: invalid shape of tree"
+  -- | Node (lt & {l = ll, r = Node lrt}) ->
+  --   avlCreate lrt.key lrt.value
+  --     (avlCreate lt.key lt.value ll lrt.l)
+  --     (avlCreate k v lrt.r r)
   | Leaf _ -> error "avlRotateLeftRight: empty tree"
 
   -- NOTE(larshum, 2023-03-04): Joins two AVL trees where the provided key is
@@ -183,7 +196,7 @@ lang AVLTreeImpl
     let d = cmp k t.key in
     if lti d 0 then avlJoin t.key t.value (avlInsert cmp k v t.l) t.r
     else if gti d 0 then avlJoin t.key t.value t.l (avlInsert cmp k v t.r)
-    else Node {t with value = v}
+    else Node {key = t.key, value = v, l = t.l, r = t.r, h = t.h}
 
   sem avlRemove : all k. all v. (k -> k -> Int) -> k -> AVL k v -> AVL k v
   sem avlRemove cmp k =

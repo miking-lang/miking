@@ -319,7 +319,7 @@ lang ConNormPat = NPatImpl + DataPat
       (patToNormpat p)
 end
 
-lang RecordNormPat = NPatImpl + RecordPat
+lang RecordNormPat = NPatImpl + RecordPat + ExtRecordPat
   syn SNPat =
   | NPatRecord (Map SID NPat)
 
@@ -360,7 +360,7 @@ lang RecordNormPat = NPatImpl + RecordPat
     }
 
   sem patToNormpat =
-  | PatRecord { bindings = bs } ->
+  | PatRecord { bindings = bs } | PatExtRecord {bindings = bs} ->
     let nested = mapMap (lam p. patToNormpat p) bs in
     let bindings =
       seqMapM (lam kv. map (lam v. (kv.0, v)) kv.1) (mapBindings nested) in

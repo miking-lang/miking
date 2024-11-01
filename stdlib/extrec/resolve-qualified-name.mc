@@ -103,7 +103,10 @@ lang ResolveQualifiedName = MLangAst + RecordTypeAst + QualifiedTypeAst +
   
     {accEnv with langEnvs = mapInsert langIdent innerEnv accEnv.langEnvs}
   | other -> 
-    never
+    errorSingle [infoTy other.tyIdent] (join [
+      " * Expected a record as a constructor payload but got: \n",
+      type2str (other.tyIdent)
+    ])
   
   sem resolveQualifiedNamesWithinLang langIdent staticEnv accEnv = 
   | DeclCosyn d & decl ->

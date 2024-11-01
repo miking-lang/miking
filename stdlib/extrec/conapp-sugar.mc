@@ -7,12 +7,16 @@ include "mexpr/ast.mc"
 include "name.mc"
 include "map.mc"
 
-lang ExtrecConappSugar = MLangAst + MExprAst + ExtRecordAst 
+lang ExtrecConappSugar = MLangAst + MExprAst + ExtRecordAst + ExtRecordPat
   sem handleConappSugar = 
   | prog -> 
     let ctx = foldl (sfold_Decl_Decl collectConappSugarEnv) (mapEmpty nameCmp) prog.decls in 
     let decls = map (handleConappSugar_Decl ctx) prog.decls in 
     let expr = handleConappSugar_Expr ctx prog.expr in 
+
+    let decls = map (insertExtRecordPat_Decl ctx) decls in
+    let expr = insertExtRecordPat_Expr ctx expr in 
+
     {decls = decls, expr = expr}
 
   sem collectConappSugarEnv acc = 
@@ -43,4 +47,43 @@ lang ExtrecConappSugar = MLangAst + MExprAst + ExtRecordAst
       TmConApp app 
   | other -> 
     smap_Expr_Expr (handleConappSugar_Expr ctx) other
+
+  sem insertExtRecordPat_Decl ctx =
+  | decl -> 
+    let decl = smap_Decl_Decl (insertExtRecordPat_Decl ctx) decl in 
+    let decl = smap_Decl_Pat (insertExtRecordPat_Pat ctx) decl in 
+    smap_Decl_Expr (insertExtRecordPat_Expr ctx) decl
+
+  sem insertExtRecordPat_Expr ctx =
+  | expr -> 
+    let expr = smap_Expr_Expr (insertExtRecordPat_Expr ctx) expr in 
+    smap_Expr_Pat (insertExtRecordPat_Pat ctx) expr
+
+  sem insertExtRecordPat_Pat ctx = 
+  -- | PatCon (p1 & {subpat = PatRecord p2}) & pat -> 
+  | PatCon p & pat -> 
+    match mapLookup p.ident ctx with Some ident then
+      PatCon {p with subpat = handleSubpat ctx ident p.subpat}
+      -- let bindings = mapMap (smap_Pat_Pat (insertExtRecordPat_Pat ctx)) p2.bindings in 
+      -- PatCon {p1 with subpat = PatExtRecord {bindings = bindings,
+      --                                        ident = typeIdent,
+      --                                        info = p2.info,
+      --                                        ty = p2.ty}}
+    else
+      smap_Pat_Pat (insertExtRecordPat_Pat ctx) pat
+  | pat -> 
+    smap_Pat_Pat (insertExtRecordPat_Pat ctx) pat
+
+  sem handleSubpat ctx ident = 
+  | PatRecord p -> 
+    let bindings = mapMap (smap_Pat_Pat (insertExtRecordPat_Pat ctx)) p.bindings in 
+    PatExtRecord {bindings = bindings,
+                  ident    = ident,
+                  info     = p.info,
+                  ty       = p.ty} 
+  | pat & (PatOr _ | PatAnd _) ->
+    smap_Pat_Pat (handleSubpat ctx ident) pat
+  | pat ->
+    insertExtRecordPat_Pat ctx pat
+
 end

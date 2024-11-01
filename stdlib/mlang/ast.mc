@@ -78,6 +78,8 @@ lang DeclAst = Ast
   sem smapAccumL_Decl_Expr f acc = | d -> (acc, d)
   sem smapAccumL_Decl_Type : all acc. (acc -> Type -> (acc, Type)) -> acc -> Decl -> (acc, Decl)
   sem smapAccumL_Decl_Type f acc = | d -> (acc, d)
+  sem smapAccumL_Decl_Pat : all acc. (acc -> Pat -> (acc, Pat)) -> acc -> Decl -> (acc, Decl)
+  sem smapAccumL_Decl_Pat f acc = | d -> (acc, d)
 
   sem smap_Decl_Decl : (Decl -> Decl) -> Decl -> Decl
   sem smap_Decl_Decl f = | d -> (smapAccumL_Decl_Decl (lam. lam a. ((), f a)) () d).1
@@ -96,6 +98,12 @@ lang DeclAst = Ast
 
   sem sfold_Decl_Type : all acc. (acc -> Type -> acc) -> acc -> Decl -> acc
   sem sfold_Decl_Type f acc = | d -> (smapAccumL_Decl_Type (lam acc. lam a. (f acc a, a)) acc d).0
+
+  sem smap_Decl_Pat : (Pat -> Pat) -> Decl -> Decl
+  sem smap_Decl_Pat f = | d -> (smapAccumL_Decl_Pat (lam. lam a. ((), f a)) () d).1
+
+  sem sfold_Decl_Pat : all acc. (acc -> Pat -> acc) -> acc -> Decl -> acc
+  sem sfold_Decl_Pat f acc = | d -> (smapAccumL_Decl_Pat (lam acc. lam a. (f acc a, a)) acc d).0
 end
 
 -- DeclLang --
@@ -194,6 +202,14 @@ lang SemDeclAst = DeclAst
     let fcase = lam acc. lam c.
       match f acc c.thn with (acc, thn) in
       (acc, {c with thn = thn}) in
+    match mapAccumL fcase acc x.cases with (acc, cases) in
+    (acc, DeclSem {x with cases = cases})
+    
+  sem smapAccumL_Decl_Pat f acc = 
+  | DeclSem x ->
+    let fcase = lam acc. lam c.
+      match f acc c.pat with (acc, pat) in
+      (acc, {c with pat = pat}) in
     match mapAccumL fcase acc x.cases with (acc, cases) in
     (acc, DeclSem {x with cases = cases})
 end

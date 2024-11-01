@@ -10,9 +10,35 @@ include "set.mc"
 
 lang ExtRecMonomorphise = RecordAst + ExtRecordAst + MatchAst + 
                           MExprAst + MExprPrettyPrint +
-                          TypeAbsAst
+                          TypeAbsAst + ExtRecordPat
 
-  sem monomorphiseExpr : ExtRecEnvType -> Set Name -> Expr -> Expr
+  sem updateNames_expr names = 
+  | expr ->
+    let names = sfold_Expr_Expr updateNames_expr names expr in  
+    sfold_Expr_Pat updateNames_pat names expr 
+
+  sem updateNames_pat names = 
+  | PatExtRecord p -> 
+    let work = lam acc. lam. lam p. 
+      match p with PatNamed {ident = PName n} then 
+        mapInsert n 1 acc 
+      else
+        updateNames_pat acc p
+    in 
+    mapFoldWithKey work names p.bindings 
+  | p ->
+    sfold_Pat_Pat updateNames_pat names p
+
+  sem monomorhpisePat env names =
+  | PatExtRecord p -> 
+    let bindings = mapMap (monomorhpisePat env names) p.bindings in 
+    PatRecord {bindings = bindings,
+               info = p.info,
+               ty = p.ty}
+  | p ->
+    smap_Pat_Pat (monomorhpisePat env names) p
+
+  sem monomorphiseExpr : ExtRecEnvType -> Map Name Int -> Expr -> Expr
   sem monomorphiseExpr env names = 
   | TmRecType t -> 
     match mapLookup t.ident env.defs with Some labelToType in 
@@ -76,8 +102,9 @@ lang ExtRecMonomorphise = RecordAst + ExtRecordAst + MatchAst +
                       info = t.info} in 
     mapFoldWithKey work t.e t.bindings
   | TmVar t & tm -> 
-    if setMem t.ident names then 
-      appf1_ tm (uunit_)
+    match mapLookup t.ident names with Some depth then
+      let units = make depth uunit_ in 
+      appSeq_ tm units 
     else 
       tm
   -- | TmMatch t & tm ->
@@ -99,6 +126,7 @@ lang ExtRecMonomorphise = RecordAst + ExtRecordAst + MatchAst +
   --   else
   --     tm
   | expr -> 
+    let expr = smap_Expr_Pat (monomorhpisePat env names) expr in 
     smap_Expr_Expr (monomorphiseExpr env names) expr
   
   sem _inspectTyWithinAlias2 : Type -> Type

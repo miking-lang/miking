@@ -149,9 +149,32 @@ lang PresenceKindPrettyPrint = PrettyPrint + PresenceKindAst
   | Presence () -> (env, "Presence")
 end
 
+lang PatExtRecordPrettyPrint = PrettyPrint + ExtRecordPat
+  sem getPatStringCode indent env = 
+  | PatExtRecord {ident = ident, bindings = bindings} ->
+    match pprintTypeName env ident with (env, ident) in 
+    if mapIsEmpty bindings then (env, join ["{", ident, " of nothing}"])
+    else match record2tuple bindings with Some pats then
+      match mapAccumL (lam env. lam e. getPatStringCode indent env e) env pats
+      with (env, tuplePats) in
+      let merged =
+        match tuplePats with [e]
+        then concat e ","
+        else strJoin ", " tuplePats in
+      (env, join ["(", merged, ")"])
+    else match
+      mapMapAccum
+        (lam env. lam k. lam v.
+           match getPatStringCode indent env v with (env,str) in
+           (env,join [pprintLabelString k, " = ", str]))
+         env bindings
+    with (env,bindMap) in
+    (env,join ["{", ident, " of ", strJoin ", " (mapValues bindMap), "}"])
+end
+
 
 lang ExtRecPrettyPrint = ExtRecTermPrettyPrint + 
                          TypeAbsPrettyPrint + TypeAbsAppAst + 
                          PresenceKindPrettyPrint + DeclCosemPrettyPrint +
-                         DeclCosynPrettyPrint
+                         DeclCosynPrettyPrint + PatExtRecordPrettyPrint
 end

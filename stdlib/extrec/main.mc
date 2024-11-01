@@ -255,7 +255,9 @@ lang BigPipeline = BigIncludeHandler +
         let expr = handleTypeOf expr in 
         endPhaseStatsExpr log "handle-typeof" expr;
 
-        let expr = monomorphiseExpr tcEnv.extRecordType (deref tcEnv.extPatNames) expr in 
+        let names = deref tcEnv.extPatNames in 
+        let names = updateNames_expr names expr in 
+        let expr = monomorphiseExpr tcEnv.extRecordType names expr in 
         let expr = removeExtRecTypes_Expr () expr in 
         endPhaseStatsExpr log "monomorphise" expr;
 
@@ -293,6 +295,7 @@ lang BigPipeline = BigIncludeHandler +
     match symbolizeMLang symEnvDefault p with (_, p) in 
 
     let p = handleConappSugar p in 
+    printLn (mlang2str p) ;
 
 
     let res = result.consume (checkCompositionWithOptions defaultCompositionCheckOptions p) in 

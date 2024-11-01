@@ -151,3 +151,29 @@ lang TypeAbsAppAst = Ast
     match f acc t.rhs with (acc, rhs) in 
     (acc, TyAbsApp {t with lhs = lhs, rhs = rhs})
 end
+
+lang ExtRecordPat = MatchAst 
+  syn Pat = 
+  | PatExtRecord {ident : Name,
+                  bindings : Map SID Pat,
+                  info : Info, 
+                  ty : Type}
+
+  sem infoPat =
+  | PatExtRecord r -> r.info
+
+  sem withInfoPat info =
+  | PatExtRecord r -> PatExtRecord {r with info = info}
+
+  sem tyPat =
+  | PatExtRecord r -> r.ty
+
+  sem withTypePat (ty : Type) =
+  | PatExtRecord r -> PatExtRecord {r with ty = ty}
+
+  sem smapAccumL_Pat_Pat f acc =
+  | PatExtRecord p ->
+    match mapMapAccum (lam acc. lam. lam p. f acc p) acc p.bindings with (acc, bindings) then
+      (acc, PatExtRecord {p with bindings = bindings})
+    else never
+end

@@ -373,6 +373,24 @@ lang ExtRecordTypeCheck = TypeCheck + ExtRecordAst +
       unify env [infoTm rec] (newrecvar fields env.currentLvl (infoTm rec)) (tyTm rec);
       TmRecordUpdate {t with rec = rec, value = value, ty = tyTm rec}
 
+  sem typeCheckPat env patEnv = 
+  | PatExtRecord t ->
+    let paramMetaVars = newParamMetaVars env t.ident in 
+
+    let typeCheckBinding = lam patEnv. lam. lam pat. typeCheckPat env patEnv pat in
+    match mapMapAccum typeCheckBinding patEnv t.bindings with (patEnv, bindings) in
+
+    let labels : Set Name = setMap nameCmp (lam sid. nameNoSym (sidToString sid)) (setOfKeys t.bindings) in 
+
+    let kind = Data {types = mapSingleton nameCmp t.ident {lower = labels, upper = None ()}} in 
+    let r = newnmetavar "r" kind env.currentLvl noinfo_ in 
+    let ty = TyCon {ident = t.ident, 
+                    data = r,
+                    info = noinfo_} in 
+    let ty = tyapps_ ty paramMetaVars in
+    
+    (patEnv, PatExtRecord {t with bindings = bindings, ty = ty})
+
   sem typeCheckExpr env =
   | TmMatch {pat = PatRecord p} & TmMatch t ->
     let target = typeCheckExpr env t.target in
@@ -430,7 +448,7 @@ lang ExtRecordTypeCheck = TypeCheck + ExtRecordAst +
     (match _inspectTyWithinAlias (tyTm target) with TyCon extRec then
       recursive let f = lam acc. lam p. 
         match p with PatNamed {ident = PName n} then 
-          setInsert n acc
+          mapInsert n 1 acc
         else
           sfold_Pat_Pat f acc p
       in 
