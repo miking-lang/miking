@@ -6,72 +6,79 @@ type ReadChannel
 
 
 -- Returns true if the give file exists, else false
-external fileExists ! : String -> Bool
+external externalFileExists ! : String -> Bool
+let fileExists = lam s. externalFileExists s
 
 -- Deletes the file from the file system. If the file does not
 -- exist, no error is reported. Use function fileExists to check
 -- if the file exists.
-external deleteFile ! : String -> ()
-let deleteFile = lam s. if fileExists s then deleteFile s else ()
+external externalDeleteFile ! : String -> ()
+let deleteFile = lam s. if externalFileExists s then externalDeleteFile s else ()
 
 -- Returns the size in bytes of a given file
 -- If the file does not exist, 0 is returned.
 -- Use function fileExists to check if a file exists.
-external fileSize ! : String -> Int
+external externalFileSize ! : String -> Int
+let fileSize : String -> Int =
+  lam name. externalFileSize name
 
 -- Open a file for writing. Note that we
 -- always open binary channels.
 -- Note: the external function is shadowed. Use the second signature
-external writeOpen ! : String -> (WriteChannel, Bool)
+external externalWriteOpen ! : String -> (WriteChannel, Bool)
 let writeOpen : String -> Option WriteChannel =
-  lam name. match writeOpen name with (wc, true) then Some wc else None ()
+  lam name. match externalWriteOpen name with (wc, true) then Some wc else None ()
 
 -- Write a text string to the output channel
 -- Right now, it does not handle Unicode correctly
 -- It should default to UTF-8
-external writeString ! : WriteChannel -> String -> ()
+external externalWriteString ! : WriteChannel -> String -> ()
 let writeString : WriteChannel -> String -> () =
-  lam c. lam s. writeString c s
+  lam c. lam s. externalWriteString c s
 
 -- Flush output channel
-external writeFlush ! : WriteChannel -> ()
+external externalWriteFlush ! : WriteChannel -> ()
+let writeFlush = lam c. externalWriteFlush c
 
 -- Close a write channel
-external writeClose ! : WriteChannel -> ()
+external externalWriteClose ! : WriteChannel -> ()
+let writeClose = lam c. externalWriteClose c
 
 -- Open a file for reading. Read open either return
 -- Note: the external function is shadowed. Use the second signature
-external readOpen ! : String -> (ReadChannel, Bool)
+external externalReadOpen ! : String -> (ReadChannel, Bool)
 let readOpen : String -> Option ReadChannel =
-  lam name. match readOpen name with (rc, true) then Some rc else None ()
+  lam name. match externalReadOpen name with (rc, true) then Some rc else None ()
 
 -- Reads one line of text. Returns None if end of file.
 -- If a successful line is read, it is returned without
 -- the end-of-line character.
 -- Should support Unicode in the future.
 -- Note: the external function is shadowed. Use the second signature
-external readLine ! : ReadChannel -> (String, Bool)
+external externalReadLine ! : ReadChannel -> (String, Bool)
 let readLine : ReadChannel -> Option String =
-  lam rc. match readLine rc with (s, false) then Some s else None ()
+  lam rc. match externalReadLine rc with (s, false) then Some s else None ()
 
 -- Reads everything in a file and returns the content as a string.
 -- Should support Unicode in the future.
-external readString ! : ReadChannel -> String
+external externalReadString ! : ReadChannel -> String
+let readString = lam c. externalReadString c
 
 -- Closes a channel that was opened for reading
-external readClose ! : ReadChannel -> ()
+external externalReadClose ! : ReadChannel -> ()
+let readClose = lam c. externalReadClose c
 
 -- Standard in read channel
-external stdin ! : ReadChannel
+external externalStdin ! : ReadChannel
+let stdin = externalStdin
 
 -- Standard out write channel
-external stdout ! : WriteChannel
+external externalStdout ! : WriteChannel
+let stdout = externalStdout
 
 -- Standard error write channel
-external stderr ! : WriteChannel
-
-
-
+external externalStderr ! : WriteChannel
+let stderr = externalStderr
 
 mexpr
 
