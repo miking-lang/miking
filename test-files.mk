@@ -104,6 +104,9 @@ run_files_exclude += stdlib/parser-combinators.mc
 run_files_exclude += test/mlang/catchall.mc
 run_files_exclude += test/mlang/mlang.mc
 
+# Programs that we currently cannot interpret/test since externals cannot be tested by interpreter currently.
+external_files_exclude += stdlib/ext/file-ext.mc
+
 # Programs that we should be able to compile/test if we prune utests.
 compile_files_prune =\
 	$(filter-out $(python_files) $(typecheck_files_exclude) $(compile_files_exclude), $(src_files_all))
@@ -116,7 +119,7 @@ compile_files =\
 
 # Programs that we should be able to interpret/test with the interpreter.
 run_files =\
-	$(filter-out $(python_files) $(run_files_exclude) $(typecheck_files_exclude),\
+	$(filter-out $(python_files) $(run_files_exclude) $(typecheck_files_exclude) $(external_files_exclude),\
 		$(src_files_all))
 
 
