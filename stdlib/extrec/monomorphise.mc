@@ -7,7 +7,7 @@ include "mlang/compile.mc"
 include "map.mc"
 include "stringid.mc"
 include "set.mc"
--- am i introducing new lambda terms in this file?
+
 lang ExtRecMonomorphise = RecordAst + ExtRecordAst + MatchAst + 
                           MExprAst + MExprPrettyPrint +
                           TypeAbsAst + ExtRecordPat
