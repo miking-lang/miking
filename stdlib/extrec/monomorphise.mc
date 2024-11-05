@@ -11,35 +11,17 @@ include "set.mc"
 lang ExtRecMonomorphise = RecordAst + ExtRecordAst + MatchAst + 
                           MExprAst + MExprPrettyPrint +
                           TypeAbsAst + ExtRecordPat
-
-  sem updateNames_expr names = 
-  | expr ->
-    let names = sfold_Expr_Expr updateNames_expr names expr in  
-    sfold_Expr_Pat updateNames_pat names expr 
-
-  sem updateNames_pat names = 
+  sem monomorhpisePat env =
   | PatExtRecord p -> 
-    let work = lam acc. lam. lam p. 
-      match p with PatNamed {ident = PName n} then 
-        mapInsert n 1 acc 
-      else
-        updateNames_pat acc p
-    in 
-    mapFoldWithKey work names p.bindings 
-  | p ->
-    sfold_Pat_Pat updateNames_pat names p
-
-  sem monomorhpisePat env names =
-  | PatExtRecord p -> 
-    let bindings = mapMap (monomorhpisePat env names) p.bindings in 
+    let bindings = mapMap (monomorhpisePat env) p.bindings in 
     PatRecord {bindings = bindings,
                info = p.info,
                ty = p.ty}
   | p ->
-    smap_Pat_Pat (monomorhpisePat env names) p
+    smap_Pat_Pat (monomorhpisePat env) p
 
-  sem monomorphiseExpr : ExtRecEnvType -> Map Name Int -> Expr -> Expr
-  sem monomorphiseExpr env names = 
+  sem monomorphiseExpr : ExtRecEnvType -> Expr -> Expr
+  sem monomorphiseExpr env = 
   | TmRecType t -> 
     match mapLookup t.ident env.defs with Some labelToType in 
 
@@ -59,10 +41,10 @@ lang ExtRecMonomorphise = RecordAst + ExtRecordAst + MatchAst +
              -- params = cons mapParamIdent t.params,
             params = t.params,
             tyIdent = TyRecord {info = NoInfo (), fields = fields},
-            inexpr = monomorphiseExpr env names t.inexpr,
+            inexpr = monomorphiseExpr env t.inexpr,
             ty = t.ty,
             info = t.info}
-  | TmRecField t -> monomorphiseExpr env names t.inexpr 
+  | TmRecField t -> monomorphiseExpr env t.inexpr 
   | TmExtRecord t -> 
     match mapLookup t.ident env.defs with Some labelToType in 
 
@@ -80,7 +62,7 @@ lang ExtRecMonomorphise = RecordAst + ExtRecordAst + MatchAst +
     let bindings = map f allLabels in 
     let bindings = mapFromSeq cmpSID bindings in 
 
-    let bindings = mapMap (monomorphiseExpr env names) bindings in 
+    let bindings = mapMap (monomorphiseExpr env) bindings in 
 
     TmRecord {bindings = bindings,
               ty = tyunknown_,
@@ -94,8 +76,8 @@ lang ExtRecMonomorphise = RecordAst + ExtRecordAst + MatchAst +
                       info = t.info} in 
     mapFoldWithKey work t.e t.bindings
   | expr -> 
-    let expr = smap_Expr_Pat (monomorhpisePat env names) expr in 
-    smap_Expr_Expr (monomorphiseExpr env names) expr
+    let expr = smap_Expr_Pat (monomorhpisePat env) expr in 
+    smap_Expr_Expr (monomorphiseExpr env) expr
   
   sem _inspectTyWithinAlias2 : Type -> Type
   sem _inspectTyWithinAlias2 = 
@@ -120,16 +102,6 @@ lang ExtRecMonomorphise = RecordAst + ExtRecordAst + MatchAst +
     TyCon {ident = t.rhs, info = t.info, data = tyunknown_}
   | TyCon t -> 
     TyCon {t with data = tyunknown_}
-  -- | TyApp {lhs = TyCon t, rhs = TyVar _} ->
-  --   TyCon{t with data = tyunknown_}
-  -- | TyApp {rhs = TyVar tyVar} & TyApp t ->
-  --   if eqString (nameGetStr tyVar.ident) "M" then
-  --     removeExtRecTypes_Type env t.lhs 
-  --   else if eqString (nameGetStr tyVar.ident) "ss" then
-  --     removeExtRecTypes_Type env t.lhs 
-  --   else 
-  --     TyApp {t with lhs = removeExtRecTypes_Type env t.lhs,
-  --                   rhs = removeExtRecTypes_Type env t.rhs}
   | TyAll t & ty ->
     match t.kind with Data _ then
       removeExtRecTypes_Type env t.ty
@@ -147,7 +119,4 @@ lang ExtRecMonomorphise = RecordAst + ExtRecordAst + MatchAst +
     Poly ()
   | kind -> 
     smap_Kind_Type (removeExtRecTypes_Type env) kind
-
-
-
 end

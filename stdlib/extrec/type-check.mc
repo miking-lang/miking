@@ -444,19 +444,6 @@ lang ExtRecordTypeCheck = TypeCheck + ExtRecordAst +
       (patEnv, pat)
     in 
 
-    (match _inspectTyWithinAlias (tyTm target) with TyCon extRec then
-      recursive let f = lam acc. lam p. 
-        match p with PatNamed {ident = PName n} then 
-          mapInsert n 1 acc
-        else
-          sfold_Pat_Pat f acc p
-      in 
-      let newValue = foldl f (deref env.extPatNames) (mapValues p.bindings) in 
-      modref env.extPatNames newValue
-    else 
-      ());
-
-
     match res with (patEnv, pat) in 
     unify env [infoTm target, infoPat pat] (tyPat pat) (tyTm target);
 

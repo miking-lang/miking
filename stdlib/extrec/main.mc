@@ -256,9 +256,7 @@ lang BigPipeline = BigIncludeHandler +
         let expr = handleTypeOf expr in 
         endPhaseStatsExpr log "handle-typeof" expr;
 
-        let names = deref tcEnv.extPatNames in 
-        let names = updateNames_expr names expr in 
-        let expr = monomorphiseExpr tcEnv.extRecordType names expr in 
+        let expr = monomorphiseExpr tcEnv.extRecordType expr in 
         let expr = removeExtRecTypes_Expr () expr in 
         endPhaseStatsExpr log "monomorphise" expr;
 
@@ -352,8 +350,7 @@ lang BigPipeline = BigIncludeHandler +
     -- printLn (strJoin "\n" (dumpTypes [] expr));
     -- printLn (expr2str expr);
 
-    -- iter (lam n. printLn (nameGetStr n)) (setToSeq (deref tcEnv.extPatNames)) ;
-    let expr = monomorphiseExpr tcEnv.extRecordType (deref tcEnv.extPatNames) expr in 
+    let expr = monomorphiseExpr tcEnv.extRecordType expr in 
     let expr = removeExtRecTypes_Expr () expr in 
 
     -- printLn " === POST MONOMORPHISATION === ";
