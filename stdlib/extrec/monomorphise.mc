@@ -7,7 +7,7 @@ include "mlang/compile.mc"
 include "map.mc"
 include "stringid.mc"
 include "set.mc"
-
+-- am i introducing new lambda terms in this file?
 lang ExtRecMonomorphise = RecordAst + ExtRecordAst + MatchAst + 
                           MExprAst + MExprPrettyPrint +
                           TypeAbsAst + ExtRecordPat
@@ -50,9 +50,6 @@ lang ExtRecMonomorphise = RecordAst + ExtRecordAst + MatchAst +
           match ty with TyAbs t then work t.body else ty in 
         let ty = work ty in 
         let ty = removeExtRecTypes_Type () ty in 
-        let ty = TyArrow {info = NoInfo (),
-                          from = tyunit_,
-                          to = ty} in 
         mapInsert (stringToSid label) ty acc) 
       (mapEmpty cmpSID)
       labelToType
@@ -66,12 +63,6 @@ lang ExtRecMonomorphise = RecordAst + ExtRecordAst + MatchAst +
             ty = t.ty,
             info = t.info}
   | TmRecField t -> monomorphiseExpr env names t.inexpr 
-  | TmRecordUpdate t & tm -> 
-    match tyTm t.rec with TyCon tyCon then 
-      TmRecordUpdate {t with value = nulam_ (nameNoSym "") t.value,
-                             rec = monomorphiseExpr env names t.rec}
-    else 
-      tm 
   | TmExtRecord t -> 
     match mapLookup t.ident env.defs with Some labelToType in 
 
@@ -80,9 +71,10 @@ lang ExtRecMonomorphise = RecordAst + ExtRecordAst + MatchAst +
 
     let f = lam label.
       if setMem label presentLabels then 
-        match mapLookup label t.bindings with Some e in (stringToSid label, ulam_ "" e)
+        match mapLookup label t.bindings with Some e in
+        (stringToSid label, e)
       else 
-        (stringToSid label, ulam_ "" never_)
+        (stringToSid label, placeholder_)
     in 
 
     let bindings = map f allLabels in 
@@ -97,34 +89,10 @@ lang ExtRecMonomorphise = RecordAst + ExtRecordAst + MatchAst +
     let work = lam acc. lam label. lam expr. 
       TmRecordUpdate {rec = acc, 
                       key = stringToSid label, 
-                      value = nulam_ (nameNoSym "") expr, 
+                      value = expr, 
                       ty = tyunknown_,
                       info = t.info} in 
     mapFoldWithKey work t.e t.bindings
-  | TmVar t & tm -> 
-    match mapLookup t.ident names with Some depth then
-      let units = make depth uunit_ in 
-      appSeq_ tm units 
-    else 
-      tm
-  -- | TmMatch t & tm ->
-  --   printLn "Encountered match!";
-  --   printLn (type2str (_inspectTyWithinAlias2 (tyTm t.target)));
-  --   match _inspectTyWithinAlias2 (tyTm t.target) with TyExtRec extRec then
-  --     printLn "\tEncountered correct Target!";
-  --     match t.pat with PatRecord patRec & p then
-  --       printLn "\t\tEncountered correct pattern!";
-  --       recursive let collectBoundNames = lam acc. lam pat. 
-  --         match pat with PatNamed {ident = PName ident} then setInsert ident acc 
-  --         else sfold_Pat_Pat collectBoundNames acc pat
-  --       in
-  --       let boundNames = collectBoundNames (setEmpty nameCmp) p in 
-  --       iter (lam n. printLn (nameGetStr n)) (setToSeq boundNames) ;
-  --       tm
-  --     else
-  --       errorSingle [t.info] " * This match is too complicated for crude monomorhpization."
-  --   else
-  --     tm
   | expr -> 
     let expr = smap_Expr_Pat (monomorhpisePat env names) expr in 
     smap_Expr_Expr (monomorphiseExpr env names) expr

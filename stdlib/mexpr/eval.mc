@@ -1290,6 +1290,12 @@ lang NotPatEval = MatchEvalBase + NotPat
     match res with Some _ then None () else never
 end
 
+lang PlaceholderEval = PlaceholderAst + Eval + IntAst + IntTypeAst
+  sem eval env =
+  | TmPlaceholder {} -> 
+    TmConst {val = CInt {val = 0}, ty = TyInt {info = NoInfo ()}, info = NoInfo ()} 
+end
+
 -------------------------
 -- MEXPR EVAL FRAGMENT --
 -------------------------
@@ -1307,7 +1313,7 @@ lang MExprEval =
   SymbEval + CmpSymbEval + SeqOpEval + FileOpEval + IOEval + SysEval +
   RandomNumberGeneratorEval + FloatIntConversionEval + CmpCharEval +
   IntCharConversionEval + FloatStringConversionEval + TimeEval + RefOpEval +
-  ConTagEval + TensorOpEval + BootParserEval + UnsafeCoerceEval +
+  ConTagEval + TensorOpEval + BootParserEval + UnsafeCoerceEval + PlaceholderEval + 
 
   -- Patterns
   NamedPatEval + SeqTotPatEval + SeqEdgePatEval + RecordPatEval + DataPatEval +

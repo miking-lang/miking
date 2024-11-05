@@ -418,7 +418,6 @@ lang ExtRecordTypeCheck = TypeCheck + ExtRecordAst +
                       nameGetStr extRec.ident,
                       "'!"
                      ]) in 
-        -- let expectedTy = resolveTyAbsApp (TyAbsApp {lhs = tyAbs, rhs = extRec.data}) in 
         let expectedTy = resolveAll tyAbs paramMetaVars in 
         let expectedTy = resolveType (NoInfo ()) env false expectedTy in 
         unify env [NoInfo ()] ty expectedTy ;

@@ -140,6 +140,7 @@ lang OCamlPrettyPrint =
   | s -> escapeLabelString (sidToString s)
 
   sem isAtomic =
+  | TmPlaceholder _ -> true
   | TmLam _ -> false
   | TmLet _ -> false
   | TmRecLets _ -> false
@@ -427,6 +428,7 @@ lang OCamlPrettyPrint =
 
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
+  | TmPlaceholder _ -> (env, "(Obj.magic ())")
   | TmVar {ident = ident} -> pprintVarName env ident
   | OTmVarExt {ident = ident} -> (env, ident)
   | OTmExprExt {expr = expr} -> (env, expr)

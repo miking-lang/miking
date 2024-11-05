@@ -722,6 +722,25 @@ lang NeverAst = Ast
   | TmNever t -> TmNever {t with ty = ty}
 end
 
+-- TmPlaceholder --
+lang PlaceholderAst = Ast
+  syn Expr = 
+  | TmPlaceholder {ty : Type,
+                   info : Info}
+
+  sem infoTm = 
+  | TmPlaceholder t -> t.info
+
+  sem withInfo info = 
+  | TmPlaceholder t -> TmPlaceholder {t with info = info}
+
+  sem tyTm =
+  | TmPlaceholder t -> t.ty
+
+  sem withType ty = 
+  | TmPlaceholder t -> TmPlaceholder {t with ty = ty}
+end
+
 -- TmExt --
 lang ExtAst = Ast + VarAst
   syn Expr =
@@ -1610,6 +1629,7 @@ lang MExprAst =
   -- Terms
   VarAst + AppAst + LamAst + RecordAst + LetAst + TypeAst + RecLetsAst +
   ConstAst + DataAst + MatchAst + UtestAst + SeqAst + NeverAst + ExtAst +
+  PlaceholderAst +
 
   -- Constants
   IntAst + ArithIntAst + ShiftIntAst + FloatAst + ArithFloatAst + BoolAst +

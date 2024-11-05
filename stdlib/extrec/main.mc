@@ -54,6 +54,7 @@ lang BigPipeline = BigIncludeHandler +
                    BigPrettyPrint + 
                    ExtRecCollectEnv + 
                    BigTypeCheck +
+                   PlaceholderAst + 
                    ExtRecordTypeCheck+ 
                    MLangConstTransformer + 
                    ExtRecMonomorphise + 

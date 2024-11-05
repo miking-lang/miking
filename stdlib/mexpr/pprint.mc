@@ -667,6 +667,14 @@ lang NeverPrettyPrint = PrettyPrint + NeverAst
   | TmNever _ -> (env,"never")
 end
 
+lang PlaceholderPrettyPrint = PrettyPrint + PlaceholderAst
+  sem isAtomic =
+  | TmPlaceholder _ -> true
+
+  sem pprintCode indent env =
+  | TmPlaceholder _ -> (env, "placeholder")
+end
+
 ---------------
 -- CONSTANTS --
 ---------------
@@ -1400,6 +1408,7 @@ lang MExprPrettyPrint =
   RandomNumberGeneratorPrettyPrint + SysPrettyPrint + TimePrettyPrint +
   ConTagPrettyPrint + RefOpPrettyPrint + TensorOpPrettyPrint +
   BootParserPrettyPrint + UnsafeCoercePrettyPrint + TypeOfPrettyPrint + 
+  PlaceholderPrettyPrint + 
 
   -- Patterns
   NamedPatPrettyPrint + SeqTotPatPrettyPrint + SeqEdgePatPrettyPrint +

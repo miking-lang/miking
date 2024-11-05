@@ -1,6 +1,8 @@
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
 
+include "extrec/ast.mc"
+
 type OCamlTopBinding =
   { ident : Name
   , tyBody : use Ast in Type
@@ -338,7 +340,7 @@ lang OCamlAst =
   -- Terms
   VarAst + LamAst + AppAst + LetAst + RecLetsAst + RecordAst + OCamlMatch + OCamlTuple +
   OCamlArray + OCamlData + OCamlRecord + OCamlRecordUpdate + OCamlLabel +
-  OCamlLam +
+  OCamlLam + PlaceholderAst + 
 
   -- Constants
   ArithIntAst + ShiftIntAst + ArithFloatAst + BoolAst + FloatIntConversionAst +

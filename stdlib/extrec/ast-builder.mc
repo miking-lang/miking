@@ -27,3 +27,7 @@ recursive let extrec_bindF_ = use MLangAst in
       f letexpr expr -- Insert at the end of the chain
   ) letexpr expr
 end
+
+let placeholder_ = use PlaceholderAst in 
+  TmPlaceholder {info = NoInfo (), 
+                 ty = tyunknown_}

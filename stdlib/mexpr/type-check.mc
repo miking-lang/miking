@@ -768,7 +768,9 @@ lang TypeCheck = TCUnify + Generalize + RemoveMetaVar
   sem typeCheckExpr : TCEnv -> Expr -> Expr
   sem typeCheckExpr env =
   | tm ->
-    dprint tm; print "\n"; error ""
+    dprint tm;
+    print "\n"; 
+    error "Unmatched term expression in 'typeCheckExpr'"
 end
 
 lang PatTypeCheck = TCUnify
@@ -1614,6 +1616,12 @@ lang NeverTypeCheck = TypeCheck + NeverAst + IsEmpty
       end
 end
 
+lang PlaceholderTypeCheck = TypeCheck + PlaceholderAst
+  sem typeCheckExpr env =
+  | TmPlaceholder t ->
+    TmPlaceholder {t with ty = newpolyvar env.currentLvl t.info}
+end
+
 lang ExtTypeCheck = TypeCheck + ExtAst + ResolveType
   sem typeCheckExpr env =
   | TmExt t ->
@@ -1776,7 +1784,7 @@ lang MExprTypeCheckMost =
   -- Terms
   AppTypeCheck + MatchTypeCheck + ConstTypeCheck + SeqTypeCheck +
   RecordTypeCheck + TypeTypeCheck + DataTypeCheck + UtestTypeCheck +
-  NeverTypeCheck + ExtTypeCheck + 
+  NeverTypeCheck + ExtTypeCheck + PlaceholderTypeCheck +
 
   -- Patterns
   NamedPatTypeCheck + SeqTotPatTypeCheck + SeqEdgePatTypeCheck +
