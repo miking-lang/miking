@@ -310,12 +310,6 @@ lang ExtRecordTypeCheck = TypeCheck + ExtRecordAst +
                           info = NoInfo (),
                           data = newR} in 
 
-    -- printLn "===";
-    -- print "\t";
-    -- printLn (type2str resultTy);
-    -- _dump_datakind (getKind env newR);
-    -- printLn "===";
-
     TmExtExtend {t with e = e, 
                         bindings = bindings,
                         ty = resultTy}
@@ -350,15 +344,20 @@ lang ExtRecordTypeCheck = TypeCheck + ExtRecordAst +
       let kind = Data {types = kindMap} in 
       let r = newnmetavar "r" kind env.currentLvl (NoInfo ()) in 
 
+      let paramMetaVars = newParamMetaVars env extRec.ident in
+      let paramMetaVars = cons r paramMetaVars in 
+
       let expectedTy = TyCon {ident = extRec.ident, 
                               data = r,
                               info = NoInfo ()} in
+
+      let expectedTy = foldl tyapp_ expectedTy (tail paramMetaVars) in
 
       unify env [t.info] expectedTy actualTy ;
 
       match mapLookup label labelToType with Some (_, tyAbs) in 
 
-      let ty = resolveTyAbsApp (TyAbsApp {lhs = tyAbs, rhs = r}) in 
+      let ty = resolveAll tyAbs paramMetaVars in
       let ty = resolveType t.info env false ty in
       
       let value = typeCheckExpr env t.value in 
