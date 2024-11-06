@@ -142,6 +142,28 @@ generate_type_log() {
   done
 }
 
+run_stdlib() {
+  for file in "stdlib/"*.mc
+  do
+    echo "=== $file ==="
+    $COMPILE_EXTREC --output $OUTPUT_LOCATION/stdlib $file > /dev/null 2> /dev/null
+    if [ $? -eq 0 ] 
+    then
+      printf "${GREEN}Compilation successful!\n${NC}"
+      ./$OUTPUT_LOCATION/stdlib > /dev/null 2> /dev/null
+      if [ $? -eq 0 ] 
+      then 
+        printf  "${GREEN}Test Passed}!\n${NC}"
+      else 
+        printf "${RED}Test or Execution Failed!\n${NC}"
+      fi
+    else
+      printf "${RED}Compilation error!\n${NC}"
+    fi
+    rm -f ./$OUTPUT_LOCATION/stdlib
+  done
+}
+
 case $1 in 
   run-test)
     run_test "$2"
@@ -161,6 +183,9 @@ case $1 in
     ;;
   type-csv)
     ill_typed_csv
+    ;;
+  stdlib)
+    run_stdlib
     ;;
   type-log)
     generate_type_log "$2"
