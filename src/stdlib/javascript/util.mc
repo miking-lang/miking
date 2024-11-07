@@ -24,6 +24,7 @@ type CompileJSOptions = {
   targetPlatform : CompileJSTargetPlatform,
   debugMode : Bool,
   generalOptimizations : Bool,
+  output : Option String,
   tailCallOptimizations: Bool
 }
 
@@ -164,6 +165,7 @@ let _binOpM : use JSExprAst in JSBinOp -> [JSExpr] -> JSExpr = use JSExprAst in
 let compileJSOptionsEmpty : CompileJSOptions = {
   targetPlatform = CompileJSTP_Generic (),
   debugMode = false,
+  output = None (),
   generalOptimizations = true,
   tailCallOptimizations = true
 }

@@ -428,7 +428,7 @@ let javascriptCompileFile : use Ast in CompileJSOptions -> Expr -> String -> Str
   lam ast : use Ast in Expr.
   lam sourcePath: String.
   use JSProgPrettyPrint in
-  let targetPath = concat (filepathWithoutExtension sourcePath) ".js" in
+  let targetPath = optionGetOr (concat (filepathWithoutExtension sourcePath) ".js") opts.output in
   let jsprog = javascriptCompile opts ast in   -- Run JS compiler
   let source = printJSProg jsprog in      -- Pretty print
   let intrinsics = join [readFile jsIntrinsicsFile_generic, (
