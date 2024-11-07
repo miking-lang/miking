@@ -237,6 +237,9 @@ lang PrettyPrint = IdentifierPrettyPrint + MExprAst
   sem kind2str = 
   | kind -> kindToString pprintEnvEmpty kind
 
+  sem pat2str = 
+  | pat -> (getPatStringCode 0 pprintEnvEmpty pat).1
+
   -- Helper function for printing parentheses
   sem printParen (indent : Int) (env: PprintEnv) =
   | expr ->

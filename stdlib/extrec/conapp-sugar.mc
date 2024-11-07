@@ -76,7 +76,7 @@ lang ExtrecConappSugar = MLangAst + MExprAst + ExtRecordAst + ExtRecordPat
 
   sem handleSubpat ctx ident = 
   | PatRecord p -> 
-    let bindings = mapMap (smap_Pat_Pat (insertExtRecordPat_Pat ctx)) p.bindings in 
+    let bindings = mapMap (insertExtRecordPat_Pat ctx) p.bindings in 
     PatExtRecord {bindings = bindings,
                   ident    = ident,
                   info     = p.info,

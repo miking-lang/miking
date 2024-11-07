@@ -398,7 +398,20 @@ lang ExtRecordTypeCheck = TypeCheck + ExtRecordAst +
       match mapLookup extRec.ident env.extRecordType.defs with Some labelToType in 
       match mapLookup extRec.ident env.extRecordType.tyDeps with Some tydeps in 
 
-      let typeCheckBinding = lam patEnv. lam. lam pat. typeCheckPat env patEnv pat in 
+      let typeCheckBinding = lam patEnv. lam sid. lam pat. 
+        let label = sidToString sid in
+        match mapLookup label labelToType with Some (_, tyAbs) in
+        recursive let work = lam ty. match ty with TyAbs t then work t.body else ty in 
+        let body = work tyAbs in 
+
+        match (body, pat) with (TyCon {ident = ident}, PatRecord p) then
+          let pat = PatExtRecord {ident = ident, 
+                                  bindings = p.bindings,
+                                  info = p.info,
+                                  ty = p.ty} in
+          typeCheckPat env patEnv pat
+        else
+          typeCheckPat env patEnv pat in 
       match mapMapAccum typeCheckBinding (mapEmpty nameCmp) p.bindings with (patEnv, bindings) in 
 
       let paramMetaVars = newParamMetaVars env extRec.ident in
