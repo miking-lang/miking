@@ -164,6 +164,38 @@ run_stdlib() {
   done
 }
 
+run_patterns() {
+  for file in "test/extrec/pattern-tests/"*.mc
+  do
+    echo "=== $file ==="
+    if [[ $file == *.err.mc ]]; then
+      $COMPILE_EXTREC --output $OUTPUT_LOCATION/patterns $file > /dev/null 2> /dev/null
+      if [ $? -ne 0 ] 
+      then
+        printf "${GREEN}Compilation failed as expected!\n${NC}"
+      else
+        printf "${RED}Compilation succeeded even though the program should not have been well-typed!\n${NC}"
+      fi
+    else    
+      $COMPILE_EXTREC --output $OUTPUT_LOCATION/patterns $file > /dev/null 2> /dev/null
+      if [ $? -eq 0 ] 
+      then
+        printf "${GREEN}Compilation successful!\n${NC}"
+        ./$OUTPUT_LOCATION/patterns > /dev/null 2> /dev/null
+        if [ $? -eq 0 ] 
+        then 
+          printf  "${GREEN}Test Passed!\n${NC}"
+        else 
+          printf "${RED}Test or Execution Failed!\n${NC}"
+        fi
+      else
+        printf "${RED}Compilation error!\n${NC}"
+      fi
+      rm -f ./$OUTPUT_LOCATION/patterns
+    fi
+  done
+}
+
 case $1 in 
   run-test)
     run_test "$2"
@@ -186,6 +218,9 @@ case $1 in
     ;;
   stdlib)
     run_stdlib
+    ;;
+  patterns) 
+    run_patterns
     ;;
   type-log)
     generate_type_log "$2"
