@@ -37,7 +37,7 @@ let symbmap t =
 
 let pprint_symb s = us (Printf.sprintf "%d" (Symb.hash s))
 
-let pprint_named_symb symbmap s = SymbMap.find s symbmap
+let pprint_named_symb symbmap s = Option.value (SymbMap.find_opt s symbmap) ~default:(us "<Missing>")
 
 let pprint_symbset ss =
   us "{"

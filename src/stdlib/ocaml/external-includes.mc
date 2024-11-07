@@ -59,14 +59,10 @@ let globalExternalImplsMap : Map String [ExternalImpl] =
 -- sequence is returned.
 let externalListOcamlPackages : () -> [(String, String)] = lam.
   let res = mapEmpty cmpString in
-  if sysCommandExists "dune" then
-    let tempDir = sysTempDirMake () in
-    match sysRunCommand [
-      "dune", "installed-libraries", "--root", tempDir
-    ] "" "." with
+  if sysCommandExists "ocamlfind" then
+    match sysRunCommand ["ocamlfind", "list"] "" "." with
       {stdout = stdout, returncode = returncode}
     then
-      sysTempDirDelete tempDir ();
       if eqi 0 returncode then
         -- Format is: `name (version: info)` delimited by newline
         let pkgs = map (strSplit "(version: ") (strSplit "\n" stdout) in
@@ -77,7 +73,7 @@ let externalListOcamlPackages : () -> [(String, String)] = lam.
       else
         printError
           (join
-            ["externalListOcamlPackages: failed to run `dune installed-libraries`",
+            ["externalListOcamlPackages: failed to run `ocamlfind list`",
              " cannot automatically find ocaml packages available the system\n"]);
         flushStderr;
         []
@@ -85,7 +81,7 @@ let externalListOcamlPackages : () -> [(String, String)] = lam.
   else
     printError
       (join
-        ["externalListOcamlPackages: dune not in PATH, cannot",
+        ["externalListOcamlPackages: ocamlfind not in PATH, cannot",
          " automatically find ocaml packages available the system\n"]);
     flushStderr;
     []

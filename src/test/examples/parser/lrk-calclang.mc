@@ -190,7 +190,9 @@ end
     ]),
     ""
   ] in
-  let fname = "lrk-calclang-gen.mc" in
+  let fname = match argv with [_, fname] ++ _
+    then fname
+    else "lrk-calclang-gen.mc" in
   match fileWriteOpen fname with Some wc then
     fileWriteString wc program;
     printLn (join ["Generated parser as \"", fname, "\""])

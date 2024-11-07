@@ -15,11 +15,11 @@ utest classify (false, false) with "four" in
 -- the following expression should give a type error.
 -- utest classify (true, true, true) with "five" in
 
-let uncurry = lam f. lam x : (a, b).
+let uncurry = lam f. lam x : (Unknown, Unknown).
   match x with (a, b) then f a b else error "bad" in
 utest uncurry addi (1, 2) with 3 in
 
-let weird = lam x : (([a], [a]), ([a], [a])).
+let weird = lam x : (([Unknown], [Unknown]), ([Unknown], [Unknown])).
   match x with ((a, b), (c, d)) then
     concat (concat a b) (concat c d)
   else error "bad" in

@@ -4,7 +4,7 @@
 include "sys.mc"
 include "option.mc"
 
-let stdlibCwd = join [sysGetCwd (), "/stdlib"]
+let stdlibCwd = join [sysGetCwd (), "/src/stdlib"]
 
 let stdlibLocUnix =
   match sysGetEnv "HOME" with Some path then

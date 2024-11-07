@@ -47,7 +47,7 @@ if [ $useTup -eq 1 ]; then
   fi
   mapfile -t args < "$tmp"
   rm "$tmp"
-  exec tup "${args[@]}"
+  exec tup -k "${args[@]}"
 else
   echo "Using 'make' as a test runner"
   exec make -f <(misc/test-spec --make "$@")

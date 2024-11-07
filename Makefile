@@ -45,19 +45,14 @@ clean:
 	bash -c 'mapfile -t args < <(misc/repo-ignored-files build); rm -rf "$${args[@]}"'
 	find build -depth -type d -empty -delete
 
-.PHONY: env
-env:
-	$(SET_OCAMLPATH) env
-
 
 # The OCaml library and executables (`boot`)
 
 .PHONY: boot
-boot: build/$(BOOT_NAME)
-build/$(BOOT_NAME): $(shell find src/boot/ -type f)
+boot:
 	misc/with-tmp-dir dune build --root=src/boot/ --build-dir="{}" \
 	"&&" dune install --root=src/boot/ --build-dir="{}" --prefix=$(current_dir)/build ">/dev/null" "2>&1"
-	mv $(current_dir)"/build/bin/boot" $@
+	mv $(current_dir)"/build/bin/boot" build/$(BOOT_NAME)
 	rm -f $(current_dir)"/build/lib/boot/dune-package"
 
 .PHONY: install-boot
@@ -84,31 +79,24 @@ fix:
 # Bootstrapping the `mi` executable
 
 .PHONY: bootstrap
-bootstrap: build/$(MI_NAME)
-
-build/$(MI_LITE_NAME): build/$(BOOT_NAME)
-	$(SET_STDLIB) $(SET_OCAMLPATH) time build/$(BOOT_NAME) eval src/main/mi-lite.mc -- 0 src/main/mi-lite.mc build/$(MI_LITE_NAME)
-
-build/$(MI_MID_NAME): build/$(MI_LITE_NAME)
-	$(SET_STDLIB) $(SET_OCAMLPATH) time build/$(MI_LITE_NAME) 1 src/main/mi.mc build/$(MI_MID_NAME)
-
-build/$(MI_NAME): build/$(MI_MID_NAME)
-	$(SET_STDLIB) $(SET_OCAMLPATH) time build/$(MI_MID_NAME) compile src/main/mi.mc --output build/$(MI_NAME)
+bootstrap: $(if $(wildcard build/$(BOOT_NAME)),,boot)
+	$(SET_STDLIB) $(SET_OCAMLPATH) build/$(BOOT_NAME) eval src/main/mi-lite.mc -- 0 src/main/mi-lite.mc build/$(MI_LITE_NAME)
+	$(SET_STDLIB) $(SET_OCAMLPATH) build/$(MI_LITE_NAME) 1 src/main/mi.mc build/$(MI_MID_NAME)
+	$(SET_STDLIB) $(SET_OCAMLPATH) build/$(MI_MID_NAME) compile src/main/mi.mc --output build/$(MI_NAME)
 
 .PHONY: cheat
-cheat: build/$(MI_CHEAT_NAME)
-build/$(MI_CHEAT_NAME): build/$(BOOT_NAME)
-	$(SET_STDLIB) $(SET_OCAMLPATH) time mi compile src/main/mi.mc --output build/$(MI_CHEAT_NAME)
+cheat:
+	$(SET_STDLIB) $(SET_OCAMLPATH) mi compile src/main/mi.mc --output build/$(MI_CHEAT_NAME)
 
 
 # Installing and uninstalling `mi` and the standard library
 
 .PHONY: install
-install: build/$(MI_NAME) install-boot
-	rm -rf $(mcoredir)/stdlib || true
+install: $(if $(wildcard build/$(MI_NAME)),,bootstrap) install-boot
 	mkdir -p $(bindir) $(mcoredir)
-	cp -rf src/stdlib $(mcoredir)
 	cp -f build/$(MI_NAME) $(bindir)
+	rm -rf $(mcoredir)/stdlib || true
+	cp -rf src/stdlib $(mcoredir)
 
 .PHONY: uninstall
 uninstall:

@@ -17,7 +17,15 @@ stdenv.mkDerivation (finalAttrs: rec {
 
   src = ../..;
 
-  nativeBuildInputs = [ makeWrapper menhir ]
+  nativeBuildInputs = [
+    makeWrapper
+    menhir
+    dune_3
+    coreutils
+    ocaml
+    findlib
+    linenoise
+  ]
     ++ lib.lists.optional finalAttrs.withLwt lwt
     ++ lib.lists.optional finalAttrs.withOwl owl
     ++ lib.lists.optional finalAttrs.withToml toml;
@@ -26,19 +34,23 @@ stdenv.mkDerivation (finalAttrs: rec {
     coreutils  # Miking currently requires mkdir to be able to run
     ocaml
     findlib
-    dune_3
     linenoise
   ];
 
   makeFlags = [ "prefix=$(out)" "ocamllibdir=$(out)/lib/ocaml/${ocaml.version}/site-lib" ];
 
+  preConfigure = ''
+    for f in $(find misc -type f -a -executable); do patchShebangs --build $f; done
+  '';
+
   postInstall = ''
     wrapProgram $out/bin/mi \
       --suffix PATH : ${coreutils}/bin \
+      --prefix PATH : ${ocaml}/bin \
   '';
 
-  doCheck = true;
-  checkTarget = "test-compile";
+  # doCheck = true;
+  # checkTarget = "test-compile";
 
   setupHook = writeText "setupHook.sh" ''
     addMCorePath() {

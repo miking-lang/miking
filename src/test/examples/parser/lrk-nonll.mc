@@ -99,13 +99,12 @@ case ResultOk {value = lrtable} then
     ]),
     ""
   ] in
-  let fname = "lrk-nonll-gen.mc" in
+  let fname = match argv with [_, fname] ++ _
+    then fname
+    else "lrk-nonll-gen.mc" in
   match fileWriteOpen fname with Some wc then
     fileWriteString wc program;
     printLn (join ["Generated parser as \"", fname, "\""])
   else
     printLn (join ["Could not open the file \"", fname, "\""])
 end
-
-
-

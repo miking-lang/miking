@@ -3,7 +3,7 @@
 
 include "string.mc"
 
-external extTestListConcatMap : (a -> [b]) -> [a] -> [b]
+external extTestListConcatMap : all a. all b. (a -> [b]) -> [a] -> [b]
 
 mexpr
 let x = extTestListConcatMap (lam x. [addi x 1]) [1, 2] in

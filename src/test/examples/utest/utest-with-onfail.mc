@@ -4,7 +4,6 @@ mexpr
 
 let eq = lam l. lam r. eqi 0 (string2int r) in
 let toString = lam l. lam r.
-  lam l. lam r.
     join ["left hand: ", int2string l, ", right hand: \"", r, "\""]
 in
 

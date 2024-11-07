@@ -83,11 +83,14 @@ con SuffixFile : String -> File
 type MarkApi =
   { mark : NormalTasks -> [Path] -> ()
   , glob : [String] -> Subdirs -> File -> [Path]
+  , strsToPaths : [String] -> [Path]
   }
 type TestApi =
-  { mi : { m : MidCmd, e : EndCmd, f : EndCmd }
-  , sh : { m : MidCmd, e : EndCmd, f : EndCmd }
+  { mid : MidCmd
+  , success : EndCmd
+  , fail : EndCmd
   , glob : [String] -> Subdirs -> File -> [Path]
+  , strsToPaths : [String] -> [Path]
   }
 
 -- Example:
@@ -126,30 +129,25 @@ type TestCollection =
   , checkCondition : () -> ConditionStatus
 
   -- Setup new tests that do not follow the normal testing
-  -- strategy. Two functions are available for adding build/test
-  -- steps:
+  -- strategy. There are three functions for adding steps:
   --
-  -- * `mi`, for invoking the correct `mi`, since there are multiple
-  --   versions that could be used, and we must also setup where to
-  --   look for the standard library. The `String` argument is the
-  --   command to use, e.g., `compile --test %i --output %o`.
-  -- * `sh`, for running anything else, e.g., `sort %i | uniq > %o`.
+  -- * `mid`, for producing intermediate results, e.g., compiled
+  --   executables. The `String` argument is the command to use, e.g.,
+  --   `%m compile --test %i --output %o` (see later for %-syntax).
+  -- * `success`, for running a command that should succeed.
+  -- * `fail`, for running a command that should fail (non-zero
+  --   exit-code).
   --
-  -- Both of these come in three versions:
-  --
-  -- * `m` for `mid`, a command that takes one input and produces one
-  --   output. `%i` and `%o` will be replaced by the input and output,
-  --   respectively.
-  -- * `e` for `end`, a command that takes one input and produces no
-  --   output; all information we care about is printed to
-  --   stdout/stderr or in the return code.
-  -- * `f` for `fail`, a command that takes one input and produces no
-  --   input, and is expected to fail, as reported by the return code.
+  -- All of these take one file as input. `mid` produces one file as
+  -- output, the others should produce no files
   --
   -- Other useful information:
   --
   -- * `%i` and `%o` are replaced by the input and the output
-  --   respectively. There is presently no way to escape these.
+  --   respectively. `%%` is replaced with a single `%`, if required.
+  -- * `%m` is replaced with the appropriate incantation for invoking
+  --   `mi` (choosing between installed, bootstrapped, or cheated, as
+  --   well as setting environment flags and the like).
   -- * All commands are run with the current working directory set to
   --   the root of the repository, i.e., scripts in `misc` are readily
   --   available.
@@ -161,11 +159,7 @@ type TestCollection =
   , newTests : TestApi -> ()
   }
 
--- Small helper to setup a test collection. Example usage:
--- { testColl "foo"
---   with conditionalInclusions = lam add.
---     add defaultTasks (glob "stdlib/foo/**/*.mc")
--- }
+-- Small helper to setup a test collection.
 let testColl : String -> TestCollection = lam name.
   { name = name
   , exclusions = lam. ()
@@ -269,6 +263,15 @@ let _cmpPath : Path -> Path -> Int = lam a. lam b.
     tupleCmp2 (seqCmp cmpString) cmpString a.orig.path b.orig.path
   end
 
+let excludePaths : [Path] -> [String] -> [Path] = lam paths. lam toExclude.
+  let toExclude = foldl
+    (lam s. lam p.
+      match strSplit "/" p with dirs ++ [file] in
+      setInsert (OrigPath {path = (cons "src" dirs, file)}) s)
+    (setEmpty _cmpPath)
+    toExclude in
+  setToSeq (setSubtract (setOfSeq _cmpPath paths) toExclude)
+
 let _glob
   : { root : String
     , glob : Glob
@@ -326,13 +329,14 @@ let _unionTasks : NormalTasks -> NormalTasks -> NormalTasks = lam a. lam b.
   , run = _maxER a.run b.run
   }
 
-let _expandFormat : String -> {i : String, o : String} -> String = lam format. lam data.
+let _expandFormat : String -> {i : String, o : String, m : String} -> String = lam format. lam data.
   recursive let work : String -> String -> String = lam acc. lam str.
     switch str
     case "" then acc
     case "%%" ++ str then work (snoc acc '%') str
     case "%i" ++ str then work (concat acc data.i) str
     case "%o" ++ str then work (concat acc data.o) str
+    case "%m" ++ str then work (concat acc data.m) str
     case [c] ++ str then work (snoc acc c) str
     end
   in work "" format
@@ -444,7 +448,7 @@ let testMain : [TestCollection] -> () = lam colls.
         pathBasename p in
       ({src = srcDir, root = strJoin "/" (map (lam. "..") dirs)}, pathToString)
     else
-      ({src = concat root "/src/", root = root}, lam p. strJoin "/" (snoc (pathDirs p) (pathBasename p)))
+      ({src = concat root "/src", root = root}, lam p. strJoin "/" (snoc (pathDirs p) (pathBasename p)))
   with (commandPath, pathToString) in
 
   let globBase =
@@ -457,6 +461,10 @@ let testMain : [TestCollection] -> () = lam colls.
     } in
   let glob = lam dirs. lam subs. lam file.
     _glob {globBase with glob = {dirs = dirs, subdirs = subs, file = file}} in
+  let strsToPaths = lam strs.
+    joinMap
+      (lam str. match strSplit "/" str with dirs ++ [file] in glob dirs (OnlyHere ()) (ExactFile file))
+      strs in
 
   -- NOTE(vipa, 2023-03-30): Check the validity of the requested sets
   let argColls : Set String = setOfSeq cmpString argColls in
@@ -486,6 +494,11 @@ let testMain : [TestCollection] -> () = lam colls.
       end in
     mapUnion explicitColls smartColls in
   let unchosenColls = mapDifference colls chosenColls in
+  (match options.mode with !TupRules _ then
+    printError (join ["Included collections: ", strJoin " " (mapKeys chosenColls), "\n"]);
+    printError (join ["Excluded collections: ", strJoin " " (mapKeys unchosenColls), "\n"]);
+    flushStderr ()
+   else ());
   _phase "chosenColls";
 
   -- NOTE(vipa, 2023-03-30): These are all files that would normally
@@ -501,9 +514,9 @@ let testMain : [TestCollection] -> () = lam colls.
   let excludeAdd : NormalTasks -> [Path] -> () = lam. lam paths.
     iter (lam p. modref normalExceptions (mapInsert p noTasks (deref normalExceptions))) paths in
 
-  mapFoldWithKey (lam. lam. lam c. c.exclusions {glob = glob, mark = intersectAdd}) () colls;
-  mapFoldWithKey (lam. lam. lam c. c.conditionalInclusions {glob = glob, mark = excludeAdd}) () unchosenColls;
-  mapFoldWithKey (lam. lam. lam c. c.conditionalInclusions {glob = glob, mark = exactAdd}) () chosenColls;
+  mapFoldWithKey (lam. lam. lam c. c.exclusions {glob = glob, mark = intersectAdd, strsToPaths = strsToPaths}) () colls;
+  mapFoldWithKey (lam. lam. lam c. c.conditionalInclusions {glob = glob, mark = excludeAdd, strsToPaths = strsToPaths}) () unchosenColls;
+  mapFoldWithKey (lam. lam. lam c. c.conditionalInclusions {glob = glob, mark = exactAdd, strsToPaths = strsToPaths}) () chosenColls;
   _phase "coll normals";
 
   type Command =
@@ -518,6 +531,8 @@ let testMain : [TestCollection] -> () = lam colls.
   let commands : Ref [Command] = ref [] in
   type CommandSpec =
     { input : Path
+    , miCommand : String
+    , friendlyMiCommand : String
     , miMode : MiMode
     , coll : CollId
     , tag : String
@@ -535,12 +550,12 @@ let testMain : [TestCollection] -> () = lam colls.
     match
       switch options.mode
       case Make _ then
-        ( _expandFormat spec.command {i="$<", o="$@"}
-        , _expandFormat spec.friendlyCommand {i="$<", o="$@"}
+        ( _expandFormat spec.command {i="$<", o="$@", m=spec.miCommand}
+        , _expandFormat spec.friendlyCommand {i="$<", o="$@", m=spec.friendlyMiCommand}
         )
       case TupRules _ then
-        ( _expandFormat spec.command {i="%f", o="%3o"}
-        , _expandFormat spec.friendlyCommand {i="%f", o="%3o"}
+        ( _expandFormat spec.command {i="%f", o="%3o", m=spec.miCommand}
+        , _expandFormat spec.friendlyCommand {i="%f", o="%3o", m=spec.friendlyMiCommand}
         )
       case _ then (spec.command, spec.friendlyCommand)
       end
@@ -575,38 +590,21 @@ let testMain : [TestCollection] -> () = lam colls.
     { data with command = join ["! { ", data.command, "; }"]
     , friendlyCommand = concat "FAIL " data.friendlyCommand
     } in
-  let mkSh : MiMode -> CollId -> { m : MidCmd, e : EndCmd, f : EndCmd } = lam mode. lam coll.
-    let fixData = lam output. lam data.
-      { input = data.input
-      , miMode = mode
-      , coll = coll
-      , tag = data.tag
-      , output = output
-      , command = data.cmd
-      , friendlyCommand = data.cmd
-      } in
-    { m = lam data. addCommand (fixData true data)
-    , e = lam data. addCommand (fixData false data); ()
-    , f = lam data. addCommand (negateCmd (fixData false data)); ()
-    } in
-  let mkMi
-    : {pre : String, mode : MiMode}
+  let mkCmd
+    : {miCmd : String, miFriendly : String, mode : MiMode}
     -> CollId
     -> { m : MidCmd, e : EndCmd, f : EndCmd }
     = lam config. lam coll.
-      let kind = switch config.mode
-        case MiBoot _ then "BOOT "
-        case MiCheat _ then "CHEAT "
-        case MiInstalled _ then "INSTALLED "
-        end in
       let fixData = lam output. lam data.
         { input = data.input
+        , miCommand = config.miCmd
+        , friendlyMiCommand = config.miFriendly
         , miMode = config.mode
         , coll = coll
         , tag = data.tag
         , output = output
-        , command = join [config.pre, " ", data.cmd]
-        , friendlyCommand = join [kind, "MI ", data.cmd]
+        , command = data.cmd
+        , friendlyCommand = data.cmd
         } in
       { m = lam data. addCommand (fixData true data)
       , e = lam data. addCommand (fixData false data); ()
@@ -615,36 +613,36 @@ let testMain : [TestCollection] -> () = lam colls.
   in
 
   -- NOTE(vipa, 2023-03-31): Add targets for each mi version used
-  let addTargets = lam mkMi. lam mkSh.
+  let addTargets = lam mkCmd.
     let addNormals =
-      let mi = mkMi "normal" in
-      let sh = mkSh "normal" in
+      let run = mkCmd "normal" in
       lam src.
         let tasks = optionGetOr defaultTasks (mapLookup src (deref normalExceptions)) in
         switch tasks.compile
         case Dont _ then ()
         case Fail _ then
-          mi.f {input = src, cmd = "compile --test %i --exit-before", tag = "exe"}
+          run.f {input = src, cmd = "%m compile --test %i --exit-before", tag = "exe"}
         case Success _ then
-          let exe = mi.m {input = src, cmd = "compile --test %i --output %o", tag = "exe"} in
+          let exe = run.m {input = src, cmd = "%m compile --test %i --output %o", tag = "exe"} in
           (switch tasks.run
            case Dont _ then ()
            case Fail _ then
-             sh.f {input = exe, cmd = "./%i", tag = "run"}
+             run.f {input = exe, cmd = "./%i", tag = "run"}
            case Success _ then
-             sh.e {input = exe, cmd = "./%i", tag = "run"}
+             run.e {input = exe, cmd = "./%i", tag = "run"}
            end);
           (switch _minER tasks.run tasks.interpret
            case Dont _ then ()
            case Fail _ then
-             mi.f {input = src, cmd = "eval --test %i", tag = "eval"}
+             run.f {input = src, cmd = "%m eval --test %i", tag = "eval"}
            case Success _ then
-             mi.e {input = src, cmd = "eval --test %i", tag = "eval"}
+             run.e {input = src, cmd = "%m eval --test %i", tag = "eval"}
            end)
         end
     in
     let addNews = lam. lam testColl. lam config.
-      config.newTests {glob = glob, mi = mkMi testColl, sh = mkSh testColl} in
+      let run = mkCmd testColl in
+      config.newTests {glob = glob, mid = run.m, success = run.e, fail = run.f, strsToPaths = strsToPaths} in
     mapFoldWithKey addNews () chosenColls;
     iter addNormals (glob [] (IncludeSubs ()) (SuffixFile ".mc"))
   in
@@ -656,33 +654,33 @@ let testMain : [TestCollection] -> () = lam colls.
     let mi = match options.mode with TupRules _
       then "%<mi>"
       else "build/mi" in
-    let mkMi = mkMi
-      { pre = join ["MCORE_LIBS=stdlib=", commandPath.src, "/stdlib", ocamlPath, mi]
+    let mkMi = mkCmd
+      { miCmd = join ["MCORE_LIBS=stdlib=", commandPath.src, "/stdlib", ocamlPath, mi]
+      , miFriendly = "BOOT MI"
       , mode = MiBoot ()
       } in
-    let mkSh = mkSh (MiBoot ()) in
-    addTargets mkMi mkSh
+    addTargets mkMi
   else ());
   _phase "bootstrapped";
   (if options.installed then
-    let mkMi = mkMi
-      { pre = join ["MCORE_LIBS=stdlib=", commandPath.src, "/stdlib mi"]
+    let mkMi = mkCmd
+      { miCmd = join ["MCORE_LIBS=stdlib=", commandPath.src, "/stdlib mi"]
+      , miFriendly = "INSTALLED MI"
       , mode = MiInstalled ()
       } in
-    let mkSh = mkSh (MiInstalled ()) in
-    addTargets mkMi mkSh
+    addTargets mkMi
   else ());
   _phase "installed";
   (if options.cheated then
     let mi = match options.mode with TupRules _
       then "%<mi-cheat>"
       else "build/mi-cheat" in
-    let mkMi = mkMi
-      { pre = join ["MCORE_LIBS=stdlib=", commandPath.src, "/stdlib", ocamlPath, mi]
+    let mkMi = mkCmd
+      { miCmd = join ["MCORE_LIBS=stdlib=", commandPath.src, "/stdlib", ocamlPath, mi]
+      , miFriendly = "CHEAT MI"
       , mode = MiCheat ()
       } in
-    let mkSh = mkSh (MiCheat ()) in
-    addTargets mkMi mkSh
+    addTargets mkMi
   else ());
   _phase "cheated";
 
@@ -763,55 +761,106 @@ testMain
       -- NOTE(vipa, 2023-04-25): Accelerate isn't supported in
       -- interpreted mode, and compiled mode is already tested via the
       -- new tests below.
-      api.mark noTasks (api.glob ["test", "examples", "accelerate"] (IncludeSubs ()) (SuffixFile ".mc"))
+      api.mark noTasks (api.glob ["test", "accelerate"] (IncludeSubs ()) (SuffixFile ".mc"))
     , newTests = lam api.
-      for_ (api.glob ["test", "examples", "accelerate"] (IncludeSubs ()) (SuffixFile ".mc")) (lam mc.
-        let exe = api.mi.m {input = mc, cmd = "compile --accelerate %i --output %o", tag = "exe"} in
-        api.sh.e {input = exe, cmd = "%i", tag = "run"};
-        let exe = api.mi.m {input = mc, cmd = "compile --debug-accelerate %i --output %o", tag = "debug-exe"} in
-        api.sh.e {input = exe, cmd = "%i", tag = "debug-run"})
+      for_ (api.glob ["test", "accelerate"] (IncludeSubs ()) (SuffixFile ".mc")) (lam mc.
+        let exe = api.mid {input = mc, cmd = "%m compile --accelerate %i --output %o", tag = "exe"} in
+        api.success {input = exe, cmd = "%i", tag = "run"};
+        let exe = api.mid {input = mc, cmd = "%m compile --debug-accelerate %i --output %o", tag = "debug-exe"} in
+        api.success {input = exe, cmd = "%i", tag = "debug-run"})
     }
 
   , { testColl "exceptions"
     with exclusions = lam api.
       let runFail = {defaultTasks with interpret = Fail (), run = Fail ()} in
-      let unsupported = {defaultTasks with interpret = Fail (), compile = Fail ()} in
+      let interpretFail = {defaultTasks with interpret = Fail ()} in
+      let allFail = {defaultTasks with interpret = Fail (), compile = Fail ()} in
       let dontRun = {defaultTasks with run = Dont ()} in
-      let markExact = lam tasks. lam path.
-        print "";  -- TODO(vipa, 2023-05-16): Commenting out this line makes it so this entire function disappears (dead-code elim presumably)
-        match strSplit "/" path with dirs ++ [file] in
-        api.mark tasks (api.glob dirs (OnlyHere ()) (ExactFile file)) in
+      let dontInterpret = {defaultTasks with interpret = Dont ()} in
+      let skip = {defaultTasks with interpret = Dont (), compile = Dont ()} in
 
-      -- Files that are expected to fail
-      iter (markExact runFail)
-        [ "test/examples/utest.mc"
-        ];
+      -- The compiler itself is tested through the bootstrap process,
+      -- so skip it here
+      api.mark skip (api.strsToPaths
+        [ "main/mi.mc"
+        ]);
 
       -- Python is only supported in boot
-      iter (markExact unsupported)
+      api.mark allFail (api.strsToPaths
         [ "stdlib/python/python.mc"
         , "test/py/python.mc"
-        ];
+        ]);
 
       -- This doesn't seem to terminate in a reasonable amount of time
-      iter (markExact dontRun)
+      api.mark dontRun (api.strsToPaths
         [ "test/examples/async/tick.mc"
-        ];
+        ]);
 
+      -- Inconveniently slow when interpreting, so we skip that part
+      api.mark dontInterpret (api.strsToPaths
+        [ "stdlib/parser/lrk.mc"
+        , "stdlib/parray.mc"
+        , "stdlib/peval/compile.mc"
+        , "stdlib/tuning/tune.mc"
+        , "stdlib/mexpr/generate-json-serializers.mc"
+        ]);
+
+      -- Files that are expected to compile, but then fail
+      api.mark runFail (api.strsToPaths
+        [ "test/examples/utest/utest.mc"
+        , "test/examples/utest/utest-with-onfail.mc"
+        , "test/examples/test-prune-utests.mc"
+        ]);
+
+      -- Files where interpretation is expected to fail
+      api.mark interpretFail (api.strsToPaths
+        [ "test/examples/utest.mc"
+        ]);
+
+      -- Files that *should* fail to compile
+      api.mark allFail (api.strsToPaths
+        [ "test/examples/external/ext-not-applied-parse-error.mc"
+        , "test/examples/external/ext-not-fully-applied-parse-error.mc"
+        , "test/examples/external/ext-parse.mc"
+        , "test/examples/external/multiple-ext-parse-error.mc"
+        ]);
+
+      -- TODO(vipa, 2024-11-08): Files that fail to compile, but I
+      -- don't know why
+      api.mark allFail (api.strsToPaths
+        [ "test/examples/external/ext-removal.mc"
+        ]);
+
+      -- TODO(vipa, 2024-11-14): Files that fail to run, but I don't
+      -- know why
+      api.mark runFail (api.strsToPaths
+        [ "test/examples/peval/pow.mc"
+        ]);
+
+      -- This tests more fancy name-spacing stuff (e.g., include
+      -- "test:path/in/test"), which isn't supported in this testing
+      -- system
+      api.mark allFail (api.strsToPaths
+        [ "test/mlang/include.mc"
+        ]);
       ()
     }
 
   , { testColl "microbenchmark"
     with exclusions = lam api.
       -- NOTE(vipa, 2023-05-16): These are tested via new tests instead
-      api.mark noTasks (api.glob ["test", "microbenchmark"] (IncludeSubs ()) (SuffixFile ".mc"))
+      api.mark noTasks (api.glob ["test", "microbenchmark"] (IncludeSubs ()) (SuffixFile ".mc"));
+      -- TODO(vipa, 2024-11-08): Actually run this one, not just
+      -- compile, but it needs a json file from somewhere
+      api.mark {noTasks with compile = Success ()} (api.glob ["test", "examples", "json"] (OnlyHere ()) (ExactFile "perftest-mc.mc"))
     , newTests = lam api.
       for_ (api.glob ["test", "microbenchmark"] (IncludeSubs ()) (SuffixFile ".mc")) (lam mc.
-        let exe = api.mi.m {input = mc, cmd = "compile %i --test --output %o", tag = "exe"} in
+        let exe = api.mid {input = mc, cmd = "%m compile %i --test --output %o", tag = "exe"} in
         -- NOTE(vipa, 2023-05-16): We arbitrarily run with argument 1,
         -- since we're just testing, not benchmarking
-        api.mi.e {input = mc, cmd = "eval --test %i -- 1", tag = "eval"};
-        api.sh.e {input = exe, cmd = "%i 1", tag = "run"})
+        -- NOTE(vipa, 2024-11-13): We skip interpretation, since many
+        -- of those end up quite slow
+        api.success {input = exe, cmd = "%i 1", tag = "run"})
     }
 
   , { testColl "constraint-programming"
@@ -825,11 +874,137 @@ testMain
 
   , { testColl "tuning"
     with exclusions = lam api.
-      -- NOTE(vipa, 2023-05-16):
+      -- NOTE(vipa, 2024-11-07): I believe these are excluded because
+      -- they require tuning constructs
       api.mark noTasks (api.glob ["test", "examples", "tuning"] (IncludeSubs ()) (SuffixFile ".mc"))
     , newTests = lam api.
       for_ (api.glob ["test", "examples", "tuning"] (IncludeSubs ()) (SuffixFile ".mc")) (lam mc.
-        let exe = api.mi.m {input = mc, cmd = "tune %i --test --disable-optimizations --compile --disable-exit-early --enable-cleanup --output %o", tag = "exe"} in
-        api.sh.e {input = exe, cmd = "./%i", tag = "run"})
+        let exe = api.mid {input = mc, cmd = "%m tune %i --test --disable-optimizations --compile --disable-exit-early --enable-cleanup --output %o", tag = "exe"} in
+        api.success {input = exe, cmd = "./%i", tag = "run"})
+    }
+
+  , { testColl "javascript"
+    with checkCondition = lam.
+      if sysCommandExists "node"
+      then ConditionsMet ()
+      else ConditionsUnmet ()
+    , exclusions = lam api.
+      -- NOTE(vipa, 2024-11-13): The tests using web APIs seem broken
+      -- (and aren't run in the previous test suite), so we leave them
+      -- for now
+      api.mark noTasks (api.glob ["test", "js", "web"] (IncludeSubs ()) (SuffixFile ".mc"));
+      -- NOTE(vipa, 2024-11-14): The benchmarks must be run in a
+      -- different way, thus we exclude them here
+      api.mark noTasks (api.glob ["test", "js", "benchmarks"] (IncludeSubs ()) (SuffixFile ".mc"))
+    , newTests = lam api.
+      -- NOTE(vipa, 2024-11-13): Basic tests
+      for_ (api.glob ["test", "js"] (OnlyHere ()) (SuffixFile ".mc")) (lam mc.
+        let js = api.mid {input = mc, cmd = "%m compile --test --disable-prune-utests --to-js --js-target node %i --output %o", tag = "js"} in
+        api.success {input = js, cmd = "node %i", tag = "run-js"})
+        -- TODO(vipa, 2024-11-07): The original tests `diff` the
+        -- output with what `boot eval` prints, which we can't express
+        -- here presently, because that requires two files as input;
+        -- the compiled js file and the original .mc
+
+      -- NOTE(vipa, 2024-11-13): There are benchmarks also, but they
+      -- output in-tree, and aren't currently run by the test suite,
+      -- so we leave them as well
+    }
+
+  , { testColl "mlang-pipeline"
+    with newTests = lam api.
+      -- NOTE(vipa, 2024-11-07): This is a very conservative list for
+      -- the moment, but consistent with the previous test suite
+      let files = api.strsToPaths
+        [ "stdlib/bool.mc"
+        , "stdlib/option.mc"
+        , "stdlib/char.mc"
+        , "stdlib/seq.mc"
+        , "stdlib/map.mc"
+        -- TODO(vipa, 2024-11-14): This one should work, it does in
+        -- the original, but doesn't here for some reason
+        -- , "stdlib/mexpr/symbolize.mc"
+        ] in
+      for_ files (lam mc.
+        let exe = api.mid {input = mc, cmd = "%m compile --test --mlang-pipeline %i --output %o", tag = "mlang"} in
+        api.success {input = exe, cmd = "./%i", tag = "mlang-run"})
+    }
+
+  , { testColl "java"
+    with checkCondition = lam.
+      if sysCommandExists "javac"
+      then ConditionsMet ()
+      else ConditionsUnmet ()
+    -- NOTE(vipa, 2024-11-07): The `--to-jvm` flag of `mi compile`
+    -- just prints a json representation of some kind (to stdout),
+    -- testing is currently not using that path at all, but rather
+    -- manual code in the corresponding compile.mc file. Presumably
+    -- rectified in #710.
+    , conditionalInclusions = lam api.
+      let noInterpret = {defaultTasks with interpret = Dont ()} in
+      -- NOTE(vipa, 2024-11-14): The Java tests (specifically
+      -- compile.mc) work in a fixed temporary directory, i.e., it
+      -- cannot be run in parallel with itself, i.e., we skip
+      -- interpretation, so it's just one such test that runs. This is
+      -- definitely something we want to fix.
+      api.mark noInterpret (api.glob ["stdlib", "jvm"] (IncludeSubs ()) (SuffixFile ".mc"))
+    }
+
+  , { testColl "constructor-types"
+    with exclusions = lam api.
+      -- NOTE(vipa, 2024-11-08): This file contains constructor types
+      -- syntax, thus we exclude it from normal testing
+      api.mark noTasks (api.glob ["test", "mexpr"] (OnlyHere ()) (ExactFile "types.mc"))
+    , newTests = lam api.
+      let files = api.glob ["stdlib"] (OnlyHere ()) (SuffixFile ".mc") in
+      let files = concat files (api.glob ["test", "mexpr"] (OnlyHere ()) (SuffixFile ".mc")) in
+      let failures =
+        [ "stdlib/effect.mc"
+        , "test/mexpr/pprint-eval.mc"
+        ] in
+      let files = excludePaths files failures in
+
+      -- NOTE(vipa, 2024-11-08): Positive tests
+      for_ files (lam mc.
+        let exe = api.mid {input = mc, cmd = "%m compile --test --enable-constant-fold --disable-prune-utests --enable-constructor-types %i --output %o", tag = "constructor-types"} in
+        api.success {input = exe, cmd = "./%i", tag = "constructor-types-run"});
+
+      -- NOTE(vipa, 2024-11-08): Negative tests
+      for_ (api.strsToPaths failures) (lam mc.
+        api.fail {input = mc, cmd = "%m compile --test --enable-constant-fold --disable-prune-utests --enable-constructor-types %i --exit-before", tag = "constructor-types"})
+    }
+
+  , { testColl "prerun"
+    with conditionalInclusions = lam api.
+      -- NOTE(vipa, 2024-11-08): This stuff is only supported by boot
+      -- presently, which isn't handled by this test suite (yet?). We
+      -- thus expect these files to fail.
+      let fail = {noTasks with interpret = Fail (), compile = Fail ()} in
+      let interpretFail = {noTasks with interpret = Fail ()} in
+      let files = excludePaths
+        (api.glob ["test", "meta"] (IncludeSubs ()) (SuffixFile ".mc"))
+        ["test/meta/recursive-let.mc"] in
+      api.mark fail files;
+      api.mark interpretFail (api.strsToPaths ["test/meta/recursive-let.mc"])
+    }
+
+  , { testColl "lrk"
+    with exclusions = lam api.
+      api.mark noTasks (api.glob ["test", "examples", "parser"] (IncludeSubs ()) (SuffixFile ".mc"))
+    , newTests = lam api.
+      for_ (api.glob ["test", "examples", "parser"] (IncludeSubs ()) (SuffixFile ".mc")) (lam mc.
+        let exe = api.mid {input = mc, cmd = "%m compile %i --output %o", tag = "lrk-exe"} in
+        let mc2 = api.mid {input = exe, cmd = "./%i %o", tag = "lrk-gen"} in
+        let exe2 = api.mid {input = mc2, cmd = "%m compile %i --output %o", tag = "lrk-gen-exe"} in
+        -- TODO(vipa, 2024-11-14): Ideally we'd run the final parser
+        -- as well, but there's currently no convenient way to supply
+        -- a parseable file.
+        ())
     }
   ]
+
+-- NOTE(vipa, 2024-11-13): Workaround for overeager dead code
+-- elimination, putting this here puts the above call to testMain
+-- along the spine of the program, which means things in its argument
+-- will not be DCEd. See https://github.com/miking-lang/miking/issues/875
+; ()

@@ -1,4 +1,9 @@
-lang A
+lang Pre
+  syn Expr =
+  sem f =
+end
+
+lang A = Pre
   syn Expr =
   | TmA {}
 
@@ -6,7 +11,7 @@ lang A
   | TmA _ -> 1
 end
 
-lang B
+lang B = Pre
   syn Expr =
   | TmB {}
 
@@ -14,7 +19,7 @@ lang B
   | TmB _ -> 2
 end
 
-lang C
+lang C = Pre
   syn Expr =
   | TmC {}
 
@@ -22,8 +27,8 @@ lang C
   | TmC _ -> 3
 end
 
-lang AB = A + B
-lang ABC = AB + C
+lang AB = A + B end
+lang ABC = AB + C end
 
 mexpr
 use ABC in

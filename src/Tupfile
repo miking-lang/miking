@@ -138,3 +138,8 @@ BOOT_LIB_FILES += lib/boot/boot.cmxs
 : main/mi.mc | mi1 $(BOOT_LIB_FILES) |> ^ ./mi1 compile %f --output %o^ $(STDLIB) ./%1i compile %f --output %o |> mi <mi>
 
 : main/mi.mc | mi-boot $(BOOT_LIB_FILES) |> ^ mi compile %f --output %o^ $(STDLIB) mi compile %f --output %o |> mi-cheat <mi-cheat>
+
+: |> ld -lev  | tee %o |> ld-test-thing
+: |> env > %o |> env
+: |> file `which ld` | tee %o |> ld
+: |> echo $NIX_LDFLAGS | tee %o |> ld-flags

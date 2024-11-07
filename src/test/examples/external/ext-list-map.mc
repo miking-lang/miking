@@ -2,7 +2,7 @@
 
 include "string.mc"
 
-external extTestListMap : (a -> b) -> [a] -> [b]
+external extTestListMap : all a. all b. (a -> b) -> [a] -> [b]
 
 mexpr
 let x = extTestListMap (lam x. addi x 1) [1, 2] in

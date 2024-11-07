@@ -1,20 +1,23 @@
-lang A
+lang Pre
+  syn Expr =
+end
+lang A = Pre
   syn Expr =
   | TmA {}
 end
 
-lang B
+lang B = Pre
   syn Expr =
   | TmB {}
 end
 
-lang C
+lang C = Pre
   syn Expr =
   | TmC {}
 end
 
-lang AB = A + B
-lang ABC = AB + C
+lang AB = A + B end
+lang ABC = AB + C end
 
 mexpr
 use ABC in
