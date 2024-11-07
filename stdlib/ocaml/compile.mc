@@ -20,65 +20,56 @@ let defaultCompileOptions : CompileOptions = {
   cLibraries = []
 }
 
-let ocamlCompileWithConfig : CompileOptions -> String -> CompileResult =
-  lam options : CompileOptions. lam p.
-  let libstr =
-    strJoin " " (distinct eqString (cons "boot" options.libraries))
-  in
-  let flagstr =
-    let clibstr =
-      strJoin " "(map (concat "-cclib -l") (distinct eqString options.cLibraries))
+let ocamlCompileWithConfig : CompileOptions -> String -> CompileResult
+  = lam options : CompileOptions. lam p.
+    let td = sysTempDirMake () in
+    let dir = sysTempDirName td in
+    let tempfile = lam f. sysJoinPath dir f in
+
+    let libflags =
+      joinMap (lam x. ["-package", x]) (distinct eqString (cons "boot" options.libraries))
     in
-    concat ":standard -w -a " clibstr
-  in
-  let dunefile =
-   join [
-   "(env
-      (dev
-        (flags (", flagstr ,"))
-        (ocamlc_flags (-without-runtime))
-        (ocamlopt_flags (-linscan -inline 1)))
-      (opt
-        (flags (", flagstr ,"))
-        (ocamlc_flags (-without-runtime))
-        (ocamlopt_flags (-O3))))
-    (executable (name program) (libraries ", libstr , "))"] in
-  let td = sysTempDirMake () in
-  let dir = sysTempDirName td in
-  let tempfile = lam f. sysJoinPath dir f in
+    let clibflags =
+      joinMap (lam x. ["-cclib", concat "-l" x]) (distinct eqString options.cLibraries) in
+    let otherflags =
+      ["-linkpkg", "-thread", "-w", "-a"] in
+    let flags = join
+      [ clibflags, libflags, otherflags
+      , if options.optimize
+        then ["-O3"]
+        else ["-linscan", "-inline", "1"]
+      ] in
+    let command = join
+      [ ["ocamlfind", "ocamlopt"]
+      , flags
+      , ["program.mli", "program.ml", "-o", tempfile "program.exe"]
+      ] in
 
-  writeFile (tempfile "program.ml") p;
-  writeFile (tempfile "program.mli") "";
-  writeFile (tempfile "dune-project") "(lang dune 2.0)";
-  writeFile (tempfile "dune") dunefile;
+    writeFile (tempfile "program.ml") p;
+    writeFile (tempfile "program.mli") "";
 
-  let command =
-    if options.optimize then
-      ["dune", "build", "--profile=opt"]
-    else
-      ["dune", "build"]
-  in
-  let r = sysRunCommand command "" dir in
-  if neqi r.returncode 0 then
-      print (join ["'dune build' failed on program:\n\n",
-                   readFile (tempfile "program.ml"),
-                   "\n\nexit code: ",
-                   int2string r.returncode,
-                   "\n\nstandard error:\n", r.stderr]);
-      sysTempDirDelete td;
-      exit 1
-  else ();
+    let r = sysRunCommand command "" dir in
+    if neqi r.returncode 0 then
+        print (join ["'ocamlfind ocamlopt' failed on program:\n\n",
+                     readFile (tempfile "program.ml"),
+                     "\n\nexit code: ",
+                     int2string r.returncode,
+                     "\n\nstandard out:\n", r.stdout,
+                     "\n\nstandard error:\n", r.stderr]);
+        sysTempDirDelete td;
+        exit 1
+    else ();
 
-  {
-    run =
-      lam stdin. lam args.
-        let command =
-          concat ["dune", "exec", "--no-build", "./program.exe", "--"] args
-        in
-        sysRunCommand command stdin (tempfile ""),
-    cleanup = lam. sysTempDirDelete td (); (),
-    binaryPath = tempfile "_build/default/program.exe"
-  }
+    {
+      run =
+        lam stdin. lam args.
+          let command =
+            cons (tempfile "program.exe") args
+          in
+          sysRunCommand command stdin (tempfile ""),
+      cleanup = lam. sysTempDirDelete td (); (),
+      binaryPath = tempfile "program.exe"
+    }
 
 let ocamlCompile : String -> CompileResult =
   ocamlCompileWithConfig defaultCompileOptions
