@@ -44,7 +44,7 @@ lang ExtrecConappSugar = MLangAst + MExprAst + ExtRecordAst + ExtRecordPat
                            info = rec.info} in 
       TmConApp {app with body = r}
     else 
-      TmConApp app 
+      TmConApp {app with body = handleConappSugar_Expr ctx app.body} 
   | other -> 
     smap_Expr_Expr (handleConappSugar_Expr ctx) other
 
