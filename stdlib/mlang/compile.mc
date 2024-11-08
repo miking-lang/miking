@@ -218,8 +218,8 @@ lang LangDeclCompiler = DeclCompiler + LangDeclAst + MExprAst + SemDeclAst +
 
     let ctx = foldl withSemSymbol ctx (map (lam s. match s with DeclSem s in s.ident) semDecls) in 
 
-    let res = result.foldlM compileDecl ctx typeDecls in 
-    let res = result.map (lam ctx. foldl compileSynTypes ctx synDecls) res in 
+    let ctx = foldl compileSynTypes ctx synDecls in 
+    let res = result.foldlM compileDecl ctx typeDecls in
     let res = result.map (lam ctx. foldl (compileCosyn langStr) ctx cosynDecls) res in 
     let res = result.map (lam ctx. foldl (compileSynConstructors langStr) ctx synDecls) res in 
     let res = result.map (lam ctx. foldl (compileSynProd langStr) ctx prodDecls) res in 
@@ -278,15 +278,23 @@ lang LangDeclCompiler = DeclCompiler + LangDeclAst + MExprAst + SemDeclAst +
     -- We only include a type definition if this is the base declaration of
     -- a syntax type. To check that something is a base syn definition,
     -- we check that it does not include any other definitions.
-    if null s.includes then
-      withExpr ctx (TmType {ident = s.ident,
-                            params = s.params,
-                            tyIdent = tyvariant_ [],
-                            inexpr = uunit_,
-                            ty = tyunknown_,
-                            info = s.info})
-    else
-      ctx
+    let ctx = if null s.includes 
+              then withExpr ctx (TmType {ident = s.ident,
+                                         params = s.params,
+                                         tyIdent = tyvariant_ [],
+                                         inexpr = uunit_,
+                                         ty = tyunknown_,
+                                         info = s.info})
+              else ctx in 
+
+    -- Generate a record type for each definition in the syntax type.
+    let work = lam ctx. lam def. 
+      withExpr ctx (TmRecType {ident = def.tyName,
+                               params = s.params,
+                               ty = tyunknown_,
+                               inexpr = uunit_,
+                               info = infoTy def.tyIdent}) in
+    foldl work ctx s.defs
 
   sem compileSynConstructors : String -> CompilationContext -> Decl -> CompilationContext
   sem compileSynConstructors langStr ctx = 
@@ -316,11 +324,6 @@ lang LangDeclCompiler = DeclCompiler + LangDeclAst + MExprAst + SemDeclAst +
         let recIdent = def.tyName in
         let ctx = {ctx with conToExtType = mapInsert def.ident recIdent ctx.conToExtType} in 
 
-        let ctx = withExpr ctx (TmRecType {ident = recIdent,
-                                           params = s.params,
-                                           ty = tyunknown_,
-                                           inexpr = uunit_,
-                                           info = infoTy def.tyIdent}) in 
         let work = lam ctx. lam sid. lam ty. 
           let label = sidToString sid in 
           let tyIdent = tyarrow_ (conappWrapper (ntycon_ recIdent)) ty in 
