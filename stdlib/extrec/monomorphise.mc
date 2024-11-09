@@ -31,7 +31,7 @@ lang ExtRecMonomorphise = RecordAst + ExtRecordAst + MatchAst +
         recursive let work = lam ty.
           match ty with TyAbs t then work t.body else ty in 
         let ty = work ty in 
-        let ty = removeExtRecTypes_Type () ty in 
+        let ty = removeExtRecTypes_Type env ty in 
         mapInsert (stringToSid label) ty acc) 
       (mapEmpty cmpSID)
       labelToType
@@ -88,10 +88,17 @@ lang ExtRecMonomorphise = RecordAst + ExtRecordAst + MatchAst +
 
   sem removeExtRecTypes_Expr env = 
   | TmType t ->
-    TmType {t with params = tail t.params,
-                   tyIdent = removeExtRecTypes_Type env t.tyIdent,
-                   ty = removeExtRecTypes_Type env t.ty,
-                   inexpr = removeExtRecTypes_Expr env t.inexpr}
+    -- We need to remove the first parameter from TmTypes representing 
+    -- open sum types or payloads. Type aliases should remain unaffected.
+    if or (setMem t.ident env.sumTypeNames) (setMem t.ident env.payloadNames) then
+      TmType {t with params = tail t.params,
+                    tyIdent = removeExtRecTypes_Type env t.tyIdent,
+                    ty = removeExtRecTypes_Type env t.ty,
+                    inexpr = removeExtRecTypes_Expr env t.inexpr}
+    else
+      TmType {t with tyIdent = removeExtRecTypes_Type env t.tyIdent,
+                     ty = removeExtRecTypes_Type env t.ty,
+                     inexpr = removeExtRecTypes_Expr env t.inexpr}
   | expr -> 
     let expr = smap_Expr_Type (removeExtRecTypes_Type env) expr in  
     let expr = smap_Expr_TypeLabel (removeExtRecTypes_Type env) expr in 

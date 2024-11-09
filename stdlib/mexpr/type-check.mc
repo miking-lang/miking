@@ -40,7 +40,9 @@ type ExtRecDefs = use Ast in Map Name (Map String (Name, Type))
 type ExtRecEnvType = {
   defs : ExtRecDefs,
   tyDeps : Map Name (Set Name),
-  labelTyDeps : Map Name (Map String (Set Name))
+  labelTyDeps : Map Name (Map String (Set Name)),
+  sumTypeNames : Set Name,
+  payloadNames : Set Name
 }
 
 type TCEnv = {
@@ -88,7 +90,9 @@ let typcheckEnvEmpty : TCEnv = {
   extRecordType = {
     defs = mapEmpty nameCmp,
     tyDeps = mapEmpty nameCmp,
-    labelTyDeps = mapEmpty nameCmp
+    labelTyDeps = mapEmpty nameCmp,
+    sumTypeNames = setEmpty nameCmp,
+    payloadNames = setEmpty nameCmp
   },
   matchLvl = 0,
   currentLvl = 0,

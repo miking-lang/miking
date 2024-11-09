@@ -37,6 +37,8 @@ lang InsertImplictRecursionVar = MLangAst + MExprAst
       TyCon {t with data = intyvar_ t.info implicitParamIdent}   
     else
       ty 
+  | TyAlias t ->
+    TyAlias {t with content = insertImplicitParam_Type ctx t.content}
   | ty -> 
     smap_Type_Type (insertImplicitParam_Type ctx) ty
 

@@ -146,6 +146,19 @@ lang BigPipeline = BigIncludeHandler +
     DeclSyn {d with defs = map work d.defs}
   | other -> other
 
+  sem collectSumTypes acc =
+  | DeclSyn d -> 
+    setInsert d.ident acc
+  | other ->
+    sfold_Decl_Decl collectSumTypes acc other
+
+  sem collectPayloadNames acc = 
+  | DeclSyn d -> 
+    let tyNames = map (lam def. def.tyName) d.defs in
+    foldr setInsert acc tyNames
+  | other -> 
+    sfold_Decl_Decl collectPayloadNames acc other
+
   sem dumpTyVars_Expr = 
   | expr ->
     smap_Expr_Type dumpTyVars_Type expr ; 
@@ -244,11 +257,15 @@ lang BigPipeline = BigIncludeHandler +
         let labelTyDeps = computeLabelTyDeps tyDeps defs in 
         endPhaseStatsExpr log "dependency-analysis" expr ; 
         
+        let sumTypeNames = foldl collectSumTypes (setEmpty nameCmp) p.decls in 
+        let payloadNames = foldl collectPayloadNames (setEmpty nameCmp) p.decls in
         let tcEnv = {typcheckEnvDefault with
           disableConstructorTypes = false, 
           extRecordType = {defs = defs, 
                            tyDeps = tyDeps,
-                           labelTyDeps = labelTyDeps}} in 
+                           labelTyDeps = labelTyDeps,
+                           sumTypeNames = sumTypeNames,
+                           payloadNames = payloadNames}} in 
         
         let expr = typeCheckExpr tcEnv expr in 
         endPhaseStatsExpr log "extrec-type-check" expr;
@@ -257,7 +274,7 @@ lang BigPipeline = BigIncludeHandler +
         endPhaseStatsExpr log "handle-typeof" expr;
 
         let expr = monomorphiseExpr tcEnv.extRecordType expr in 
-        let expr = removeExtRecTypes_Expr () expr in 
+        let expr = removeExtRecTypes_Expr tcEnv.extRecordType expr in 
         endPhaseStatsExpr log "monomorphise" expr;
 
 
@@ -336,11 +353,15 @@ lang BigPipeline = BigIncludeHandler +
 
     let labelTyDeps = computeLabelTyDeps tyDeps defs in 
 
+    let sumTypeNames = foldl collectSumTypes (setEmpty nameCmp) p.decls in 
+    let payloadNames = foldl collectPayloadNames (setEmpty nameCmp) p.decls in
     let tcEnv = {typcheckEnvDefault with
       disableConstructorTypes = false, 
       extRecordType = {defs = defs, 
                        tyDeps = tyDeps,
-                       labelTyDeps = labelTyDeps}} in 
+                       labelTyDeps = labelTyDeps,
+                       sumTypeNames = sumTypeNames,
+                       payloadNames = payloadNames}} in 
 
     let expr = typeCheckExpr tcEnv expr in 
 
@@ -351,7 +372,7 @@ lang BigPipeline = BigIncludeHandler +
     -- printLn (expr2str expr);
 
     let expr = monomorphiseExpr tcEnv.extRecordType expr in 
-    let expr = removeExtRecTypes_Expr () expr in 
+    let expr = removeExtRecTypes_Expr tcEnv.extRecordType expr in 
 
     -- printLn " === POST MONOMORPHISATION === ";
     -- printLn (expr2str expr);
