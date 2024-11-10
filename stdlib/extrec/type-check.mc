@@ -400,6 +400,14 @@ lang ExtRecordTypeCheck = TypeCheck + ExtRecordAst +
 
       let typeCheckBinding = lam patEnv. lam sid. lam pat. 
         let label = sidToString sid in
+        let tyAbs = match mapLookup label labelToType with Some (_, tyAbs) 
+                    then tyAbs
+                    else errorSingle [p.info] (join [
+                      "* The label '",
+                      label,
+                      "' is not defined for the type '",
+                      nameGetStr extRec.ident,
+                      "'!"]) in
         match mapLookup label labelToType with Some (_, tyAbs) in
         recursive let work = lam ty. match ty with TyAbs t then work t.body else ty in 
         let body = work tyAbs in 
