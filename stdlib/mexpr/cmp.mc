@@ -4,6 +4,8 @@ include "ast.mc"
 include "ast-builder.mc"
 include "repr-ast.mc"
 
+include "pprint.mc"
+
 -------------------
 -- BASE FRAGMENT --
 -------------------
@@ -50,7 +52,9 @@ lang Cmp = ConstAst
   | (lhs, rhs) /- (Type, Type) -/ ->
     let res = subi (constructorTag lhs) (constructorTag rhs) in
     if eqi res 0 then
-      errorMulti [(infoTy lhs, ""), (infoTy rhs, "")]
+      printLn "here!!!";
+      use MExprPrettyPrint in 
+      errorMulti [(infoTy lhs, (type2str lhs)), (infoTy rhs, (type2str rhs))]
         "Missing case in cmpTypeH for types with equal indices."
     else res
 

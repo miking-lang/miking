@@ -194,7 +194,7 @@ end
 ----------------------
 
 lang TCUnify = Unify + AliasTypeAst + MetaVarTypeAst + DataKindAst + 
-               PrettyPrint + Cmp + RepTypesHelpers + VarTypeAst
+               PrettyPrint + MExprCmp + RepTypesHelpers + VarTypeAst
   -- Unify the types `ty1' and `ty2', where
   -- `ty1' is the expected type of an expression, and
   -- `ty2' is the inferred type of the expression.
