@@ -53,6 +53,10 @@ type CompilationContext = use MLangAst in {
   -- Accumulator of compilation result
   exprs: [Expr],
 
+  -- Accumulator of expressions that must be at the top level
+  -- I.e. declarations of open sum types and open product types.
+  toplevelExprs : [Expr],
+
   compositionCheckEnv : CompositionCheckEnv,
 
   -- A map from identifier strings of semantic functions to the 
@@ -77,6 +81,7 @@ let mergeRecordTypes = lam l. lam r.
 
 let _emptyCompilationContext : CompositionCheckEnv -> CompilationContext = lam env : CompositionCheckEnv. {
   exprs = [],
+  toplevelExprs = [],
   compositionCheckEnv = env,
   semSymbols = mapEmpty cmpString,
   conToExtType = mapEmpty nameCmp,
@@ -86,7 +91,11 @@ let _emptyCompilationContext : CompositionCheckEnv -> CompilationContext = lam e
   globalFields = mapEmpty nameCmp
 }
 
-let withExpr = lam ctx. lam expr. {ctx with exprs = snoc ctx.exprs expr}
+let withExpr = lam ctx. lam expr. 
+  {ctx with exprs = snoc ctx.exprs expr}
+
+let withToplevelExpr = lam ctx. lam expr. 
+  {ctx with toplevelExprs = snoc ctx.toplevelExprs expr}
 
 let withSemSymbol = lam ctx : CompilationContext. lam n : Name.
   let s = nameGetStr n in 
@@ -169,11 +178,11 @@ lang TypeDeclCompiler = DeclCompiler + TypeDeclAst + TypeAst
   sem compileDecl ctx = 
   | DeclType d -> 
     result.ok (withExpr ctx (TmType {ident = d.ident,
-                               params = d.params,
-                               tyIdent = d.tyIdent,
-                               info = d.info,
-                               ty = tyunknown_,
-                               inexpr = uunit_}))
+                                     params = d.params,
+                                     tyIdent = d.tyIdent,
+                                     info = d.info,
+                                     ty = tyunknown_,
+                                     inexpr = uunit_}))
 end
 
 lang ConDefDeclCompiler = DeclCompiler + DataDeclAst + DataAst
@@ -279,12 +288,12 @@ lang LangDeclCompiler = DeclCompiler + LangDeclAst + MExprAst + SemDeclAst +
     -- a syntax type. To check that something is a base syn definition,
     -- we check that it does not include any other definitions.
     let ctx = if null s.includes 
-              then withExpr ctx (TmType {ident = s.ident,
-                                         params = s.params,
-                                         tyIdent = tyvariant_ [],
-                                         inexpr = uunit_,
-                                         ty = tyunknown_,
-                                         info = s.info})
+              then withToplevelExpr ctx (TmType {ident = s.ident,
+                                                 params = s.params,
+                                                 tyIdent = tyvariant_ [],
+                                                 inexpr = uunit_,
+                                                 ty = tyunknown_,
+                                                 info = s.info})
               else ctx in 
 
     -- Generate a record type for each definition in the syntax type.
@@ -608,8 +617,10 @@ lang MLangCompiler = MLangAst + MExprAst +
   sem compile ctx =| prog -> 
     match result.consume (compileProg ctx prog) with (_, res) in
     switch res
-      case Left err then result.err (head err)
-      case Right ctx then result.ok (bindall_ ctx.exprs)
+      case Left err then 
+        result.err (head err)
+      case Right ctx then 
+        result.ok (bindall_ (concat ctx.toplevelExprs ctx.exprs))
     end
 end
 
