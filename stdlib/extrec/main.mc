@@ -152,12 +152,17 @@ lang BigPipeline = BigIncludeHandler +
   | other ->
     sfold_Decl_Decl collectSumTypes acc other
 
-  sem collectPayloadNames acc = 
+  sem collectErecNames acc = 
   | DeclSyn d -> 
     let tyNames = map (lam def. def.tyName) d.defs in
     foldr setInsert acc tyNames
+  | DeclCosyn d -> 
+    if d.isBase then 
+      setInsert d.ident acc
+    else 
+      acc
   | other -> 
-    sfold_Decl_Decl collectPayloadNames acc other
+    sfold_Decl_Decl collectErecNames acc other
 
   sem dumpTyVars_Expr = 
   | expr ->
@@ -258,7 +263,7 @@ lang BigPipeline = BigIncludeHandler +
         endPhaseStatsExpr log "dependency-analysis" expr ; 
         
         let sumTypeNames = foldl collectSumTypes (setEmpty nameCmp) p.decls in 
-        let payloadNames = foldl collectPayloadNames (setEmpty nameCmp) p.decls in
+        let payloadNames = foldl collectErecNames (setEmpty nameCmp) p.decls in
         let tcEnv = {typcheckEnvDefault with
           disableConstructorTypes = false, 
           extRecordType = {defs = defs, 
@@ -354,7 +359,7 @@ lang BigPipeline = BigIncludeHandler +
     let labelTyDeps = computeLabelTyDeps tyDeps defs in 
 
     let sumTypeNames = foldl collectSumTypes (setEmpty nameCmp) p.decls in 
-    let payloadNames = foldl collectPayloadNames (setEmpty nameCmp) p.decls in
+    let payloadNames = foldl collectErecNames (setEmpty nameCmp) p.decls in
     let tcEnv = {typcheckEnvDefault with
       disableConstructorTypes = false, 
       extRecordType = {defs = defs, 
