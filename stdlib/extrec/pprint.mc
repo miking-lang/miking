@@ -114,6 +114,15 @@ lang DeclCosemPrettyPrint = DeclPrettyPrint + CosemDeclAst + RecordCopatPrettyPr
   sem pprintDeclCode indent env = 
   | DeclCosem t -> 
     match pprintVarName env t.ident with (env, ident) in
+
+    let pair = match t.tyAnnot with !TyUnknown _ then
+      match getTypeStringCode indent env t.tyAnnot with (env, tyStr) in
+      (env, Some (join ["cosem ", ident, " : ", tyStr]))
+    else 
+      (env, None ()) in
+
+    match pair with (env, typeAnnotStr) in 
+
     let eqSym = if t.isBase then " = " else " *= " in 
 
     let pprintCase = lam env. lam cs. 
@@ -125,7 +134,12 @@ lang DeclCosemPrettyPrint = DeclPrettyPrint + CosemDeclAst + RecordCopatPrettyPr
     match mapAccumL pprintCase env t.cases with (env, str) in 
     let str = strJoin "\n" str in 
 
-    (env, join ["cosem ", ident, eqSym, "\n", str])
+    let bodyStr = join ["cosem ", ident, eqSym, "\n", str] in 
+    
+    match typeAnnotStr with Some typeAnnotStr then
+      (env, join [typeAnnotStr, pprintNewline indent, bodyStr])
+    else 
+      (env, bodyStr)
 end
 
 lang TypeAbsPrettyPrint = PrettyPrint + TypeAbsAst

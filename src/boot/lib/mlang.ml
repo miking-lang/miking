@@ -772,7 +772,7 @@ let add_decl_to_lang (lang_fi : info) (lang_name : ustring) (data : lang_data)
   | Cosyn (fi, _, _, _, _) -> 
     raise_error fi ( "Cosyn definitions are not supported by this version of "
                    ^ "Miking.")
-  | Cosem (fi, _, _, _, _) -> 
+  | Cosem (fi, _, _, _, _, _) -> 
     raise_error fi ( "Cosem definitions are not supported by this version of "
                    ^ "Miking.")
   | DataProdExt (fi, _, _, _, _) ->

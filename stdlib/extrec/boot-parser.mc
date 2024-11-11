@@ -95,7 +95,8 @@ lang CosemBootParser = BootParserMLang + RecordCopatAst + CosemDeclAst
     let isBase = eqi (glistlen d 2) 0 in 
 
     let parseArg = lam i.
-      {ident = gname d (addi 1 i), tyAnnot = gtype d i} in 
+      let i = addi 1 i in 
+      {ident = gname d i, tyAnnot = gtype d i} in 
     let args = map parseArg (range 0 nArgs 1) in 
 
     let parseCase = lam i. (gcopat d i, gterm d i) in 
@@ -106,7 +107,8 @@ lang CosemBootParser = BootParserMLang + RecordCopatAst + CosemDeclAst
                args = args,
                cases = cases,
                isBase = isBase,
-               includes = []}
+               includes = [],
+               tyAnnot = gtype d 0}
 
   sem gcopat c =
   | n -> let c2 = bootParserGetCopat c n in
@@ -164,6 +166,18 @@ let str = strJoin "\n" [
   "end"
 ] in
 let p = parseProgram str in 
+printLn (mlang2str p) ;
+
+-- Test cosem with type annotation
+let str = strJoin "\n" [
+  "lang L1",
+  "  cosyn Env = {x : Int}",
+  "  cosem makeEnv : Int -> Env",
+  "  cosem makeEnv param =",
+  "  | {Env of x} <- {x = 10}",
+  "end"
+] in
+let p = parseProgram str in
 printLn (mlang2str p) ;
 
 ()

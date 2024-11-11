@@ -83,6 +83,7 @@ con CosynInfo : use ExtendedMLang in {ident : Name,
 con CosemInfo : use ExtendedMLang in {ident : Name, 
                                       info : Info,
                                       orig : String,
+                                      tyAnnot : Type,
                                       args : [{ident : Name, tyAnnot : Type}]} -> DeclInfo
 
 let decl2info = lam orig. lam d.
@@ -108,6 +109,7 @@ let decl2info = lam orig. lam d.
                                      orig = orig}
     case DeclCosem d then CosemInfo {ident = d.ident, 
                                      info = d.info,
+                                     tyAnnot = d.tyAnnot,
                                      orig = orig,
                                      args = d.args}
   end                     
@@ -364,7 +366,8 @@ lang LanguageComposer = ExtendedMLang
                                 cases = [],
                                 includes = includes,
                                 info = s.info,
-                                isBase = false} in 
+                                isBase = false,
+                                tyAnnot = tyunknown_} in 
           let info = decl2info langStr decl in 
           (ctxWithDeclInfo ctx (langStr, nameGetStr s.ident) info, decl)
         case CosynInfo _ then 

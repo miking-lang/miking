@@ -383,7 +383,20 @@ lang CosemDeclAst = DeclAst + CopatAst + Ast
                args : [{ident : Name, tyAnnot : Type}],
                cases : [(Copat, Expr)],
                includes : [(String, String)],
-               isBase : Bool}
+               isBase : Bool,
+               tyAnnot : Type}
+
+  sem infoDecl =
+  | DeclCosem d -> d.info
+
+  sem smapAccumL_Decl_Type f acc =
+  | DeclCosem x ->
+    let farg = lam acc. lam arg.
+      match f acc arg.tyAnnot with (acc, tyAnnot) in
+      (acc, {arg with tyAnnot = tyAnnot}) in
+    match f acc x.tyAnnot with (acc, tyAnnot) in
+    match mapAccumL farg acc x.args with (acc, args) in
+    (acc, DeclCosem {x with args = args, tyAnnot = tyAnnot})
 end 
 
 lang MLangTopLevel = DeclAst

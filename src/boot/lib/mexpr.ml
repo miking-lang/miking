@@ -716,7 +716,7 @@ let getData = function
       , []
       , [] 
       , [])
-  | PTreeDecl (Cosem (fi, ident, args, cases, isBase)) -> 
+  | PTreeDecl (Cosem (fi, ident, args, cases, isBase, ty)) -> 
     let argIdents =
       List.map (fun x -> match x with Param (_, s, _) -> s) args
     in
@@ -728,7 +728,7 @@ let getData = function
     (idDeclCosem
       , [fi]
       , [List.length args; List.length cases; if isBase then 0 else 1]
-      , argTys
+      , ty :: argTys
       , tms
       , ident :: argIdents
       , []

@@ -93,6 +93,27 @@ lang BootParserMLang = BootParser + MLangAst
     match foldl work ([], mapEmpty cmpString) decls with (res, m) in 
     concat res (mapValues m)
 
+  sem mergeCosems : [Decl] -> [Decl]
+  sem mergeCosems =| decls ->
+    let work = lam acc : ([Decl], Map String Decl). lam decl : Decl. 
+      match acc with (res, m) in 
+      match decl with DeclCosem s1 then 
+        let str = nameGetStr s1.ident in 
+        match mapLookup str m with Some (DeclCosem s2) then
+          match s1.tyAnnot with TyUnknown _ then
+            let m = mapRemove str m in 
+            (res, mapInsert str (DeclCosem {s1 with tyAnnot = s2.tyAnnot}) m)
+          else 
+            let m = mapRemove str m in 
+            (res, mapInsert str (DeclCosem {s1 with args = s2.args, cases = s2.cases}) m)
+        else 
+          (res, mapInsert str decl m)
+      else 
+        (cons decl res, m)
+    in 
+    match foldl work ([], mapEmpty cmpString) decls with (res, m) in 
+    concat res (mapValues m)
+
 
   sem matchDecl : Unknown -> Int -> Decl
   sem matchDecl d =
@@ -198,6 +219,8 @@ lang BootParserMLang = BootParser + MLangAst
 
     let decls = map parseDecl (range 0 nDecls 1) in 
     let decls = reverse (mergeSems decls) in 
+    let decls = reverse (mergeCosems decls) in 
+
 
 
     DeclLang {ident = gname d 0,

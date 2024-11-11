@@ -16,6 +16,7 @@ include "compile.mc"
 include "type-check.mc"
 include "unify.mc"
 include "monomorphise.mc"
+include "cosem-ty-annot.mc"
 include "resolve-qualified-name.mc"
 include "mlang-ty-deps.mc"
 include "insert-implicit-recursion-var.mc"
@@ -59,6 +60,7 @@ lang BigPipeline = BigIncludeHandler +
                    MLangConstTransformer + 
                    ExtRecMonomorphise + 
                    MExprEval + 
+                   CosemTyAnnot +
                    LanguageComposer +
                    MLangCompositionCheck +
                    MLangCompiler + 
@@ -228,6 +230,10 @@ lang BigPipeline = BigIncludeHandler +
         iter raiseError errs ;
         never
       case Right env then
+        let p = handleCosemTyAnnot env.baseMap2 p in
+        endPhaseStatsProg log "cosem-tyannot" p; 
+        -- printLn (mlang2str p);
+
         let ctx = _emptyCompilationContext env in 
 
         let mlangTyDeps = getProgTyDeps env.baseMap2 p in  
@@ -316,8 +322,6 @@ lang BigPipeline = BigIncludeHandler +
     match symbolizeMLang symEnvDefault p with (_, p) in 
 
     let p = handleConappSugar p in 
-    printLn (mlang2str p) ;
-
 
     let res = result.consume (checkCompositionWithOptions defaultCompositionCheckOptions p) in 
     let compositionCheckEnv = 
@@ -328,6 +332,9 @@ lang BigPipeline = BigIncludeHandler +
     in
 
     let p = pruneProgram usedLangs p in 
+
+    let p = handleCosemTyAnnot compositionCheckEnv.baseMap2 p in
+    printLn (mlang2str p);
 
     let mlangTyDeps = getProgTyDeps compositionCheckEnv.baseMap2 p in  
     -- printLn (dumpTyDeps mlangTyDeps) ;

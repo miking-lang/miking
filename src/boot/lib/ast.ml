@@ -263,7 +263,7 @@ and decl =
   (* The fields in order represent 
      Info, identifier, param list, type, isBase *)
   | Cosyn of info * ustring * ustring list * ty * bool
-  | Cosem of info * ustring * param list * (copat * tm) list * bool
+  | Cosem of info * ustring * param list * (copat * tm) list * bool * ty
 
 and with_kind = WithType | WithValue
 
