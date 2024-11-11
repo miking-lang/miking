@@ -395,7 +395,13 @@ lang ExtRecordTypeCheck = TypeCheck + ExtRecordAst +
     let target = typeCheckExpr env t.target in
 
     let handleExtRec = lam extRec.
-      match mapLookup extRec.ident env.extRecordType.defs with Some labelToType in 
+      let labelToType = match mapLookup extRec.ident env.extRecordType.defs with Some labelToType 
+                        then labelToType 
+                        else errorSingle [p.info] (join [
+                          "* The type '",
+                          nameGetStr extRec.ident,
+                          "' is not defined!"
+                        ]) in
       match mapLookup extRec.ident env.extRecordType.tyDeps with Some tydeps in 
 
       let typeCheckBinding = lam patEnv. lam sid. lam pat. 
