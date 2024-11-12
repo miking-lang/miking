@@ -119,8 +119,7 @@ lang CosemBootParser = BootParserMLang + RecordCopatAst + CosemDeclAst
   | 800 -> 
     let n = glistlen c 0 in 
     RecordCopat {info = ginfo c 0,
-                 ident = gname c 0,
-                 fields = map (gstr c) (range 1 (addi n 1) 1)}
+                 fields = map (gstr c) (range 0 n 1)}
 end 
 
 lang MyPrettyPrint = MLangPrettyPrint + ExtRecPrettyPrint + DeclCosynPrettyPrint + DeclCosemPrettyPrint

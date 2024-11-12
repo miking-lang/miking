@@ -366,7 +366,6 @@ end
 lang RecordCopatAst = CopatAst
   syn Copat =
   | RecordCopat {info : Info, 
-                 ident : Name,
                  fields : [String]}
 
   sem copatInfo =

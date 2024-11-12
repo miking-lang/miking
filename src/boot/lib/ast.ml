@@ -395,7 +395,7 @@ and pat =
 
 (* Copatterns *)
 and copat =
-  | CopatRecord of info * ustring * ustring list
+  | CopatRecord of info * ustring list
 
 (* Types *)
 (* NOTE(aathn, 2022-06-10): Types are not symbolized in boot *)

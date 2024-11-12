@@ -66,6 +66,7 @@ end
 lang TypeCheck = Base
   cosyn Env = {} 
 
+  cosem emptyEnv : () -> Env
   cosem emptyEnv arg = 
 
   sem typeCheck (env : Env) =
@@ -84,7 +85,7 @@ lang STLC = TypeCheck + LC + IntArith
   cosyn Env *= {varMap : [(String, Ty)]}
 
   cosem emptyEnv arg *=
-  | {Env of varMap} <- {varMap = []}
+  | {varMap} <- {varMap = []}
 
   sem eqType +=
   | (TyInt _, TyInt _) -> true
@@ -167,7 +168,7 @@ lang SystemF = STLC + Base + TypeCheck
   cosyn Env *= {tyvars : [String]}
 
   cosem emptyEnv arg *=
-  | {Env of tyvars} <- {tyvars = []}
+  | { tyvars} <- {tyvars = []}
 
   sem typeCheck (env : Env) +=
   | TmTypeAbs t -> 

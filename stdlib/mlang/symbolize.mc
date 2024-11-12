@@ -172,8 +172,7 @@ lang DeclLangSym = DeclSym + LangDeclAst + TypeDeclAst + SemDeclAst +
                    SynDeclAst + LetSym + SynProdExtDeclAst + CosynDeclAst +
                    CosemDeclAst + RecordCopatAst
   sem symbolizeCopat env =
-  | RecordCopat c ->
-    RecordCopat {c with ident = getSymbol {kind = "type", info = [c.info], allowFree = false} env.currentEnv.tyConEnv c.ident}
+  | c & (RecordCopat _)  -> c
 
   -- TODO(25-09-2024, voorberg): A bunch of symbols are created manually
   -- through `nameSym`. These should probably be replaced with calls to 

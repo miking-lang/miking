@@ -468,8 +468,8 @@ let getData = function
   | PTreePat (PatNot (fi, p)) ->
       (idPatNot, [fi], [], [], [], [], [], [], [], [p], [], [], [])
   (* Copatterns *)
-  | PTreeCopat (CopatRecord (fi, ident, strs)) ->
-      (idRecordCopat, [fi], [List.length strs], [], [], ident :: strs, [], [], [], [], [], [], [])
+  | PTreeCopat (CopatRecord (fi, strs)) ->
+      (idRecordCopat, [fi], [List.length strs], [], [], strs, [], [], [], [], [], [], [])
   (* MLang *)
   | PTreeProgram (Program (includes, tops, expr)) ->
       let includeStrings =

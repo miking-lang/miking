@@ -437,7 +437,6 @@ lang MLangCompositionCheck = MLangAst + MExprPatAnalysis + MExprAst + MExprPrett
         let includeSet = setOfSeq nameCmp includeList in 
 
         if eqi 1 (setSize includeSet) then
-          printLn "Inserting cosem into basemap!";
           result.ok (insertBaseMap env (langStr, nameGetStr s.ident) s.ident (head includeList))
         else
           result.err (DifferentBaseSem {
