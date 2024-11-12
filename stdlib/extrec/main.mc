@@ -221,9 +221,9 @@ lang BigPipeline = BigIncludeHandler +
     match result.consume (checkCompositionWithOptions checkOptions p) with (_, res) in 
     endPhaseStatsProg log "composition-check" p; 
 
-    let p = if options.keepDeadCode then p 
-            else pruneProgram usedLangs p in 
-    endPhaseStatsProg log "prune-unused-langs" p;
+    -- let p = if options.keepDeadCode then p 
+    --         else pruneProgram usedLangs p in 
+    -- endPhaseStatsProg log "prune-unused-langs" p;
 
     switch res 
       case Left errs then 
@@ -307,13 +307,9 @@ lang BigPipeline = BigIncludeHandler +
   sem doIt =| filepath ->
     let p = parseAndHandleIncludes filepath in 
 
-
     let p = constTransformProgram builtin p in
 
-    
     let p = composeProgram p in 
-
-    -- printLn (mlang2str p);
 
     let usedLangs = collectUsedLangs_Prog p in 
 
@@ -331,10 +327,10 @@ lang BigPipeline = BigIncludeHandler +
       end
     in
 
-    let p = pruneProgram usedLangs p in 
-
     let p = handleCosemTyAnnot compositionCheckEnv.baseMap2 p in
+    printLn "=== Cosyn Ty Annot ===";
     printLn (mlang2str p);
+
 
     let mlangTyDeps = getProgTyDeps compositionCheckEnv.baseMap2 p in  
     -- printLn (dumpTyDeps mlangTyDeps) ;

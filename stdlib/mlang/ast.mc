@@ -384,7 +384,8 @@ lang CosemDeclAst = DeclAst + CopatAst + Ast
                cases : [(Copat, Expr)],
                includes : [(String, String)],
                isBase : Bool,
-               tyAnnot : Type}
+               tyAnnot : Type,
+               targetTyIdent : Name}
 
   sem infoDecl =
   | DeclCosem d -> d.info

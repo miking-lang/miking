@@ -3,6 +3,7 @@ include "map.mc"
 include "mexpr/ast.mc"
 
 include "mlang/ast.mc"
+include "mlang/pprint.mc"
 
 include "extrec/ast.mc"
 
@@ -11,28 +12,24 @@ type CosemTyAnnotContext = {
   tyAnnotMap : Map Name (use Ast in Type)
 }
 
-lang CosemTyAnnot = MLangAst 
+lang CosemTyAnnot = MLangAst + MLangPrettyPrint
   sem handleCosemTyAnnot : Map Name Name -> MLangProgram -> MLangProgram
   sem handleCosemTyAnnot baseMap = 
   | prog ->
-    printLn (int2string (length prog.decls));
-
     let ctx = { baseMap = baseMap, tyAnnotMap = mapEmpty nameCmp} in
     match mapAccumL handleCosemTyAnnot_Decl ctx prog.decls 
     with (_, decls) in 
-
-    printLn (int2string (length decls));
 
     {prog with decls = decls}
 
   sem handleCosemTyAnnot_Decl : CosemTyAnnotContext -> Decl -> (CosemTyAnnotContext, Decl)
   sem handleCosemTyAnnot_Decl ctx = 
-  | decl & DeclCosem d -> 
-    printLn "Here!";
+  | DeclCosem d -> 
+    match mapLookup d.ident ctx.baseMap with Some baseIdent in 
     if d.isBase then 
-      ({ctx with tyAnnotMap = mapInsert d.ident d.tyAnnot ctx.tyAnnotMap}, decl)
+      ({ctx with tyAnnotMap = mapInsert baseIdent d.tyAnnot ctx.tyAnnotMap}, 
+       DeclCosem {d with targetTyIdent = extractCosemTarget (d.info, d.ident) d.tyAnnot})
     else
-      match mapLookup d.ident ctx.baseMap with Some baseIdent in 
       let tyAnnot = match mapLookup baseIdent ctx.tyAnnotMap 
                     with Some tyAnnot then tyAnnot
                     else errorSingle [d.info] (join [
@@ -41,7 +38,27 @@ lang CosemTyAnnot = MLangAst
                       "* Please provide a type annotation for the cosem at the",
                       " base declaration."
                     ]) in 
-       (ctx, DeclCosem {d with tyAnnot = tyAnnot})
-  | d -> 
-    smapAccumL_Decl_Decl handleCosemTyAnnot_Decl ctx d
+       (ctx, DeclCosem {d with tyAnnot = tyAnnot,
+                               targetTyIdent = extractCosemTarget (d.info, d.ident) tyAnnot})
+  | other -> 
+    (ctx, other)
+  | DeclLang d -> 
+    match mapAccumL handleCosemTyAnnot_Decl ctx d.decls with (ctx, decls) in 
+    (ctx, DeclLang {d with decls = decls})
+
+  sem extractCosemTarget : (Info, Name) -> Type -> Name
+  sem extractCosemTarget ctx =
+  | TyAll t -> extractCosemTarget ctx t.ty
+  | TyArrow t -> extractCosemTarget ctx t.to
+  | TyApp t -> extractCosemTarget ctx t.rhs
+  | TyCon t -> t.ident
+  | other -> 
+    errorSingle [ctx.0] (join [
+      "* The base declaration of must have a type annotation!\n",
+      "* Furthermore, the return type of a cosem type annotation should be an erec, but found: '\n", 
+      (type2str other), 
+      "'\n",
+      "* Please provide an appropriate type annotation for the cosem at its base",
+      "declaration."
+    ])
 end

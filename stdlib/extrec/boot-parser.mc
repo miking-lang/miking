@@ -108,7 +108,8 @@ lang CosemBootParser = BootParserMLang + RecordCopatAst + CosemDeclAst
                cases = cases,
                isBase = isBase,
                includes = [],
-               tyAnnot = gtype d 0}
+               tyAnnot = gtype d 0,
+               targetTyIdent = nameSym ""}
 
   sem gcopat c =
   | n -> let c2 = bootParserGetCopat c n in

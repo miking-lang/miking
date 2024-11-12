@@ -152,7 +152,13 @@ lang ExtRecordTypeCheck = TypeCheck + ExtRecordAst +
     TmRecType {t with inexpr = inexpr, 
                       ty =  tyTm inexpr}
   | TmExtRecord t ->
-    match mapLookup t.ident env.extRecordType.defs with Some labelToType in 
+    let labelToType = match mapLookup t.ident env.extRecordType.defs 
+                      with Some l then l 
+                      else errorSingle [t.info] (join [
+                        " * The type '",
+                        nameGetStr t.ident,
+                        "' is not defined!"
+                      ]) in
     match mapLookup t.ident env.extRecordType.tyDeps with Some tydeps in 
     let boundLabels = setOfKeys t.bindings in 
     let boundLabelNameSet = setMap nameCmp nameNoSym boundLabels in 

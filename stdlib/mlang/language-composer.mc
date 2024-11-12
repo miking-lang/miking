@@ -367,7 +367,8 @@ lang LanguageComposer = ExtendedMLang
                                 includes = includes,
                                 info = s.info,
                                 isBase = false,
-                                tyAnnot = tyunknown_} in 
+                                tyAnnot = tyunknown_,
+                                targetTyIdent = nameSym ""} in 
           let info = decl2info langStr decl in 
           (ctxWithDeclInfo ctx (langStr, nameGetStr s.ident) info, decl)
         case CosynInfo _ then 

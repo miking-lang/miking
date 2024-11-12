@@ -459,6 +459,9 @@ lang DeclLangSym = DeclSym + LangDeclAst + TypeDeclAst + SemDeclAst +
 
       let env = updateEnv env langEnv in
 
+      match symbolizeTyAnnot env s.tyAnnot with (tyVarEnv, tyAnnot) in 
+      let env = symbolizeUpdateTyVarEnv env tyVarEnv in 
+
       let symbArgTy = lam env : SymEnv. lam arg : {ident : Name, tyAnnot : Type}. 
           match setSymbol env.currentEnv.varEnv arg.ident with (varEnv, ident) in 
           let env = symbolizeUpdateVarEnv env varEnv in 
@@ -477,7 +480,9 @@ lang DeclLangSym = DeclSym + LangDeclAst + TypeDeclAst + SemDeclAst +
       in
       let cases = map symbCases s.cases in
 
-      let decl = DeclCosem {s with cases = cases, args = args} in 
+      let decl = DeclCosem {s with cases = cases, 
+                                   args = args,
+                                   tyAnnot = tyAnnot} in 
 
       decl
     in
