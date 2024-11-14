@@ -115,7 +115,7 @@ with ("Hello", "Next string", "Final", "EOF") in
 -- Check that the file size is correct
 utest fileSize filename with 23 in
 
--- Reads the content of the file using function readString()
+-- Reads the content of the file using function fileReadString()
 utest
   match fileReadOpen filename with Some rc then
     let s = fileReadString rc in
@@ -149,9 +149,9 @@ with false in
 -- Uncomment the lines below to test the echo function in interactive mode.
 utest
   let skip = (fileStdin, fileStdout, fileStderr) in
-  --match readLine stdin with Some s in
-  --writeString stdout s;
-  --writeString stderr s;
+  --match fileReadLine stdin with Some s in
+  --fileWriteString stdout s;
+  --fileWriteString stderr s;
   ()
 with () in
 
