@@ -31,6 +31,9 @@ let tybool_ = use BoolTypeAst in
 let tychar_ = use CharTypeAst in
   TyChar {info = NoInfo ()}
 
+let itychar_ = use CharTypeAst in
+  lam i. TyChar {info = i}
+
 let tyunknown_ = use UnknownTypeAst in
   TyUnknown {info = NoInfo ()}
 
@@ -47,6 +50,8 @@ let tyseq_ = use SeqTypeAst in
   ityseq_ (NoInfo ()) ty
 
 let tystr_ = tyseq_ tychar_
+
+let itystr_ = lam i. ityseq_ i (itychar_ i)
 
 let tytensor_ = use TensorTypeAst in
   lam ty.
