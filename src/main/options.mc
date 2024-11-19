@@ -14,6 +14,7 @@ let optionsDefault : Options = {
   debugShallow = false,
   debugConstantFold = false,
   debugPhases = false,
+  debugDumpPhases = setEmpty cmpString,
   exitBefore = false,
   disablePruneExternalUtests = false,
   disablePruneExternalUtestsWarning = false,

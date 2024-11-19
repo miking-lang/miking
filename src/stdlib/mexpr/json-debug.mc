@@ -10,10 +10,18 @@ include "mlang/ast.mc"
 
 lang AstToJson = Ast + DeclAst
   sem exprToJson : Expr -> JsonValue
+  sem exprToJson =
+  | tm -> error (join ["Missing case in exprToJson ", info2str (infoTm tm)])
   sem typeToJson : Type -> JsonValue
+  sem typeToJson =
+  | ty -> error (join ["Missing case in typeToJson ", info2str (infoTy ty)])
   sem kindToJson : Kind -> JsonValue
   sem patToJson : Pat -> JsonValue
+  sem patToJson =
+  | pat -> error (join ["Missing case in patToJson ", info2str (infoPat pat)])
   sem declToJson : Decl -> JsonValue
+  sem declToJson =
+  | decl -> error (join ["Missing case in declToJson ", info2str (infoDecl decl)])
 
   sem optToNull : Option JsonValue -> JsonValue
   sem optToNull =
@@ -555,6 +563,14 @@ lang ExtToJson = ExtDeclAst + AstToJson
     , ("tyIdent", typeToJson x.tyIdent)
     , ("effect", JsonBool x.effect)
     , ("info", infoToJson x.info)
+    ] )
+end
+
+lang MLangProgramToJson = MLangTopLevel + AstToJson
+  sem progToJson =
+  | x -> JsonObject (mapFromSeq cmpString
+    [ ("decls", JsonArray (map declToJson x.decls))
+    , ("expr", exprToJson x.expr)
     ] )
 end
 

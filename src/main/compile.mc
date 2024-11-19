@@ -41,7 +41,8 @@ lang MCoreCompile =
   MExprConstantFold +
   OCamlTryWithWrap + MCoreCompileLang + PhaseStats +
   SpecializeCompile +
-  PprintTyAnnot + HtmlAnnotator
+  PprintTyAnnot + HtmlAnnotator +
+  MExprToJson
 end
 
 lang TyAnnotFull = MExprPrettyPrint + TyAnnot + HtmlAnnotator + MetaVarTypePrettyPrint
@@ -63,7 +64,7 @@ let insertTunedOrDefaults = lam options : Options. lam ast. lam file.
 
 let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
   use MCoreCompile in
-    let log = mkPhaseLogState options.debugPhases in
+    let log = mkPhaseLogState options.debugDumpPhases options.debugPhases in
 
     -- If option --debug-profile, insert instrumented profiling expressions
     -- in AST
@@ -151,7 +152,7 @@ let compile = lam files. lam options : Options. lam args.
     iter (compileExtendedMLangToOcaml options compileWithUtests) files
   else
     let compileFile = lam file.
-      let log = mkPhaseLogState options.debugPhases in
+      let log = mkPhaseLogState options.debugDumpPhases options.debugPhases in
       let ast = parseParseMCoreFile {
         keepUtests = options.runTests,
         pruneExternalUtests = not options.disablePruneExternalUtests,

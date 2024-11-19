@@ -1,4 +1,5 @@
 include "tuning/tune-options.mc"
+include "set.mc"
 
 -- Options type
 type Options = {
@@ -11,6 +12,7 @@ type Options = {
   debugShallow : Bool,
   debugConstantFold : Bool,
   debugPhases : Bool,
+  debugDumpPhases : Set String,
   exitBefore : Bool,
   disablePruneExternalUtests : Bool,
   disablePruneExternalUtestsWarning : Bool,

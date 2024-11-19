@@ -39,6 +39,10 @@ let optionsConfig : ParseConfig Options = [
     "Show debug and profiling information about each pass",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with debugPhases = true}),
+  ([("--debug-phase", " ", "<phase>")],
+    "Print a json representation of the AST after the given pass. Can be given multiple times.",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with debugDumpPhases = setInsert (argToString p) o.debugDumpPhases}),
   ([("--exit-before", "", "")],
     "Exit before evaluation or compilation",
     lam p: ArgPart Options.
