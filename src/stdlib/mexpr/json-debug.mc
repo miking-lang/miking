@@ -31,12 +31,6 @@ lang AstToJson = Ast + DeclAst
 
   sem infoToJson : Info -> JsonValue
   sem infoToJson = | info -> JsonString (info2str info)
-
-  -- TODO(vipa, 2024-05-16): This is a temporary helper until
-  -- https://github.com/miking-lang/miking/issues/826 is implemented
-  sem exprAsDecl : Expr -> Option (Decl, Expr)
-  sem exprAsDecl =
-  | _ -> None ()
 end
 
 lang VarToJson = AstToJson + VarAst
@@ -74,33 +68,7 @@ lang LamToJson = AstToJson + LamAst
     ] )
 end
 
-lang DeclsToJson = AstToJson + LetAst + LetDeclAst + RecLetsAst + RecLetsDeclAst + TypeAst + TypeDeclAst + DataAst + DataDeclAst + UtestAst + UtestDeclAst + ExtAst + ExtDeclAst
-  sem exprAsDecl =
-  | TmLet x -> Some
-    ( DeclLet {ident = x.ident, tyAnnot = x.tyAnnot, tyBody = x.tyBody, body = x.body, info = x.info}
-    , x.inexpr
-    )
-  | TmRecLets x -> Some
-    ( DeclRecLets {info = x.info, bindings = x.bindings}
-    , x.inexpr
-    )
-  | TmType x -> Some
-    ( DeclType {ident = x.ident, params = x.params, tyIdent = x.tyIdent, info = x.info}
-    , x.inexpr
-    )
-  | TmConDef x -> Some
-    ( DeclConDef {ident = x.ident, tyIdent = x.tyIdent, info = x.info}
-    , x.inexpr
-    )
-  | TmUtest x -> Some
-    ( DeclUtest {test = x.test, expected = x.expected, tusing = x.tusing, tonfail = x.tonfail, info = x.info}
-    , x.next
-    )
-  | TmExt x -> Some
-    ( DeclExt {ident = x.ident, tyIdent = x.tyIdent, effect = x.effect, info = x.info}
-    , x.inexpr
-    )
-
+lang DeclsToJson = AstToJson + MExprAsDecl
   sem exprToJson =
   | tm & (TmLet _ | TmRecLets _ | TmType _ | TmConDef _ | TmUtest _ | TmExt _) ->
     recursive let work = lam acc. lam expr.
