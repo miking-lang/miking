@@ -14,6 +14,7 @@ include "string.mc"
 include "option.mc"
 include "tensor.mc"
 include "math.mc"
+include "common.mc"
 
 type JsonValue
 con JsonObject: Map String JsonValue -> JsonValue
@@ -345,6 +346,87 @@ recursive let json2string: JsonValue -> String = lam value.
     "null"
   end
 end
+
+recursive let _printJson: JsonValue -> () = lam value.
+  switch value
+  case JsonObject properties then
+    print "{";
+    mapFoldWithKey (lam comma. lam k. lam v.
+      (if comma then print "," else ());
+      _printJson (JsonString k);
+      print ":";
+      _printJson v;
+      true
+    ) false properties;
+    print "}"
+  case JsonArray values then
+    print "[";
+    (match values with [h] ++ t then
+      _printJson h;
+      iter (lam v. print ","; _printJson v) t
+     else ());
+    print "]"
+  case JsonString s then
+    let escape: Char -> () = lam c.
+      let cval: Int = char2int c in
+      if eqi cval 8 then
+        print "\\b"
+      else if eqi cval 12 then
+        print "\\f"
+      else if or (lti cval 32) (eqi cval 127) then
+        let tohex: Int -> Char = lam x.
+          if lti x 10 then
+            int2char (addi x (char2int '0'))
+          else
+            int2char (addi (subi x 10) (char2int 'a'))
+        in
+        print ['\\', 'u', '0', '0', tohex (divi cval 16), tohex (modi cval 16)]
+      else
+        switch c
+        case '\"' then print "\\\""
+        case '\\' then print "\\\\"
+        case '/' then print "\\/"
+        case '\n' then print "\\n"
+        case '\r' then print "\\r"
+        case '\t' then print "\\t"
+        case _ then
+          -- NOTE(johnwikman, 2022-05-13): Ignoring the upper bound on JSON
+          -- character size here.
+          print [c]
+        end
+    in
+    print "\"";
+    iter escape s;
+    print "\""
+  case JsonFloat f then
+    if neqf f f then
+      print "{\"__float__\": \"nan\"}"
+    else if eqf f inf then
+      print "{\"__float__\": \"inf\"}"
+    else if eqf f (negf inf) then
+      print "{\"__float__\": \"-inf\"}"
+    else
+      -- NOTE(vsenderov, 2023-09-14): Need to append/prepend 0 to conform to the
+      -- JSON standard.  What is the situation in locales that don't use a dot
+      -- to delimit decimals?
+      let str = float2string f in
+      switch str
+        case _ ++ "." then print str; print "0"
+        case "." ++ _ then print "0"; print str
+        case _ then print str
+      end
+
+  case JsonInt i then
+    print (int2string i)
+  case JsonBool b then
+    print (if b then "true" else "false")
+  case JsonNull () then
+    print "null"
+  end
+end
+let printJsonLn : JsonValue -> () = lam v.
+  _printJson v;
+  printLn ""
 
 recursive let jsonEq: JsonValue -> JsonValue -> Bool =
   lam lhs. lam rhs.
