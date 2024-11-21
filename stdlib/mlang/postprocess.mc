@@ -14,37 +14,24 @@ include "option.mc"
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/pprint.mc"
+include "mexpr/utils.mc"
 
-let foobla : Map (String, String) Name -> (Name -> Name) = lam m.
-  let pairs : [((String, String), Name)] = mapToSeq m in 
-  let reversedPairs = map (lam p. (p.1, p.0)) pairs in 
-  let reversedMap = mapFromSeq nameCmp reversedPairs in 
+lang PostProcess = MExprAst + MExprSubstitute
+  sem buildMap : Map (String, String) Name -> Map Name Name
+  sem buildMap =
+  | m ->
+    let pairs = mapToSeq m in
+    let pairs = map (lam p. 
+      match p with ((langStr, semStr), n) in (n, join [langStr, "_", semStr]))
+      pairs in
+    let pairs = map (lam p. match p with (n, str) in (n, nameSetStr n str)) pairs in
+    mapFromSeq nameCmp pairs
 
-  lam n.
-    match mapLookup n reversedMap with Some ((origLang, semName)) then 
-      nameSetStr n (join [origLang, "_", semName])
-    else 
-      n
 
-lang PostProcess = MExprAst 
   sem postprocess : Map (String, String) Name -> Expr -> Expr
   sem postprocess m =| e ->
-    let sub = foobla m in 
-    worker sub e
-
-  sem worker : (Name -> Name) -> Expr -> Expr
-  sem worker sub = 
-  | TmVar t -> TmVar {t with ident = sub t.ident}
-  | TmLet t -> TmLet {t with ident = sub t.ident,
-                             inexpr = worker sub t.inexpr}
-  | TmRecLets t -> 
-    let work = lam binding. 
-      {binding with ident = sub binding.ident,
-                    body = worker sub binding.body}
-    in
-    TmRecLets {t with bindings = map work t.bindings,
-                      inexpr = worker sub t.inexpr}
-  | other -> smap_Expr_Expr (worker sub) other
+    let m = buildMap m in 
+    substituteIdentifiersExpr m e
 end
 
 mexpr

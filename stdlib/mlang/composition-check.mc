@@ -445,6 +445,7 @@ lang MLangCompositionCheck = MLangAst + MExprPatAnalysis + MExprAst + MExprPrett
   sem validateSynSemBase langStr env =
   | DeclCosem s -> 
     let env = {env with symToPair = mapInsert s.ident (langStr, nameGetStr s.ident) env.symToPair,
+                        semSymMap = mapInsert (langStr, nameGetStr s.ident) s.ident env.semSymMap,
                         langToSems = mapInsert langStr (cons s.ident (mapLookupOrElse (lam. []) langStr env.langToSems)) env.langToSems
     } in
 
@@ -476,8 +477,7 @@ lang MLangCompositionCheck = MLangAst + MExprPatAnalysis + MExprAst + MExprPrett
             info = s.info
           })
   | DeclCosyn s -> 
-    let env = {env with symToPair = mapInsert s.ident (langStr, nameGetStr s.ident) env.symToPair,
-                        semSymMap = mapInsert (langStr, nameGetStr s.ident) s.ident env.semSymMap} in
+    let env = {env with symToPair = mapInsert s.ident (langStr, nameGetStr s.ident) env.symToPair} in
 
     match s.includes with [] then 
       result.ok (insertBaseMap env (langStr, nameGetStr s.ident) s.ident s.ident)
