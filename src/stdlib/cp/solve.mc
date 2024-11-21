@@ -266,11 +266,9 @@ in
 let eqTest =
   lam options: COPSolverOptions. lam isOpt: Bool. lam vars: [String].
   lam lhs: String. lam rhs: TestRhs.
-    if sysCommandExists "minizinc" then
-      let env = (createEnv vars) in
-      let lhs = _solveString isOpt options env lhs in
-      eqCOPSolverResult lhs (rhs2Result env rhs)
-    else true
+  let env = (createEnv vars) in
+  let lhs = _solveString isOpt options env lhs in
+  eqCOPSolverResult lhs (rhs2Result env rhs)
 in
 
 let eqTestOpt = eqTest (solverOptionsDefault {}) true in

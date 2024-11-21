@@ -285,16 +285,15 @@ let _glob
         _restrictToDir dir args.glob
       else Some args.glob in
     match glob with Some glob then
-      let globStr = strJoin "/" (cons "src" glob.dirs) in
-      let globStr = match glob.subdirs with IncludeSubs _
-        then concat globStr "/**"
-        else globStr in
-      let globStr = switch glob.file
-        case ExactFile f then join [globStr, "/", f]
-        case SuffixFile f then join [globStr, "/*", f]
+      let dir = [strJoin "/" (cons "src" glob.dirs)] in
+      let depth = match glob.subdirs with IncludeSubs _
+        then []
+        else ["-maxdepth", "1"] in
+      let name = switch glob.file
+        case ExactFile f then ["-name", f]
+        case SuffixFile f then ["-name", concat "\\*" f]
         end in
-      let bashCmd = join ["\"for f in ", globStr, "; do echo \\$f; done\""] in
-      let res = sysRunCommand ["bash", "-O", "globstar", "-O", "nullglob", "-c", bashCmd] "" args.root in
+      let res = sysRunCommand (join [["find"], dir, depth, name]) "" args.root in
       let stringToPath = lam s. OrigPath { path = match strSplit "/" s with dirs ++ [file] in (dirs, file) } in
       let paths = init (strSplit "\n" res.stdout) in
       let paths = match args.files with Some files
@@ -472,8 +471,9 @@ let testMain : [TestCollection] -> () = lam colls.
   (if setIsEmpty unknownColls then () else
     let msg = join
       [ "Unknown test set(s): ", strJoin ", " (setToSeq unknownColls), "\n"
-      , "Try one of these:    ", strJoin ", " (setToSeq knownColls)] in
-    printLn msg;
+      , "Try one of these:    ", strJoin ", " (setToSeq knownColls), "\n"] in
+    printError msg;
+    flushStderr ();
     exit 1);
   _phase "unknownColls";
 
@@ -568,8 +568,8 @@ let testMain : [TestCollection] -> () = lam colls.
       then "%2o"
       else pathToString stderr in
     let elideCat = match options.mode with TupRules _
-      then "$(ROOT)/misc/elide-cat"
-      else "misc/elide-cat" in
+      then "$(ROOT)/misc/scripts/elide-cat"
+      else "misc/scripts/elide-cat" in
     let command = join
       [ "{ ", command, "; } >'", stdoutStr, "' 2>'", stderrStr
       , "' || { ", elideCat, " stdout '", stdoutStr, "'; ", elideCat, " stderr '", stderrStr, "'; false; }"
@@ -621,9 +621,9 @@ let testMain : [TestCollection] -> () = lam colls.
         switch tasks.compile
         case Dont _ then ()
         case Fail _ then
-          run.f {input = src, cmd = "%m compile --test %i --exit-before", tag = "exe"}
+          run.f {input = src, cmd = "%m compile --disable-prune-utests --test %i --exit-before", tag = "exe"}
         case Success _ then
-          let exe = run.m {input = src, cmd = "%m compile --test %i --output %o", tag = "exe"} in
+          let exe = run.m {input = src, cmd = "%m compile --disable-prune-utests --test %i --output %o", tag = "exe"} in
           (switch tasks.run
            case Dont _ then ()
            case Fail _ then
@@ -634,9 +634,9 @@ let testMain : [TestCollection] -> () = lam colls.
           (switch _minER tasks.run tasks.interpret
            case Dont _ then ()
            case Fail _ then
-             run.f {input = src, cmd = "%m eval --test %i", tag = "eval"}
+             run.f {input = src, cmd = "%m eval --disable-prune-utests --test %i", tag = "eval"}
            case Success _ then
-             run.e {input = src, cmd = "%m eval --test %i", tag = "eval"}
+             run.e {input = src, cmd = "%m eval --disable-prune-utests --test %i", tag = "eval"}
            end)
         end
     in
@@ -791,11 +791,6 @@ testMain
         , "test/py/python.mc"
         ]);
 
-      -- This doesn't seem to terminate in a reasonable amount of time
-      api.mark dontRun (api.strsToPaths
-        [ "test/examples/async/tick.mc"
-        ]);
-
       -- Inconveniently slow when interpreting, so we skip that part
       api.mark dontInterpret (api.strsToPaths
         [ "stdlib/parser/lrk.mc"
@@ -812,9 +807,24 @@ testMain
         , "test/examples/test-prune-utests.mc"
         ]);
 
-      -- Files where interpretation is expected to fail
+      -- Files using externals not available in the interpreter
       api.mark interpretFail (api.strsToPaths
-        [ "test/examples/utest.mc"
+        [ "stdlib/ext/file-ext.mc"
+        , "stdlib/ext/array-ext.mc"
+        , "stdlib/ext/ext-test.mc"
+        , "stdlib/ext/local-search.mc"
+        , "test/examples/external/ext-list-map.mc"
+        , "test/examples/external/ext-list-concat-map.mc"
+        , "stdlib/multicore/atomic.mc"
+        , "stdlib/multicore/atomic.mc"
+        , "stdlib/multicore/channel.mc"
+        , "stdlib/multicore/thread.mc"
+        , "stdlib/multicore/thread-pool.mc"
+        , "stdlib/multicore/cond.mc"
+        , "stdlib/multicore/mutex.mc"
+        , "stdlib/multicore/pseq.mc"
+        , "stdlib/stats.mc"
+        , "stdlib/math.mc"
         ]);
 
       -- Files that *should* fail to compile
@@ -986,6 +996,74 @@ testMain
         ["test/meta/recursive-let.mc"] in
       api.mark fail files;
       api.mark interpretFail (api.strsToPaths ["test/meta/recursive-let.mc"])
+    }
+
+  , { testColl "ipopt"
+    with checkCondition = lam.
+      if eqi 0 (command "ocamlfind query ipoptml &>/dev/null")
+      then ConditionsMet ()
+      else ConditionsUnmet ()
+    , conditionalInclusions = lam api.
+      api.mark defaultTasks
+        (api.glob ["stdlib", "ipopt"] (IncludeSubs ()) (SuffixFile ".mc"));
+      api.mark {defaultTasks with interpret = Fail ()} (api.strsToPaths
+        [ "stdlib/ipopt/ipopt.mc"
+        ] )
+    }
+
+  , { testColl "sundials"
+    with checkCondition = lam.
+      if eqi 0 (command "ocamlfind query sundialsml &>/dev/null")
+      then ConditionsMet ()
+      else ConditionsUnmet ()
+    , conditionalInclusions = lam api.
+      api.mark defaultTasks
+        (api.glob ["stdlib", "sundials"] (IncludeSubs ()) (SuffixFile ".mc"));
+      api.mark {defaultTasks with interpret = Fail ()} (api.strsToPaths
+        [ "stdlib/sundials/cvode.mc"
+        , "stdlib/sundials/ida.mc"
+        , "stdlib/sundials/kinsol.mc"
+        ] )
+    }
+
+  , { testColl "lwt"
+    with checkCondition = lam.
+      if eqi 0 (command "ocamlfind query lwt &>/dev/null")
+      then ConditionsMet ()
+      else ConditionsUnmet ()
+    , conditionalInclusions = lam api.
+      api.mark {defaultTasks with interpret = Fail ()} (api.strsToPaths
+        [ "stdlib/ext/async-ext.mc"
+        ] );
+      -- NOTE(vipa, 2024-11-25): This doesn't terminate in a reasonable amount of time
+      api.mark {defaultTasks with interpret = Dont (), run = Dont ()} (api.strsToPaths
+        [ "test/examples/async/tick.mc"
+        ] )
+    }
+
+  , { testColl "owl"
+    with checkCondition = lam.
+      if eqi 0 (command "ocamlfind query owl &>/dev/null")
+      then ConditionsMet ()
+      else ConditionsUnmet ()
+    , conditionalInclusions = lam api.
+      api.mark {defaultTasks with interpret = Fail ()} (api.strsToPaths
+        [ "stdlib/ext/math-ext.mc"
+        , "stdlib/ext/matrix-ext.mc"
+        , "stdlib/ext/dist-ext.mc"
+        ] )
+    }
+
+  , { testColl "toml"
+    with checkCondition = lam.
+      if eqi 0 (command "ocamlfind query toml &>/dev/null")
+      then ConditionsMet ()
+      else ConditionsUnmet ()
+    , conditionalInclusions = lam api.
+      api.mark {defaultTasks with interpret = Fail ()} (api.strsToPaths
+        [ "stdlib/ext/toml-ext.mc"
+        , "stdlib/tuning/tune-options.mc"
+        ] )
     }
 
   , { testColl "lrk"

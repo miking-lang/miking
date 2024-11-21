@@ -42,7 +42,7 @@ default: bootstrap
 # directory, which should coincide with generated files
 .PHONY: clean
 clean:
-	bash -c 'mapfile -t args < <(misc/repo-ignored-files build); rm -rf "$${args[@]}"'
+	misc/scripts/repo-ignored-files build | tr "\n" "\0" | xargs -r0 rm -f
 	find build -depth -type d -empty -delete
 
 
@@ -50,30 +50,30 @@ clean:
 
 .PHONY: boot
 boot:
-	misc/with-tmp-dir dune build --root=src/boot/ --build-dir="{}" \
+	misc/scripts/with-tmp-dir dune build --root=src/boot/ --build-dir="{}" \
 	"&&" dune install --root=src/boot/ --build-dir="{}" --prefix=$(current_dir)/build ">/dev/null" "2>&1"
 	mv $(current_dir)"/build/bin/boot" build/$(BOOT_NAME)
 	rm -f $(current_dir)"/build/lib/boot/dune-package"
 
 .PHONY: install-boot
 install-boot:
-	misc/with-tmp-dir dune build --root=src/boot/ --build-dir="{}" \
+	misc/scripts/with-tmp-dir dune build --root=src/boot/ --build-dir="{}" \
 	"&&" dune install --root=src/boot/ --build-dir="{}" --prefix=$(prefix) --libdir=$(ocamllibdir) ">/dev/null 2>&1"
 
 .PHONY: uninstall-boot
 uninstall-boot:
-	misc/with-tmp-dir dune uninstall --root=src/boot --build-dir="{}" --prefix=$(prefix) --libdir=$(ocamllibdir) ">/dev/null 2>&1"
+	misc/scripts/with-tmp-dir dune uninstall --root=src/boot --build-dir="{}" --prefix=$(prefix) --libdir=$(ocamllibdir) ">/dev/null 2>&1"
 
 
 ## Formatting, checking and autoformatting respectively
 
 .PHONY: lint
 lint:
-	misc/with-tmp-dir dune fmt --root=src/boot/ --build-dir="{}"
+	misc/scripts/with-tmp-dir dune fmt --root=src/boot/ --build-dir="{}"
 
 .PHONY: fix
 fix:
-	misc/with-tmp-dir dune fmt --root=src/boot/ --build-dir="{}" --auto-promote
+	misc/scripts/with-tmp-dir dune fmt --root=src/boot/ --build-dir="{}" --auto-promote
 
 
 # Bootstrapping the `mi` executable

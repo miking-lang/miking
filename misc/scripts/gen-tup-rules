@@ -2,7 +2,7 @@
 
 set -e
 
-DIR=$(dirname "$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )")
+DIR=$(dirname "$(dirname "$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )")")
 TARGETDIR=$(realpath --relative-to="$DIR" .)
 cd "$DIR"
 
