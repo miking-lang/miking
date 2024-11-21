@@ -269,7 +269,7 @@ lang MLangCompositionCheck = MLangAst + MExprPatAnalysis + MExprAst + MExprPrett
   | DeclSyn s & d ->
     _foldlMfun env d [validateSynSemParams langStr, validateSynSemBase langStr, validateStrictSumExtension]
   | SynDeclProdExt s & d ->
-    validateSynSemBase langStr env d
+    _foldlMfun env d [validateSynSemParams langStr, validateSynSemBase langStr]
   | DeclCosyn _ & d -> 
     _foldlMfun env d [validateSynSemParams langStr, validateSynSemBase langStr]
   | DeclCosem _ & d ->
@@ -360,6 +360,33 @@ lang MLangCompositionCheck = MLangAst + MExprPatAnalysis + MExprAst + MExprPrett
           synIdent = s.ident,
           info = s.info
         })
+  | SynDeclProdExt s ->
+    let str = nameGetStr s.ident in 
+    let paramNum = length s.params in 
+
+    match s.includes with [] then 
+      result.ok (insertParamMap env (langStr, str) paramNum)
+    else 
+      let paramNum = length s.params in 
+
+      let raiseErr = lam. 
+        errorSingle [s.info] (join [
+          "Illegal state during composition-check for the syn '",
+          str,
+          "'!"
+        ]) in 
+      let includeList = map (lam incl. mapLookupOrElse raiseErr incl env.paramMap) 
+        s.includes in 
+      let includeSet = setOfSeq subi includeList in 
+      let includeSet = setInsert paramNum includeSet in 
+
+      if eqi 1 (setSize includeSet) then
+        result.ok (insertParamMap env (langStr, str) paramNum)
+      else
+        result.err (MismatchedSynParams {
+          synIdent = s.ident,
+          info = s.info
+        })
   | DeclSyn s -> 
     let str = nameGetStr s.ident in 
     let paramNum = length s.params in 
@@ -369,8 +396,13 @@ lang MLangCompositionCheck = MLangAst + MExprPatAnalysis + MExprAst + MExprPrett
     else 
       let paramNum = length s.params in 
 
-      let includeList = map 
-        (lam incl. match mapLookup incl env.paramMap with Some b in b) 
+      let raiseErr = lam. 
+        errorSingle [s.info] (join [
+          "Illegal state during composition-check for the syn '",
+          str,
+          "'!"
+        ]) in 
+      let includeList = map (lam incl. mapLookupOrElse raiseErr incl env.paramMap) 
         s.includes in 
       let includeSet = setOfSeq subi includeList in 
       let includeSet = setInsert paramNum includeSet in 
@@ -444,7 +476,8 @@ lang MLangCompositionCheck = MLangAst + MExprPatAnalysis + MExprAst + MExprPrett
             info = s.info
           })
   | DeclCosyn s -> 
-    let env = {env with symToPair = mapInsert s.ident (langStr, nameGetStr s.ident) env.symToPair} in
+    let env = {env with symToPair = mapInsert s.ident (langStr, nameGetStr s.ident) env.symToPair,
+                        semSymMap = mapInsert (langStr, nameGetStr s.ident) s.ident env.semSymMap} in
 
     match s.includes with [] then 
       result.ok (insertBaseMap env (langStr, nameGetStr s.ident) s.ident s.ident)

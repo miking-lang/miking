@@ -289,8 +289,6 @@ lang BigPipeline = BigIncludeHandler +
         endPhaseStatsExpr log "monomorphise" expr;
 
 
-        endPhaseStatsExpr log "postprocess" expr;
-
         -- TODO: replace this by its own dedicated debug flag
         (if options.debugParse then 
           printLn " === Monomorphised result: ===" ; 

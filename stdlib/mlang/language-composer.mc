@@ -173,7 +173,7 @@ lang LanguageComposer = ExtendedMLang
               else None ()) decls in 
     let synOrSemStrings = map nameGetStr synOrSemNames in 
 
-    match addImplicitIncludes (nameGetStr l.ident) includes synOrSemStrings ctx 
+    match addImplicitIncludes (nameGetStr l.ident) l.info includes synOrSemStrings ctx 
     with (ctx, generatedDecls) in 
 
     (ctx, DeclLang {l with decls = concat decls generatedDecls})
@@ -289,7 +289,7 @@ lang LanguageComposer = ExtendedMLang
     -- (ctx, decl) 
     error "Only Type, Syn, and Sem declarations can be contained inside of a langauge!"
 
-  sem addImplicitIncludes langStr includes definedSynsSems =
+  sem addImplicitIncludes langStr langInfo includes definedSynsSems =
   | ctx ->
     let includeSet = setOfSeq cmpString includes in 
 
@@ -331,7 +331,7 @@ lang LanguageComposer = ExtendedMLang
                               params = s.params,
                               defs = [],
                               includes = includes,
-                              info = s.info,
+                              info = langInfo,
                               declKind = sumext_kind_} in 
           let info = decl2info langStr decl in 
           (ctxWithDeclInfo ctx (langStr, nameGetStr s.ident) info, decl)
@@ -349,7 +349,7 @@ lang LanguageComposer = ExtendedMLang
                               args = args,
                               cases = [],
                               includes = includes,
-                              info = s.info,
+                              info = langInfo,
                               declKind = sumext_kind_} in 
           let info = decl2info langStr decl in 
           (ctxWithDeclInfo ctx (langStr, nameGetStr s.ident) info, decl)
@@ -365,7 +365,7 @@ lang LanguageComposer = ExtendedMLang
                                 args = args,
                                 cases = [],
                                 includes = includes,
-                                info = s.info,
+                                info = langInfo,
                                 isBase = false,
                                 tyAnnot = tyunknown_,
                                 targetTyIdent = nameSym ""} in 
