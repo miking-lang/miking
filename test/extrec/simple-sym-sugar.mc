@@ -122,7 +122,7 @@ lang ExtendedSym = ExtendedLang + BaseSym
 end
 
 lang FullSym = ExtendedSym + SimpleSym
-  sem symbolizeExpr : < FullSym::SymEnv -> Unknown -> Unknown
+  sem symbolizeExpr : atmost FullSym::SymEnv -> Unknown -> Unknown
   sem symbolizeExpr env +=
 end
 

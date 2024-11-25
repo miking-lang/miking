@@ -3,7 +3,7 @@ lang BaseArith
   | TmInt {val : Int}
   | TmAdd {lhs : Expr, rhs : Expr} 
 
-  sem eval : < BaseArith::Expr -> Int
+  sem eval : atmost BaseArith::Expr -> Int
   sem eval =
   | TmInt t -> t.val 
   | TmAdd t -> addi (eval t.lhs) (eval t.rhs)
@@ -13,7 +13,7 @@ lang SugarArith = BaseArith
   syn Expr += 
   | TmIncr {e : Expr} 
 
-  sem desugar : < SugarArith::Expr -> > BaseArith::Expr
+  sem desugar : atmost SugarArith::Expr -> atleast BaseArith::Expr
   sem desugar =
   | TmInt t -> TmInt {TmIntType of val = t.val}
   | TmAdd t -> TmAdd {TmAddType of lhs = desugar t.lhs,

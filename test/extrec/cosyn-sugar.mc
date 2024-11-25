@@ -11,7 +11,7 @@ lang L2 = L0
 end 
 
 lang L12 = L1 + L2
-  sem f : < L12::Foo -> Int
+  sem f : atmost L12::Foo -> Int
   sem f =
   | foo -> 
     addi foo.a foo.b

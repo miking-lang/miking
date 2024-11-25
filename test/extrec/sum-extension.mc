@@ -8,7 +8,7 @@ lang ArithLang = BaseLang
   | TmInt {val : Int}
   | TmAdd {lhs : Expr, rhs : Expr} 
 
-  sem eval : < ArithLang::Expr -> Int
+  sem eval : atmost ArithLang::Expr -> Int
   sem eval +=
   | TmInt t -> t.val 
   | TmAdd t -> addi (eval t.lhs) (eval t.rhs)
@@ -18,7 +18,7 @@ lang ConditionalLang = ArithLang
   syn Expr +=
   | TmIfThenElse {cond : Expr, thn : Expr, els : Expr}
 
-  sem eval : < ConditionalLang::Expr -> Int
+  sem eval : atmost ConditionalLang::Expr -> Int
   sem eval += 
   | TmIfThenElse t ->
     if eqi (eval t.cond) 0 then

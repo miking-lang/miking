@@ -88,7 +88,8 @@
 %token <unit Ast.tokendata> RECTYPE
 %token <unit Ast.tokendata> FIELD
 %token <unit Ast.tokendata> OF
-
+%token <unit Ast.tokendata> ATLEAST
+%token <unit Ast.tokendata> ATMOST
 
 /* Types */
 %token <unit Ast.tokendata> TUNKNOWN
@@ -734,9 +735,9 @@ ty_ish_atom:
     { TyVar($1.i,$1.v) }
   | UNDERSCORE
     { TyVar($1.i, us"_") }
-  | GREATER ident DCOLON ident
+  | ATLEAST ident DCOLON ident
     { TyQualifiedName(mkinfo $1.i $4.i, false, $2.v, $4.v) }
-  | LESS ident DCOLON ident
+  | ATMOST ident DCOLON ident
     { TyQualifiedName(mkinfo $1.i $4.i, true, $2.v, $4.v) }
     
 
