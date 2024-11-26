@@ -70,8 +70,8 @@ let fileExtMap =
       }
     ]),
     ("externalReadBytes", [
-      { expr = "(fun rc len -> let buf = Bytes.create len in try really_input rc buf 0 len; (Bytes.to_string buf, false) with | End_of_file -> (\"\",true))",
-        ty = tyarrows_ [otyvarext_ "in_channel" [], tyint_, otytuple_ [otystring_, tybool_]],
+      { expr = "(fun rc len -> try let buf = Bytes.create len in let actual_len = input rc buf 0 len in let reached_eof = actual_len < len in let had_error = false in let int_list = List.init actual_len (fun i -> int_of_char (Bytes.get buf i)) in (int_list, reached_eof, had_error) with | Sys_error err -> ([], false, true))",
+        ty = tyarrows_ [otyvarext_ "in_channel" [], tyint_, otytuple_ [otylist_ tyint_, tybool_, tybool_]],
         libraries = [],
         cLibraries = []
       }
