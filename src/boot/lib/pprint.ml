@@ -209,7 +209,7 @@ let rec ustring_of_ty = function
       pprint_type_str x
   | TyVar (_, x) ->
       pprint_var_str x
-  | TyQualifiedName (_, pos, n1, n2) ->
+  | TyQualifiedName (_, pos, n1, n2, _, _) ->
     let s = if pos then ">" else "<" in 
     us s ^. (pprint_type_str n1) ^. us "=>" ^. (pprint_type_str n2)
   | TyUse (_, lang, ty) ->

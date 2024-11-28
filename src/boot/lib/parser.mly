@@ -104,8 +104,9 @@
 %token <unit Ast.tokendata> PLUSEQ        /* "+="   */
 %token <unit Ast.tokendata> TIMESEQ       /* "*="   */
 %token <unit Ast.tokendata> ARROW         /* "->"  */
-%token <unit Ast.tokendata> LARROW         /* "<-"  */
+%token <unit Ast.tokendata> LARROW        /* "<-"  */
 %token <unit Ast.tokendata> ADD           /* "+"   */
+%token <unit Ast.tokendata> SUB           /* "-"   */
 
 
 /* Symbolic Tokens */
@@ -735,11 +736,38 @@ ty_ish_atom:
     { TyVar($1.i,$1.v) }
   | UNDERSCORE
     { TyVar($1.i, us"_") }
-  | ATLEAST ident DCOLON ident
-    { TyQualifiedName(mkinfo $1.i $4.i, false, $2.v, $4.v) }
-  | ATMOST ident DCOLON ident
-    { TyQualifiedName(mkinfo $1.i $4.i, true, $2.v, $4.v) }
-    
+  | atleast_atmost ident DCOLON ident
+    { let (b, fi) = $1 in
+      TyQualifiedName(mkinfo fi $4.i, b, $2.v, $4.v, [], []) }
+  | atleast_atmost LPAREN ident DCOLON ident plus_opt minus_opt RPAREN 
+    { let (b, fi) = $1 in
+      TyQualifiedName(mkinfo fi $8.i, b, $3.v, $5.v, $6, $7) }
+
+atleast_atmost:
+  | ATLEAST
+    { (false, $1.i) }
+  | ATMOST 
+    { (true, $1.i) }
+
+plus_opt: 
+  | 
+    { [] }
+  | ADD separated_list(COMMA, ident_colon_ident)
+    { $2 }
+
+minus_opt: 
+  | 
+    { [] }
+  | SUB separated_list(COMMA, ident_colon_ident)
+    { $2 }
+
+// plus_list:
+//   | separated_list(COMMA, ident_colon_ident)
+//     { $1 }
+
+ident_colon_ident:
+  | ident DCOLON ident
+    { ($1.v, $3.v) }
 
 %inline ty_data:
   | LBRACKET var_ident RBRACKET

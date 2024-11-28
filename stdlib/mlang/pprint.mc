@@ -52,7 +52,32 @@ lang QualifiedNamePrettyPrint = MExprPrettyPrint + QualifiedTypeAst +
     let prefix = if t.pos then "< " else "> " in 
     match pprintLangName env t.lhs with (env, lhs) in
     match pprintTypeName env t.rhs with (env, rhs) in
-    (env, join [prefix, lhs, "::", rhs])                        
+
+    printLn (int2string (length t.plus));
+    printLn (int2string (length t.minus));
+
+    if and (null t.plus) (null t.minus) then
+      (env, join [prefix, lhs, "::", rhs])                        
+    else
+      let pprintList = lam env. lam pairs.
+        mapAccumL (lam env. lam pair.
+          match pair with (t, c) in 
+          match pprintTypeName env t with (env, t) in
+          match pprintTypeName env c with (env, c) in
+          (env, join [t, "::", c])
+        ) env pairs
+      in
+
+      let plus = if null t.plus then "" else 
+        match pprintList env t.plus with (env, plus) in 
+        concat " + " (strJoin ", " plus) in 
+
+      let minus = if null t.minus then "" else 
+        match pprintList env t.minus with (env, minus) in 
+        concat " - " (strJoin ", " minus) in
+
+      (env, join [prefix, "(", lhs, "::", rhs, plus, minus, ")"])
+      
 end
 
 

@@ -69,6 +69,7 @@ let reserved_strings = [
   ("*=",            fun(i) -> Parser.TIMESEQ{i=i;v=()});
   ("=",             fun(i) -> Parser.EQ{i=i;v=()});
   ("+",             fun(i) -> Parser.ADD{i=i;v=()});
+  ("-",             fun(i) -> Parser.SUB{i=i;v=()});
   ("++",            fun(i) -> Parser.CONCAT{i=i;v=()});
 
   (* Symbolic Tokens *)

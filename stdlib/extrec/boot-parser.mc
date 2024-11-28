@@ -157,26 +157,25 @@ let str = strJoin "\n" [
 let p = parseProgram str in 
 printLn (mlang2str p) ;
 
--- Test syn product extension
-let str = strJoin "\n" [
-  "lang L1",
-  "  cosyn Env a = {x : a}",
-  "  cosem makeEnv param =",
-  "  | {Env of x} <- {x = 10}",
-  "end"
-] in
-let p = parseProgram str in 
-printLn (mlang2str p) ;
-
 -- Test cosem with type annotation
 let str = strJoin "\n" [
   "lang L1",
   "  cosyn Env = {x : Int}",
   "  cosem makeEnv : Int -> Env",
   "  cosem makeEnv param =",
-  "  | {Env of x} <- {x = 10}",
+  "  | {x} <- {x = 10}",
   "end"
 ] in
+let p = parseProgram str in
+printLn (mlang2str p) ;
+
+let str = strJoin "\n" [
+  "lang L0",
+  "  sem eval1 : atmost (BaseArith::Expr - Expr::TmIncr) -> Int",
+  "  sem eval2 : atmost (BaseArith::Expr + Expr::TmIncr) -> Int",
+  "  sem eval3 : atmost (BaseArith::Expr + Expr::TmIncr - Expr::TmIncr) -> Int",
+  "end"
+] in 
 let p = parseProgram str in
 printLn (mlang2str p) ;
 

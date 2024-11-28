@@ -328,9 +328,10 @@ let getData = function
       let labels, tms = r |> Record.bindings |> List.split in
       (idTmRecExtend, [fi], [List.length labels], [], e :: tms, labels, [], [], [], [], [], [], [])
   (* Types *)
-  | PTreeTy (TyQualifiedName (fi, pos, lhs, rhs)) -> 
+  | PTreeTy (TyQualifiedName (fi, pos, lhs, rhs, plus, minus)) -> 
       let posInt = if pos then 1 else 0 in 
-      (idTyQualifiedName, [fi], [], [], [], [lhs ; rhs], [posInt], [], [], [], [], [], [])
+      let flatten pairs = List.fold_right (fun (a, b) acc -> a :: b :: acc) pairs [] in 
+      (idTyQualifiedName, [fi], [List.length plus; List.length minus], [], [], [lhs ; rhs] @ flatten plus @ flatten minus, [posInt], [], [], [], [], [], [])
   | PTreeTy (TyUnknown fi) ->
       (idTyUnknown, [fi], [], [], [], [], [], [], [], [], [], [], [])
   | PTreeTy (TyBool fi) ->

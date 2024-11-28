@@ -23,7 +23,7 @@ lang BaseArith
   | TmAdd {lhs : Expr, rhs : Expr} 
   | TmSub {lhs : Expr, rhs : Expr}
 
-  sem eval : < BaseArith::Expr -> Int
+  sem eval : atmost BaseArith::Expr -> Int
   sem eval =
   | TmInt t -> t.val 
   | TmAdd t -> addi (eval t.lhs) (eval t.rhs)

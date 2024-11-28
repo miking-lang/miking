@@ -196,10 +196,22 @@ lang ResolveQualifiedName = MLangAst + RecordTypeAst + QualifiedTypeAst +
                  ]) in 
 
     let env = mapLookupOrElse 
-      (lam. errorSingle [t.info] " * Langauge on lhs does not exist!") 
+      (lam. errorSingle [t.info] "* Langauge on left-hand side does not exist!") 
       t.lhs 
       accEnv.langEnvs
     in
+
+    let updateEnv = lam updater. lam env. lam pair.
+      match pair with (tyIdent, conIdent) in 
+      match mapLookup tyIdent env.prodFields with Some fields then 
+        {env with prodFields = mapInsert tyIdent (updater conIdent fields) env.prodFields}
+      else match mapLookup tyIdent env.sumFields with Some fields then 
+        {env with sumFields = mapInsert tyIdent (updater conIdent fields) env.sumFields}
+      else 
+        env
+    in
+    let env = foldl (updateEnv setInsert) env t.plus in 
+    let env = foldl (updateEnv setRemove) env t.minus in
 
     let folder = lam acc. lam dep.
       let dep = mapLookupOr dep dep staticEnv.baseMap in 

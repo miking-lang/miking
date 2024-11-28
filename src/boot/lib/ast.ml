@@ -437,7 +437,7 @@ and ty =
   (* Type variables *)
   | TyVar of info * ustring
   (* Qualified names in type annotations *)
-  | TyQualifiedName of info * bool * ustring * ustring
+  | TyQualifiedName of info * bool * ustring * ustring * ((ustring * ustring) list) * ((ustring * ustring) list)
   (* Type application *)
   | TyApp of info * ty * ty
   (* Type-level use *)
@@ -802,7 +802,7 @@ let ty_info = function
   | TyVar (fi, _)
   | TyUse (fi, _, _)
   | TyApp (fi, _, _)
-  | TyQualifiedName (fi, _, _, _) ->
+  | TyQualifiedName (fi, _, _, _, _, _) ->
       fi
 
 (* Checks if a constant _may_ have a side effect. It is conservative

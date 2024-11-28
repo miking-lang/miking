@@ -106,8 +106,7 @@ end
 lang RecordCopatPrettyPrint = RecordCopatAst + CopatPrettyPrint + MExprIdentifierPrettyPrint
   sem getCopatStringCode indent env = 
   | RecordCopat c ->
-    match pprintTypeName env c.ident with (env, ident) in 
-    (env, join ["{ ", ident, " of ", (strJoin ", " c.fields), " }"])
+    (env, join ["{ ", strJoin ", " c.fields, " }"])
 end
 
 lang DeclCosemPrettyPrint = DeclPrettyPrint + CosemDeclAst + RecordCopatPrettyPrint

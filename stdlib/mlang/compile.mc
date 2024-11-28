@@ -511,7 +511,7 @@ lang LangDeclCompiler = DeclCompiler + LangDeclAst + MExprAst + SemDeclAst +
         -- else (error_ (str_ "Inexhaustive match!"))
         else 
           let s = join ["Inexhaustive match in ", langStr, ".", nameGetStr d.ident, "!\n"] in 
-          semi_ (print_ (str_ s)) never_
+          semi_ (print_ (str_ s)) (inever_ d.info)
     in 
     let compileBodyHelper = lam cases : [{pat : Pat, thn : Expr}]. 
       if null cases then 
