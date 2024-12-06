@@ -29,7 +29,7 @@ jobs:
           # Install dependencies of owl
           sudo apt-get install -y liblapacke-dev libopenblas-dev
 
-          # Install all opam packages used in make test-all
+          # Install all opam packages used in make test
           opam install -y dune linenoise pyml toml lwt owl ocamlformat.0.24.1
 
       - name: Build Miking
@@ -42,7 +42,7 @@ jobs:
         timeout-minutes: 60
         run: |
           eval $(opam env)
-          make test-all
+          make test
 
   build-and-test-mac-os:
     runs-on: macos-13
@@ -73,7 +73,7 @@ jobs:
           ln -s $(brew --prefix gcc)/lib/gcc/current/libgcc_s.1.1.dylib $(brew --prefix openblas)/lib
           ln -s $(brew --prefix gcc)/lib/gcc/current/libquadmath.0.dylib $(brew --prefix openblas)/lib
 
-          # Install all opam packages used in make test-all
+          # Install all opam packages used in make test
           opam install -y dune linenoise pyml toml lwt owl ocamlformat.0.24.1
 
       - name: Build Miking
@@ -86,4 +86,4 @@ jobs:
         timeout-minutes: 60
         run: |
           eval $(opam env)
-          make test-all
+          make test

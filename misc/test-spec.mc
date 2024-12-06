@@ -1000,7 +1000,7 @@ testMain
 
   , { testColl "ipopt"
     with checkCondition = lam.
-      if eqi 0 (command "ocamlfind query ipoptml &>/dev/null")
+      if eqi 0 (command "ocamlfind query ipoptml >/dev/null 2>&1")
       then ConditionsMet ()
       else ConditionsUnmet ()
     , conditionalInclusions = lam api.
@@ -1013,7 +1013,7 @@ testMain
 
   , { testColl "sundials"
     with checkCondition = lam.
-      if eqi 0 (command "ocamlfind query sundialsml &>/dev/null")
+      if eqi 0 (command "ocamlfind query sundialsml >/dev/null 2>&1")
       then ConditionsMet ()
       else ConditionsUnmet ()
     , conditionalInclusions = lam api.
@@ -1028,7 +1028,7 @@ testMain
 
   , { testColl "lwt"
     with checkCondition = lam.
-      if eqi 0 (command "ocamlfind query lwt &>/dev/null")
+      if eqi 0 (command "ocamlfind query lwt >/dev/null 2>&1")
       then ConditionsMet ()
       else ConditionsUnmet ()
     , conditionalInclusions = lam api.
@@ -1043,7 +1043,7 @@ testMain
 
   , { testColl "owl"
     with checkCondition = lam.
-      if eqi 0 (command "ocamlfind query owl &>/dev/null")
+      if eqi 0 (command "ocamlfind query owl >/dev/null 2>&1")
       then ConditionsMet ()
       else ConditionsUnmet ()
     , conditionalInclusions = lam api.
@@ -1056,7 +1056,7 @@ testMain
 
   , { testColl "toml"
     with checkCondition = lam.
-      if eqi 0 (command "ocamlfind query toml &>/dev/null")
+      if eqi 0 (command "ocamlfind query toml >/dev/null 2>&1")
       then ConditionsMet ()
       else ConditionsUnmet ()
     , conditionalInclusions = lam api.
