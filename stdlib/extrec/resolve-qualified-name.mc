@@ -190,7 +190,7 @@ lang ResolveQualifiedName = MLangAst + RecordTypeAst + QualifiedTypeAst +
     let ident = t.rhs in 
     let tydeps = match mapLookup ident staticEnv.tydeps with Some tydeps then tydeps
                  else errorSingle [t.info] (join [
-                   " * Unknown rhs '",
+                   " * Unknown right-hand side '",
                    nameGetStr t.rhs,
                    "' of qualified type!"
                  ]) in 
@@ -201,6 +201,10 @@ lang ResolveQualifiedName = MLangAst + RecordTypeAst + QualifiedTypeAst +
       accEnv.langEnvs
     in
 
+    -- Update the environment based on the plus and minus sets.
+    -- Note that we do this by updating the environment in place.
+    -- This is only possible because we do not pass the environment into
+    -- any recursive calls.
     let updateEnv = lam updater. lam env. lam pair.
       match pair with (tyIdent, conIdent) in 
       match mapLookup tyIdent env.prodFields with Some fields then 

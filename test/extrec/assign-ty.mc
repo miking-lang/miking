@@ -105,9 +105,8 @@ lang AssignTy = LCArith
     let foundType = getFromEnv t.ident env in 
     TmVar {ident = t.ident, ty = foundType}
   | TmAbs t ->
-    -- TODO: handle this by projecting!
-    -- let tyAnnot = TyInt {} in 
     let tyAnnot = stripTyAnnot t.tyAnnot in 
+    -- let tyAnnot = t.tyAnnot in 
 
     let body = t.body in 
     let ident = t.ident in 
