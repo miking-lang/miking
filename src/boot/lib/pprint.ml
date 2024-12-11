@@ -210,13 +210,12 @@ let rec ustring_of_ty = function
   | TyVar (_, x) ->
       pprint_var_str x
   | TyQualifiedName (_, pos, n1, n2, _, _) ->
-    let s = if pos then ">" else "<" in 
-    us s ^. (pprint_type_str n1) ^. us "=>" ^. (pprint_type_str n2)
+      let s = if pos then ">" else "<" in
+      us s ^. pprint_type_str n1 ^. us "=>" ^. pprint_type_str n2
   | TyUse (_, lang, ty) ->
       us "use " ^. lang ^. us " in " ^. ustring_of_ty ty
   | TyApp (_, ty1, ty2) ->
       us "(" ^. ustring_of_ty ty1 ^. us " " ^. ustring_of_ty ty2 ^. us ")"
-
 
 (** Simple enum used in the concat function in ustring_of_tm *)
 type sep = Space | Comma
@@ -559,7 +558,7 @@ let rec print_const fmt = function
   | CbootParserGetPat _ ->
       fprintf fmt "bootParserParseGetPat"
   | CbootParserGetCopat _ ->
-    fprintf fmt "bootParserParseGetCopat"
+      fprintf fmt "bootParserParseGetCopat"
   | CbootParserGetInfo _ ->
       fprintf fmt "bootParserParseGetInfo"
   (* Python intrinsics *)
@@ -616,9 +615,9 @@ and print_tm fmt (prec, t) =
     | TmBox _
     | TmRecType _
     | TmRecField _
-    | TmRecCreation _ 
-    | TmRecExtend _ 
-    | TmRecProj _ 
+    | TmRecCreation _
+    | TmRecExtend _
+    | TmRecProj _
     | TmTensor _ ->
         Atom
   in
@@ -798,17 +797,16 @@ and print_tm' fmt t =
       let ty = ty |> ustring_of_ty |> string_of_ustring in
       fprintf fmt "@[<hov 0>field %s%s in@ %a@]" name (print_ty_if_known ty)
         print_tm (Match, tm)
-  | TmRecCreation (_, n, r) -> 
+  | TmRecCreation (_, n, r) ->
       let name = string_of_ustring n in
       let contents = Record.fold (fun l v ack -> (l, v) :: ack) r [] in
       print_extrecord name fmt contents
   | TmRecProj (_, tm, n, l) ->
-      let name = string_of_ustring n in 
-      let label = string_of_ustring l in 
+      let name = string_of_ustring n in
+      let label = string_of_ustring l in
       fprintf fmt "@[<hv 0>%a->%s.%s" print_tm (App, tm) name label
-  | (TmRecExtend _) as t ->
-    raise_error (tm_info t) "Pprint unsupported for TmRecExtend!"
-    
+  | TmRecExtend _ as t ->
+      raise_error (tm_info t) "Pprint unsupported for TmRecExtend!"
 
 (** Print an environment on the given formatter. *)
 and print_env fmt env =

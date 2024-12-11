@@ -46,7 +46,7 @@ let idTmExt = 115
 
 let idTmUse = 116
 
-let idTmRecType = 117 
+let idTmRecType = 117
 
 let idTmRecField = 118
 
@@ -54,7 +54,7 @@ let idTmRecCreation = 119
 
 let idTmRecProj = 120
 
-let idTmRecUpdate = 121 
+let idTmRecUpdate = 121
 
 let idTmRecExtend = 122
 
@@ -90,7 +90,6 @@ let idTyAll = 213
 let idTyUse = 214
 
 let idTyQualifiedName = 216
-
 
 (* Const literals *)
 let idCBool = 300
@@ -161,16 +160,15 @@ let idDeclExt = 709
 
 let idDeclSynProdExt = 710
 
-let idDeclRecType = 711 
+let idDeclRecType = 711
 
 let idDeclRecField = 712
 
-let idDeclSynProd = 713 
+let idDeclSynProd = 713
 
 let idDeclCosyn = 714
 
 let idDeclCosem = 715
-
 
 (* Copatterns *)
 let idRecordCopat = 800
@@ -267,10 +265,34 @@ let getData = function
       , []
       , [] )
   | PTreeTm (TmRecordUpdate (fi, t1, x, t2)) ->
-      (idTmRecordUpdate, [fi], [], [], [t1; t2], [x], [], [], [], [], [], [], [])
+      ( idTmRecordUpdate
+      , [fi]
+      , []
+      , []
+      , [t1; t2]
+      , [x]
+      , []
+      , []
+      , []
+      , []
+      , []
+      , []
+      , [] )
   | PTreeTm (TmType (fi, x, params, ty, t)) ->
       let len = List.length params + 1 in
-      (idTmType, [fi], [len], [ty], [t], x :: params, [], [], [], [], [], [], [])
+      ( idTmType
+      , [fi]
+      , [len]
+      , [ty]
+      , [t]
+      , x :: params
+      , []
+      , []
+      , []
+      , []
+      , []
+      , []
+      , [] )
   | PTreeTm (TmConDef (fi, x, _, ty, t)) ->
       (idTmConDef, [fi], [], [ty], [t], [x], [], [], [], [], [], [], [])
   | PTreeTm (TmConApp (fi, x, _, t)) ->
@@ -282,7 +304,19 @@ let getData = function
     | None, None ->
         (idTmUtest, [fi], [3], [], [t1; t2; t3], [], [], [], [], [], [], [], [])
     | Some t4, None ->
-        (idTmUtest, [fi], [4], [], [t1; t2; t3; t4], [], [], [], [], [], [], [], [])
+        ( idTmUtest
+        , [fi]
+        , [4]
+        , []
+        , [t1; t2; t3; t4]
+        , []
+        , []
+        , []
+        , []
+        , []
+        , []
+        , []
+        , [] )
     | Some t4, Some t5 ->
         ( idTmUtest
         , [fi]
@@ -295,7 +329,7 @@ let getData = function
         , []
         , []
         , []
-        , [] 
+        , []
         , [] )
     | _, _ ->
         failwith "bootparser getData undefined" )
@@ -313,25 +347,87 @@ let getData = function
       , []
       , []
       , []
-      , [] 
-      , [])
-  | PTreeTm (TmRecType (fi, n, params, tm)) -> 
-      (idTmRecType, [fi], [List.length params], [], [tm], n :: params, [], [], [], [], [], [], [])
-  | PTreeTm (TmRecField (fi, n, ty, tm)) -> 
+      , []
+      , [] )
+  | PTreeTm (TmRecType (fi, n, params, tm)) ->
+      ( idTmRecType
+      , [fi]
+      , [List.length params]
+      , []
+      , [tm]
+      , n :: params
+      , []
+      , []
+      , []
+      , []
+      , []
+      , []
+      , [] )
+  | PTreeTm (TmRecField (fi, n, ty, tm)) ->
       (idTmRecField, [fi], [], [ty], [tm], [n], [], [], [], [], [], [], [])
-  | PTreeTm (TmRecCreation (fi, name, r)) -> 
+  | PTreeTm (TmRecCreation (fi, name, r)) ->
       let labels, tms = r |> Record.bindings |> List.split in
-      (idTmRecCreation, [fi], [List.length labels], [], tms, name :: labels, [], [], [], [], [], [], [])
-  | PTreeTm (TmRecProj (fi, tm, name, label)) -> 
-      (idTmRecProj, [fi], [], [], [tm], [name; label], [], [], [], [], [], [], [])
-  | PTreeTm (TmRecExtend (fi, e, r)) -> 
+      ( idTmRecCreation
+      , [fi]
+      , [List.length labels]
+      , []
+      , tms
+      , name :: labels
+      , []
+      , []
+      , []
+      , []
+      , []
+      , []
+      , [] )
+  | PTreeTm (TmRecProj (fi, tm, name, label)) ->
+      ( idTmRecProj
+      , [fi]
+      , []
+      , []
+      , [tm]
+      , [name; label]
+      , []
+      , []
+      , []
+      , []
+      , []
+      , []
+      , [] )
+  | PTreeTm (TmRecExtend (fi, e, r)) ->
       let labels, tms = r |> Record.bindings |> List.split in
-      (idTmRecExtend, [fi], [List.length labels], [], e :: tms, labels, [], [], [], [], [], [], [])
+      ( idTmRecExtend
+      , [fi]
+      , [List.length labels]
+      , []
+      , e :: tms
+      , labels
+      , []
+      , []
+      , []
+      , []
+      , []
+      , []
+      , [] )
   (* Types *)
-  | PTreeTy (TyQualifiedName (fi, pos, lhs, rhs, plus, minus)) -> 
-      let posInt = if pos then 1 else 0 in 
-      let flatten pairs = List.fold_right (fun (a, b) acc -> a :: b :: acc) pairs [] in 
-      (idTyQualifiedName, [fi], [List.length plus; List.length minus], [], [], [lhs ; rhs] @ flatten plus @ flatten minus, [posInt], [], [], [], [], [], [])
+  | PTreeTy (TyQualifiedName (fi, pos, lhs, rhs, plus, minus)) ->
+      let posInt = if pos then 1 else 0 in
+      let flatten pairs =
+        List.fold_right (fun (a, b) acc -> a :: b :: acc) pairs []
+      in
+      ( idTyQualifiedName
+      , [fi]
+      , [List.length plus; List.length minus]
+      , []
+      , []
+      , [lhs; rhs] @ flatten plus @ flatten minus
+      , [posInt]
+      , []
+      , []
+      , []
+      , []
+      , []
+      , [] )
   | PTreeTy (TyUnknown fi) ->
       (idTyUnknown, [fi], [], [], [], [], [], [], [], [], [], [], [])
   | PTreeTy (TyBool fi) ->
@@ -425,7 +521,19 @@ let getData = function
       (idCerror, [], [], [], [], [], [], [], [], [], [], [], [])
   (* Patterns *)
   | PTreePat (PatNamed (fi, x)) ->
-      (idPatNamed, [fi], [], [], [], [patNameToStr x], [], [], [], [], [], [], [])
+      ( idPatNamed
+      , [fi]
+      , []
+      , []
+      , []
+      , [patNameToStr x]
+      , []
+      , []
+      , []
+      , []
+      , []
+      , []
+      , [] )
   | PTreePat (PatSeqTot (fi, pats)) ->
       let len = Mseq.length pats in
       let ps = Mseq.Helpers.to_list pats in
@@ -447,8 +555,8 @@ let getData = function
       , []
       , ps1 @ ps2
       , []
-      , [] 
-      , [])
+      , []
+      , [] )
   | PTreePat (PatRecord (fi, pats)) ->
       let slst, plst = pats |> Record.bindings |> List.split in
       let len = List.length slst in
@@ -470,7 +578,19 @@ let getData = function
       (idPatNot, [fi], [], [], [], [], [], [], [], [p], [], [], [])
   (* Copatterns *)
   | PTreeCopat (CopatRecord (fi, strs)) ->
-      (idRecordCopat, [fi], [List.length strs], [], [], strs, [], [], [], [], [], [], [])
+      ( idRecordCopat
+      , [fi]
+      , [List.length strs]
+      , []
+      , []
+      , strs
+      , []
+      , []
+      , []
+      , []
+      , []
+      , []
+      , [] )
   (* MLang *)
   | PTreeProgram (Program (includes, tops, expr)) ->
       let includeStrings =
@@ -490,8 +610,8 @@ let getData = function
       , []
       , []
       , tops
-      , [] 
-      , [])
+      , []
+      , [] )
   (* Info *)
   | PTreeInfo (Info (fn, r1, c1, r2, c2)) ->
       (idInfo, [], [], [], [], [fn], [r1; c1; r2; c2], [], [], [], [], [], [])
@@ -515,8 +635,8 @@ let getData = function
       , []
       , []
       , []
-      , [] 
-      , [])
+      , []
+      , [] )
   | PTreeTop (TopRecLet (RecLet (fi, lst))) ->
       let len = List.length lst in
       let fis = fi :: List.map (fun (fi, _, _, _) -> fi) lst in
@@ -529,9 +649,22 @@ let getData = function
   | PTreeTop (TopUtest (Utest (fi, tm1, tm2, tmUsing, _))) -> (
     match tmUsing with
     | Some tm ->
-        (idDeclUtest, [fi], [1], [], [tm1; tm2; tm], [], [], [], [], [], [], [], [])
+        ( idDeclUtest
+        , [fi]
+        , [1]
+        , []
+        , [tm1; tm2; tm]
+        , []
+        , []
+        , []
+        , []
+        , []
+        , []
+        , []
+        , [] )
     | _ ->
-        (idDeclUtest, [fi], [0], [], [tm1; tm2], [], [], [], [], [], [], [], []) )
+        (idDeclUtest, [fi], [0], [], [tm1; tm2], [], [], [], [], [], [], [], [])
+    )
   | PTreeTop (TopExt (Ext (fi, str, effect, ty))) ->
       ( idDeclExt
       , [fi]
@@ -630,22 +763,10 @@ let getData = function
       , []
       , []
       , []
-      , [] 
-      , [])
+      , []
+      , [] )
   | PTreeTop (TopRecField (RecFieldDecl (fi, ident, ty))) ->
-      ( idDeclRecField
-      , [fi]
-      , []
-      , [ty]
-      , []
-      , [ident]
-      , []
-      , []
-      , []
-      , []
-      , []
-      , []
-      , [] )  
+      (idDeclRecField, [fi], [], [ty], [], [ident], [], [], [], [], [], [], [])
   | PTreeDecl (Inter (fi, ident, ty, paramListOpt, cases, kind)) -> (
       let kindInt = match kind with Base -> 0 | SumExt -> 1 in
       match paramListOpt with
@@ -703,10 +824,10 @@ let getData = function
       , []
       , []
       , [] )
-  | PTreeDecl (Cosyn (fi, ident, params, ty, isBase)) -> 
-    (idDeclCosyn
+  | PTreeDecl (Cosyn (fi, ident, params, ty, isBase)) ->
+      ( idDeclCosyn
       , [fi]
-      , [List.length params; if isBase then 0 else 1]
+      , [List.length params; (if isBase then 0 else 1)]
       , [ty]
       , []
       , ident :: params
@@ -715,20 +836,20 @@ let getData = function
       , []
       , []
       , []
-      , [] 
-      , [])
-  | PTreeDecl (Cosem (fi, ident, args, cases, isBase, ty)) -> 
-    let argIdents =
-      List.map (fun x -> match x with Param (_, s, _) -> s) args
-    in
-    let argTys =
-      List.map (fun x -> match x with Param (_, _, ty) -> ty) args
-    in
-    let copats = List.map fst cases in 
-    let tms = List.map snd cases in 
-    (idDeclCosem
+      , []
+      , [] )
+  | PTreeDecl (Cosem (fi, ident, args, cases, isBase, ty)) ->
+      let argIdents =
+        List.map (fun x -> match x with Param (_, s, _) -> s) args
+      in
+      let argTys =
+        List.map (fun x -> match x with Param (_, _, ty) -> ty) args
+      in
+      let copats = List.map fst cases in
+      let tms = List.map snd cases in
+      ( idDeclCosem
       , [fi]
-      , [List.length args; List.length cases; if isBase then 0 else 1]
+      , [List.length args; List.length cases; (if isBase then 0 else 1)]
       , ty :: argTys
       , tms
       , ident :: argIdents
@@ -737,45 +858,45 @@ let getData = function
       , []
       , []
       , []
-      , [] 
-      , copats)
+      , []
+      , copats )
   | _ ->
       failwith "The AST node is unknown"
 
 let getId t =
-  let id, _, _, _, _, _, _, _, _, _, _, _, _= getData t in
+  let id, _, _, _, _, _, _, _, _, _, _, _, _ = getData t in
   id
 
 let getTerm t n =
-  let _, _, _, _, lst, _, _, _, _, _, _, _, _= getData t in
+  let _, _, _, _, lst, _, _, _, _, _, _, _, _ = getData t in
   PTreeTm (List.nth lst n)
 
 let getType t n =
-  let _, _, _, lst, _, _, _, _, _, _, _, _, _= getData t in
+  let _, _, _, lst, _, _, _, _, _, _, _, _, _ = getData t in
   PTreeTy (List.nth lst n)
 
 let getString t n =
-  let _, _, _, _, _, lst, _, _, _, _, _, _, _= getData t in
+  let _, _, _, _, _, lst, _, _, _, _, _, _, _ = getData t in
   List.nth lst n |> Intrinsics.Mseq.Helpers.of_ustring
 
 let getInt t n =
-  let _, _, _, _, _, _, lst, _, _, _, _, _, _= getData t in
+  let _, _, _, _, _, _, lst, _, _, _, _, _, _ = getData t in
   List.nth lst n
 
 let getFloat t n =
-  let _, _, _, _, _, _, _, lst, _, _, _, _, _= getData t in
+  let _, _, _, _, _, _, _, lst, _, _, _, _, _ = getData t in
   List.nth lst n
 
 let getListLength t n =
-  let _, _, lst, _, _, _, _, _, _, _, _, _, _= getData t in
+  let _, _, lst, _, _, _, _, _, _, _, _, _, _ = getData t in
   List.nth lst n
 
 let getConst t n =
-  let _, _, _, _, _, _, _, _, lst, _, _, _, _= getData t in
+  let _, _, _, _, _, _, _, _, lst, _, _, _, _ = getData t in
   PTreeConst (List.nth lst n)
 
 let getPat t n =
-  let _, _, _, _, _, _, _, _, _, lst, _, _, _= getData t in
+  let _, _, _, _, _, _, _, _, _, lst, _, _, _ = getData t in
   PTreePat (List.nth lst n)
 
 let getTop t n =
@@ -786,12 +907,12 @@ let getDecl t n =
   let _, _, _, _, _, _, _, _, _, _, _, lst, _ = getData t in
   PTreeDecl (List.nth lst n)
 
-let getCopat t n = 
+let getCopat t n =
   let _, _, _, _, _, _, _, _, _, _, _, _, lst = getData t in
-    PTreeCopat (List.nth lst n)   
+  PTreeCopat (List.nth lst n)
 
 let getInfo t n =
-  let _, lst, _, _, _, _, _, _, _, _, _, _, _= getData t in
+  let _, lst, _, _, _, _, _, _, _, _, _, _, _ = getData t in
   PTreeInfo (List.nth lst n)
 
 (* This function determines how to print program output.
@@ -2968,8 +3089,10 @@ and eval (env : (Symb.t * tm) list) (pe : peval) (t : tm) =
   (* Only at runtime *)
   | TmClos _ | TmRef _ | TmTensor _ ->
       t
-  | (TmRecType _ | TmRecField _ | TmRecCreation _ | TmRecProj _ | TmRecExtend _) as t ->
-    raise_error (tm_info t) ("Extensible record type evaluation is unsupported by boot!")
+  | (TmRecType _ | TmRecField _ | TmRecCreation _ | TmRecProj _ | TmRecExtend _)
+    as t ->
+      raise_error (tm_info t)
+        "Extensible record type evaluation is unsupported by boot!"
 
 (* Same as eval, but records all toplevel definitions and returns them along
    with the evaluated result *)
@@ -3012,5 +3135,7 @@ let rec eval_toplevel (env : (Symb.t * tm) list) (pe : peval) = function
     | TmBox _
     | TmExt _ ) as t ->
       (env, eval env pe t)
-  | (TmRecType _ | TmRecField _ | TmRecCreation _ | TmRecProj _ | TmRecExtend _) as t ->
-    raise_error (tm_info t) ("Extensible record type symbolization is unsupported by boot!")
+  | (TmRecType _ | TmRecField _ | TmRecCreation _ | TmRecProj _ | TmRecExtend _)
+    as t ->
+      raise_error (tm_info t)
+        "Extensible record type symbolization is unsupported by boot!"

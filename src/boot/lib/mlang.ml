@@ -763,18 +763,20 @@ let rec translate_tm (env : mlang_env) : tm -> tm = function
       let tm = smap_tm_ty (translate_ty env) tm in
       let tm = smap_tm_tm (translate_tm env) tm in
       tm
-  | (TmRecType _ | TmRecField _ | TmRecCreation _ | TmRecProj _ | TmRecExtend _) as t ->
-    raise_error (tm_info t) ("Extensible record type translation is unsupported by boot!")
+  | (TmRecType _ | TmRecField _ | TmRecCreation _ | TmRecProj _ | TmRecExtend _)
+    as t ->
+      raise_error (tm_info t)
+        "Extensible record type translation is unsupported by boot!"
 
 let add_decl_to_lang (lang_fi : info) (lang_name : ustring) (data : lang_data)
     : decl -> lang_data = function
   (* | DataProdExt (fi, name, param_count, constructors, ty) ->  *)
-  | Cosyn (fi, _, _, _, _) -> 
-    raise_error fi ( "Cosyn definitions are not supported by this version of "
-                   ^ "Miking.")
-  | Cosem (fi, _, _, _, _, _) -> 
-    raise_error fi ( "Cosem definitions are not supported by this version of "
-                   ^ "Miking.")
+  | Cosyn (fi, _, _, _, _) ->
+      raise_error fi
+        ("Cosyn definitions are not supported by this version of " ^ "Miking.")
+  | Cosem (fi, _, _, _, _, _) ->
+      raise_error fi
+        ("Cosem definitions are not supported by this version of " ^ "Miking.")
   | DataProdExt (fi, _, _, _, _) ->
       raise_error fi
         ( "Product extension is not supported by this version of "
@@ -1175,10 +1177,10 @@ let translate_top (env : mlang_env) : top -> mlang_env * (tm -> tm) = function
         TmExt (fi, id, Symb.Helpers.nosym, e, translate_ty env ty, inexpr)
       in
       (new_env, wrap)
-  | (TopRecField (RecFieldDecl (fi, _, _))) ->
-    raise_error fi "Unsupported!"
-  | (TopRecType (RecTypeDecl (fi, _, _))) ->
-    raise_error fi "Unsupported!"
+  | TopRecField (RecFieldDecl (fi, _, _)) ->
+      raise_error fi "Unsupported!"
+  | TopRecType (RecTypeDecl (fi, _, _)) ->
+      raise_error fi "Unsupported!"
 
 let translate_tops_with_env (env : mlang_env) (tops : top list) (bot : tm) :
     mlang_env * tm =

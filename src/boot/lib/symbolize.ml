@@ -255,8 +255,10 @@ let rec symbolize (env : sym_env) (t : tm) =
       failwith "Box is a runtime value"
   | TmConst _ | TmNever _ | TmRef _ | TmTensor _ ->
       t
-  | (TmRecType _ | TmRecField _ | TmRecCreation _ | TmRecProj _ | TmRecExtend _ ) as t ->
-    raise_error (tm_info t) ("Extensible record type symbolization is unsupported by boot!")
+  | (TmRecType _ | TmRecField _ | TmRecCreation _ | TmRecProj _ | TmRecExtend _)
+    as t ->
+      raise_error (tm_info t)
+        "Extensible record type symbolization is unsupported by boot!"
 
 (* Same as symbolize, but records all toplevel definitions and returns them
    along with the symbolized term. *)
@@ -320,5 +322,7 @@ let rec symbolize_toplevel (env : sym_env) = function
     | TmBox _
     | TmTensor _ ) as t ->
       (env, symbolize env t)
-  | (TmRecType _ | TmRecField _ | TmRecCreation _ | TmRecProj _ | TmRecExtend _) as t ->
-    raise_error (tm_info t) ("Extensible record type symbolization is unsupported by boot!")
+  | (TmRecType _ | TmRecField _ | TmRecCreation _ | TmRecProj _ | TmRecExtend _)
+    as t ->
+      raise_error (tm_info t)
+        "Extensible record type symbolization is unsupported by boot!"
