@@ -88,6 +88,7 @@ con CosemInfo : use ExtendedMLang in {ident : Name,
 
 let decl2info = lam orig. lam d.
   use ExtendedMLang in 
+  use ExtRecAst in 
   switch d
     case DeclSem s then SemInfo {ident = s.ident,
                                  info = s.info,
@@ -151,7 +152,7 @@ let emptyComposerContext : ComposerContext = {
 let ctxWithDeclInfo = lam ctx. lam s. lam declInfo.
   {ctx with langMap = mapInsert s declInfo ctx.langMap}
 
-lang LanguageComposer = ExtendedMLang
+lang LanguageComposer = ExtendedMLang + ExtRecAst
   sem composeProgram : MLangProgram -> MLangProgram 
   sem composeProgram =| p ->
     let ctx = emptyComposerContext in 

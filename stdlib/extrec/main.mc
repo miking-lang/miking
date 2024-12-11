@@ -14,7 +14,6 @@ include "conapp-sugar.mc"
 include "pprint.mc"
 include "compile.mc"
 include "type-check.mc"
-include "unify.mc"
 include "monomorphise.mc"
 include "cosem-ty-annot.mc"
 include "resolve-qualified-name.mc"
@@ -44,7 +43,7 @@ lang BigSym = MLangSym + ExtRecordSym
 end
 
 lang BigTypeCheck = MExprTypeCheckMost + MExprTypeCheckLamLetVar +
-                    ExtRecordTypeCheck + PresenceKindAstUnify
+                    ExtRecordTypeCheck
 end
 
 lang BigIncludeHandler = MLangIncludeHandler + BootParserMLang + ExtRecBootParser + CosynBootParser + CosemBootParser

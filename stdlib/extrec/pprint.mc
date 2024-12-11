@@ -157,11 +157,6 @@ lang TypeAbsAppAst = PrettyPrint + TypeAbsAppAst
     (env, join [lhs, " @ ", rhs])
 end
 
-lang PresenceKindPrettyPrint = PrettyPrint + PresenceKindAst 
-  sem getKindStringCode (indent : Int) (env : PprintEnv) =
-  | Presence () -> (env, "Presence")
-end
-
 lang PatExtRecordPrettyPrint = PrettyPrint + ExtRecordPat
   sem getPatStringCode indent env = 
   | PatExtRecord {ident = ident, bindings = bindings} ->
@@ -188,6 +183,6 @@ end
 
 lang ExtRecPrettyPrint = ExtRecTermPrettyPrint + 
                          TypeAbsPrettyPrint + TypeAbsAppAst + 
-                         PresenceKindPrettyPrint + DeclCosemPrettyPrint +
+                         DeclCosemPrettyPrint +
                          DeclCosynPrettyPrint + PatExtRecordPrettyPrint
 end

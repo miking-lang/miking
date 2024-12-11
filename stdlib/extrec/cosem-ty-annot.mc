@@ -12,7 +12,7 @@ type CosemTyAnnotContext = {
   tyAnnotMap : Map Name (use Ast in Type)
 }
 
-lang CosemTyAnnot = MLangAst + MLangPrettyPrint
+lang CosemTyAnnot = MLangAst + MLangPrettyPrint + ExtRecAst
   sem handleCosemTyAnnot : Map Name Name -> MLangProgram -> MLangProgram
   sem handleCosemTyAnnot baseMap = 
   | prog ->

@@ -1,7 +1,6 @@
 include "mexpr/type-check.mc"
 include "mexpr/pattern-analysis.mc"
 
-include "unify.mc"
 include "ast.mc"
 
 lang TypeAbsAppResolver = TypeAbsAppAst + TypeAbsAst + VarTypeAst
@@ -45,7 +44,7 @@ lang TypeAbsAppResolver = TypeAbsAppAst + TypeAbsAst + VarTypeAst
 end
 
 lang ExtRecordTypeCheck = TypeCheck + ExtRecordAst + 
-                          PresenceKindAst + TypeAbsAppAst + GetKind + 
+                          TypeAbsAppAst + GetKind + 
                           TypeAbsAppResolver + ResolveType + RecordAst +
                           RecordTypeAst + MatchAst + RecordPat + 
                           MExprPatAnalysis + PatTypeCheck

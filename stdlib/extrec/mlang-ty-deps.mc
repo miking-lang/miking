@@ -25,7 +25,7 @@ type MLangTyDepsEnv = {
 
 
 
-lang ComputeMLangTyDeps = MLangAst + MExprAst + ExtRecordAst + TypeAbsAst 
+lang ComputeMLangTyDeps = MLangAst + MExprAst + ExtRecAst
   sem _collectNames : MLangTyDepsEnv -> Decl -> MLangTyDepsEnv
   sem _collectNames env = 
   | _ -> env

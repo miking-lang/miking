@@ -1,4 +1,4 @@
-lang RowHelpers = ExtRecordType + PresenceKindAst + MetaVarTypeAst +
+lang RowHelpers = ExtRecordType + MetaVarTypeAst +
                   MExprPrettyPrint
   sem _deplookup : ExtRecEnvType -> Name -> Set Name
   sem _deplookup env = 

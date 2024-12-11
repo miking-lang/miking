@@ -148,26 +148,6 @@ lang SynDeclAst = DeclAst
     (acc, DeclSyn {x with defs = defs})
 end
 
-lang SynProdExtDeclAst = DeclAst 
-  syn Decl = 
-  | SynDeclProdExt {ident : Name,
-                    params : [Name],
-                    globalExt : Option Type, 
-                    individualExts : [{ident : Name, tyIdent : Type, tyName : Name}],
-                    includes : [(String, String)],
-                    info : Info}
-
-  sem infoDecl =
-  | SynDeclProdExt {info = info} -> info
-
-  sem smapAccumL_Decl_Type f acc =
-  | SynDeclProdExt x ->
-    let f = lam acc. lam def.
-      match f acc def.tyIdent with (acc, tyIdent) in
-      (acc, {def with tyIdent = tyIdent}) in
-    match mapAccumL f acc x.individualExts with (acc, individualExts) in
-    (acc, SynDeclProdExt {x with individualExts = individualExts})
-end
 -- DeclSem --
 lang SemDeclAst = DeclAst
   type DeclSemType = {ident : Name,
@@ -345,60 +325,6 @@ lang IncludeDeclAst = DeclAst
   | DeclInclude d -> d.info
 end
 
-lang CosynDeclAst = DeclAst + Ast
-  syn Decl = 
-  | DeclCosyn {info : Info,
-               ident : Name,
-               params : [Name],
-               isBase : Bool,
-               ty : Type,
-               includes : [(String, String)]}
-end
-
-lang CopatAst
-  syn Copat = 
-
-  sem copatInfo =
-
-  sem copatWithInfo info =
-end
-
-lang RecordCopatAst = CopatAst
-  syn Copat =
-  | RecordCopat {info : Info, 
-                 fields : [String]}
-
-  sem copatInfo =
-  | RecordCopat c -> c.info
-
-  sem copatWithInfo info =
-  | RecordCopat c -> {RecordCopat c with info = info}
-end 
-
-lang CosemDeclAst = DeclAst + CopatAst + Ast
-  syn Decl = 
-  | DeclCosem {info : Info, 
-               ident : Name,
-               args : [{ident : Name, tyAnnot : Type}],
-               cases : [(Copat, Expr)],
-               includes : [(String, String)],
-               isBase : Bool,
-               tyAnnot : Type,
-               targetTyIdent : Name}
-
-  sem infoDecl =
-  | DeclCosem d -> d.info
-
-  sem smapAccumL_Decl_Type f acc =
-  | DeclCosem x ->
-    let farg = lam acc. lam arg.
-      match f acc arg.tyAnnot with (acc, tyAnnot) in
-      (acc, {arg with tyAnnot = tyAnnot}) in
-    match f acc x.tyAnnot with (acc, tyAnnot) in
-    match mapAccumL farg acc x.args with (acc, args) in
-    (acc, DeclCosem {x with args = args, tyAnnot = tyAnnot})
-end 
-
 lang MLangTopLevel = DeclAst
   type MLangProgram = {
     decls : [Decl],
@@ -439,6 +365,5 @@ lang MLangAst =
   -- Declarations
   + LangDeclAst + SynDeclAst + SemDeclAst + LetDeclAst + TypeDeclAst
   + RecLetsDeclAst + DataDeclAst + UtestDeclAst + ExtDeclAst + IncludeDeclAst
-  + TyUseAst + SynProdExtDeclAst + CosynDeclAst + CosemDeclAst
-
+  + TyUseAst
 end

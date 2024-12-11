@@ -34,6 +34,8 @@ include "mexpr/eval.mc"
 include "mexpr/eq.mc"
 include "mexpr/utils.mc"
 
+include "extrec/ast.mc"
+
 include "common.mc"
 include "option.mc"
 include "map.mc"
@@ -128,13 +130,13 @@ let isTypeDecl = use MLangAst in
   lam d. match d with DeclType _ then true else false
 let isSynDecl = use MLangAst in 
   lam d. match d with DeclSyn _ then true else false
-let isCosynDecl = use MLangAst in 
+let isCosynDecl = use ExtRecAst in 
   lam d. match d with DeclCosyn _ then true else false
 let isSemDecl = use MLangAst in 
   lam d. match d with DeclSem _ then true else false
-let isCosemDecl = use MLangAst in 
+let isCosemDecl = use ExtRecAst in 
   lam d. match d with DeclCosem _ then true else false
-let isProdDecl = use MLangAst in 
+let isProdDecl = use ExtRecAst in 
   lam d. match d with SynDeclProdExt _ then true else false
 
 lang DeclCompiler = DeclAst + Ast + MExprSubstitute

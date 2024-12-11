@@ -110,17 +110,6 @@ let decl_syn_ = use MLangAst in
   lam s. lam defs: [(String, Type)].
   decl_nsyn_ (nameNoSym s) defs
 
-let decl_syn_prodext_ = use MLangAst in 
-  lam s. lam globExt : Option Type. lam indivExts : [(String, Type)]. 
-  let parseExt = lam indivExt. 
-    {ident = nameNoSym indivExt.0, tyIdent = indivExt.1} in 
-  SynDeclProdExt {ident = nameNoSym s, 
-               params = [],
-               includes = [],
-               globalExt = globExt,
-               individualExts = map parseExt indivExts,
-               info = NoInfo ()}
-
 let decl_syn_params_ = use MLangAst in 
   lam s : String. lam ss : [String]. lam defs : [(String, Type)].
   DeclSyn {ident = nameNoSym s,
@@ -162,39 +151,6 @@ let decl_sem_args_ty_cases_ = use MLangAst in
            cases = map (lam t. {pat = t.0, thn = t.1}) cases,
            info = NoInfo {},
            declKind = base_kind_}
-
-let decl_ncosyn_ = use MLangAst in 
-  lam n : Name. lam params : [Name]. lam isBase : Bool. lam ty : Type. 
-    DeclCosyn {ident = n,
-               params = params,
-               isBase = isBase,
-               ty = ty,
-               info = NoInfo (),
-               includes = []}
-
-let decl_cosyn_ = lam s. lam sparams. 
-  decl_ncosyn_ (nameNoSym s) (map nameNoSym sparams)
-
-
-let decl_ncosem_ = use MLangAst in 
-  lam n : Name. lam nargs : [(Name, Type)]. lam cases: [(Copat, Expr)]. lam isBase : Bool.
-  DeclCosem {ident = n,
-             info = NoInfo (),
-             args = map (lam tupl. {ident = tupl.0, tyAnnot = tupl.1}) nargs,
-             cases = cases,
-             isBase = isBase,
-             includes = []} 
-
-let decl_cosem_ = use MLangAst in 
-  lam s : String. lam args : [(String, Type)]. lam cases: [(Copat, Expr)]. lam isBase : Bool.
-  decl_ncosem_ (nameNoSym s) (map (lam tupl. (nameNoSym tupl.0, tupl.1)) args) cases isBase
-
-let nrecord_copat_ = use RecordCopatAst in 
-  lam n : Name. lam fields : [String]. 
-    RecordCopat {info = NoInfo (), ident = n, fields = fields} 
-  
-let record_copat_ = use RecordCopatAst in 
-  lam s : String. lam fields : [String]. nrecord_copat_ (nameNoSym s) fields
 
 let decl_nsem_ = use MLangAst in
   lam n. lam nargs: [(Name, Type)]. lam cases: [(Pat, Expr)].

@@ -6,7 +6,7 @@ include "mexpr/ast.mc"
 include "set.mc"
 include "name.mc"
 
-lang PruneUnusedLangs = MLangAst + MExprAst
+lang PruneUnusedLangs = MLangAst + MExprAst + ExtRecAst
   sem pruneProgram : Set String -> MLangProgram -> MLangProgram
   sem pruneProgram usedLangs =
   | prog -> 

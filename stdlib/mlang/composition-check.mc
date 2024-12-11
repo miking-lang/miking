@@ -20,6 +20,8 @@ include "language-composer.mc"
 include "mexpr/pattern-analysis.mc"
 include "mexpr/ast-builder.mc"
 
+include "extrec/ast.mc"
+
 include "common.mc"
 include "bool.mc"
 include "name.mc"
@@ -35,7 +37,7 @@ let defaultCompositionCheckOptions = {
   disableStrictSumExtension = false
 }
 
-type ExtendedCopat = use MLangAst in {
+type ExtendedCopat = use MLangAst in use CopatAst in  {
   copat : Copat,
   thn : Expr,
   id : Int,
@@ -143,7 +145,8 @@ let insertSemPatMap = lam env. lam k. lam v.
 -- E.g. checking the params and base is identical for cosyn and syn.
 -- TODO(voorberg, 15/09/202): A composition check should be added that ensures
 -- that the labels in a constructor's type are disjoint under product extension.
-lang MLangCompositionCheck = MLangAst + MExprPatAnalysis + MExprAst + MExprPrettyPrint + RecordCopatAst
+lang MLangCompositionCheck = MLangAst + MExprPatAnalysis + MExprAst + 
+                             MExprPrettyPrint + RecordCopatAst + ExtRecAst
   syn CompositionError =
   | DifferentBaseSyn {
     synIdent : Name,

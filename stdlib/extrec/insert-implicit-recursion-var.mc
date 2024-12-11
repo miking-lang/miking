@@ -7,7 +7,7 @@ include "map.mc"
 
 let implicitParamIdent = nameSym "M"
 
-lang InsertImplictRecursionVar = MLangAst + MExprAst
+lang InsertImplictRecursionVar = MLangAst + MExprAst + ExtRecAst
   type ExtensibleNamesCtx = {
     sumTypeNames : Set Name,
     prodTypeNames : Set Name

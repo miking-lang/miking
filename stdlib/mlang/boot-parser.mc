@@ -23,7 +23,7 @@ include "seq.mc"
 include "option.mc"
 include "result.mc"
 
-lang BootParserMLang = BootParser + MLangAst
+lang BootParserMLang = BootParser + MLangAst + CosemDeclAst
   sem parseMLangFile : all a. String -> Result a (Info, String) MLangProgram
   sem parseMLangFile =| filepath -> 
     let p = bootParserParseMLangFile filepath in
@@ -171,38 +171,6 @@ lang BootParserMLang = BootParser + MLangAst
               params = map (gname d) (range 1 (addi 1 (glistlen d 0)) 1),
               tyIdent = gtype d 0,
               info = ginfo d 0}
-  | 710 ->
-    let nCons = glistlen d 0 in 
-    let nParams = if eqi nCons 0 then 0 else glistlen d 1 in 
-
-    let parseCon = lam i. 
-      let ident = gname d (addi i 1) in 
-      let ty = gtype d (addi i 1) in 
-      let tyName = nameNoSym (concat (gstr d (addi i 1)) "Type") in 
-      {ident = ident, tyIdent = ty, tyName = tyName}
-    in 
-
-    -- When no global extension is given, boot will parse this as a unit type
-    -- which is represented as an empty record. 
-    -- We check if we receive a unit type, then there is no global extension
-    -- Otherwise we wrap the provided type in a Some. 
-    let globalTy = gtype d 0 in 
-    let globalTyOpt = 
-      match globalTy with TyRecord r then
-        if mapIsEmpty r.fields then
-          None ()
-        else 
-          Some globalTy
-      else
-        Some globalTy
-    in 
-
-    SynDeclProdExt {ident = gname d 0,
-                    includes = [],
-                    individualExts = map parseCon (range 0 nCons 1),
-                    globalExt = globalTyOpt,
-                    params = map (lam i. gname d (addi (addi 1 nCons) i)) (range 0 nParams 1),
-                    info = ginfo d 0}
 
   sem matchTop : Unknown -> Int -> Decl
   sem matchTop d = 

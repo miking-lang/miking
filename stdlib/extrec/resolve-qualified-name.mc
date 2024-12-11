@@ -22,7 +22,7 @@ type ResolveQualifiedNameEnv = {
 -- correct kind instead of having to introduce forall terms which may
 -- not be legal in all places.
 lang ResolveQualifiedName = MLangAst + RecordTypeAst + QualifiedTypeAst + 
-                            MLangPrettyPrint
+                            MLangPrettyPrint + ExtRecAst
                             
   sem resolveQualifiedNameProgram tydeps baseMap = 
   | prog -> 
