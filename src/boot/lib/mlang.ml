@@ -1177,10 +1177,6 @@ let translate_top (env : mlang_env) : top -> mlang_env * (tm -> tm) = function
         TmExt (fi, id, Symb.Helpers.nosym, e, translate_ty env ty, inexpr)
       in
       (new_env, wrap)
-  | TopRecField (RecFieldDecl (fi, _, _)) ->
-      raise_error fi "Unsupported!"
-  | TopRecType (RecTypeDecl (fi, _, _)) ->
-      raise_error fi "Unsupported!"
 
 let translate_tops_with_env (env : mlang_env) (tops : top list) (bot : tm) :
     mlang_env * tm =

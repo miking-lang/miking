@@ -751,22 +751,6 @@ let getData = function
       , []
       , []
       , [] )
-  | PTreeTop (TopRecType (RecTypeDecl (fi, ident, params))) ->
-      ( idDeclRecType
-      , [fi]
-      , [List.length params]
-      , []
-      , []
-      , ident :: params
-      , []
-      , []
-      , []
-      , []
-      , []
-      , []
-      , [] )
-  | PTreeTop (TopRecField (RecFieldDecl (fi, ident, ty))) ->
-      (idDeclRecField, [fi], [], [ty], [], [ident], [], [], [], [], [], [], [])
   | PTreeDecl (Inter (fi, ident, ty, paramListOpt, cases, kind)) -> (
       let kindInt = match kind with Base -> 0 | SumExt -> 1 in
       match paramListOpt with

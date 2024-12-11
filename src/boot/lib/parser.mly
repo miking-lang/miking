@@ -195,10 +195,6 @@ top:
     { TopUtest($1) }
   | topext
     { TopExt($1) }
-  | toprectype
-    { TopRecType($1) }
-  | toprecfield
-    { TopRecField($1) }
 
 toplet:
   | LET var_ident ty_op EQ mexpr
@@ -217,14 +213,6 @@ topRecLet:
   | REC lets END
     { let fi = mkinfo $1.i $3.i in
       RecLet (fi, $2) }
-
-toprectype:
-  | RECTYPE type_ident type_params
-   { RecTypeDecl ($1.i, $2.v, $3) }
-
-toprecfield: 
-  | FIELD var_ident ty_op 
-    { RecFieldDecl ($1.i, $2.v, $3 $1.i) }
 
 topcon:
   | CON con_ident ty_op

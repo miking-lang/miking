@@ -40,14 +40,14 @@ lang BigPrettyPrint = MLangPrettyPrint + ExtRecPrettyPrint +
                       DeclCosemPrettyPrint + DeclCosynPrettyPrint
 end
 
-lang BigSym = MLangSym + ExtRecordSym + RecFieldDeclSym + RecTypeDeclSym
+lang BigSym = MLangSym + ExtRecordSym
 end
 
 lang BigTypeCheck = MExprTypeCheckMost + MExprTypeCheckLamLetVar +
                     ExtRecordTypeCheck + PresenceKindAstUnify
 end
 
-lang BigIncludeHandler = MLangIncludeHandler + BootParserMLang + ExtRecBootParser + RecDeclBootParser + CosynBootParser + CosemBootParser
+lang BigIncludeHandler = MLangIncludeHandler + BootParserMLang + ExtRecBootParser + CosynBootParser + CosemBootParser
 end
 
 lang BigPipeline = BigIncludeHandler + 
@@ -56,7 +56,7 @@ lang BigPipeline = BigIncludeHandler +
                    ExtRecCollectEnv + 
                    BigTypeCheck +
                    PlaceholderAst + 
-                   ExtRecordTypeCheck+ 
+                   ExtRecordTypeCheck + 
                    MLangConstTransformer + 
                    ExtRecMonomorphise + 
                    MExprEval + 
@@ -64,8 +64,6 @@ lang BigPipeline = BigIncludeHandler +
                    LanguageComposer +
                    MLangCompositionCheck +
                    MLangCompiler + 
-                   RecFieldDeclCompiler + 
-                   RecTypeDeclCompiler + 
                    ResolveQualifiedName + 
                    ComputeMLangTyDeps +
                    PhaseStats +

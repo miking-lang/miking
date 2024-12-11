@@ -37,22 +37,3 @@ lang ExtRecordSym = Sym + ExtRecordAst
     -- let ident = t.ident in 
     TmExtProject {t with ident = ident, e = symbolizeExpr env t.e}
 end
-
-lang RecTypeDeclSym = MLangSym + RecTypeDeclAst 
-  sem symbolizeDecl env =
-  | RecTypeDecl d -> 
-    match setSymbol env.currentEnv.tyConEnv d.ident with (tyConEnv, ident) in
-    let env = symbolizeUpdateTyConEnv env tyConEnv in 
-
-    let params = map (setSymbol env.currentEnv.tyVarEnv) d.params in
-    let params = map snd params in 
-
-    (env, RecTypeDecl {d with ident = ident,
-                              params = params})
-end
-
-lang RecFieldDeclSym = MLangSym + RecFieldDeclAst
-  sem symbolizeDecl env = 
-  | RecFieldDecl d ->
-    (env, RecFieldDecl {d with tyLabel = symbolizeType env d.tyLabel})
-end
