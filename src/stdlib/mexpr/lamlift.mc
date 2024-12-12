@@ -3,6 +3,7 @@
 
 include "digraph.mc"
 include "mexpr/ast.mc"
+include "mlang/ast.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/call-graph.mc"
 include "mexpr/eq.mc"
@@ -524,6 +525,82 @@ lang MExprLambdaLift =
   | t ->
     let t = nameAnonymousLambdas t in
     let state = findFreeVariables emptyLambdaLiftState t in
+    let t = insertFreeVariables state.sols t in
+    let t = liftGlobal t in
+    replaceCapturedParameters state.sols t
+end
+
+lang MExprLambdaLiftAllowSpineCapture =
+  MExprLambdaLift + MExprAsDecl
+
+  sem findFreeVariablesSpine : LambdaLiftState -> Expr -> LambdaLiftState
+  sem findFreeVariablesSpine state =
+  | TmLet t ->
+    let state =
+      match t.body with TmLam _ then
+        -- NOTE(vipa, 2023-10-09): A let-bound lambda, find a solution
+        -- for it
+        let sol = findFreeVariablesInBody state _solEmpty t.body in
+        {state with sols = mapInsert t.ident sol state.sols}
+      else
+        -- NOTE(vipa, 2025-01-14): A normal variable along the spine,
+        -- don't treat it as free later
+        state
+    in
+    let state =
+      let tyvars = concat (stripTyAll t.tyAnnot).0 (stripTyAll t.tyBody).0 in
+      foldl (lam acc. lam pair. {acc with tyVars = mapInsert pair.0 pair.1 acc.tyVars}) state tyvars in
+    let state = findFreeVariables state t.body in
+    findFreeVariablesSpine state t.inexpr
+  | tm & TmRecLets t -> recursive
+    let insertInitialSolution = lam state. lam binding.
+      let sol = findFreeVariablesInBody state _solEmpty binding.body in
+      {state with sols = mapInsert binding.ident sol state.sols} in
+    recursive let propagateFunNames
+      : LambdaLiftState -> [[Name]] -> LambdaLiftState
+      = lam state. lam s.
+        match s with [h] ++ t then
+          let sol =
+            foldl
+              (lam acc. lam id.
+                match mapLookup id state.sols with Some sol then
+                  _solUnion acc sol
+                else acc)
+              _solEmpty h in
+          let state =
+            foldl
+              (lam state : LambdaLiftState. lam id.
+                {state with sols = mapInsert id sol state.sols})
+              state h in
+          propagateFunNames state t
+        else state
+    in
+    let findFreeVariablesBinding
+      : LambdaLiftState -> RecLetBinding -> LambdaLiftState
+      = lam state. lam bind.
+        let tyvars = concat (stripTyAll bind.tyAnnot).0 (stripTyAll bind.tyBody).0 in
+        let state = foldl (lam acc. lam pair. {acc with tyVars = mapInsert pair.0 pair.1 acc.tyVars}) state tyvars in
+        findFreeVariables state bind.body
+    in
+    let state = foldl insertInitialSolution state t.bindings in
+    let g : Digraph Name Int = constructCallGraph tm in
+    let sccs = digraphTarjan g in
+    let state = propagateFunNames state (reverse sccs) in
+    let state = foldl findFreeVariablesBinding state t.bindings in
+    findFreeVariablesSpine state t.inexpr
+  | TmExt t ->
+    let state = {state with sols = mapInsert t.ident _solEmpty state.sols} in
+    findFreeVariablesSpine state t.inexpr
+  | tm ->
+    match exprAsDecl tm with Some (decl, inexpr) then
+      let state = sfold_Decl_Expr findFreeVariables state decl in
+      findFreeVariablesSpine state inexpr
+    else findFreeVariables state tm
+
+  sem liftLambdasWithSolutionsAllowSpineCapture : Expr -> (Map Name FinalOrderedLamLiftSolution, Expr)
+  sem liftLambdasWithSolutionsAllowSpineCapture = | t ->
+    let t = nameAnonymousLambdas t in
+    let state = findFreeVariablesSpine emptyLambdaLiftState t in
     let t = insertFreeVariables state.sols t in
     let t = liftGlobal t in
     replaceCapturedParameters state.sols t
