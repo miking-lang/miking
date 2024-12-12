@@ -50,6 +50,7 @@ lang TmUseSym = Sym + UseAst
         symbolizeExpr (updateEnv env langEnv) t.inexpr
       else
         symLookupError
+          env.langEnv
           {kind = "language", info = [t.info], allowFree = false}
           t.ident
 end
@@ -62,6 +63,7 @@ lang TyUseSym = Sym + TyUseAst
         symbolizeType (updateEnv env langEnv) t.inty
       else
         symLookupError
+          env.langEnv
           {kind = "language", info = [t.info], allowFree = false}
           t.ident
 end

@@ -2,6 +2,7 @@ include "bool.mc"
 include "char.mc"
 include "option.mc"
 include "seq.mc"
+include "int.mc"
 
 let emptyStr : String = ""
 
@@ -290,3 +291,24 @@ utest strReplace "viking" "miking" "two vikings" with "two mikings"
 utest strReplace "dog" "cat" "every dog loves dogs" with "every cat loves cats"
 utest strReplace "sub" "tu" "ssubb__ssusubu__su" with "stub__ssutuu__su"
 utest strReplace "oout" "Z" "ttoooutott" with "ttoZott"
+
+let levenshteinDistance
+  : String -> String -> Int
+  = lam a. lam b.
+    let start = create (addi 1 (length b)) (lam i. i) in
+    let calcRow = lam prev. lam a_i. lam a_c.
+      let start = [addi a_i 1] in
+      let calcCell = lam new. lam b_i. lam b_c.
+        let delCost = addi (get prev (addi b_i 1)) 1 in
+        let insertCost = addi (get new b_i) 1 in
+        let substCost = if eqc a_c b_c
+          then get prev b_i
+          else addi (get prev b_i) 1 in
+        snoc new (mini delCost (mini insertCost substCost)) in
+      foldli calcCell start b in
+    let final = foldli calcRow start a in
+    last final
+
+utest levenshteinDistance "abc" "abd" with 1
+utest levenshteinDistance "kitten" "sitting" with 3
+utest levenshteinDistance "Saturday" "Sunday" with 3

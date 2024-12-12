@@ -47,51 +47,51 @@ let mergeNameEnv = lam l. lam r. {
   tyVarEnv = mapUnion l.tyVarEnv r.tyVarEnv,
   tyConEnv = mapUnion l.tyConEnv r.tyConEnv,
   reprEnv = mapUnion l.reprEnv r.reprEnv,
-  extensionEnv = (mapMerge 
+  extensionEnv = (mapMerge
     (lam lhs. lam rhs.
       match lhs with None _ then rhs
       else match rhs with None _ then lhs
       else match (lhs, rhs) with (Some lhs, Some rhs)
-      in Some (setUnion lhs rhs)) 
+      in Some (setUnion lhs rhs))
     l.extensionEnv
     r.extensionEnv)
 }
 
 type SymEnv = {
-  allowFree : Bool, 
+  allowFree : Bool,
   ignoreExternals : Bool,
   currentEnv : NameEnv,
   langEnv : Map String NameEnv,
   namespaceEnv : Map String Name
 }
 
-let symbolizeUpdateVarEnv = lam env : SymEnv . lam varEnv : Map String Name. 
+let symbolizeUpdateVarEnv = lam env : SymEnv . lam varEnv : Map String Name.
   {env with currentEnv = {env.currentEnv with varEnv = varEnv}}
 
-let symbolizeUpdateConEnv = lam env : SymEnv . lam conEnv : Map String Name. 
+let symbolizeUpdateConEnv = lam env : SymEnv . lam conEnv : Map String Name.
   {env with currentEnv = {env.currentEnv with conEnv = conEnv}}
 
-let symbolizeUpdateTyVarEnv = lam env : SymEnv . lam tyVarEnv : Map String Name. 
+let symbolizeUpdateTyVarEnv = lam env : SymEnv . lam tyVarEnv : Map String Name.
   {env with currentEnv = {env.currentEnv with tyVarEnv = tyVarEnv}}
 
-let symbolizeUpdateTyConEnv = lam env : SymEnv . lam tyConEnv : Map String Name. 
+let symbolizeUpdateTyConEnv = lam env : SymEnv . lam tyConEnv : Map String Name.
   {env with currentEnv = {env.currentEnv with tyConEnv = tyConEnv}}
 
-let symbolizeUpdateReprEnv = lam env : SymEnv . lam reprEnv : Map String Name. 
+let symbolizeUpdateReprEnv = lam env : SymEnv . lam reprEnv : Map String Name.
   {env with currentEnv = {env.currentEnv with reprEnv = reprEnv}}
 
 let _symEnvEmpty : SymEnv = {
   allowFree = false,
   ignoreExternals = false,
-  currentEnv = _nameEnvEmpty, 
+  currentEnv = _nameEnvEmpty,
   langEnv = mapEmpty cmpString,
   namespaceEnv = mapEmpty cmpString
 }
 
 let symEnvAddBuiltinTypes : all a. SymEnv -> [(String, a)] -> SymEnv
-  = lam env. lam tys. symbolizeUpdateTyConEnv env (foldl 
+  = lam env. lam tys. symbolizeUpdateTyConEnv env (foldl
     (lam env. lam t. mapInsert t.0 (nameNoSym t.0) env)
-    env.currentEnv.tyConEnv 
+    env.currentEnv.tyConEnv
     tys)
 
 let symEnvDefault =
@@ -102,13 +102,41 @@ let symEnvDefault =
 -- remove this alias and rename `_symEnvEmpty` to `symEnvEmpty`.
 let symEnvEmpty = symEnvDefault
 
-lang SymLookup
+-- NOTE(vipa, 2025-02-17): All suggestions made by symLookupError will
+-- have at most this edit distance
+let symSuggestionMaxDistance = 4
+
+lang SymLookup = IdentifierPrettyPrint
   type LookupParams = {kind : String, info : [Info], allowFree : Bool}
 
-  sem symLookupError : all a. LookupParams -> Name -> a
-  sem symLookupError lkup =| ident ->
+  sem symLookupError : all a. all n. Map String n -> LookupParams -> Name -> a
+  sem symLookupError env lkup =| ident ->
+    let identStr = nameGetStr ident in
+    let f = lam acc : (Int, [String]). lam name. lam.
+      if leqi (absi (subi (length identStr) (length name))) acc.0 then
+        -- NOTE(vipa, 2025-01-14): We only compute the edit distance
+        -- if it's even possible for it to be at least as good as the
+        -- current best (length difference is a lower bound, and much
+        -- faster to compute)
+        let dist = levenshteinDistance identStr name in
+        if lti dist acc.0 then (dist, [name]) else
+        if eqi dist acc.0 then (acc.0, snoc acc.1 name)
+        else acc
+      else acc in
+    let pprintVar = lam str.
+      (pprintVarName pprintEnvEmpty (nameNoSym str)).1 in
+    let oxfordList = lam strs. switch strs
+      case [x] then x
+      case [a, b] then join [a, " or ", b]
+      case prev ++ [x] then strJoin ", " (snoc prev (concat "or " x))
+      case [] then ""
+      end in
+    let suggestion = switch mapFoldWithKey f (symSuggestionMaxDistance, []) env
+      case (_, []) then ""
+      case (_, names) then join ["\n(did you mean ", oxfordList (map pprintVar names), "?)"]
+      end in
     errorSingle lkup.info
-      (join ["Unknown ", lkup.kind, " in symbolize: ", nameGetStr ident])
+      (join ["Unknown ", lkup.kind, " in symbolize: ", nameGetStr ident, suggestion])
 
   -- Get a symbol from the environment, or give an error if it is not there.
   sem getSymbol : LookupParams -> Map String Name -> Name -> Name
@@ -117,12 +145,12 @@ lang SymLookup
     else
       optionGetOrElse
         (lam. if lkup.allowFree then ident
-              else symLookupError lkup ident)
+              else symLookupError env lkup ident)
         (mapLookup (nameGetStr ident) env)
 
   -- Insert a new symbol mapping into the environment, overriding if it exists.
   sem setSymbol : Map String Name -> Name -> (Map String Name, Name)
-  sem setSymbol env =| ident -> 
+  sem setSymbol env =| ident ->
     if nameHasSym ident then (env, ident)
     else
       let ident = nameSetNewSym ident in
@@ -482,10 +510,10 @@ lang DataKindSym = Sym + DataKindAst
     let symbolizeCons = lam cons.
       setFold
         (lam ks. lam k.
-          let str = nameGetStr k in 
-          if isLowerAlpha (head str) then 
+          let str = nameGetStr k in
+          if isLowerAlpha (head str) then
             setInsert k ks
-          else 
+          else
             setInsert
             (getSymbol {kind = "constructor",
                         info = [info],
