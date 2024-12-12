@@ -88,14 +88,12 @@ let _symEnvEmpty : SymEnv = {
   namespaceEnv = mapEmpty cmpString
 }
 
-let symEnvAddBuiltinTypes : all a. SymEnv -> [(String, a)] -> SymEnv
-  = lam env. lam tys. symbolizeUpdateTyConEnv env (foldl
-    (lam env. lam t. mapInsert t.0 (nameNoSym t.0) env)
-    env.currentEnv.tyConEnv
-    tys)
+let symEnvAddBuiltinTypes : all a. SymEnv -> SymEnv
+  = lam env. symbolizeUpdateTyConEnv env
+    (mapUnion env.currentEnv.tyConEnv builtinTypeNames)
 
 let symEnvDefault =
-  symEnvAddBuiltinTypes _symEnvEmpty builtinTypes
+  symEnvAddBuiltinTypes _symEnvEmpty
 
 -- TODO(oerikss, 2023-11-14): Change all DSLs that use this name for the
 -- symbolize environment to instead point to `symEnvDefault` and then

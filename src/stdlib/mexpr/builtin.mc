@@ -1,5 +1,4 @@
 include "ast.mc"
-include "const-types.mc"
 include "map.mc"
 include "set.mc"
 include "stringid.mc"
@@ -148,3 +147,8 @@ let builtinTypes : [(String, [String])] =
   , ("Ref", ["a"])
   , ("BootParseTree", [])
   ]
+let builtinTypes : [(String, Name, [String])] =
+  map (lam pair. (pair.0, nameSym pair.0, pair.1)) builtinTypes
+
+let builtinTypeNames : Map String Name =
+  foldl (lam env. lam t. mapInsert t.0 t.1 env) (mapEmpty cmpString) builtinTypes

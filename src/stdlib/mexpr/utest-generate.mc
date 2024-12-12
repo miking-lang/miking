@@ -59,7 +59,7 @@ let _ppTensorTyVarName = nameSym "a"
 let _eqTensorName = nameSym "eqTensor"
 let _eqTensorTyVarName = nameSym "a"
 
-let _builtinTypes = map (lam s. nameNoSym s.0) builtinTypes
+let _builtinTypes = map (lam x. x.1) builtinTypes
 
 let _utestInfo =
   let pos = initPos "utest-generated" in
@@ -589,11 +589,11 @@ lang VariantPrettyPrint = GeneratePrettyPrintBase + UtestRuntime
   sem generatePrettyPrintBodyH info env =
   | (TyApp _ | TyCon _) & ty ->
     match collectTypeArguments [] ty with (id, tyArgs) in
-    if nameEq id (nameNoSym "Symbol") then
+    if nameEq id (mapFindExn "Symbol" builtinTypeNames) then
       generateSymbolPrettyPrint env ty
-    else if nameEq id (nameNoSym "Ref") then
+    else if nameEq id (mapFindExn "Ref" builtinTypeNames) then
       generateReferencePrettyPrint env ty
-    else if nameEq id (nameNoSym "BootParseTree") then
+    else if nameEq id (mapFindExn "BootParseTree" builtinTypeNames) then
       generateBootParseTreePrettyPrint env ty
     else defaultVariantPrettyPrint info env id tyArgs ty
 
@@ -773,11 +773,11 @@ lang VariantEquality = GenerateEqualityBase + UtestRuntime
   sem generateEqualityBodyH info env =
   | (TyCon _ | TyApp _) & ty ->
     match collectTypeArguments [] ty with (id, tyArgs) in
-    if nameEq id (nameNoSym "Symbol") then
+    if nameEq id (mapFindExn "Symbol" builtinTypeNames) then
       generateSymbolEquality info env ty
-    else if nameEq id (nameNoSym "Ref") then
+    else if nameEq id (mapFindExn "Ref" builtinTypeNames) then
       generateReferenceEquality info env ty
-    else if nameEq id (nameNoSym "BootParseTree") then
+    else if nameEq id (mapFindExn "BootParseTree" builtinTypeNames) then
       generateBootParseTreeEquality info env ty
     else defaultVariantEq info env id tyArgs ty
 
@@ -1213,13 +1213,13 @@ utest evalEquality env ty c4 c5 with false_ using eqExpr in
 utest evalEquality env ty c4 c4 with true_ using eqExpr in
 utest evalEquality env ty c5 c5 with true_ using eqExpr in
 
-let symTy = tycon_ "Symbol" in
+let symTy = ntycon_ (mapFindExn "Symbol" builtinTypeNames) in
 let s = gensym_ unit_ in
 utest evalEquality env symTy s s with false_ using eqExpr in
 utest match expr2str (evalPrettyPrint env symTy s) with "\"sym (" ++ _ ++ ")\"" then true else false
 with true in
 
-let refTy = tyapp_ (tycon_ "Ref") tyint_ in
+let refTy = tyapp_ (ntycon_ (mapFindExn "Ref" builtinTypeNames)) tyint_ in
 let r = ref_ (int_ 0) in
 utest evalPrettyPrint env refTy r with str_ "<ref>" using eqExpr in
 

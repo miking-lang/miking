@@ -28,7 +28,7 @@ let _typeEnvEmpty = {
   varEnv = mapEmpty nameCmp,
   conEnv = mapEmpty nameCmp,
   tyEnv  = mapFromSeq nameCmp (
-    map (lam t : (String, [String]). (nameNoSym t.0, tyvariant_ [])) builtinTypes
+    map (lam t : (String, Name, [String]). (t.1, tyvariant_ [])) builtinTypes
   )
 }
 

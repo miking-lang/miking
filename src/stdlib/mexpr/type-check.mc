@@ -108,13 +108,13 @@ let typcheckEnvEmpty : TCEnv = {
   }
 }
 
-let typecheckEnvAddBuiltinTypes : TCEnv -> [(String, [String])] -> TCEnv
+let typecheckEnvAddBuiltinTypes : TCEnv -> [(String, Name, [String])] -> TCEnv
   = lam env. lam tys.
     { env with
       tyConEnv =
         foldl
           (lam env. lam t.
-            mapInsert (nameNoSym t.0) (0, map nameSym t.1, tyvariant_ []) env)
+            mapInsert t.1 (0, map nameSym t.2, tyvariant_ []) env)
           env.tyConEnv tys }
 
 let typcheckEnvDefault =

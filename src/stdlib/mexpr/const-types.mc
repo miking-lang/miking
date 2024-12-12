@@ -3,12 +3,13 @@
 
 include "ast.mc"
 include "ast-builder.mc"
+include "builtin.mc"
 
 let mktyall_ = lam s. lam f. tyall_ s (f (tyvar_ s))
 let mkstyall_ = lam s. lam k. lam f. styall_ s k (f (tyvar_ s))
 
 let mktybuiltin_ = lam s. lam d. lam disable. lam f.
-  let ident = nameNoSym s in
+  let ident = mapFindExn s builtinTypeNames in
   if disable then f (nsitycon_ ident tyunknown_ (NoInfo ()))
   else
     mkstyall_ d
