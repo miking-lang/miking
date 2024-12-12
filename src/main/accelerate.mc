@@ -56,6 +56,7 @@ lang PMExprCompile =
   BootParser +
   MExprSym + MExprTypeCheck + MExprRemoveTypeAscription +
   MExprLowerNestedPatterns + MExprUtestGenerate + PMExprAst + MExprANF +
+  MExprTypeAnnot +
   PMExprDemote + PMExprRewrite + PMExprTailRecursion + PMExprParallelPattern +
   MExprLambdaLift + MExprCSE + MExprDemoteRecursive +
   PMExprExtractAccelerate + PMExprClassify + PMExprCExternals +

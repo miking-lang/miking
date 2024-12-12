@@ -16,6 +16,7 @@ include "tune-stats.mc"
 include "mexpr/shallow-patterns.mc"
 include "ocaml/mcore.mc"
 include "ocaml/pprint.mc"
+include "mexpr/type-annot.mc"
 
 -- Performs tuning of a context expanded program with holes.
 
@@ -537,7 +538,8 @@ lang TestLang =
   MExprTune + GraphColoring + MExprHoleCFA + DependencyAnalysis +
   NestedMeasuringPoints + ContextExpand + Instrumentation +
   BootParser + MExprSym + MExprPrettyPrint + MExprEval + MExprTypeCheck +
-  MExprLowerNestedPatterns + MCoreCompileLang
+  MExprLowerNestedPatterns + MCoreCompileLang +
+  MExprTypeAnnot
 end
 
 mexpr
@@ -597,6 +599,7 @@ let test : Bool -> Bool -> TuneOptions -> Expr -> (LookupTable, Option SearchSta
       let opt = {optimize = true, libraries = libs, cLibraries = clibs} in
       ocamlCompileWithConfig opt ocamlProg
     in
+    let ast = typeAnnot ast in
     let cunit: CompileResult = compileMCore ast (mkEmptyHooks compileOCaml) in
 
     -- Run the program

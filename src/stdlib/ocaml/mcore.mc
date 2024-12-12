@@ -8,8 +8,7 @@ include "ocaml/pprint.mc"
 include "sys.mc"
 
 type Hooks a =
-  { debugTypeAnnot : use Ast in Expr -> ()
-  , debugGenerate : String -> ()
+  { debugGenerate : String -> ()
   , exitBefore : () -> ()
   , postprocessOcamlTops : [use OCamlTopAst in Top] -> [use OCamlTopAst in Top]
   , compileOcaml : [String] -> [String] -> String -> a
@@ -17,15 +16,14 @@ type Hooks a =
 
 let mkEmptyHooks : all a. ([String] -> [String] -> String -> a) -> Hooks a =
   lam compileOcaml.
-  { debugTypeAnnot = lam. ()
-  , debugGenerate = lam. ()
+  { debugGenerate = lam. ()
   , exitBefore = lam. ()
   , postprocessOcamlTops = lam tops. tops
   , compileOcaml = compileOcaml
   }
 
 lang MCoreCompileLang =
-  MExprTypeAnnot + MExprRemoveTypeAscription + MExprTypeLift +
+  MExprRemoveTypeAscription + MExprTypeLift +
   OCamlTypeDeclGenerate + OCamlGenerate + OCamlGenerateExternalNaive
 
   sem collectLibraries : Map Name [ExternalImpl] -> Set String -> ([String], [String])
@@ -46,11 +44,7 @@ lang MCoreCompileLang =
   sem compileMCore : all a. Expr -> Hooks a -> a
   sem compileMCore ast =
   | hooks ->
-    let ast = typeAnnot ast in
     let ast = removeTypeAscription ast in
-
-    -- If option --debug-type-annot, then pretty-print the AST
-    hooks.debugTypeAnnot ast;
 
     match typeLift ast with (env, ast) in
     match generateTypeDecls env with (env, typeTops) in
