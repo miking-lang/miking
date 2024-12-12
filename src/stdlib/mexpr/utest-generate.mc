@@ -1,3 +1,8 @@
+-- NOTE(vipa, 2025-02-17): If you want the functionality provided by
+-- this file, consider looking at `generate-utest.mc` instead. We want
+-- to move to using that file and the loader approach rather than this
+-- file, which should be replaced somewhere down the line.
+
 -- Defines the generation of unit test code from utest expressions. This
 -- includes a small runtime which keeps track of the number of failing tests
 -- (defined in stdlib/mexpr/utest-runtime.mc), as well as the automated
