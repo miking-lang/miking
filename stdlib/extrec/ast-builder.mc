@@ -52,26 +52,27 @@ let decl_ncosem_ = use ExtRecAst in
              args = map (lam tupl. {ident = tupl.0, tyAnnot = tupl.1}) nargs,
              cases = cases,
              isBase = isBase,
+             tyAnnot = tyunknown_,
+             targetTyIdent = nameNoSym "",
              includes = []} 
 
 let decl_cosem_ = use ExtRecAst in 
   lam s : String. lam args : [(String, Type)]. lam cases: [(Copat, Expr)]. lam isBase : Bool.
   decl_ncosem_ (nameNoSym s) (map (lam tupl. (nameNoSym tupl.0, tupl.1)) args) cases isBase
 
-let nrecord_copat_ = use RecordCopatAst in 
-  lam n : Name. lam fields : [String]. 
-    RecordCopat {info = NoInfo (), ident = n, fields = fields} 
-  
 let record_copat_ = use RecordCopatAst in 
-  lam s : String. lam fields : [String]. nrecord_copat_ (nameNoSym s) fields
-
+  lam fields : [String]. 
+    RecordCopat {info = NoInfo (), fields = fields} 
+  
 let decl_syn_prodext_ = use ExtRecAst in 
   lam s. lam globExt : Option Type. lam indivExts : [(String, Type)]. 
   let parseExt = lam indivExt. 
-    {ident = nameNoSym indivExt.0, tyIdent = indivExt.1} in 
+    {ident = nameNoSym indivExt.0, 
+     tyIdent = indivExt.1,
+     tyName = nameNoSym (concat indivExt.0 "Type")} in 
   SynDeclProdExt {ident = nameNoSym s, 
-               params = [],
-               includes = [],
-               globalExt = globExt,
-               individualExts = map parseExt indivExts,
-               info = NoInfo ()}
+                  params = [],
+                  includes = [],
+                  globalExt = globExt,
+                  individualExts = map parseExt indivExts,
+                  info = NoInfo ()}

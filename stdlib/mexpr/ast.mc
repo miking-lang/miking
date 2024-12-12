@@ -1580,22 +1580,6 @@ lang AliasTypeAst = AllTypeAst
     end
 end
 
-lang QualifiedTypeAst = Ast
-  syn Type = 
-  | TyQualifiedName {pos : Bool,
-                     info : Info,
-                     lhs : Name,
-                     rhs : Name,
-                     plus : [(Name, Name)],
-                     minus : [(Name, Name)]}
-  
-  sem tyWithInfo info =
-  | TyQualifiedName t -> TyQualifiedName {t with info = info}
-
-  sem infoTy =
-  | TyQualifiedName {info = info} -> info
-end
-
 lang PolyKindAst = Ast
   syn Kind =
   | Poly ()
@@ -1649,7 +1633,7 @@ lang MExprAst =
   UnknownTypeAst + BoolTypeAst + IntTypeAst + FloatTypeAst + CharTypeAst +
   FunTypeAst + SeqTypeAst + RecordTypeAst + VariantTypeAst + ConTypeAst +
   DataTypeAst + VarTypeAst + AppTypeAst + TensorTypeAst + AllTypeAst + 
-  AliasTypeAst + QualifiedTypeAst + 
+  AliasTypeAst +  
 
   -- Kinds
   PolyKindAst + MonoKindAst + RecordKindAst + DataKindAst

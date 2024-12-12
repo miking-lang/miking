@@ -13,7 +13,7 @@ include "ast-builder.mc"
 
 let gcopat = lam tree. lam i. bootParserGetCopat tree i 
 
-lang ExtRecBootParser = BootParserMLang + ExtRecordAst
+lang ExtRecordBootParser = BootParserMLang + ExtRecordAst
   sem matchTerm t = 
   | 117 -> 
     let n = glistlen t 0 in 
@@ -139,13 +139,33 @@ lang CosemBootParser = BootParserMLang + RecordCopatAst + CosemDeclAst
                  fields = map (gstr c) (range 0 n 1)}
 end 
 
+lang TyQualifiedNameBootParser = BootParserMLang + QualifiedTypeAst
+  sem matchType t = 
+  | 216 ->
+    let plusLen = glistlen t 0 in
+    let minusLen = glistlen t 1 in 
+
+    let parsePairs = lam offset. lam len. map 
+      (lam i. (gname t (addi i offset), gname t (addi (addi i offset) 1)))
+      (range 0 len 2) in 
+
+    TyQualifiedName {pos = eqi (gint t 0) 1,
+                     info = ginfo t 0,
+                     lhs = gname t 0,
+                     rhs = gname t 1,
+                     plus = parsePairs 2 plusLen,
+                     minus = parsePairs (addi 2 plusLen) minusLen}
+end
+
+lang ExtRecBootParser = ExtRecordBootParser + CosynBootParser + 
+                        CosemBootParser + TyQualifiedNameBootParser 
+end
+
 lang MyPrettyPrint = MLangPrettyPrint + ExtRecPrettyPrint + DeclCosynPrettyPrint + DeclCosemPrettyPrint
 end
 
-lang MyBigBootParserForTesting = ExtRecBootParser + CosynBootParser + CosemBootParser end
-
 mexpr
-use MyBigBootParserForTesting in 
+use ExtRecBootParser in 
 use MyPrettyPrint in 
 let parseProgram = lam str.
   match result.consume (parseMLangString str) with (_, Right p) in p

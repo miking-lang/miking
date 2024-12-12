@@ -39,14 +39,14 @@ lang BigPrettyPrint = MLangPrettyPrint + ExtRecPrettyPrint +
                       DeclCosemPrettyPrint + DeclCosynPrettyPrint
 end
 
-lang BigSym = MLangSym + ExtRecordSym
+lang BigSym = ExtRecSym + MLangSymWihoutLang
 end
 
 lang BigTypeCheck = MExprTypeCheckMost + MExprTypeCheckLamLetVar +
                     ExtRecordTypeCheck
 end
 
-lang BigIncludeHandler = MLangIncludeHandler + BootParserMLang + ExtRecBootParser + CosynBootParser + CosemBootParser
+lang BigIncludeHandler = MLangIncludeHandler + BootParserMLang + ExtRecBootParser
 end
 
 lang BigPipeline = BigIncludeHandler + 

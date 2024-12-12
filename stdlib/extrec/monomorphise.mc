@@ -8,9 +8,7 @@ include "map.mc"
 include "stringid.mc"
 include "set.mc"
 
-lang ExtRecMonomorphise = RecordAst + ExtRecordAst + MatchAst + 
-                          MExprAst + MExprPrettyPrint +
-                          TypeAbsAst + ExtRecordPat
+lang ExtRecMonomorphise = MLangAst + MExprAst + ExtRecAst
   sem monomorhpisePat env =
   | PatExtRecord p -> 
     let bindings = mapMap (monomorhpisePat env) p.bindings in 

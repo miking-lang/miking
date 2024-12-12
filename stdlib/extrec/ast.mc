@@ -228,7 +228,23 @@ lang ExtRecordPat = MatchAst
     else never
 end
 
+lang QualifiedTypeAst = Ast
+  syn Type = 
+  | TyQualifiedName {pos : Bool,
+                     info : Info,
+                     lhs : Name,
+                     rhs : Name,
+                     plus : [(Name, Name)],
+                     minus : [(Name, Name)]}
+  
+  sem tyWithInfo info =
+  | TyQualifiedName t -> TyQualifiedName {t with info = info}
+
+  sem infoTy =
+  | TyQualifiedName {info = info} -> info
+end
+
 lang ExtRecAst = SynProdExtDeclAst + CosynDeclAst + CopatAst + RecordCopatAst + 
                  CosemDeclAst + ExtRecordAst + TypeAbsAppAst + TypeAbsAst + 
-                 ExtRecordPat
+                 ExtRecordPat + QualifiedTypeAst
 end
