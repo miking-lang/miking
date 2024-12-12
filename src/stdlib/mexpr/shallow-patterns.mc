@@ -520,7 +520,7 @@ lang ShallowRecord = ShallowBase + RecordPat + RecordTypeAst + PrettyPrint
       , ty = x.ty
       , info = x.info
       } in
-    match_ (nvar_ scrutinee) pat t never_
+    withInfo x.info (match_ (nvar_ scrutinee) pat t never_)
 
   sem shallowIsInfallible =
   | SPatRecord _ -> true
@@ -654,10 +654,6 @@ lang ShallowSeq = ShallowBase + SeqTotPat + SeqEdgePat
         let expr = switch pair
           case (0, 0) then nvar_ scrutinee
           case (n, 0) then
-            -- TODO(vipa, 2024-07-19): tupleproj_ (and ast-builder in
-            -- general) inserts nodes without ty and info fields,
-            -- which is particularly an issue when what's inserted is
-            -- related to records
             tupleproj_ 1
               (withType
                 (tytuple_ [x.ty, x.ty])
