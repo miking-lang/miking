@@ -65,6 +65,14 @@ type SymEnv = {
   namespaceEnv : Map String Name
 }
 
+let mergeSymEnv : SymEnv -> SymEnv -> SymEnv = lam l. lam r.
+  { allowFree = l.allowFree
+  , ignoreExternals = l.ignoreExternals
+  , currentEnv = mergeNameEnv l.currentEnv r.currentEnv
+  , langEnv = mapUnion l.langEnv r.langEnv
+  , namespaceEnv = mapUnion l.namespaceEnv r.namespaceEnv
+  }
+
 let symbolizeUpdateVarEnv = lam env : SymEnv . lam varEnv : Map String Name.
   {env with currentEnv = {env.currentEnv with varEnv = varEnv}}
 

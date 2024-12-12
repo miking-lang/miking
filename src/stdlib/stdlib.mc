@@ -60,6 +60,8 @@ let stdlibLoc = mapFindExn "stdlib" stdlibMCoreLibs
 -- `relativeTo`. Applies path normalization. The `doError` function
 -- will be called with an error message if an error occurs. Follows
 -- these rules:
+-- - If path has the form "/absolute/path/to/file", return the path
+--   unchanged
 -- - If path has the form "lib::path/to/file" and MCORE_LIBS contains
 --   "lib=path/to/lib", return "path/to/lib/path/to/file".
 -- - If path has the form "./path/to/file" or "../path/to/file",
@@ -68,7 +70,9 @@ let stdlibLoc = mapFindExn "stdlib" stdlibMCoreLibs
 --   the given directory or in the stdlib. Checks for ambiguity,
 --   errors if both exist. Priority: existing file, then local file.
 let stdlibResolveFileOr : (String -> String) -> String -> String -> String = lam doError. lam relativeTo. lam path.
-  match strSplit "::" path with [lib, path] ++ paths then
+  match path with "/" ++ _ then
+    path
+  else match strSplit "::" path with [lib, path] ++ paths then
     -- Explicit library use
     match mapLookup lib stdlibMCoreLibs with Some libPath
     then fileutilsNormalize (filepathConcat libPath (strJoin "::" (cons path paths)))
