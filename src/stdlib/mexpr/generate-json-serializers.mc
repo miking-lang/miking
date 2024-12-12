@@ -9,6 +9,7 @@ include "symbolize.mc"
 include "type.mc"
 include "utils.mc"
 include "duplicate-code-elimination.mc"
+include "mlang/loader.mc"
 
 include "json.mc"
 include "stdlib.mc"
@@ -40,8 +41,8 @@ lang GenerateJsonSerializers =
   type GJSEnv = {
 
     -- Information from the given program
-    namedTypes: Map Name Expr, -- Expr only TmTypes
-    constructors: Map Name [Expr], -- [Expr] only TmConDefs
+    namedTypes: Map Name {params : [Name], tyIdent : Type},
+    constructors: Map Name [{ident : Name, tyIdent : Type}],
 
     -- Required libraries for the generation
     lib: Expr,
@@ -55,7 +56,6 @@ lang GenerateJsonSerializers =
     sString: Name, dString: Name, sSeq: Name, dSeq: Name,
     sTensor: Name, dTensorInt: Name, dTensorFloat: Name, dTensorDense: Name,
     jsonObject: Name, jsonString: Name,
-    jsonParse: Name, jsonParseExn: Name, json2string: Name,
     mapInsert: Name, mapEmpty: Name, mapLookup: Name,
     cmpString: Name,
     some: Name, none: Name
@@ -101,7 +101,6 @@ lang GenerateJsonSerializers =
         "jsonDeserializeTensorCArrayInt","jsonDeserializeTensorCArrayFloat",
         "jsonDeserializeTensorDense",
         "JsonObject", "JsonString",
-        "jsonParse", "jsonParseExn", "json2string",
         "mapInsert", "mapEmpty", "mapLookup",
         "cmpString",
         "Some", "None"
@@ -114,7 +113,6 @@ lang GenerateJsonSerializers =
         ssq, dsq,
         st, dti, dtf, dtd,
         jo, js,
-        jp,jpe,j2s,
         mi,me,ml,
         cs,
         s,n
@@ -128,7 +126,6 @@ lang GenerateJsonSerializers =
       sString = ss, dString = ds, sSeq = ssq, dSeq = dsq,
       sTensor = st, dTensorInt = dti, dTensorFloat = dtf, dTensorDense = dtd,
       jsonObject = jo, jsonString = js,
-      jsonParse = jp, jsonParseExn = jpe, json2string = j2s,
       mapInsert = mi, mapEmpty = me, mapLookup = ml,
       cmpString = cs,
       some = s, none = n
@@ -146,15 +143,10 @@ lang GenerateJsonSerializers =
   sem _addType: GJSEnv -> Expr -> GJSEnv
   sem _addType env =
   | TmType r & t ->
-    { env with namedTypes = mapInsert r.ident t env.namedTypes }
+    { env with namedTypes = mapInsert r.ident {params = r.params, tyIdent = r.tyIdent} env.namedTypes }
   | TmConDef r & t ->
     match getConDefType r.tyIdent with TyCon c then
-      let ident = c.ident in
-      let condefs =
-        match mapLookup ident env.constructors with Some condefs then condefs
-        else []
-      in
-      { env with constructors = mapInsert ident (cons t condefs) env.constructors }
+      { env with constructors = mapInsertWith concat c.ident [{ident = r.ident, tyIdent = r.tyIdent}] env.constructors }
     else error "Not a TyCon at RHS of TmConDef type"
   | _ -> env
 
@@ -253,7 +245,7 @@ lang GenerateJsonSerializers =
       (acc, { serializer = nvar_ s.serializerName,
               deserializer = nvar_ s.deserializerName })
     else
-      match mapLookup t.ident env.namedTypes with Some TmType tt then
+      match mapLookup t.ident env.namedTypes with Some tt then
 
         -- Variant type case
         match tt.tyIdent with TyVariant _ then
@@ -271,8 +263,6 @@ lang GenerateJsonSerializers =
               } acc
             in
             match mapAccumL (lam acc. lam tcd.
-                let tcd = match tcd with TmConDef tcd then tcd
-                          else error "Impossible" in
                 match stripTyAll tcd.tyIdent with (tyalls,tyIdent) in
                 let varEnv = foldl2 (lam varEnv. lam ta. lam ps.
                     match ta with (n,_) in
@@ -391,6 +381,101 @@ lang GenerateJsonSerializers =
     let ast = parse (join [stdlibLoc, "/", "json.mc"]) in
     symbolize ast
 
+end
+
+lang JsonSerializationLoader = MCoreLoader + GenerateJsonSerializers
+  syn Hook =
+  | JsonSerializationHook
+    { gjsAcc : Ref (Map Name GJSNamedSerializer) -- No implementations, only names (implementations have already been inserted in the program)
+    , baseEnv : GJSEnv -- Only the library names matter, everything else is populated later
+    }
+
+  -- Makes the given loader capable of generating json serializers and
+  -- deserializers upon request
+  sem enableJsonSerialization : Loader -> Loader
+  sem enableJsonSerialization = | loader ->
+    if hasHook (lam x. match x with JsonSerializationHook _ then true else false) loader then loader else
+
+    match includeFileExn "." "stdlib::json.mc" loader with (jsonEnv, loader) in
+    match includeFileExn "." "stdlib::map.mc" loader with (mapEnv, loader) in
+    match includeFileExn "." "stdlib::string.mc" loader with (stringEnv, loader) in
+    match includeFileExn "." "stdlib::basic-types.mc" loader with (optionEnv, loader) in
+
+    let baseEnv =
+      let v = lam env. lam str. _getVarExn str env in
+      let c = lam env. lam str. _getConExn str env in
+      { namedTypes = mapEmpty nameCmp
+      , constructors = mapEmpty nameCmp
+      , lib = unit_
+      , varEnv = mapEmpty nameCmp
+
+      , sBool = v jsonEnv "jsonSerializeBool", dBool = v jsonEnv "jsonDeserializeBool"
+      , sInt = v jsonEnv "jsonSerializeInt", dInt = v jsonEnv "jsonDeserializeInt"
+      , sFloat = v jsonEnv "jsonSerializeFloat", dFloat = v jsonEnv "jsonDeserializeFloat"
+      , sChar = v jsonEnv "jsonSerializeChar", dChar = v jsonEnv "jsonDeserializeChar"
+
+      , sString = v jsonEnv "jsonSerializeString", dString = v jsonEnv "jsonDeserializeString"
+      , sSeq = v jsonEnv "jsonSerializeSeq", dSeq = v jsonEnv "jsonDeserializeSeq"
+
+      , sTensor = v jsonEnv "jsonSerializeTensor"
+      , dTensorInt = v jsonEnv "jsonDeserializeTensorCArrayInt"
+      , dTensorFloat = v jsonEnv "jsonDeserializeTensorCArrayFloat"
+      , dTensorDense = v jsonEnv "jsonDeserializeTensorDense"
+
+      , jsonObject = c jsonEnv "JsonObject"
+      , jsonString = c jsonEnv "JsonString"
+
+      , mapInsert = v mapEnv "mapInsert"
+      , mapEmpty = v mapEnv "mapEmpty"
+      , mapLookup = v mapEnv "mapLookup"
+
+      , cmpString = v stringEnv "cmpString"
+
+      , some = c optionEnv "Some", none = c optionEnv "None"
+      } in
+
+    let hook = JsonSerializationHook
+      { baseEnv = baseEnv
+      , gjsAcc = ref (mapEmpty nameCmp)
+      } in
+    addHook loader hook
+
+  sem _serializationPairsFor : [Type] -> Loader -> Hook -> Option (Loader, [GJSSerializer])
+  sem _serializationPairsFor tys loader =
+  | _ -> None ()
+  | JsonSerializationHook hook ->
+    let tcEnv = _getTCEnv loader in
+    -- OPT(vipa, 2024-12-13): This reconstruction for each request is
+    -- potentially a bit expensive
+    let namedTypes = mapMap (lam x. {params = x.1, tyIdent = x.2}) tcEnv.tyConEnv in
+    let constructors = mapMap
+      (lam cs. mapValues
+        (mapIntersectWithKey (lam c. lam. lam x. {ident = c, tyIdent = x.1}) cs tcEnv.conEnv))
+      tcEnv.conDeps in
+    let env = {hook.baseEnv with namedTypes = namedTypes, constructors = constructors} in
+    match mapAccumL (_generateType env) (deref hook.gjsAcc) tys with (gjsAcc, tys) in
+
+    let f = lam bindings. lam. lam namedSer.
+      match namedSer with {serializer = Some serializer, deserializer = Some deserializer} then
+        let eta = lam tm. match tm with TmLam _
+          then tm
+          else let n = nameSym "x" in nulam_ n (app_ tm (nvar_ n)) in
+        ( concat bindings
+          [ (namedSer.serializerName, eta serializer)
+          , (namedSer.deserializerName, eta deserializer)
+          ]
+        , {namedSer with serializer = None (), deserializer = None ()}
+        )
+      else (bindings, namedSer) in
+    match mapMapAccum f [] gjsAcc with (bindings, gjsAcc) in
+    modref hook.gjsAcc gjsAcc;
+    if null bindings then Some (loader, tys) else
+    let decl = decl_nureclets_ bindings in
+    Some (_addSymbolizedDeclExn loader decl, tys)
+
+  sem serializationPairsFor : [Type] -> Loader -> (Loader, [GJSSerializer])
+  sem serializationPairsFor tys = | loader ->
+    withHookState (_serializationPairsFor tys) loader
 end
 
 lang Test = GenerateJsonSerializers + MExprPrettyPrint + MExprEq
@@ -582,8 +667,8 @@ utest test false
   [tycon_ "Either", tycon_ "MyType"]
   "
     type Either a b in
-    con Left: all a. all b. a -> Either a b in
     con Right: all a. all b. b -> Either a b in
+    con Left: all a. all b. a -> Either a b in
     type MyType = Either Int Bool in
     ()
   "
@@ -628,8 +713,8 @@ utest test false
   [tycon_ "List"]
   "
     type List a in
-    con Node: all a. List a -> List a in
     con Leaf: all a. () -> List a in
+    con Node: all a. List a -> List a in
     ()
   "
   [("List", "serializeList", "
@@ -719,4 +804,3 @@ with true in
 -- printLn res2;
 
 ()
-
