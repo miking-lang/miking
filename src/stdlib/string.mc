@@ -277,6 +277,14 @@ utest strJoin "--" [] with emptyStr
 utest strJoin "--" ["coffee"] with "coffee"
 utest strJoin "water" ["coffee", "tea"] with "coffeewatertea"
 
+let seq2string : all a. (a -> String) -> [a] -> String
+  = lam f. lam seq.
+    join ["[", strJoin ", " (map f seq), "]"]
+
+utest seq2string int2string [1, 2, 3] with "[1, 2, 3]"
+utest seq2string int2string [] with "[]"
+utest seq2string int2string [37] with "[37]"
+
 
 -- Replaces all occurrences of the string by the replacement
 let strReplace: String -> String -> String -> String = subseqReplace eqChar
