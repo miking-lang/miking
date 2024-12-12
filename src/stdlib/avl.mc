@@ -391,28 +391,33 @@ lang AVLTreeImpl
     (k -> k -> Int) -> (a -> b -> c) -> AVL k a -> AVL k b -> AVL k c
   sem avlIntersectWith cmp f l =
   | r ->
+    avlIntersectWithKey cmp (lam k. f) l r
+  sem avlIntersectWithKey : all k. all a. all b. all c.
+    (k -> k -> Int) -> (k -> a -> b -> c) -> AVL k a -> AVL k b -> AVL k c
+  sem avlIntersectWithKey cmp f l =
+  | r ->
     match l with Leaf _ then Leaf ()
     else match r with Leaf _ then Leaf ()
     else if geqi (avlHeight l) (avlHeight r) then
       match l with Node lt then
         match avlSplit cmp lt.key r with (rl, rv, rr) in
-        let lhs = avlIntersectWith cmp f lt.l rl in
-        let rhs = avlIntersectWith cmp f lt.r rr in
+        let lhs = avlIntersectWithKey cmp f lt.l rl in
+        let rhs = avlIntersectWithKey cmp f lt.r rr in
         match rv with Some x then
-          avlJoin lt.key (f lt.value x) lhs rhs
+          avlJoin lt.key (f lt.key lt.value x) lhs rhs
         else
           avlJoin2 lhs rhs
-      else error "avlIntersectWith: empty left tree"
+      else error "avlIntersectWithKey: empty left tree"
     else
       match r with Node rt then
         match avlSplit cmp rt.key l with (ll, lv, lr) in
-        let lhs = avlIntersectWith cmp f ll rt.l in
-        let rhs = avlIntersectWith cmp f lr rt.r in
+        let lhs = avlIntersectWithKey cmp f ll rt.l in
+        let rhs = avlIntersectWithKey cmp f lr rt.r in
         match lv with Some x then
-          avlJoin rt.key (f x rt.value) lhs rhs
+          avlJoin rt.key (f rt.key x rt.value) lhs rhs
         else
           avlJoin2 lhs rhs
-      else error "avlIntersectWith: empty right tree"
+      else error "avlIntersectWithKey: empty right tree"
 
   sem avlDifference : all k. all a. all b. (k -> k -> Int) -> AVL k a -> AVL k b -> AVL k a
   sem avlDifference cmp l =
@@ -651,6 +656,10 @@ utest avlIntersectWith subi chooseLeft t1 t2 with [(3, 4), (4, 5)] using eqAvlSe
 utest avlIntersectWith subi chooseRight t1 t2 with [(3, 2), (4, 3)] using eqAvlSeq subi eqi in
 utest avlIntersectWith subi chooseLeft t1 t3 with [(1, 2), (2, 3)] using eqAvlSeq subi eqi in
 utest avlIntersectWith subi chooseLeft t2 t3 with avlEmpty () using avlEq subi eqi in
+
+utest avlIntersectWithKey subi (lam k. lam a. lam b. (k, a, b)) t1 t2
+with [(3, (3, 4, 2)), (4, (4, 5, 3))]
+using eqAvlSeq subi (lam l. lam r. and (eqi l.0 r.0) (and (eqi l.1 r.1) (eqi l.2 r.2))) in
 
 utest avlDifference subi t1 t2 with [(0, 1), (1, 2), (2, 3)] using eqAvlSeq subi eqi in
 utest avlDifference subi t2 t1 with [(5, 4)] using eqAvlSeq subi eqi in

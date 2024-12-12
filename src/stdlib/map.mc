@@ -333,6 +333,11 @@ let mapIntersectWith : all k. all a. all b. all c. (a -> b -> c) -> Map k a -> M
   use AVLTreeImpl in
   {cmp = l.cmp, root = avlIntersectWith l.cmp f l.root r.root}
 
+let mapIntersectWithKey : all k. all a. all b. all c. (k -> a -> b -> c) -> Map k a -> Map k b -> Map k c =
+  lam f. lam l. lam r.
+  use AVLTreeImpl in
+  {cmp = l.cmp, root = avlIntersectWithKey l.cmp f l.root r.root}
+
 let mapDifference : all k. all v. all v2. Map k v -> Map k v2 -> Map k v =
   lam l. lam r.
   use AVLTreeImpl in
