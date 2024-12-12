@@ -21,6 +21,12 @@ type OrderedLamLiftSolution = use Ast in
   { vars : [(Name, Type)]
   , tyVars : [(Name, Kind)]
   }
+type FinalOrderedLamLiftSolution = use Ast in
+  { vars : [(Name, Type)]
+  , varsToParams : Map Name Name
+  , tyVars : [(Name, Kind)]
+  , tyVarsToParams : Map Name Name
+  }
 
 let _orderSolution : LambdaLiftSolution -> OrderedLamLiftSolution = lam x.
   { vars = mapBindings x.vars
@@ -452,32 +458,21 @@ end
 
 lang LambdaLiftReplaceCapturedParameters = MExprAst + MExprSubstitute
   sem replaceCapturedParameters : Map Name LambdaLiftSolution -> Expr
-                               -> (Map Name LambdaLiftSolution, Expr)
+                               -> (Map Name FinalOrderedLamLiftSolution, Expr)
   sem replaceCapturedParameters solutions =
   | ast ->
     let newNamesForSolution
-      : LambdaLiftSolution -> (Map Name Name, LambdaLiftSolution)
+      : LambdaLiftSolution -> (Map Name Name, FinalOrderedLamLiftSolution)
       = lam sol.
-        -- NOTE(vipa, 2024-05-29): mapMapWithKey (which otherwise
-        -- would be the obvious function to use) doesn't guarantee
-        -- iteration order, which matters here since `nameSetNewSym`
-        -- is side-effecting, and that side-effect affects the
-        -- ordering of the eventually returned solution. This is most
-        -- likely something that *shouldn't* matter, we should export
-        -- an ordered solution, but for now this is the more direct
-        -- way to do it.
-        let orderedMapWithKey = lam f. lam m.
-          mapFoldWithKey (lam acc. lam k. lam v. mapInsert k (f k v) acc) (mapEmpty (mapGetCmpFun m)) m in
-        let substs = mapUnion
-          (orderedMapWithKey (lam k. lam. nameSetNewSym k) sol.vars)
-          (orderedMapWithKey (lam k. lam. nameSetNewSym k) sol.tyVars) in
-        let swapKeys : all v. Map Name v -> Map Name v = lam m. mapFoldWithKey
-          (lam acc. lam k. lam v. mapInsert (mapFindExn k substs) v acc)
-          (mapEmpty nameCmp)
-          m in
+        let varsToParams = mapMapWithKey (lam k. lam. nameSetNewSym k) sol.vars in
+        let tyVarsToParams = mapMapWithKey (lam k. lam. nameSetNewSym k) sol.tyVars in
+        let ordSol = _orderSolution sol in
+        let substs = mapUnion varsToParams tyVarsToParams in
         ( substs
-        , { vars = swapKeys sol.vars
-          , tyVars = swapKeys sol.tyVars
+        , { vars = ordSol.vars
+          , varsToParams = varsToParams
+          , tyVars = ordSol.tyVars
+          , tyVarsToParams = tyVarsToParams
           }
         ) in
     let merged = mapMap newNamesForSolution solutions in
@@ -524,7 +519,7 @@ lang MExprLambdaLift =
   sem liftLambdas =
   | t -> match liftLambdasWithSolutions t with (_, t) in t
 
-  sem liftLambdasWithSolutions : Expr -> (Map Name LambdaLiftSolution, Expr)
+  sem liftLambdasWithSolutions : Expr -> (Map Name FinalOrderedLamLiftSolution, Expr)
   sem liftLambdasWithSolutions =
   | t ->
     let t = nameAnonymousLambdas t in
