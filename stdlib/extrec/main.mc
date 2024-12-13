@@ -29,7 +29,6 @@ include "mlang/language-composer.mc"
 include "mlang/composition-check.mc"
 include "mlang/postprocess.mc"
 include "mlang/prune-unused-langs.mc"
-include "mlang/compile.mc"
 
 include "mexpr/type-check.mc"
 include "mexpr/phase-stats.mc"
@@ -62,7 +61,7 @@ lang BigPipeline = BigIncludeHandler +
                    CosemTyAnnot +
                    LanguageComposer +
                    MLangCompositionCheck +
-                   MLangCompiler + 
+                   ExtRecCompiler + 
                    ResolveQualifiedName + 
                    ComputeMLangTyDeps +
                    PhaseStats +
