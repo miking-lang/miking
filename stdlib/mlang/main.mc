@@ -30,8 +30,7 @@ lang MLangPipeline = MLangCompiler + BootParserMLang +
                      MLangSym + MLangCompositionCheck +
                      MExprPrettyPrint + MExprEval + MExprEq + 
                      MLangConstTransformer + MLangIncludeHandler +
-                     PhaseStats + LanguageComposer + PostProcess + 
-                     MLangTypeCheck
+                     PhaseStats + LanguageComposer + PostProcess
 
   sem myEval : Expr -> Expr
   sem myEval =| e ->
