@@ -149,6 +149,21 @@ let _mergeErrors
   = lam a. lam b.
     { warnings = mapUnion a.warnings b.warnings, errors = mapUnion a.errors b.errors }
 
+-- Map the errors, if any, inside the `Result`. Preserves all warnings.
+let _mapErrors
+  : all w. all e1. all e2. all a. (e1 -> e2) -> Result w e1 a -> Result w e2 a
+  = lam f. lam start.
+    switch start
+    case ResultOk r then ResultOk r
+    case ResultErr { warnings = warnings, errors = errors } then
+      let errors = map f (mapValues errors) in
+      let f = lam acc. lam err. mapInsert (gensym ()) err acc in
+      ResultErr {
+        warnings = warnings,
+        errors = foldl f (_emptyMap ()) errors
+      }
+    end
+
 -- Update the value, if any, inside the `Result`. Preserves all errors
 -- and warnings.
 let _map
