@@ -35,7 +35,7 @@ let rtpplExtMap =
            , ty = tyarrow_ tyint_ tyint_ } ),
     ( "rtpplOpenFileDescriptor"
     , impl { expr = "Rtppl.open_file_descriptor"
-           , ty = tyarrow_ otystring_ tyint_ } ),
+           , ty = tyarrows_ [otystring_, tyint_, tyint_] } ),
     ( "rtpplCloseFileDescriptor"
     , impl { expr = "Rtppl.close_file_descriptor"
            , ty = tyarrow_ tyint_ otyunit_ } ),
@@ -56,6 +56,12 @@ let rtpplExtMap =
            , ty = tyarrows_ [tyint_, tyint_, otyarray_ (otytuple_ [timespec, tyunknown_])] } ),
     ( "rtpplWriteIntRecord"
     , impl { expr = "Rtppl.write_int_record"
+           , ty = tyarrows_ [tyint_, tyint_, otytuple_ [timespec, tyunknown_], otyunit_] } ),
+    ( "rtpplReadFloatRecord"
+    , impl { expr = "Rtppl.read_float_record"
+           , ty = tyarrows_ [tyint_ ,tyint_, otyarray_ (otytuple_ [timespec, tyunknown_])] } ),
+    ( "rtpplWriteFloatRecord"
+    , impl { expr = "Rtppl.write_float_record"
            , ty = tyarrows_ [tyint_, tyint_, otytuple_ [timespec, tyunknown_], otyunit_] } ),
     ( "rtpplReadDistFloat"
     , impl { expr = "Rtppl.read_dist_float"

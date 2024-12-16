@@ -91,6 +91,7 @@ uninstall:
 
 # Tests everything except some files with very special external dependencies
 test-all:\
+  test-mlang-pipeline\
   test-boot-all\
   test-compile\
   test-run\
@@ -173,3 +174,6 @@ test-jvm: build
 
 test-js: build
 	@$(MAKE) -s -f test-js.mk
+
+test-mlang-pipeline: build
+	@$(MAKE) -s -f test-mlang-pipeline.mk

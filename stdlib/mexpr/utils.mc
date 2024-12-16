@@ -73,6 +73,7 @@ lang MExprSubstitute = MExprAst
   sem substituteIdentifiersType replacements =
   | TyCon t -> TyCon {t with ident = subIdent replacements t.ident}
   | TyVar t -> TyVar {t with ident = subIdent replacements t.ident}
+  | TyAll t -> TyAll {t with ident = subIdent replacements t.ident, ty = substituteIdentifiersType replacements t.ty}
   | ty -> smap_Type_Type (substituteIdentifiersType replacements) ty
 
   sem substituteIdentifiersPat : Map Name Name -> Pat -> Pat

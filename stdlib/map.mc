@@ -298,11 +298,22 @@ let mapValues : all k. all v. Map k v -> [v] = lam m.
 -- │ Merge/Union │
 -- └─────────────┘
 
+-- Generalized merging of two maps. This can be used to express union,
+-- difference, intersection, etc.; any combination of two maps where
+-- we do some form of combination and filtering at each key.
 let mapMerge : all k. all a. all b. all c.
   (Option a -> Option b -> Option c) -> Map k a -> Map k b -> Map k c =
   lam f. lam l. lam r.
   use AVLTreeImpl in
   {cmp = l.cmp, root = avlMerge l.cmp f l.root r.root}
+
+-- This is `mapMerge`, except the combination function has access to
+-- the key being merged.
+let mapMergeWithKey : all k. all a. all b. all c.
+  (k -> Option a -> Option b -> Option c) -> Map k a -> Map k b -> Map k c =
+  lam f. lam l. lam r.
+  use AVLTreeImpl in
+  {cmp = l.cmp, root = avlMergeWithKey l.cmp f l.root r.root}
 
 let mapUnion : all k. all v. Map k v -> Map k v -> Map k v = lam l. lam r.
   use AVLTreeImpl in
@@ -332,17 +343,30 @@ let mapDifference : all k. all v. all v2. Map k v -> Map k v2 -> Map k v =
 -- │ Filter │
 -- └────────┘
 
+-- Perform a mapping and filtering at the same time, with access to
+-- the key.
+let mapMapOptionWithKey : all k. all a. all b. (k -> a -> Option b) -> Map k a -> Map k b
+  = lam f. lam m.
+  use AVLTreeImpl in
+  {root = avlMapOption f m.root, cmp = m.cmp}
+
+-- Like `mapMapOptionWithKey` but without access to the key.
+let mapMapOption : all k. all a. all b. (a -> Option b) -> Map k a -> Map k b
+  = lam f. lam m.
+  use AVLTreeImpl in
+  {root = avlMapOption (lam. f) m.root, cmp = m.cmp}
+
 -- `mapFilterWithKey p m` filters the map `m` with the predicate `p`.
 let mapFilterWithKey : all k. all v. (k -> v -> Bool) -> Map k v -> Map k v
   = lam p. lam m.
-    mapFoldWithKey
-      (lam m. lam k. lam v. if p k v then mapInsert k v m else m)
-      (mapEmpty (mapGetCmpFun m))
-      m
+  use AVLTreeImpl in
+  {root = avlFilter p m.root, cmp = m.cmp}
 
 -- `mapFilter p m` filters the map `m` with the predicate `p`.
 let mapFilter : all k. all v. (v -> Bool) -> Map k v -> Map k v
-  = lam p. mapFilterWithKey (lam. p)
+  = lam p. lam m.
+  use AVLTreeImpl in
+  {root = avlFilter (lam. p) m.root, cmp = m.cmp}
 
 mexpr
 
@@ -498,6 +522,26 @@ let m = mapFromSeq subi [
 utest
   mapBindings (mapFilter (lam v. or (eqString v "1") (eqString v "3")) m)
   with [(1, "1"), (3, "3")]
+in
+
+let m = mapFromSeq subi [
+  (1, "1"),
+  (2, "2"),
+  (3, "3")
+] in
+utest
+  mapBindings (mapMapOptionWithKey (lam k. lam v. if or (eqString v "1") (eqString v "3") then Some (concat (int2string k) (cons 'x' v)) else None ()) m)
+  with [(1, "1x1"), (3, "3x3")]
+in
+
+let m = mapFromSeq subi [
+  (1, "1"),
+  (2, "2"),
+  (3, "3")
+] in
+utest
+  mapBindings (mapMapOption (lam v. if or (eqString v "1") (eqString v "3") then Some (cons 'x' v) else None ()) m)
+  with [(1, "x1"), (3, "x3")]
 in
 
 let cmp = lam a. lam b. if ltf a b then -1 else if gtf a b then 1 else 0 in

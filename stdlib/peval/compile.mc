@@ -77,7 +77,7 @@ lang SpecializeCompile = SpecializeAst + MExprPEval + MExprAst
     if not (hasSpecializeTerm false ast) then ast
     else
     match addIdentifierToSpecializeTerms ast with (specializeData, ast) in
-    match liftLambdasWithSolutions ast with (solutions, ast) in
+    let ast = liftLambdas ast in
 
     let specializeIds : [Name] = mapKeys specializeData in
 

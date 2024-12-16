@@ -89,8 +89,8 @@ case ResultOk {value = lrtable} then
     ""
   ] in
   let fname = "lrk-parenlang-gen.mc" in
-  match writeOpen fname with Some wc then
-    writeString wc program;
+  match fileWriteOpen fname with Some wc then
+    fileWriteString wc program;
     printLn (join ["Generated parser as \"", fname, "\""])
   else
     printLn (join ["Could not open the file \"", fname, "\""])

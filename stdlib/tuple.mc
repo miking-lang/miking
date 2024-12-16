@@ -76,10 +76,28 @@ let snd : all a. all b. (a, b) -> b = lam p. p.1
 utest snd (1, 2) with 2
 utest snd ([1, 2, 3], "whatever") with "whatever"
 
+-- Elementwise equality over pairs
 let tupleEq2 : all a. all b. (a -> a -> Bool) -> (b -> b -> Bool) -> (a, b) -> (a, b) -> Bool
-  = lam eqFst. lam eqSnd. lam lhs. lam rhs. 
+  = lam eqFst. lam eqSnd. lam lhs. lam rhs.
     and (eqFst lhs.0 rhs.0) (eqSnd lhs.1 rhs.1)
 
-utest (tupleEq2 eqf eqi) (1.0, 1) (1.0, 1) with true 
+utest (tupleEq2 eqf eqi) (1.0, 1) (1.0, 1) with true
 utest (tupleEq2 eqf eqi) (1.0, 1) (1.0, 12) with false
 utest (tupleEq2 eqf eqi) (1.2, 1) (1.0, 12) with false
+
+-- Elementwise equality over triples
+let tupleEq3 : all a. all b. all c.
+  (a -> a -> Bool) -> (b -> b -> Bool) -> (c -> c -> Bool) -> (a, b, c) -> (a, b, c) -> Bool
+  = lam eqA. lam eqB. lam eqC. lam lhs. lam rhs.
+    and (and (eqA lhs.0 rhs.0) (eqB lhs.1 rhs.1)) (eqC lhs.2 rhs.2)
+
+utest
+  let tupleEq3_ = tupleEq3 eqf eqi eqc in
+  utest tupleEq3_ (1., 1, '1') (1., 1, '1') with true in
+  utest tupleEq3_ (0., 1, '1') (1., 1, '1') with false in
+  utest tupleEq3_ (1., 1, '1') (0., 1, '1') with false in
+  utest tupleEq3_ (1., 0, '1') (1., 1, '1') with false in
+  utest tupleEq3_ (1., 1, '1') (1., 0, '1') with false in
+  utest tupleEq3_ (1., 1, '0') (1., 1, '1') with false in
+  utest tupleEq3_ (1., 1, '1') (1., 1, '0') with false in
+  () with ()

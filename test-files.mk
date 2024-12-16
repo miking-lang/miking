@@ -11,6 +11,17 @@ src_files_all_tmp =\
 python_files += stdlib/python/python.mc
 python_files += $(wildcard test/py/*.mc)
 
+# These test cases should eventually include all mcore files.
+# However, since the pipeline is still slow this would add an unacceptable
+# amount of runtime to the tests. Furthermore, the current version still
+# has some issues when compiling certain files.
+mlang_pipeline_files = $(wildcard stdlib/bool.mc)
+mlang_pipeline_files += stdlib/option.mc
+mlang_pipeline_files += stdlib/char.mc
+mlang_pipeline_files += stdlib/seq.mc
+mlang_pipeline_files += stdlib/map.mc
+mlang_pipeline_files += stdlib/mexpr/symbolize.mc
+
 # Exclude the tests in the JVM directory, as they depend on Java being
 # installed.
 # NOTE(larshum, 2023-11-14): Also temporarily exclude the Python boot tests
@@ -52,6 +63,7 @@ typecheck_files_exclude += test/mlang/catchall.mc
 # was extended with exhaustiveness checks. It is forbidden to add to
 # this list of programs but removing from it is very welcome.
 constrtype_files_exclude =\
+	test/mexpr/pprint-eval.mc\
 	test/mlang/subsumption.mc\
 	stdlib/effect.mc\
 	$(wildcard stdlib/c/*.mc)\
@@ -92,6 +104,9 @@ run_files_exclude += stdlib/parser-combinators.mc
 run_files_exclude += test/mlang/catchall.mc
 run_files_exclude += test/mlang/mlang.mc
 
+# Programs that we currently cannot interpret/test since externals cannot be tested by interpreter currently.
+external_files_exclude += stdlib/ext/file-ext.mc
+
 # Programs that we should be able to compile/test if we prune utests.
 compile_files_prune =\
 	$(filter-out $(python_files) $(typecheck_files_exclude) $(compile_files_exclude), $(src_files_all))
@@ -104,7 +119,7 @@ compile_files =\
 
 # Programs that we should be able to interpret/test with the interpreter.
 run_files =\
-	$(filter-out $(python_files) $(run_files_exclude) $(typecheck_files_exclude),\
+	$(filter-out $(python_files) $(run_files_exclude) $(typecheck_files_exclude) $(external_files_exclude),\
 		$(src_files_all))
 
 

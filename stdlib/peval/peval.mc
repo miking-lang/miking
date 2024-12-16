@@ -119,7 +119,7 @@ lang PEval = PEvalCtx + Eval + PrettyPrint
   sem pevalReadbackH ctx =| t -> smapAccumL_Expr_Expr pevalReadbackH ctx t
 end
 
-lang PEvalApply = Ast
+lang PEvalApply = Ast + PEvalCtx
   sem pevalApply : Info -> PEvalCtx -> (Expr -> Expr) -> (Expr, Expr) -> Expr
 end
 

@@ -99,7 +99,7 @@ lang ErrorTokenParser = TokenParser
   | ErrorTok x -> x.info
 
   sem tokToStr =
-  | ErrorTok x -> join ["<Lexing error: '", x.char, "'"]
+  | ErrorTok x -> join ["<Lexing error: '", [x.char], "'"]
 
   sem tokToRepr =
   | ErrorTok _ -> ErrorRepr ()

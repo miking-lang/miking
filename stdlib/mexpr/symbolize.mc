@@ -24,10 +24,10 @@ include "repr-ast.mc"
 -- have SIDs available, however, if needed).
 
 type NameEnv = {
-  varEnv : Map String Name,   
-  conEnv : Map String Name,   
-  tyVarEnv : Map String Name, 
-  tyConEnv : Map String Name, 
+  varEnv : Map String Name,
+  conEnv : Map String Name,
+  tyVarEnv : Map String Name,
+  tyConEnv : Map String Name,
   reprEnv : Map String Name,
   extensionEnv : Map Name (Set Name)
 }
@@ -83,9 +83,7 @@ let symbolizeUpdateReprEnv = lam env : SymEnv . lam reprEnv : Map String Name.
 let _symEnvEmpty : SymEnv = {
   allowFree = false,
   ignoreExternals = false,
-  currentEnv = _nameEnvEmpty, 
-  langEnv = mapEmpty cmpString,
-  namespaceEnv = mapEmpty cmpString
+  reprEnv = mapEmpty cmpString
 }
 
 let symEnvAddBuiltinTypes : all a. SymEnv -> [(String, a)] -> SymEnv

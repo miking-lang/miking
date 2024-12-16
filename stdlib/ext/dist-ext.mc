@@ -154,16 +154,30 @@ let geometricPmf : Float -> Int -> Float = lam p. lam x.
 -- Lomax
 external externalLomaxLogPdf : Float -> Float -> Float -> Float
 external externalLomaxSample ! : Float -> Float -> Float
-let lomaxSample = lam scale: Float. lam shape: Float.
+let lomaxSample = lam shape: Float. lam scale: Float.
   externalLomaxSample shape scale
-let lomaxLogPdf:Float -> Float -> Float -> Float = lam scale. lam shape. lam x.
+let lomaxLogPdf:Float -> Float -> Float -> Float = lam shape. lam scale. lam x.
   if ltf x 0. then negf inf else
   let lhs = subf (log shape) (log scale)  in
   let rhs = mulf (log (addf (divf x scale) 1.)) (addf shape 1.) in
   subf lhs rhs
-  --externalLomaxLogPdf x shape scale
-let lomaxPdf = lam scale: Float. lam shape: Float. lam x:Float.
-  exp (lomaxLogPdf scale shape x)
+let lomaxPdf = lam shape: Float. lam scale: Float. lam x:Float.
+  exp (lomaxLogPdf shape scale x)
+
+-- Beta binomial
+let betabinSample = lam n:Int. lam a: Float. lam b: Float.
+  let p = betaSample a b in
+  binomialSample p n
+
+let betabinLogPmf:Int -> Float -> Float -> Int -> Float = lam n. lam a. lam b. lam x.
+  if gti x n then negf inf else
+  let lbeta1 = addf (subf (logGamma (addf a (int2float x))) (logGamma (addf (int2float n) (addf a b)))) (logGamma (addf b (int2float (subi n x))))  in
+  let lbeta2 = addf (subf (logGamma a) (logGamma (addf a b))) (logGamma b)  in
+  let lcomb = (logCombination n x) in
+  addf lcomb (subf lbeta1 lbeta2)
+
+let betabinPmf = lam n:Int. lam a: Float. lam b: Float. lam x:Int.
+  exp (betabinLogPmf n a b x)
 
 -- Seed
 external externalSetSeed ! : Int -> ()
@@ -268,6 +282,12 @@ utest exp (geometricLogPmf 0.3 1) with 0.21 using _eqf in
 utest geometricPmf 0.3 2 with 0.147 using _eqf in
 utest exp (geometricLogPmf 0.3 3) with 0.1029 using _eqf in
 utest geometricSample 0.3 with 0 using geqi in
+
+-- Testing Beta-Binomial
+utest betabinLogPmf 5 1. 1. 2 with -1.79175946923 using _eqf in
+utest exp (betabinLogPmf 5 1. 1. 3) with 0.166666666667 using _eqf in
+utest betabinPmf 5 1. 1. 3 with 0.166666666667 using _eqf in
+utest betabinSample 20 1. 1. with 0 using intRange 0 20 in
 
 -- Testing seed
 utest setSeed 0; uniformSample (); uniformSample ()

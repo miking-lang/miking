@@ -169,6 +169,7 @@ changed.
 -/
 
 lang CarriedTypeBase = Ast
+lang CarriedTypeBase = Ast
   syn CarriedType =
 
   sem carriedRepr : CarriedType -> Type
@@ -388,6 +389,7 @@ let _mkFieldStubs
       , tyAnnot = ty
       , tyBody = ty
       , args = Some []
+      , args = Some []
       , cases = []
       , includes = [], declKind = BaseKind ()
       , info = NoInfo ()
@@ -399,6 +401,7 @@ let _mkFieldStubs
       { ident = request.names.set
       , tyAnnot = ty
       , tyBody = ty
+      , args = Some [{ident = valName, tyAnnot = tyunknown_}]
       , args = Some [{ident = valName, tyAnnot = tyunknown_}]
       , cases = []
       , includes = [], declKind = BaseKind ()
@@ -417,6 +420,7 @@ let _mkFieldStubs
       , tyAnnot = ty
       , includes = [], declKind = BaseKind ()
       , tyBody = ty
+      , args = Some [{ident = fName, tyAnnot = tyunknown_}, {ident = accName, tyAnnot = tyunknown_}]
       , args = Some [{ident = fName, tyAnnot = tyunknown_}, {ident = accName, tyAnnot = tyunknown_}]
       , cases =
         [ { pat = npvar_ targetName
@@ -440,6 +444,7 @@ let _mkFieldStubs
       , tyAnnot = ty
       , includes = [], declKind = BaseKind ()
       , tyBody = ty
+      , args = Some [{ident = fName, tyAnnot = tyunknown_}]
       , args = Some [{ident = fName, tyAnnot = tyunknown_}]
       , cases =
         [ { pat = npvar_ targetName

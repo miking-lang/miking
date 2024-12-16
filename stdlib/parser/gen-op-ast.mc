@@ -257,6 +257,7 @@ let _mkBaseFragment
       , tyAnnot = ty
       , tyBody = ty
       , args = Some []
+      , args = Some []
       , cases = []
       , includes = [], declKind = BaseKind ()
       , info = NoInfo ()

@@ -17,7 +17,7 @@ external rtpplSetMaxPriority : () -> Int
 external rtpplSetPriority : Int -> Int
 
 -- Opens and closes file descriptors
-external rtpplOpenFileDescriptor : String -> Int
+external rtpplOpenFileDescriptor : String -> Int -> Int
 external rtpplCloseFileDescriptor : Int -> ()
 
 type Opaque
@@ -29,6 +29,8 @@ external rtpplReadFloat : Int -> [(Timespec, Float)]
 external rtpplWriteFloat : Int -> (Timespec, Float) -> ()
 external rtpplReadIntRecord : Int -> Int -> [(Timespec, Opaque)]
 external rtpplWriteIntRecord : Int -> Int -> (Timespec, Opaque) -> ()
+external rtpplReadFloatRecord : Int -> Int -> [(Timespec, Opaque)]
+external rtpplWriteFloatRecord : Int -> Int -> (Timespec, Opaque) -> ()
 external rtpplReadDistFloat : Int -> [(Timespec, [(Float, Float)])]
 external rtpplWriteDistFloat : Int -> (Timespec, ([Float], [Float])) -> ()
 external rtpplReadDistFloatRecord : Int -> Int -> [(Timespec, [(Float, Opaque)])]

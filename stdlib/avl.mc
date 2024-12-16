@@ -340,25 +340,29 @@ lang AVLTreeImpl
   sem avlMerge : all k. all a. all b. all c.
     (k -> k -> Int) -> (Option a -> Option b -> Option c) -> AVL k a ->
     AVL k b -> AVL k c
-  sem avlMerge cmp f l =
+  sem avlMerge cmp f l = | r -> avlMergeWithKey cmp (lam. f) l r
+  sem avlMergeWithKey : all k. all a. all b. all c.
+    (k -> k -> Int) -> (k -> Option a -> Option b -> Option c) -> AVL k a ->
+    AVL k b -> AVL k c
+  sem avlMergeWithKey cmp f l =
   | r ->
     match (l, r) with (Leaf _, Leaf _) then Leaf ()
     else if geqi (avlHeight l) (avlHeight r) then
       match l with Node lt then
         match avlSplit cmp lt.key r with (rl, rv, rr) in
-        let lhs = avlMerge cmp f lt.l rl in
-        let rhs = avlMerge cmp f lt.r rr in
-        match f (Some lt.value) rv with Some v then avlJoin lt.key v lhs rhs
+        let lhs = avlMergeWithKey cmp f lt.l rl in
+        let rhs = avlMergeWithKey cmp f lt.r rr in
+        match f lt.key (Some lt.value) rv with Some v then avlJoin lt.key v lhs rhs
         else avlJoin2 lhs rhs
-      else error "avlMerge: empty left tree"
+      else error "avlMergeWithKey: empty left tree"
     else
       match r with Node rt then
         match avlSplit cmp rt.key l with (ll, lv, lr) in
-        let lhs = avlMerge cmp f ll rt.l in
-        let rhs = avlMerge cmp f lr rt.r in
-        match f lv (Some rt.value) with Some v then avlJoin rt.key v lhs rhs
+        let lhs = avlMergeWithKey cmp f ll rt.l in
+        let rhs = avlMergeWithKey cmp f lr rt.r in
+        match f rt.key lv (Some rt.value) with Some v then avlJoin rt.key v lhs rhs
         else avlJoin2 lhs rhs
-      else error "avlMerge: empty right tree"
+      else error "avlMergeWithKey: empty right tree"
 
   sem avlUnionWith : all k. all v.
     (k -> k -> Int) -> (v -> v -> v) -> AVL k v -> AVL k v -> AVL k v
@@ -425,6 +429,16 @@ lang AVLTreeImpl
         else
           avlJoin lt.key lt.value lhs rhs
       else error "avlDifference: empty left tree"
+
+  sem avlMapOption : all k. all a. all b. (k -> a -> Option b) -> AVL k a -> AVL k b
+  sem avlMapOption f =
+  | Node t ->
+    let lhs = avlMapOption f t.l in
+    let rhs = avlMapOption f t.r in
+    match f t.key t.value with Some value then avlJoin t.key value lhs rhs
+    else avlJoin2 lhs rhs
+  | Leaf _ ->
+    Leaf ()
 
   sem avlFilter : all k. all v. (k -> v -> Bool) -> AVL k v -> AVL k v
   sem avlFilter p =

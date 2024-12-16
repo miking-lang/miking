@@ -296,7 +296,7 @@ recursive let json2string: JsonValue -> String = lam value.
         concat acc "\\b"
       else if eqi cval 12 then
         concat acc "\\f"
-      else if or (lti cval 20) (eqi cval 127) then
+      else if or (lti cval 32) (eqi cval 127) then
         let tohex: Int -> Char = lam x.
           if lti x 10 then
             int2char (addi x (char2int '0'))
