@@ -256,9 +256,6 @@ lang PrettyPrint = IdentifierPrettyPrint + MExprAst
   sem type2str =
   | ty -> typeToString pprintEnvEmpty ty
   
-  sem kind2str = 
-  | kind -> kindToString pprintEnvEmpty kind
-
   sem pat2str = 
   | pat -> (getPatStringCode 0 pprintEnvEmpty pat).1
 

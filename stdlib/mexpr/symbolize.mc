@@ -83,7 +83,9 @@ let symbolizeUpdateReprEnv = lam env : SymEnv . lam reprEnv : Map String Name.
 let _symEnvEmpty : SymEnv = {
   allowFree = false,
   ignoreExternals = false,
-  reprEnv = mapEmpty cmpString
+  currentEnv = _nameEnvEmpty, 
+  langEnv = mapEmpty cmpString,
+  namespaceEnv = mapEmpty cmpString
 }
 
 let symEnvAddBuiltinTypes : all a. SymEnv -> [(String, a)] -> SymEnv
