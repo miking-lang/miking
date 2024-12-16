@@ -296,7 +296,11 @@ lang UtestDeclAst = DeclAst
     match f acc x.test with (acc, test) in
     match f acc x.expected with (acc, expected) in
     match optionMapAccum f acc x.tusing with (acc, tusing) in
-    (acc, DeclUtest {x with test = test, expected = expected, tusing = tusing})
+    match optionMapAccum f acc x.tonfail with (acc, tonfail) in
+    (acc, DeclUtest {x with test = test, 
+                            expected = expected,
+                            tusing = tusing,
+                            tonfail = tonfail})
 end
 
 -- DeclExt --
