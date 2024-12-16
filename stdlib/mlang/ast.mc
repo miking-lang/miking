@@ -66,7 +66,8 @@ end
 lang DeclAst = Ast
   syn Decl = -- intentionally left blank
 
-  sem infoDecl =
+  sem infoDecl: Decl -> Info
+  sem declWithInfo: Info -> Decl -> Decl
 
   sem smapAccumL_Decl_Decl : all acc. (acc -> Decl -> (acc, Decl)) -> acc -> Decl -> (acc, Decl)
   sem smapAccumL_Decl_Decl f acc = | d -> (acc, d)
@@ -105,6 +106,9 @@ lang LangDeclAst = DeclAst
   sem infoDecl =
   | DeclLang d -> d.info
 
+  sem declWithInfo info =
+  | DeclLang d -> DeclLang {d with info = info}
+
   sem smapAccumL_Decl_Decl f acc =
   | DeclLang x ->
     match mapAccumL f acc x.decls with (acc, decls) in
@@ -125,6 +129,9 @@ lang SynDeclAst = DeclAst
 
   sem infoDecl =
   | DeclSyn d -> d.info
+
+  sem declWithInfo info =
+  | DeclSyn d -> DeclSyn {d with info = info}
 
   sem smapAccumL_Decl_Type f acc =
   | DeclSyn x ->
@@ -147,6 +154,9 @@ lang SynProdExtDeclAst = DeclAst
 
   sem infoDecl =
   | SynDeclProdExt {info = info} -> info
+
+  sem declWithInfo info =
+  | SynDeclProdExt d -> SynDeclProdExt {d with info = info}
 
   sem smapAccumL_Decl_Type f acc =
   | SynDeclProdExt x ->
@@ -172,6 +182,9 @@ lang SemDeclAst = DeclAst
 
   sem infoDecl =
   | DeclSem d -> d.info
+
+  sem declWithInfo info =
+  | DeclSem d -> DeclSem {d with info = info}
 
   sem smapAccumL_Decl_Type f acc =
   | DeclSem x ->
@@ -205,6 +218,9 @@ lang LetDeclAst = DeclAst
   sem infoDecl =
   | DeclLet d -> d.info
 
+  sem declWithInfo info =
+  | DeclLet d -> DeclLet {d with info = info}
+
   sem smapAccumL_Decl_Expr f acc =
   | DeclLet x ->
     match f acc x.body with (acc, body) in
@@ -228,6 +244,9 @@ lang TypeDeclAst = DeclAst
   sem infoDecl =
   | DeclType d -> d.info
 
+  sem declWithInfo info =
+  | DeclType d -> DeclType {d with info = info}
+
   sem smapAccumL_Decl_Type f acc =
   | DeclType x ->
     match f acc x.tyIdent with (acc, tyIdent) in
@@ -242,6 +261,9 @@ lang RecLetsDeclAst = DeclAst + RecLetsAst
 
   sem infoDecl =
   | DeclRecLets d -> d.info
+
+  sem declWithInfo info =
+  | DeclRecLets d -> DeclRecLets {d with info = info}
 
   sem smapAccumL_Decl_Type f acc =
   | DeclRecLets x ->
@@ -271,6 +293,9 @@ lang DataDeclAst = DeclAst
   sem infoDecl =
   | DeclConDef d -> d.info
 
+  sem declWithInfo info =
+  | DeclConDef d -> DeclConDef {d with info = info}
+
   sem smapAccumL_Decl_Type f acc =
   | DeclConDef x ->
     match f acc x.tyIdent with (acc, tyIdent) in
@@ -288,6 +313,9 @@ lang UtestDeclAst = DeclAst
 
   sem infoDecl =
   | DeclUtest d -> d.info
+
+  sem declWithInfo info =
+  | DeclUtest d -> DeclUtest {d with info = info}
 
   sem smapAccumL_Decl_Expr f acc =
   | DeclUtest x ->
@@ -308,6 +336,9 @@ lang ExtDeclAst = DeclAst
   sem infoDecl =
   | DeclExt d -> d.info
 
+  sem declWithInfo info =
+  | DeclExt d -> DeclExt {d with info = info}
+
   sem smapAccumL_Decl_Type f acc =
   | DeclExt x ->
     match f acc x.tyIdent with (acc, tyIdent) in
@@ -322,6 +353,9 @@ lang IncludeDeclAst = DeclAst
 
   sem infoDecl =
   | DeclInclude d -> d.info
+
+  sem declWithInfo info =
+  | DeclInclude d -> DeclInclude {d with info = info}
 end
 
 
