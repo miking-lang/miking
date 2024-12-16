@@ -329,9 +329,28 @@ lang SemDeclCompiler = SemDeclAst + MExprAst + DeclCompiler
       info = d.info}
 end
 
+lang MLangSynDefCompiler = SynDeclAst + MExprAst 
+  sem compileMLangSynDefs langStr ctx = 
+  | DeclSyn s -> 
+    match mapLookup (langStr, nameGetStr s.ident) ctx.compositionCheckEnv.baseMap 
+    with Some baseIdent in 
+
+    let paramWrapper = lam ty. foldr ntyall_ ty s.params in 
+
+    let compileDef = lam ctx. lam def.
+      let tyIdent = tyarrow_ (paramWrapper def.tyIdent) (ntycon_ baseIdent) in
+      withExpr ctx (TmConDef {ident = def.ident,
+                              tyIdent = tyIdent,
+                              info = s.info,
+                              ty = tyunknown_,
+                              inexpr = uunit_}) in 
+
+    foldl compileDef ctx s.defs    
+end
+
 lang MLangLangDeclCompiler = DeclCompiler + LangDeclAst + MExprAst + SemDeclAst + 
                              SynDeclAst + TypeDeclAst + SynTypeDeclCompiler +
-                             SemDeclCompiler
+                             SemDeclCompiler + MLangSynDefCompiler
   sem compileDecl ctx = 
   | DeclLang l -> 
     let langStr = nameGetStr l.ident in
@@ -347,6 +366,7 @@ lang MLangLangDeclCompiler = DeclCompiler + LangDeclAst + MExprAst + SemDeclAst 
 
     let ctx = foldl compileSynType ctx synDecls in 
     let res = result.foldlM compileDecl ctx typeDecls in
+    let res = result.map (lam ctx. foldl (compileMLangSynDefs langStr) ctx synDecls) res in 
 
     let compileSemToResult : CompilationContext -> [Decl] -> CompilationContext
       = lam ctx. lam sems.
