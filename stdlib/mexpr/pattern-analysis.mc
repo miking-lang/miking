@@ -7,6 +7,8 @@ include "stringid.mc"
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
 
+include "extrec/ast.mc"
+
 lang NormPat = Ast
   syn SimpleCon =
   syn SNPat =
