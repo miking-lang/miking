@@ -710,6 +710,7 @@ let result =
   , map3 = _map3
   , map4 = _map4
   , map5 = _map5
+  , mapErrors = _mapErrors
   , apply = _apply
   , withAnnotations = _withAnnotations
   -- Mapping, action can produce new errors and/or warnings
