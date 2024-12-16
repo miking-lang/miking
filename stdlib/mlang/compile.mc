@@ -335,12 +335,15 @@ lang MLangSynDefCompiler = SynDeclAst + MExprAst
     match mapLookup (langStr, nameGetStr s.ident) ctx.compositionCheckEnv.baseMap 
     with Some baseIdent in 
 
-    let paramWrapper = lam ty. foldr ntyall_ ty s.params in 
+    -- Wrap a type in a tyall for each parameter
+    let forallWrapper = lam ty. foldr ntyall_ ty s.params in 
+
+    -- Apply the type variables to the type constructor on the rhs of tyIdent
+    let rhs = foldl (lam ty. lam n. tyapp_ ty (ntyvar_ n)) (ntycon_ baseIdent) s.params in
 
     let compileDef = lam ctx. lam def.
-      let tyIdent = tyarrow_ (paramWrapper def.tyIdent) (ntycon_ baseIdent) in
       withExpr ctx (TmConDef {ident = def.ident,
-                              tyIdent = tyIdent,
+                              tyIdent = forallWrapper (tyarrow_ def.tyIdent rhs),
                               info = s.info,
                               ty = tyunknown_,
                               inexpr = uunit_}) in 
