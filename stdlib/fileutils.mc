@@ -61,6 +61,39 @@ utest eraseFile "foo.mc" with ""
 utest eraseFile "a/b/c/foo.mc" with "a/b/c"
 utest eraseFile "a/b/c/../foo.mc" with "a/b/c/.."
 
+-- Clean up a file path by removing "." and ".." parts
+let cleanFilePath : String -> String = lam filepath.
+  let _removeParentDirectories : [String] -> String -> [String] =
+    lam acc. lam part.
+      switch (part, acc)
+        case ("..", []) then
+          cons ".." acc
+        case ("..", [".."] ++ rest) then
+          cons ".." acc
+        case ("..", _) then
+          tail acc
+        case (_, _) then
+          cons part acc
+      end
+
+  let filepath = match filepath with rest ++ "/" then rest else filepath in -- Remove trailing slash
+  let parts = strSplit "/" filepath in -- Split on slashes
+  let parts = filter (neqString ".") parts in -- Remove "." parts
+  let parts = reverse (foldl _removeParentDirectories [] parts) in -- Remove ".." parts
+  strJoin "/" parts
+
+utest cleanFilePath "a/b/c/../foo.mc" with "a/b/foo.mc"
+utest cleanFilePath "a/b/c/../../foo.mc" with "a/foo.mc"
+utest cleanFilePath "a/b/c/./foo.mc" with "a/b/c/foo.mc"
+utest cleanFilePath "a/b/c/././foo.mc" with "a/b/c/foo.mc"
+utest cleanFilePath "a/b/c/././foo.mc/.." with "a/b/c"
+utest cleanFilePath "a/b/c/./../foo.mc" with "a/b/foo.mc"
+utest cleanFilePath "a/b/c/.././foo.mc" with "a/b/foo.mc"
+utest cleanFilePath "a/b/c/.././.././foo.mc" with "a/foo.mc"
+utest cleanFilePath "a/b/../../../" with ".."
+utest cleanFilePath "a/b/../../.." with ".."
+utest cleanFilePath "a/b/../../../../" with "../.."
+
 -- type Filepath = [String]
 
 -- let filepath2string : Filepath -> String = lam fp.
