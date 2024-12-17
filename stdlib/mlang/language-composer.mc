@@ -42,6 +42,7 @@ include "ast.mc"
 include "ast-builder.mc"
 
 include "extrec/ast.mc"
+include "extrec/ast-builder.mc"
 
 include "mexpr/info.mc"
 
@@ -554,6 +555,27 @@ utest length decls with 1 in
 match head decls with DeclCosem d in
 utest d.includes with [("L0", "f")] using eqSeq (tupleEq2 eqString eqString) in 
 
+let p : MLangProgram = {
+    decls = [
+        decl_langi_ "L1" [] [
+            decl_cosem_ "f" [] [] true
+        ],
+        decl_langi_ "L2" [] [
+            decl_cosem_ "f" [] [] true
+        ],
+        decl_langi_ "L12" ["L1", "L2"] [
+          decl_cosem_ "f" [] [] false
+        ]        
+    ],
+    expr = bind_ (use_ "L2") (int_ 10)
+} in 
+let p = composeProgram p in
+match get p.decls 2 with DeclLang {decls = decls} in 
+utest length decls with 1 in 
+match head decls with DeclCosem d in
+utest length d.includes with 2 in 
+utest seqMem (tupleEq2 eqString eqString) d.includes ("L1", "f") with true in
+utest seqMem (tupleEq2 eqString eqString) d.includes ("L2", "f") with true in
 ()
 
 

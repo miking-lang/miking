@@ -199,34 +199,6 @@ lang SemDeclPrettyPrint = DeclPrettyPrint + SemDeclAst + UnknownTypeAst
     (env, strJoin "\n" (mapOption identity [mDecl, mImpl]))
 end
 
-lang SynProdExtDeclPrettyPrint = DeclPrettyPrint + SynProdExtDeclAst
-  sem pprintDeclCode (indent : Int) (env : PprintEnv) =
-  | SynDeclProdExt t -> 
-    match pprintTypeName env t.ident with (env, typeNameStr) in
-    match mapAccumL pprintEnvGetStr env t.params with (env, params) in
-    let params = join (map (concat " ") params) in
-    match
-      mapAccumL (lam env. lam indivExt.
-        match pprintConName env indivExt.ident with (env, str) in
-        match getTypeStringCode (pprintIncr indent) env indivExt.tyIdent
-        with (env, ty) in
-        (env, join ["| ", str, " ", ty])
-      ) env t.individualExts
-    with (env, indivExtStr) in
-
-    match
-      match t.globalExt with Some ext then 
-        match getTypeStringCode (pprintIncr indent) env ext 
-        with (env, str) in (env, str)
-      else 
-        (env, "")
-    with (env, globExtStr) in 
-
-    (env, strJoin (pprintNewline indent)
-                  (cons (join ["syn ", typeNameStr, params, " *= ", globExtStr]) indivExtStr))
-
-end
-
 lang LetDeclPrettyPrint = DeclPrettyPrint + LetDeclAst + LetPrettyPrint
   sem pprintDeclCode (indent : Int) (env : PprintEnv) =
   | DeclLet t ->
@@ -311,7 +283,7 @@ lang MLangPrettyPrint = MExprPrettyPrint +
   DeclPrettyPrint + LangDeclPrettyPrint + SynDeclPrettyPrint +
   SemDeclPrettyPrint + LetDeclPrettyPrint + TypeDeclPrettyPrint +
   RecLetsDeclPrettyPrint + DataDeclPrettyPrint + UtestDeclPrettyPrint +
-  ExtDeclPrettyPrint + IncludeDeclPrettyPrint + SynProdExtDeclPrettyPrint + 
+  ExtDeclPrettyPrint + IncludeDeclPrettyPrint +  
   
 
   -- Top-level pretty printer
@@ -390,7 +362,6 @@ let prog2: MLangProgram = {
         ("Apple", tyint_),
         ("Pear", tyseq_ tyfloat_)
       ],
-      decl_syn_prodext_ "Foo" (Some tyint_) [("Bar", tychar_), ("Baz", tystr_)],
       decl_usem_ "getFruit" ["x"] [
         (pcon_ "Apple" (pvar_ "i"), appf1_ (var_ "int2string") (var_ "i")),
         (pcon_ "Pear" (pvar_ "fs"),
@@ -427,12 +398,5 @@ let prog2: MLangProgram = {
 } in
 
 print (mlang2str prog2); print "\n\n";
-
-let l = decl_lang_ 
-  "MyLang" 
-  [decl_syn_prodext_ "Expr" (None ()) [("Foo", tyint_), ("Bar", tychar_)]]
-in 
-let p = {decls = [l], expr = uunit_} in 
-printLn (mlang2str p); print "\n";
 
 ()

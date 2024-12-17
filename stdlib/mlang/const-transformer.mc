@@ -17,6 +17,8 @@ include "option.mc"
 
 include "mexpr/const-transformer.mc"
 
+include "extrec/ast.mc"
+
 lang MLangConstTransformer = MLangAst + ConstTransformer + CosemDeclAst
   sem constTransformProgram : [(String, Const)] -> MLangProgram -> MLangProgram
   sem constTransformProgram builtins =

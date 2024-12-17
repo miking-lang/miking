@@ -2,6 +2,8 @@ include "common.mc"
 include "ast.mc"
 include "basic-types.mc"
 
+include "mlang/ast.mc"
+
 lang PhaseStats = Ast + MLangTopLevel
   type StatState =
     { lastPhaseEnd : Ref Float

@@ -329,7 +329,7 @@ utest optionIsNone d.tusing with true in
 match get p.decls 1 with DeclUtest d in
 utest d.test with int_ 12 using eqExpr in
 utest optionIsSome d.tusing with true in
--- printLn (mlang2str p) ;
+printLn (mlang2str p) ;
 
 -- Test empty language
 let str = strJoin "\n" [
@@ -585,19 +585,6 @@ let str = strJoin "\n" [
   "()"
 ] in
 let p = parseProgram str in 
-printLn (mlang2str p) ;
-
--- Test syn product extension
-let str = strJoin "\n" [
-  "lang Base",
-  "  syn S *= {x : Int}",
-  "  | Foo {y : Int}",
-  "  | Bar {z : String}",
-  "end",
-  "mexpr",
-  "()"
-] in
-let p = parseProgram str in 
-printLn (mlang2str p) ;
+-- printLn (mlang2str p) ;
 
 ()

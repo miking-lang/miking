@@ -279,7 +279,7 @@ lang DeclExtRecLangSym = DeclSym + LangDeclAst + TypeDeclAst + SemDeclAst +
 end
 
 lang ExtRecSym = ExtRecordSym + QualifiedNameSym + RecordCopatSym +
-                 DeclExtRecLangSym
+                 DeclExtRecLangSym + MLangSymWihoutLang
 end
 
 lang ExtRecTestLang = TestLangWithoutLang + ExtRecSym

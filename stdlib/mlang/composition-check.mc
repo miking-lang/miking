@@ -21,6 +21,9 @@ include "mexpr/pattern-analysis.mc"
 include "mexpr/ast-builder.mc"
 
 include "extrec/ast.mc"
+include "extrec/ast-builder.mc"
+include "extrec/pprint.mc"
+include "extrec/symbolize.mc"
 
 include "common.mc"
 include "bool.mc"
@@ -451,7 +454,6 @@ lang MLangCompositionCheck = MLangAst + MExprPatAnalysis + MExprAst +
                         semSymMap = mapInsert (langStr, nameGetStr s.ident) s.ident env.semSymMap,
                         langToSems = mapInsert langStr (cons s.ident (mapLookupOrElse (lam. []) langStr env.langToSems)) env.langToSems
     } in
-
     match s.includes with [] then 
       if s.isBase then 
         result.ok (insertBaseMap env (langStr, nameGetStr s.ident) s.ident s.ident)
@@ -692,11 +694,11 @@ lang MLangCompositionCheck = MLangAst + MExprPatAnalysis + MExprAst +
 
 end
 
-lang TestLang = MLangSym + MLangCompositionCheck end
+lang TestLang = ExtRecSym + MLangCompositionCheck end
 
 mexpr 
 use TestLang in 
-use MLangPrettyPrint in 
+use ExtRecPrettyPrint in 
 use LanguageComposer in 
 
 let checkCompositionDisableStrictness = lam p : MLangProgram.
@@ -822,10 +824,10 @@ assertDifferentBaseSem (checkCompositionDisableStrictness p) ;
 let p : MLangProgram = {
     decls = [
         decl_langi_ "L1" [] [
-            decl_cosem_ "f" [] [] false
+            decl_cosem_ "f" [] [] true
         ],
         decl_langi_ "L2" [] [
-            decl_cosem_ "f" [] [] false
+            decl_cosem_ "f" [] [] true
         ],
         decl_langi_ "L12" ["L1", "L2"] [
           decl_cosem_ "f" [] [] false
@@ -1002,8 +1004,8 @@ let p : MLangProgram = {
     decls = [
         decl_lang_ "L0" [
             decl_cosyn_ "Foo" [] true (tyrecord_ [("x", tyint_), ("y", tyint_), ("z", tyint_)]),
-            decl_cosem_ "f" [] [(record_copat_ "Foo" ["x", "y"], never_), 
-                                (record_copat_ "Foo" ["y", "z"], never_)] true
+            decl_cosem_ "f" [] [(record_copat_ ["x", "y"], never_), 
+                                (record_copat_ ["y", "z"], never_)] true
         ]
     ],
     expr = bind_ (use_ "L0") (int_ 10)
@@ -1017,8 +1019,8 @@ let p : MLangProgram = {
     decls = [
         decl_lang_ "L0" [
             decl_cosyn_ "Foo" [] true (tyrecord_ [("x", tyint_), ("y", tyint_), ("z", tyint_)]),
-            decl_cosem_ "f" [] [(record_copat_ "Foo" ["x"], never_), 
-                                (record_copat_ "Foo" ["y", "z"], never_)] true
+            decl_cosem_ "f" [] [(record_copat_ ["x"], never_), 
+                                (record_copat_ ["y", "z"], never_)] true
         ]
     ],
     expr = bind_ (use_ "L0") (int_ 10)
