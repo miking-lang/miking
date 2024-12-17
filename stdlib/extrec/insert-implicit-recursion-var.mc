@@ -1,5 +1,10 @@
 include "mlang/ast.mc"
+include "mlang/ast-builder.mc"
+
 include "mexpr/ast.mc"
+include "mexpr/ast-builder.mc"
+
+include "ast.mc"
 
 include "name.mc"
 include "set.mc"
