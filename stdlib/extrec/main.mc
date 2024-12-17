@@ -412,26 +412,9 @@ end
 
 mexpr 
 use BigPipeline in
--- let p = doIt "temp/basic.mc" in 
--- let p = doIt "temp/constructor-types.mc" in 
--- let p = doIt "temp/point.mc" in 
-let p = runIt (last argv) in 
 
--- let p = doIt "example.mc" in 
--- let p = doIt "symbolize-example/simple-sym.mc" in 
--- let p = doIt "temp/family.mc" in 
--- let p = doIt "temp/prodext.mc" in 
--- let p = doIt "temp/extend.mc" in 
-
-
-
--- let p = doIt "stdlib/name.mc" in
-
-
--- printLn (mlang2str p) ; 
-
--- printLn "\n\n";
-
--- runIt "example.mc";
-
-()
+if eqi (length argv) 2 then 
+  let expr = runIt (last argv) in 
+  printLn (expr2str expr)
+else
+  printLn "Usage: mlang <file>"

@@ -4,6 +4,9 @@ include "mexpr/ast-builder.mc"
 
 include "mlang/compile.mc"
 
+include "ast.mc"
+include "ast-builder.mc"
+
 include "map.mc"
 include "stringid.mc"
 include "set.mc"

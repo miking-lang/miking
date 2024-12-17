@@ -1,9 +1,13 @@
 include "mlang/ast.mc"
+include "mlang/pprint.mc"
 
 include "map.mc"
 include "name.mc"
 include "digraph.mc"
 include "set.mc"
+
+include "ast.mc"
+include "pprint.mc"
 
 type ResolveStaticEnv = {
   tydeps : Map Name (Set Name),

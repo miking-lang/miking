@@ -173,17 +173,6 @@ in
 
 -- Test syn product extension
 let str = strJoin "\n" [
-  "mexpr",
-  "rectype Foo in",
-  "recfield x : Foo -> Int in",
-  "let r = {Foo of x = 1} in ",
-  "r.x"
-] in
-let p = parseProgram str in 
-printLn (mlang2str p) ;
-
--- Test syn product extension
-let str = strJoin "\n" [
   "lang L1",
   "  cosyn Env a = {x : a}",
   "end",
@@ -192,28 +181,6 @@ let str = strJoin "\n" [
   "end"
 ] in
 let p = parseProgram str in 
-printLn (mlang2str p) ;
-
--- Test cosem with type annotation
-let str = strJoin "\n" [
-  "lang L1",
-  "  cosyn Env = {x : Int}",
-  "  cosem makeEnv : Int -> Env",
-  "  cosem makeEnv param =",
-  "  | {x} <- {x = 10}",
-  "end"
-] in
-let p = parseProgram str in
-printLn (mlang2str p) ;
-
-let str = strJoin "\n" [
-  "lang L0",
-  "  sem eval1 : atmost (BaseArith::Expr - Expr::TmIncr) -> Int",
-  "  sem eval2 : atmost (BaseArith::Expr + Expr::TmIncr) -> Int",
-  "  sem eval3 : atmost (BaseArith::Expr + Expr::TmIncr - Expr::TmIncr) -> Int",
-  "end"
-] in 
-let p = parseProgram str in
 printLn (mlang2str p) ;
 
 ()

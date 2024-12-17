@@ -2,8 +2,9 @@ include "mexpr/type-check.mc"
 include "mexpr/pattern-analysis.mc"
 
 include "ast.mc"
+include "pprint.mc"
 
-lang TypeAbsAppResolver = TypeAbsAppAst + TypeAbsAst + VarTypeAst
+lang TypeAbsAppResolver = TypeAbsAppAst + TypeAbsAst + VarTypeAst + MLangPrettyPrint
   sem _subst : Name -> Type -> Type -> Type
   sem _subst name replacement =
   | (TyVar t) & ty  ->

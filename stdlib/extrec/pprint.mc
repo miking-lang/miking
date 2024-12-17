@@ -184,5 +184,6 @@ end
 lang ExtRecPrettyPrint = ExtRecTermPrettyPrint + 
                          TypeAbsPrettyPrint + TypeAbsAppAst + 
                          DeclCosemPrettyPrint +
-                         DeclCosynPrettyPrint + PatExtRecordPrettyPrint
+                         DeclCosynPrettyPrint + PatExtRecordPrettyPrint +
+                         MLangPrettyPrint
 end
