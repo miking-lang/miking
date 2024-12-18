@@ -16,9 +16,7 @@ use OptionLang in
 let incr = addi 1 in 
 let x = Some {val = 10} in 
 
-print (typeof x);
 print "\n";
-print (typeof myMap);
 print "\n";
 utest forceGet x with 10 using eqi in 
 

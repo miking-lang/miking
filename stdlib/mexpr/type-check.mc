@@ -193,7 +193,7 @@ end
 -- TYPE UNIFICATION --
 ----------------------
 
-lang TCUnify = Unify + AliasTypeAst + MetaVarTypeAst + DataKindAst + 
+lang TCUnify = Unify + AliasTypeAst + MetaVarTypeAst + DataKindAst +
                PrettyPrint + MExprCmp + RepTypesHelpers + VarTypeAst
   -- Unify the types `ty1' and `ty2', where
   -- `ty1' is the expected type of an expression, and
@@ -298,7 +298,7 @@ lang TCUnify = Unify + AliasTypeAst + MetaVarTypeAst + DataKindAst +
           switch ty
           case TyAlias x then
             let acc = {acc with aliases = mapInsert x.display x.content acc.aliases} in
-            let acc = collectAliasesAndKinds acc x.display in 
+            let acc = collectAliasesAndKinds acc x.display in
             collectAliasesAndKinds acc x.content
           case TyMetaVar x then
             switch deref x.contents
@@ -310,7 +310,7 @@ lang TCUnify = Unify + AliasTypeAst + MetaVarTypeAst + DataKindAst +
             end
           case TyVar t then
             acc
-          case other then 
+          case other then
             sfold_Type_Type collectAliasesAndKinds acc ty
           end
     in
@@ -390,6 +390,13 @@ lang DataTypeTCUnify = TCUnify + DataTypeAst + DataKindAst
         else
           iter (lam k.
             if optionMapOr true (lam r. lti tv.level r.0) (mapLookup k conEnv) then
+              printLn "We are about to crash!";
+              (match mapLookup k conEnv with Some r then
+                printLn (join [
+                  "tv.level=", int2string tv.level, " r.0=", int2string r.0
+                ])
+              else
+                printLn "Crashed because the constructor is not in env!");
               errorSingle info (mkMsg "constructor" k)
             else ())
                (setToSeq tks.1))
@@ -635,7 +642,7 @@ let _computeUniverse : TCEnv -> Name -> Map Name (Set Name) =
 -- NOTE(aathn, 2023-05-10): In the future, this should be replaced
 -- with something which also performs a proper kind check.
 lang ResolveType = ConTypeAst + AppTypeAst + AliasTypeAst + VariantTypeAst +
-  UnknownTypeAst + DataTypeAst + DataKindAst + FunTypeAst + VarTypeSubstitute + 
+  UnknownTypeAst + DataTypeAst + DataKindAst + FunTypeAst + VarTypeSubstitute +
   AppTypeUtils + QualifiedTypeAst + MExprPrettyPrint
   sem resolveType : Info -> TCEnv -> Bool -> Type -> Type
   sem resolveType info env closeDatas =
@@ -771,7 +778,7 @@ lang TypeCheck = TCUnify + Generalize + RemoveMetaVar
   sem typeCheckExpr env =
   | tm ->
     dprint tm;
-    print "\n"; 
+    print "\n";
     error "Unmatched term expression in 'typeCheckExpr'"
 end
 
@@ -1378,7 +1385,7 @@ lang RecordTypeCheck = TypeCheck + RecordAst + RecordTypeAst
     TmRecord {t with bindings = bindings, ty = ty}
 end
 
-lang RecordUpdateTypeCheck = TypeCheck + RecordAst + RecordTypeAst 
+lang RecordUpdateTypeCheck = TypeCheck + RecordAst + RecordTypeAst
   sem typeCheckExpr env =
   | TmRecordUpdate t ->
     let rec = typeCheckExpr env t.rec in
@@ -1480,7 +1487,7 @@ lang DataTypeCheck = TypeCheck + DataAst + FunTypeAst + ResolveType + Substitute
     let body = typeCheckExpr env t.body in
     match mapLookup t.ident env.conEnv with Some (_, lty) then
       let lty =
-        if env.disableConstructorTypes then 
+        if env.disableConstructorTypes then
           -- printLn "Constructor type sare disabled";
           lty
         else
@@ -1490,7 +1497,7 @@ lang DataTypeCheck = TypeCheck + DataAst + FunTypeAst + ResolveType + Substitute
             -- print "\t";
             -- printLn (kind2str ( Data {d with types = types}));
             TyAll {r with kind = Data {d with types = types}}
-          else 
+          else
             errorSingle [t.info] "Invalid constructor type in typeCheckExpr!"
       in
       match inst t.info env.currentLvl lty with TyArrow {from = from, to = to} then
@@ -1499,7 +1506,7 @@ lang DataTypeCheck = TypeCheck + DataAst + FunTypeAst + ResolveType + Substitute
         -- printLn (type2str to);
         unify env [infoTm body] from (tyTm body);
         TmConApp {t with body = body, ty = to}
-      else 
+      else
         errorSingle [t.info] "Invalid constructor type in typeCheckExpr!"
     else
       let msg = join [
