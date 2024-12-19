@@ -9,7 +9,7 @@ include "ast-builder.mc"
 lang ExtRecTermPrettyPrint = TypePrettyPrint + PrettyPrint + ExtRecordAst 
   sem isAtomic =
   | TmRecField _ | TmRecType _ -> false
-  | TmExtRecord _ | TmExtProject _ -> true
+  | TmExtRecord  _ -> true
   | TmExtExtend _ | TmExtExtend _ -> false
 
 
@@ -74,16 +74,6 @@ lang ExtRecTermPrettyPrint = TypePrettyPrint + PrettyPrint + ExtRecordAst
         merged,
         "}"
       ])
-  | TmExtProject {e = e, ident = ident, label = label} -> 
-    match pprintCode indent env e with (env, exprStr) in 
-    (env, join [
-      "(",
-      exprStr, 
-      " of ",
-      nameGetStr ident,
-      ")->",
-      label
-    ])
 end
 
 lang DeclCosynPrettyPrint = DeclPrettyPrint + CosynDeclAst 

@@ -529,7 +529,6 @@ atom:
     { let r = $5 |> List.fold_left
         (fun acc (k,v) -> Record.add k v acc) Record.empty in 
       TmRecExtend(mkinfo $1.i $6.i, $3, r) }
-  | LPAREN atom OF con_ident RPAREN ARROW var_ident { TmRecProj(mkinfo $1.i $7.i, $2, $4.v, $7.v) }
 
 proj_label:
   | INT

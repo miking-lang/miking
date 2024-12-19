@@ -95,11 +95,6 @@ lang ExtRecordAst = Ast
                   ident : Name,
                   ty : Type,
                   info : Info}
-  | TmExtProject {e : Expr,
-                  ident : Name,
-                  label : String,
-                  ty : Type,
-                  info : Info}
   | TmExtExtend {e : Expr, 
                  bindings : Map String Expr,
                  ty : Type,
@@ -109,28 +104,24 @@ lang ExtRecordAst = Ast
   | TmRecField t -> t.info
   | TmRecType t -> t.info
   | TmExtRecord t -> t.info
-  | TmExtProject t -> t.info
   | TmExtExtend t -> t.info
 
   sem tyTm =
   | TmRecField t -> t.ty
   | TmRecType t -> t.ty
   | TmExtRecord t -> t.ty
-  | TmExtProject t -> t.ty
   | TmExtExtend t -> t.ty 
 
   sem withInfo info =
   | TmRecField t -> TmRecField {t with info = info}
   | TmRecType t -> TmRecType {t with info = info}
   | TmExtRecord t -> TmExtRecord {t with info = info}
-  | TmExtProject t -> TmExtProject {t with info = info}
   | TmExtExtend t -> TmExtExtend {t with info = info}
 
   sem withType  ty =
   | TmRecField t -> TmRecField {t with ty = ty}
   | TmRecType t -> TmRecType {t with ty = ty}
   | TmExtRecord t -> TmExtRecord {t with ty = ty}
-  | TmExtProject t -> TmExtProject {t with ty = ty}
   | TmExtExtend t -> TmExtExtend {t with ty = ty}
 
   sem smapAccumL_Expr_Expr f acc =
@@ -143,9 +134,6 @@ lang ExtRecordAst = Ast
   | TmExtRecord t ->
     match mapMapAccum (lam acc. lam. lam e. f acc e) acc t.bindings with (acc, bindings) in
     (acc, TmExtRecord {t with bindings = bindings})
-  | TmExtProject t -> 
-    match smapAccumL_Expr_Expr f acc t.e with (acc, e) in 
-    (acc, TmExtProject {t with e = e})
   | TmExtExtend t -> 
     match f acc t.e with (acc, e) in 
     match mapMapAccum (lam acc. lam. lam e. f acc e) acc t.bindings 
@@ -164,9 +152,6 @@ lang ExtRecordAst = Ast
   | TmExtRecord t ->
     match f acc t.ty with (acc, ty) in 
     (acc, TmExtRecord {t with ty = ty}) 
-  | TmExtProject t ->
-    match f acc t.ty with (acc, ty) in 
-    (acc, TmExtProject {t with ty = ty}) 
   | TmExtExtend t ->
     match f acc t.ty with (acc, ty) in 
     (acc, TmExtExtend {t with ty = ty}) 

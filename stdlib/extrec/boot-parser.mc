@@ -38,12 +38,6 @@ lang ExtRecordBootParser = BootParserMLang + ExtRecordAst
                  ident = ident,
                  ty = tyunknown_, 
                  info = ginfo t 0}
-  | 120 -> 
-    TmExtProject {e = gterm t 0, 
-                  ident = gname t 0,
-                  label = gstr t 1, 
-                  ty = tyunknown_,
-                  info = ginfo t 0}
   | 122 ->
     let n = glistlen t 0 in 
     let ident = gname t 0 in 

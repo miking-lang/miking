@@ -9,14 +9,6 @@ let ext_record_ = lam s. lam b.
                ty = tyunknown_,
                info = NoInfo ()}
 
-let ext_proj_ = lam s. lam lhs. lam l. 
-  use ExtRecordAst in 
-  TmExtProject {e = lhs, 
-                label = l,
-                ident = nameNoSym s,
-                ty = tyunknown_,
-                info = NoInfo ()}
-
 -- todo implement this
 recursive let extrec_bindF_ = use MLangAst in
   lam f : Expr -> Expr -> Expr. lam letexpr. lam expr.

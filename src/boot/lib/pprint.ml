@@ -617,7 +617,6 @@ and print_tm fmt (prec, t) =
     | TmRecField _
     | TmRecCreation _
     | TmRecExtend _
-    | TmRecProj _
     | TmTensor _ ->
         Atom
   in
@@ -801,10 +800,6 @@ and print_tm' fmt t =
       let name = string_of_ustring n in
       let contents = Record.fold (fun l v ack -> (l, v) :: ack) r [] in
       print_extrecord name fmt contents
-  | TmRecProj (_, tm, n, l) ->
-      let name = string_of_ustring n in
-      let label = string_of_ustring l in
-      fprintf fmt "@[<hv 0>%a->%s.%s" print_tm (App, tm) name label
   | TmRecExtend _ as t ->
       raise_error (tm_info t) "Pprint unsupported for TmRecExtend!"
 

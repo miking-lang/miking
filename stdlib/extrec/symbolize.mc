@@ -33,11 +33,6 @@ lang ExtRecordSym = Sym + ExtRecordAst
     let e = symbolizeExpr env t.e in
     let bindings = mapMap (symbolizeExpr env) t.bindings in
     TmExtExtend {t with bindings = bindings, e = e}
-  | TmExtProject t ->
-    let ident= getSymbol {kind = "type constructor",
-                          info = [t.info],
-                          allowFree = env.allowFree} env.currentEnv.tyConEnv t.ident in
-    TmExtProject {t with ident = ident, e = symbolizeExpr env t.e}
 end
 
 lang QualifiedNameSym = Sym + QualifiedTypeAst

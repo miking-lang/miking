@@ -763,8 +763,7 @@ let rec translate_tm (env : mlang_env) : tm -> tm = function
       let tm = smap_tm_ty (translate_ty env) tm in
       let tm = smap_tm_tm (translate_tm env) tm in
       tm
-  | (TmRecType _ | TmRecField _ | TmRecCreation _ | TmRecProj _ | TmRecExtend _)
-    as t ->
+  | (TmRecType _ | TmRecField _ | TmRecCreation _ | TmRecExtend _) as t ->
       raise_error (tm_info t)
         "Extensible record type translation is unsupported by boot!"
 

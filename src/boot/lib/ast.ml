@@ -352,7 +352,6 @@ and tm =
   | TmRecType of info * ustring * ustring list * tm
   | TmRecField of info * ustring * ty * tm
   | TmRecCreation of info * ustring * tm Record.t
-  | TmRecProj of info * tm * ustring * ustring
   | TmRecExtend of info * tm * tm Record.t
 
 (* Kind of pattern name *)
@@ -501,8 +500,6 @@ let smap_accum_left_tm_tm (f : 'a -> tm -> 'a * tm) (acc : 'a) : tm -> 'a * tm
       f acc t |> fun (acc, t') -> (acc, TmRecType (fi, name, params, t'))
   | TmRecField (fi, name, ty, t) ->
       f acc t |> fun (acc, t') -> (acc, TmRecField (fi, name, ty, t'))
-  | TmRecProj (fi, tm, n1, n2) ->
-      f acc tm |> fun (acc, t') -> (acc, TmRecProj (fi, t', n1, n2))
   | TmRecCreation (fi, name, r) ->
       let acc, r' = Record.map_fold (fun _ t acc -> f acc t) r acc in
       (acc, TmRecCreation (fi, name, r'))
@@ -601,7 +598,6 @@ let smap_accum_left_tm_ty (f : 'a -> ty -> 'a * ty) (acc : 'a) : tm -> 'a * tm
     | TmRecType _
     | TmRecCreation _
     | TmRecExtend _
-    | TmRecProj _
     | TmBox _ ) as tm ->
       (acc, tm)
 
@@ -767,7 +763,6 @@ let tm_info = function
   | TmRecType (fi, _, _, _)
   | TmRecField (fi, _, _, _)
   | TmRecCreation (fi, _, _)
-  | TmRecProj (fi, _, _, _)
   | TmRecExtend (fi, _, _) ->
       fi
 
