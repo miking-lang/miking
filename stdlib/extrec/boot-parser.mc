@@ -56,8 +56,6 @@ lang CosynBootParser = BootParserMLang + CosynDeclAst + SynProdExtDeclAst
     let isBase = eqi (glistlen d 1) 0 in
     let params = map (lam i. gname d (addi i 1)) (range 0 n 1) in
 
-    -- Insert implicit parameter
-    -- let params = cons (nameNoSym "m") params in
     DeclCosyn {info = ginfo d 0,
                ident = gname d 0,
                ty = gtype d 0,

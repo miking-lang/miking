@@ -69,7 +69,8 @@ lang SynProdDeclCompiler = SynProdExtDeclAst + ExtRecordAst + RecordTypeAst
 
     -- Compile global ext
     match s.globalExt with Some globalExt then
-      never
+      -- Global extension is currently unsupported so we just throw an error
+      errorSingle [s.info] "* Global Product Extension is not supported!"
       -- match mapLookup s.ident ctx.baseMap with Some baseIdent in
       -- match mapLookup baseIdent ctx.baseToCons with Some allConstructors in
       -- let explicitConstructors = setOfSeq nameCmp (map (lam e. e.ident) s.individualExts) in

@@ -60,15 +60,9 @@ lang ExtrecConappSugar = MLangAst + MExprAst + ExtRecordAst + ExtRecordPat
     smap_Expr_Pat (insertExtRecordPat_Pat ctx) expr
 
   sem insertExtRecordPat_Pat ctx =
-  -- | PatCon (p1 & {subpat = PatRecord p2}) & pat ->
   | PatCon p & pat ->
     match mapLookup p.ident ctx with Some ident then
       PatCon {p with subpat = handleSubpat ctx ident p.subpat}
-      -- let bindings = mapMap (smap_Pat_Pat (insertExtRecordPat_Pat ctx)) p2.bindings in
-      -- PatCon {p1 with subpat = PatExtRecord {bindings = bindings,
-      --                                        ident = typeIdent,
-      --                                        info = p2.info,
-      --                                        ty = p2.ty}}
     else
       smap_Pat_Pat (insertExtRecordPat_Pat ctx) pat
   | pat ->

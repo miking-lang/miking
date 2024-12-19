@@ -158,5 +158,3 @@ lang ExtRecCollectEnv = MExprAst + ExtRecordAst + MExprPrettyPrint +
     let edgesStr = map (lam e. join [nameGetStr e.0, " -> ", nameGetStr e.1]) edges in
     strJoin "\n" (snoc (cons "=== DEPENDECY GRAPH ===" edgesStr) "=== END GRAPH ===")
 end
-
--- TODO add some utests for ty dep calculation!
