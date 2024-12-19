@@ -255,11 +255,11 @@ lang PrettyPrint = IdentifierPrettyPrint + MExprAst
 
   sem type2str =
   | ty -> typeToString pprintEnvEmpty ty
-  
-  sem pat2str = 
+
+  sem pat2str =
   | pat -> (getPatStringCode 0 pprintEnvEmpty pat).1
 
-  sem kind2str = 
+  sem kind2str =
   | kind -> kindToString pprintEnvEmpty kind
 
   -- Helper function for printing parentheses
@@ -949,9 +949,9 @@ lang ConTagPrettyPrint = ConTagAst + ConstPrettyPrint
   | CConstructorTag _ -> "constructorTag"
 end
 
-lang TypeOfPrettyPrint = TypeOpAst + ConstPrettyPrint 
+lang TypeOfPrettyPrint = TypeOpAst + ConstPrettyPrint
   sem getConstStringCode indent =
-  | CTypeOf _ -> "typeof"
+  | CTypeOf _ -> "debug_typeof"
 end
 
 lang TensorOpPrettyPrint = TensorOpAst + ConstPrettyPrint
@@ -1479,8 +1479,8 @@ lang MExprPrettyPrint =
   SeqOpPrettyPrint + FileOpPrettyPrint + IOPrettyPrint +
   RandomNumberGeneratorPrettyPrint + SysPrettyPrint + TimePrettyPrint +
   ConTagPrettyPrint + RefOpPrettyPrint + TensorOpPrettyPrint +
-  BootParserPrettyPrint + UnsafeCoercePrettyPrint + TypeOfPrettyPrint + 
-  PlaceholderPrettyPrint + 
+  BootParserPrettyPrint + UnsafeCoercePrettyPrint + TypeOfPrettyPrint +
+  PlaceholderPrettyPrint +
 
   -- Patterns
   NamedPatPrettyPrint + SeqTotPatPrettyPrint + SeqEdgePatPrettyPrint +
@@ -1494,7 +1494,7 @@ lang MExprPrettyPrint =
   SeqTypePrettyPrint + RecordTypePrettyPrint + VariantTypePrettyPrint +
   ConTypePrettyPrint + DataTypePrettyPrint + VarTypePrettyPrint +
   AppTypePrettyPrint + TensorTypePrettyPrint + AllTypePrettyPrint +
-  AliasTypePrettyPrint + 
+  AliasTypePrettyPrint +
 
   -- Kinds
   PolyKindPrettyPrint + MonoKindPrettyPrint + RecordKindPrettyPrint +

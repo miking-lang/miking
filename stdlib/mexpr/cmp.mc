@@ -52,8 +52,7 @@ lang Cmp = ConstAst
   | (lhs, rhs) /- (Type, Type) -/ ->
     let res = subi (constructorTag lhs) (constructorTag rhs) in
     if eqi res 0 then
-      printLn "here!!!";
-      use MExprPrettyPrint in 
+      use MExprPrettyPrint in
       errorMulti [(infoTy lhs, (type2str lhs)), (infoTy rhs, (type2str rhs))]
         "Missing case in cmpTypeH for types with equal indices."
     else res

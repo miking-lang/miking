@@ -390,13 +390,6 @@ lang DataTypeTCUnify = TCUnify + DataTypeAst + DataKindAst
         else
           iter (lam k.
             if optionMapOr true (lam r. lti tv.level r.0) (mapLookup k conEnv) then
-              printLn "We are about to crash!";
-              (match mapLookup k conEnv with Some r then
-                printLn (join [
-                  "tv.level=", int2string tv.level, " r.0=", int2string r.0
-                ])
-              else
-                printLn "Crashed because the constructor is not in env!");
               errorSingle info (mkMsg "constructor" k)
             else ())
                (setToSeq tks.1))
@@ -1422,17 +1415,13 @@ lang DataTypeCheck = TypeCheck + DataAst + FunTypeAst + ResolveType + Substitute
       "* right-hand side should refer to a constructor type.\n",
       "* When type checking the expression\n"
     ] in
-    -- printLn "We are here now ;)";
-    -- printLn (type2str ty);
     match inspectType ty with TyArrow {to = to} then
       match getTypeArgs to with (TyCon target, _) then
-        -- if or true disableConstructorTypes then (target.ident, setOfSeq nameCmp [target.ident], ty)
         if disableConstructorTypes then (target.ident, setOfSeq nameCmp [target.ident], ty)
         else
           recursive let substituteData = lam v. lam acc. lam x.
             switch x
             case TyCon t then
-            -- case TyCon (t & {data = TyUnknown _}) then
               (setInsert t.ident acc, TyCon { t with data = v })
             case TyAlias t then
               match substituteData v acc t.content with (acc, content) in
@@ -1483,27 +1472,19 @@ lang DataTypeCheck = TypeCheck + DataAst + FunTypeAst + ResolveType + Substitute
     unify env [t.info, infoTm inexpr] (newpolyvar env.currentLvl t.info) (tyTm inexpr);
     TmConDef {t with tyIdent = tyIdent, inexpr = inexpr, ty = tyTm inexpr}
   | TmConApp t ->
-    -- printLn "Were are here!";
     let body = typeCheckExpr env t.body in
     match mapLookup t.ident env.conEnv with Some (_, lty) then
       let lty =
         if env.disableConstructorTypes then
-          -- printLn "Constructor type sare disabled";
           lty
         else
-          -- printLn "Constructor type sare not disabled!";
           match lty with TyAll (r & {kind = Data d}) then
             let types = mapMap (lam ks. {ks with lower = setInsert t.ident ks.lower}) d.types in
-            -- print "\t";
-            -- printLn (kind2str ( Data {d with types = types}));
             TyAll {r with kind = Data {d with types = types}}
           else
             errorSingle [t.info] "Invalid constructor type in typeCheckExpr!"
       in
       match inst t.info env.currentLvl lty with TyArrow {from = from, to = to} then
-        -- printLn (type2str lty);
-        -- printLn (type2str from);
-        -- printLn (type2str to);
         unify env [infoTm body] from (tyTm body);
         TmConApp {t with body = body, ty = to}
       else
