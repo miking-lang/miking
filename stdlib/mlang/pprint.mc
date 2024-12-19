@@ -37,7 +37,7 @@ end
 
 lang TyUsePrettyPrint = MExprPrettyPrint + TyUseAst + MLangIdentifierPrettyPrint
   sem getTypeStringCode (indent : Int) (env : PprintEnv) =
-  | TyUse t -> 
+  | TyUse t ->
     match pprintLangName env t.ident with (env, ident) in
     match getTypeStringCode indent env t.inty with (env, inty) in
     (env, join ["use ", ident, pprintNewline indent,
@@ -45,39 +45,36 @@ lang TyUsePrettyPrint = MExprPrettyPrint + TyUseAst + MLangIdentifierPrettyPrint
                 inty])
 end
 
-lang QualifiedNamePrettyPrint = MExprPrettyPrint + QualifiedTypeAst + 
-                                MLangIdentifierPrettyPrint                        
+lang QualifiedNamePrettyPrint = MExprPrettyPrint + QualifiedTypeAst +
+                                MLangIdentifierPrettyPrint
   sem getTypeStringCode (indent : Int) (env : PprintEnv) =
-  | TyQualifiedName t -> 
-    let prefix = if t.pos then "< " else "> " in 
+  | TyQualifiedName t ->
+    let prefix = if t.pos then "< " else "> " in
     match pprintLangName env t.lhs with (env, lhs) in
     match pprintTypeName env t.rhs with (env, rhs) in
 
-    printLn (int2string (length t.plus));
-    printLn (int2string (length t.minus));
-
     if and (null t.plus) (null t.minus) then
-      (env, join [prefix, lhs, "::", rhs])                        
+      (env, join [prefix, lhs, "::", rhs])
     else
       let pprintList = lam env. lam pairs.
         mapAccumL (lam env. lam pair.
-          match pair with (t, c) in 
+          match pair with (t, c) in
           match pprintTypeName env t with (env, t) in
           match pprintTypeName env c with (env, c) in
           (env, join [t, "::", c])
         ) env pairs
       in
 
-      let plus = if null t.plus then "" else 
-        match pprintList env t.plus with (env, plus) in 
-        concat " + " (strJoin ", " plus) in 
+      let plus = if null t.plus then "" else
+        match pprintList env t.plus with (env, plus) in
+        concat " + " (strJoin ", " plus) in
 
-      let minus = if null t.minus then "" else 
-        match pprintList env t.minus with (env, minus) in 
+      let minus = if null t.minus then "" else
+        match pprintList env t.minus with (env, minus) in
         concat " - " (strJoin ", " minus) in
 
       (env, join [prefix, "(", lhs, "::", rhs, plus, minus, ")"])
-      
+
 end
 
 
@@ -140,10 +137,10 @@ lang SynDeclPrettyPrint = DeclPrettyPrint + SynDeclAst + DataPrettyPrint
       ) env t.defs
     with (env, defStrings) in
 
-    let eqSym = switch t.declKind 
+    let eqSym = switch t.declKind
       case BaseKind _ then " ="
       case SumExtKind _ then " +="
-    end in 
+    end in
 
     (env, strJoin (pprintNewline indent)
                   (cons (join ["syn ", typeNameStr, params, eqSym]) defStrings))
@@ -164,7 +161,7 @@ lang SemDeclPrettyPrint = DeclPrettyPrint + SemDeclAst + UnknownTypeAst
       match (t.args, t.cases) with !(None _, []) then
         -- sem impl
         match
-          match t.args with Some args in 
+          match t.args with Some args in
           mapAccumL (lam env. lam arg.
             match pprintEnvGetStr env arg.ident with (env, baseStr) in
             match arg.tyAnnot with TyUnknown _ then
@@ -184,11 +181,11 @@ lang SemDeclPrettyPrint = DeclPrettyPrint + SemDeclAst + UnknownTypeAst
           ) env t.cases
         with (arg, caseStrs) in
 
-        let eqSym = switch t.declKind 
+        let eqSym = switch t.declKind
           case BaseKind _ then " ="
           case SumExtKind _ then " +="
           case _ then "?"
-        end in 
+        end in
 
         let final = strJoin (pprintNewline indent) (
                 cons (join ["sem ", baseStr, strJoin " " (cons "" argStrs), eqSym])
@@ -277,14 +274,14 @@ end
 lang MLangPrettyPrint = MExprPrettyPrint +
 
   -- Extended expressions and types
-  UsePrettyPrint + TyUsePrettyPrint + QualifiedNamePrettyPrint + 
+  UsePrettyPrint + TyUsePrettyPrint + QualifiedNamePrettyPrint +
 
   -- Declarations
   DeclPrettyPrint + LangDeclPrettyPrint + SynDeclPrettyPrint +
   SemDeclPrettyPrint + LetDeclPrettyPrint + TypeDeclPrettyPrint +
   RecLetsDeclPrettyPrint + DataDeclPrettyPrint + UtestDeclPrettyPrint +
-  ExtDeclPrettyPrint + IncludeDeclPrettyPrint +  
-  
+  ExtDeclPrettyPrint + IncludeDeclPrettyPrint +
+
 
   -- Top-level pretty printer
   MLangTopLevelPrettyPrint
