@@ -100,8 +100,8 @@ lang DeclCosynSym = Sym + CosynDeclAst
 
     ({langEnv with tyConEnv = tyConEnv}, synn)
 
-  sem symbolizeCosynStep2 env langEnv = 
-  | DeclCosyn s -> 
+  sem symbolizeCosynStep2 env langEnv =
+  | DeclCosyn s ->
     let env = updateEnv env langEnv in
 
     let paramPairs = map (lam p. (nameGetStr p, p)) s.params in
@@ -116,9 +116,9 @@ lang DeclCosynSym = Sym + CosynDeclAst
     (langEnv, synn)
 end
 
-lang DeclProdExtSym = Sym + SynProdExtDeclAst 
-  sem symbProdExtDef env params langEnv = 
-  | def -> 
+lang DeclProdExtSym = Sym + SynProdExtDeclAst
+  sem symbProdExtDef env params langEnv =
+  | def ->
     let ident = getSymbol
       {kind = "Syn Type", info = [NoInfo ()], allowFree = false}
       langEnv.conEnv
@@ -142,8 +142,8 @@ lang DeclProdExtSym = Sym + SynProdExtDeclAst
 
     (langEnv, {ident = ident, tyIdent = tyIdent, tyName = tyName})
 
-  sem symbolizeProdExt env langEnv = 
-  | SynDeclProdExt s -> 
+  sem symbolizeProdExt env langEnv =
+  | SynDeclProdExt s ->
     match mapAccumL (symbProdExtDef env s.params) langEnv s.individualExts with (langEnv, exts) in
     let decl = SynDeclProdExt {s with individualExts = exts,
                                       ident = nameSym (nameGetStr s.ident)} in
@@ -161,7 +161,7 @@ lang DeclCosemSym = Sym + CosemDeclAst + LetSym
     (langEnv, decl)
 
   sem symbolizeCosemStep2 env langEnv =
-  | DeclCosem s -> 
+  | DeclCosem s ->
     let env = updateEnv env langEnv in
 
     match symbolizeTyAnnot env s.tyAnnot with (tyVarEnv, tyAnnot) in
@@ -313,8 +313,8 @@ lang ExtRecTestLang = TestLangWithoutLang + ExtRecSym
   | DeclCosyn s ->
     _and (lam. and (nameHasSym s.ident) (forAll nameHasSym s.params))
          (isFullySymbolizedType s.ty)
-  | DeclCosem s -> 
-    let isFullySymbolizedArg = lam arg. 
+  | DeclCosem s ->
+    let isFullySymbolizedArg = lam arg.
       _and (lam. nameHasSym arg.ident) (isFullySymbolizedType arg.tyAnnot) in
 
     let isFullySymbolizedCase = lam cas.
@@ -325,7 +325,7 @@ lang ExtRecTestLang = TestLangWithoutLang + ExtRecSym
       foldl (_andFold isFullySymbolizedArg) (lam. true) s.args,
       foldl (_andFold isFullySymbolizedCase) (lam. true) s.cases
     ]
-  | SynDeclProdExt s -> 
+  | SynDeclProdExt s ->
     let isSymbolizedExt = lam ext.
       _and (lam. nameHasSym ext.ident) (isFullySymbolizedType ext.tyIdent) in
 
@@ -341,9 +341,9 @@ lang ExtRecTestLang = TestLangWithoutLang + ExtRecSym
 end
 
 mexpr
-use ExtRecTestLang in 
-use MLangPrettyPrint in 
-use LanguageComposer in 
+use ExtRecTestLang in
+use MLangPrettyPrint in
+use LanguageComposer in
 
 -- Cosyn Symbolization
 let p : MLangProgram = {
@@ -353,10 +353,10 @@ let p : MLangProgram = {
     ]
   ],
   expr = uunit_
-} in 
+} in
 
-let p = composeProgram p in  
-match symbolizeMLang symEnvDefault p with (_, p) in 
+let p = composeProgram p in
+match symbolizeMLang symEnvDefault p with (_, p) in
 utest length p.decls with 1 in
 utest isFullySymbolizedProgram p () with true in
 
@@ -368,10 +368,10 @@ let p : MLangProgram = {
     ]
   ],
   expr = uunit_
-} in 
+} in
 
-let p = composeProgram p in  
-match symbolizeMLang symEnvDefault p with (_, p) in 
+let p = composeProgram p in
+match symbolizeMLang symEnvDefault p with (_, p) in
 utest length p.decls with 1 in
 utest isFullySymbolizedProgram p () with true in
 
@@ -389,8 +389,8 @@ let p : MLangProgram = {
   expr = uunit_
 } in
 
-let p = composeProgram p in  
-match symbolizeMLang symEnvDefault p with (_, p) in 
+let p = composeProgram p in
+match symbolizeMLang symEnvDefault p with (_, p) in
 utest isFullySymbolizedProgram p () with true in
 
 -- Test symbolization of cosem
@@ -403,8 +403,8 @@ let p : MLangProgram = {
   expr = uunit_
 } in
 
-let p = composeProgram p in  
-match symbolizeMLang symEnvDefault p with (_, p) in 
+let p = composeProgram p in
+match symbolizeMLang symEnvDefault p with (_, p) in
 utest isFullySymbolizedProgram p () with true in
 
 ()

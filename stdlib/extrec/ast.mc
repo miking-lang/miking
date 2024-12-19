@@ -4,11 +4,11 @@ include "mexpr/ast.mc"
 
 include "name.mc"
 
-lang SynProdExtDeclAst = DeclAst 
-  syn Decl = 
+lang SynProdExtDeclAst = DeclAst
+  syn Decl =
   | SynDeclProdExt {ident : Name,
                     params : [Name],
-                    globalExt : Option Type, 
+                    globalExt : Option Type,
                     individualExts : [{ident : Name, tyIdent : Type, tyName : Name}],
                     includes : [(String, String)],
                     info : Info}
@@ -26,7 +26,7 @@ lang SynProdExtDeclAst = DeclAst
 end
 
 lang CosynDeclAst = DeclAst + Ast
-  syn Decl = 
+  syn Decl =
   | DeclCosyn {info : Info,
                ident : Name,
                params : [Name],
@@ -36,7 +36,7 @@ lang CosynDeclAst = DeclAst + Ast
 end
 
 lang CopatAst
-  syn Copat = 
+  syn Copat =
 
   sem copatInfo =
 
@@ -45,7 +45,7 @@ end
 
 lang RecordCopatAst = CopatAst
   syn Copat =
-  | RecordCopat {info : Info, 
+  | RecordCopat {info : Info,
                  fields : [String]}
 
   sem copatInfo =
@@ -53,11 +53,11 @@ lang RecordCopatAst = CopatAst
 
   sem copatWithInfo info =
   | RecordCopat c -> {RecordCopat c with info = info}
-end 
+end
 
 lang CosemDeclAst = DeclAst + CopatAst + Ast
-  syn Decl = 
-  | DeclCosem {info : Info, 
+  syn Decl =
+  | DeclCosem {info : Info,
                ident : Name,
                args : [{ident : Name, tyAnnot : Type}],
                cases : [(Copat, Expr)],
@@ -77,29 +77,29 @@ lang CosemDeclAst = DeclAst + CopatAst + Ast
     match f acc x.tyAnnot with (acc, tyAnnot) in
     match mapAccumL farg acc x.args with (acc, args) in
     (acc, DeclCosem {x with args = args, tyAnnot = tyAnnot})
-end 
+end
 
 lang ExtRecordAst = Ast
-  syn Expr = 
+  syn Expr =
   | TmRecType {ident : Name,
                params : [Name],
                ty : Type,
-               inexpr : Expr, 
+               inexpr : Expr,
                info : Info}
-  | TmRecField {label : String, 
-                tyIdent : Type, 
+  | TmRecField {label : String,
+                tyIdent : Type,
                 inexpr : Expr,
                 ty : Type,
                 info : Info}
-  | TmExtRecord  {bindings : Map String Expr, 
+  | TmExtRecord  {bindings : Map String Expr,
                   ident : Name,
                   ty : Type,
                   info : Info}
-  | TmExtExtend {e : Expr, 
+  | TmExtExtend {e : Expr,
                  bindings : Map String Expr,
                  ty : Type,
                  info : Info}
-  
+
   sem infoTm =
   | TmRecField t -> t.info
   | TmRecType t -> t.info
@@ -110,7 +110,7 @@ lang ExtRecordAst = Ast
   | TmRecField t -> t.ty
   | TmRecType t -> t.ty
   | TmExtRecord t -> t.ty
-  | TmExtExtend t -> t.ty 
+  | TmExtExtend t -> t.ty
 
   sem withInfo info =
   | TmRecField t -> TmRecField {t with info = info}
@@ -126,49 +126,49 @@ lang ExtRecordAst = Ast
 
   sem smapAccumL_Expr_Expr f acc =
   | TmRecType t ->
-    match f acc t.inexpr with (acc, inexpr) in 
+    match f acc t.inexpr with (acc, inexpr) in
     (acc, TmRecType {t with inexpr = inexpr})
   | TmRecField t ->
-    match f acc t.inexpr with (acc, inexpr) in 
+    match f acc t.inexpr with (acc, inexpr) in
     (acc, TmRecField {t with inexpr = inexpr})
   | TmExtRecord t ->
     match mapMapAccum (lam acc. lam. lam e. f acc e) acc t.bindings with (acc, bindings) in
     (acc, TmExtRecord {t with bindings = bindings})
-  | TmExtExtend t -> 
-    match f acc t.e with (acc, e) in 
-    match mapMapAccum (lam acc. lam. lam e. f acc e) acc t.bindings 
+  | TmExtExtend t ->
+    match f acc t.e with (acc, e) in
+    match mapMapAccum (lam acc. lam. lam e. f acc e) acc t.bindings
     with (acc, bindings) in
     (acc, TmExtExtend {t with e = e, bindings = bindings})
 
-  sem smapAccumL_Expr_Type f acc = 
+  sem smapAccumL_Expr_Type f acc =
   | TmRecType t ->
     match f acc t.ty with (acc, ty) in
     (acc, TmRecType {t with ty = ty})
-  | TmRecField t -> 
-    match f acc t.tyIdent with (acc, tyIdent) in 
-    match f acc t.ty with (acc, ty) in 
+  | TmRecField t ->
+    match f acc t.tyIdent with (acc, tyIdent) in
+    match f acc t.ty with (acc, ty) in
     (acc, TmRecField {t with tyIdent = tyIdent,
                              ty = ty})
   | TmExtRecord t ->
-    match f acc t.ty with (acc, ty) in 
-    (acc, TmExtRecord {t with ty = ty}) 
+    match f acc t.ty with (acc, ty) in
+    (acc, TmExtRecord {t with ty = ty})
   | TmExtExtend t ->
-    match f acc t.ty with (acc, ty) in 
-    (acc, TmExtExtend {t with ty = ty}) 
+    match f acc t.ty with (acc, ty) in
+    (acc, TmExtExtend {t with ty = ty})
 end
 
-lang TypeAbsAst = Ast 
-  syn Type = 
+lang TypeAbsAst = Ast
+  syn Type =
   | TyAbs {ident : Name,
            kind : Kind,
            body : Type}
 
-  sem tyWithInfo info = 
+  sem tyWithInfo info =
   | TyAbs _ & t -> t
 
-  sem smapAccumL_Type_Type f acc = 
+  sem smapAccumL_Type_Type f acc =
   | TyAbs t ->
-    match f acc t.body with (acc, body) in 
+    match f acc t.body with (acc, body) in
     (acc, TyAbs {t with body = body})
 end
 
@@ -177,21 +177,21 @@ lang TypeAbsAppAst = Ast
   | TyAbsApp {lhs : Type,
               rhs : Type}
 
-  sem tyWithInfo info = 
+  sem tyWithInfo info =
   | TyAbsApp _ & t -> t
 
-  sem smapAccumL_Type_Type f acc = 
+  sem smapAccumL_Type_Type f acc =
   | TyAbsApp t ->
-    match f acc t.lhs with (acc, lhs) in 
-    match f acc t.rhs with (acc, rhs) in 
+    match f acc t.lhs with (acc, lhs) in
+    match f acc t.rhs with (acc, rhs) in
     (acc, TyAbsApp {t with lhs = lhs, rhs = rhs})
 end
 
-lang ExtRecordPat = MatchAst 
-  syn Pat = 
+lang ExtRecordPat = MatchAst
+  syn Pat =
   | PatExtRecord {ident : Name,
                   bindings : Map SID Pat,
-                  info : Info, 
+                  info : Info,
                   ty : Type}
 
   sem infoPat =
@@ -214,14 +214,14 @@ lang ExtRecordPat = MatchAst
 end
 
 lang QualifiedTypeAst = Ast
-  syn Type = 
+  syn Type =
   | TyQualifiedName {pos : Bool,
                      info : Info,
                      lhs : Name,
                      rhs : Name,
                      plus : [(Name, Name)],
                      minus : [(Name, Name)]}
-  
+
   sem tyWithInfo info =
   | TyQualifiedName t -> TyQualifiedName {t with info = info}
 
@@ -229,7 +229,7 @@ lang QualifiedTypeAst = Ast
   | TyQualifiedName {info = info} -> info
 end
 
-lang ExtRecAst = SynProdExtDeclAst + CosynDeclAst + CopatAst + RecordCopatAst + 
-                 CosemDeclAst + ExtRecordAst + TypeAbsAppAst + TypeAbsAst + 
+lang ExtRecAst = SynProdExtDeclAst + CosynDeclAst + CopatAst + RecordCopatAst +
+                 CosemDeclAst + ExtRecordAst + TypeAbsAppAst + TypeAbsAst +
                  ExtRecordPat + QualifiedTypeAst
 end
