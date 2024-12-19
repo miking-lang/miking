@@ -85,7 +85,8 @@ lang CosynBootParser = BootParserMLang + CosynDeclAst + SynProdExtDeclAst
         if mapIsEmpty r.fields then
           None ()
         else
-          Some globalTy
+          errorSingle [ginfo d 0] "* Global Product Extension are not supported."
+          -- Some globalTy
       else
         Some globalTy
     in
