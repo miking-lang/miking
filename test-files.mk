@@ -76,6 +76,7 @@ constrtype_files_exclude =\
 	$(wildcard stdlib/jvm/*.mc)\
 	$(wildcard stdlib/mexpr/*.mc)\
 	$(wildcard stdlib/mlang/*.mc)\
+	$(wildcard stdlib/extrec/*.mc)\
 	$(wildcard stdlib/multicore/*.mc)\
 	$(wildcard stdlib/ocaml/*.mc)\
 	$(wildcard stdlib/parser/*.mc)\
