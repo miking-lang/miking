@@ -533,12 +533,13 @@ lang FutharkGenerate = FutharkToplevelGenerate + MExprCmp
 end
 
 lang TestLang =
-  FutharkGenerate + FutharkPrettyPrint + MExprSym + MExprTypeCheck
+  FutharkGenerate + MExprSym + MExprTypeCheck
 end
 
 mexpr
 
 use TestLang in
+use FutharkPrettyPrint in 
 
 let f = nameSym "f" in
 let c = nameSym "c" in
