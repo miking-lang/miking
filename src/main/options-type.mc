@@ -15,6 +15,7 @@ type Options = {
   disablePruneExternalUtests : Bool,
   disablePruneExternalUtestsWarning : Bool,
   runTests : Bool,
+  runSpecificTest : Option String,
   runtimeChecks : Bool,
   disableOptimizations : Bool,
   enableConstantFold : Bool,

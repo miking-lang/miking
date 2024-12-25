@@ -77,7 +77,7 @@ let eval = lam files. lam options : Options. lam args.
 
     -- If option --test, then generate utest runner calls. Otherwise strip away
     -- all utest nodes from the AST.
-    let ast = generateUtest options.runTests ast in
+    let ast = generateUtest options.runTests options.runSpecificTest ast in
     if options.exitBefore then exit 0
     else
       eval (evalCtxEmpty ()) (updateArgv args ast); ()

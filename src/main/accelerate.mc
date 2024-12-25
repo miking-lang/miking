@@ -228,7 +228,7 @@ let compileAccelerated =
   let ast = demoteParallel ast in
 
   -- Generate utests or strip them from the program.
-  let ast = generateUtest options.runTests ast in
+  let ast = generateUtest options.runTests options.runSpecificTest ast in
 
   let ast = lowerAll ast in
   let ast = typeAnnot ast in
