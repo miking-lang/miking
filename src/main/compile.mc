@@ -98,7 +98,7 @@ let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
 
     -- If option --test, then generate utest runner calls. Otherwise strip away
     -- all utest nodes from the AST.
-    let ast = generateUtest options.runTests ast in
+    let ast = generateUtest options.runTests options.runSpecificTest ast in
     endPhaseStats log "generate-utest" ast;
 
     let ast =

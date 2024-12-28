@@ -56,6 +56,10 @@ let optionsConfig : ParseConfig Options = [
     "Generate utest code",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with runTests = true}),
+  ([("--specific-test", " ", "<location>")],
+    "Specifically test this utest",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with runTests = true, runSpecificTest = Some (argToString p)}),
   ([("--runtime-checks", "", "")],
     "Enables runtime checks",
     lam p: ArgPart Options.

@@ -18,6 +18,7 @@ let optionsDefault : Options = {
   disablePruneExternalUtests = false,
   disablePruneExternalUtestsWarning = false,
   runTests = false,
+  runSpecificTest = None (),
   runtimeChecks = false,
   disableOptimizations = false,
   enableConstantFold = false,

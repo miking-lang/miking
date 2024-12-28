@@ -242,7 +242,10 @@ lang UtestBase =
 
     -- Maps the identifier of a variant type to an inner map, which in turn
     -- maps constructor names to their types.
-    variants : Map Name (Map Name Type)
+    variants : Map Name (Map Name Type),
+
+    -- Only include utests on these locations
+    specificTest : Option String
   }
 
   sem utestEnvEmpty : () -> UtestEnv
@@ -251,7 +254,8 @@ lang UtestBase =
     let baseTypes = [_boolTy, _intTy, _charTy, _floatTy] in
     { eq = mapEmpty cmpType, eqDef = setOfSeq cmpType baseTypes
     , pprint = mapEmpty cmpType, pprintDef = setOfSeq cmpType baseTypes
-    , variants = mapEmpty nameCmp }
+    , variants = mapEmpty nameCmp
+    , specificTest = None () }
 
   sem lookupVariant : Name -> UtestEnv -> Info -> Map Name Type
   sem lookupVariant id env =
@@ -932,6 +936,20 @@ lang MExprUtestGenerate =
   sem replaceUtests : UtestEnv -> Expr -> (UtestEnv, Expr)
   sem replaceUtests env =
   | TmUtest t ->
+    let earlyExit = match env.specificTest with Some specificTest then
+      let location = info2str t.info in
+      if eqString location specificTest then
+        None ()
+      else
+        Some ((env, t.next))
+    else
+      None ()
+    in
+
+    match earlyExit with Some ((env, next))
+      then replaceUtests env next
+    else
+
     let info = _stringLit (info2str t.info) in
     let usingStr =
       _stringLit
@@ -1063,11 +1081,14 @@ lang MExprUtestGenerate =
   | TmUtest t -> stripUtests t.next
   | t -> smap_Expr_Expr stripUtests t
 
-  sem generateUtest : Bool -> Expr -> Expr
-  sem generateUtest testsEnabled =
+  sem generateUtest : Bool -> Option String -> Expr -> Expr
+  sem generateUtest testsEnabled specificTest =
   | ast ->
     if testsEnabled then
-      match replaceUtests (utestEnvEmpty ()) ast with (env, ast) in
+      let utestEnv = {utestEnvEmpty () with
+        specificTest = specificTest
+      } in
+      match replaceUtests utestEnv ast with (env, ast) in
       let ast = insertUtestTail ast in
       let ast = mergeWithHeader ast (loadUtestRuntime ()) in
       eliminateDuplicateCode ast
