@@ -149,6 +149,21 @@ let _mergeErrors
   = lam a. lam b.
     { warnings = mapUnion a.warnings b.warnings, errors = mapUnion a.errors b.errors }
 
+-- Map the errors, if any, inside the `Result`. Preserves all warnings.
+let _mapErrorsKeepIdentities
+  : all w. all e1. all e2. all a. (e1 -> e2) -> Result w e1 a -> Result w e2 a
+  = lam f. lam start.
+    switch start
+    case ResultOk r then ResultOk r
+    case ResultErr { warnings = warnings, errors = errors } then
+      ResultErr { warnings = warnings, errors = mapMap f errors }
+    end
+
+utest match _prepTest (_mapErrorsKeepIdentities (addi 1) (_err 3)) with ([], Left [4]) then true else false
+with true
+utest match _prepTest (_mapErrorsKeepIdentities (addi 1) (_ok 3)) with ([], Right 3) then true else false
+with true
+
 -- Update the value, if any, inside the `Result`. Preserves all errors
 -- and warnings.
 let _map
@@ -695,6 +710,7 @@ let result =
   , map3 = _map3
   , map4 = _map4
   , map5 = _map5
+  , mapErrorsKeepIdentities = _mapErrorsKeepIdentities
   , apply = _apply
   , withAnnotations = _withAnnotations
   -- Mapping, action can produce new errors and/or warnings
