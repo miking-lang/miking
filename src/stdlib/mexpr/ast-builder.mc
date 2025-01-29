@@ -623,6 +623,8 @@ let tuple_ = tmTuple (NoInfo ())
 
 let utuple_ = tuple_ tyunknown_
 
+let autoty_tuple_ = lam tms. autoty_record_ (mapi (lam i. lam t. (int2string i, t)) tms)
+
 let urecord_empty = uunit_
 let record_empty = unit_
 
