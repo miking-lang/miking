@@ -56,9 +56,11 @@ let multinomialLogPmf : [Float] -> [Int] -> Float =
 let multinomialPmf : [Float] -> [Int] -> Float =
   lam ps. lam ns. exp (externalMultinomialLogPmf ns ps)
 let categoricalLogPmf : [Float] -> Int -> Float =
-  lam ps. lam x. log (get ps x)
+  lam ps. lam x.
+  if geqi x (length ps) then negf inf else log (get ps x)
 let categoricalPmf : [Float] -> Int -> Float =
-  lam ps. lam x. get ps x
+  lam ps. lam x.
+  if geqi x (length ps) then negf inf else get ps x
 let multinomialSample : [Float] -> Int -> [Int] =
   lam ps. lam n. externalMultinomialSample n ps
 let categoricalSample : [Float] -> Int =
