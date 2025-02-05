@@ -4,12 +4,18 @@ include "bool.mc"
 -- Gamma
 external externalGammaLogPdf : Float -> Float -> Float -> Float
 external externalGammaSample ! : Float -> Float -> Float
+external externalGammaCdf : Float -> Float -> Float -> Float
+external externalGammaPpf : Float -> Float -> Float -> Float
 let gammaPdf = lam shape:Float. lam scale:Float. lam x:Float.
   exp (externalGammaLogPdf x shape scale)
 let gammaLogPdf = lam shape:Float. lam scale:Float. lam x:Float.
   externalGammaLogPdf x shape scale
 let gammaSample = lam shape:Float. lam scale:Float.
   externalGammaSample shape scale
+let gammaCdf = lam shape:Float. lam scale:Float. lam x:Float.
+  externalGammaCdf x shape scale
+let gammaPpf = lam shape:Float. lam scale:Float. lam q:Float.
+  externalGammaPpf q shape scale
 
 -- Binomial and Bernoulli
 external externalBinomialLogPmf : Int -> Float -> Int -> Float
@@ -211,6 +217,8 @@ let floatRange = lam lower. lam upper. lam r. lam l.
 utest gammaPdf 1. 2. 1. with 0.303265329856 using _eqf in
 utest exp (gammaLogPdf 2. 3. 1.) with 0.0796145900638 using _eqf in
 utest gammaSample 1. 2. with 1. using floatRange 0. inf in
+utest gammaCdf 1. 2. 1. with 0.393469340287 using _eqf in
+utest gammaPpf 0.5 1. 0.5 with 0.227468211559 using _eqf in
 
 -- Testing Binomial and Bernoulli
 utest binomialPmf 0.7 20 15 with 0.17886305057 using _eqf in

@@ -28,6 +28,20 @@ let distExtMap =
         cLibraries = []
       }
     ]),
+    ("externalGammaCdf", [
+      { expr = "Owl_stats.gamma_cdf",
+       ty = tyarrows_ [tyfloat_, otylabel_ "shape" tyfloat_, otylabel_ "scale" tyfloat_, tyfloat_],
+       libraries = ["owl"],
+       cLibraries = []
+       }
+    ]),
+    ("externalGammaPpf", [
+      { expr = "Owl_stats.gamma_ppf",
+      ty = tyarrows_ [otylabel_ "o" tyfloat_, otylabel_ "shape" tyfloat_, otylabel_ "scale" tyfloat_, tyfloat_],
+      libraries =["owl"],
+      cLibraries = []
+      }
+    ]),
     ("externalBinomialLogPmf", [
       { expr = "Owl_stats.binomial_logpdf",
         ty = tyarrows_ [tyint_, otylabel_ "p" tyfloat_, otylabel_ "n" tyint_, tyfloat_],
