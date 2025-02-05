@@ -1,1 +1,1 @@
-../../src/boot/lib/rope.ml
+../../boot/lib/rope.ml

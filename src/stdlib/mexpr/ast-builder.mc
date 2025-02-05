@@ -594,6 +594,18 @@ let record_ = tmRecord (NoInfo ())
 
 let urecord_ = record_ tyunknown_
 
+let autoty_record_ = lam bindings.
+  use MExprAst in
+  let bindings = mapFromSeq cmpSID (map (lam x. (stringToSid x.0, x.1)) bindings) in
+  TmRecord {
+    bindings = bindings,
+    ty = TyRecord {
+      fields = mapMap tyTm bindings,
+      info = NoInfo ()
+    },
+    info = NoInfo ()
+  }
+
 let tmTuple = use MExprAst in
   lam info : Info. lam ty : Type. lam tms : [Expr].
   tmRecord info ty (mapi (lam i. lam t. (int2string i, t)) tms)
@@ -658,7 +670,7 @@ let nrecordproj_ = use MExprAst in
   -- It is fine to use any variable name here. It doesn't matter if it
   -- overwrites a previous binding, since that binding will never be used in
   -- the then clause in any case.
-  match_ r (prec_ [(key,npvar_ name)]) (nvar_ name) never_
+  match_ r (withTypePat (tyTm r) (prec_ [(key,npvar_ name)])) (nvar_ name) never_
 
 let recordproj_ = use MExprAst in
   lam key. lam r.

@@ -373,35 +373,36 @@ lang OCamlPrettyPrint =
                 "\"", nameGetStr t.nativeIdent, "\";;"])
   | OTopLet t ->
     let indent = 0 in
-    match pprintVarName env t.ident with (env, ident) then
-      match pprintCode (pprintIncr indent) env t.body with (env, body) then
-        (env, join ["let ", ident, " =", pprintNewline (pprintIncr indent),
-                    body, ";;"])
-      else never
-    else never
+    match pprintVarName env t.ident with (env, ident) in
+    match collectParameters env t.body with (env, parameters, body) in
+    match pprintCode (pprintIncr indent) env body with (env, body) in
+    ( env
+    , join
+      [ "let ", ident, join (map (cons ' ') parameters), " =", pprintNewline (pprintIncr indent)
+      , body, ";;"
+      ]
+    )
+  | OTopRecLets {bindings = []} -> (env, "")
   | OTopRecLets {bindings = bindings} ->
     let indent = 0 in
-    let lname = lam env. lam bind : OCamlTopBinding.
-      match pprintVarName env bind.ident with (env,str) then
-        (env, str)
-      else never in
-    let lbody = lam env. lam bind : OCamlTopBinding.
-      match pprintCode (pprintIncr (pprintIncr indent)) env bind.body
-      with (env,str) then (env, str)
-      else never in
-    match mapAccumL lname env bindings with (env,idents) then
-      match mapAccumL lbody env bindings with (env,bodies) then
-        match bodies with [] then (env,"") else
-          let fzip = lam ident. lam body.
-            join [ident, " =",
-                  pprintNewline (pprintIncr (pprintIncr indent)),
-                  body]
-          in
-          (env,join ["let rec ",
-                     strJoin (join [pprintNewline indent, "and "])
-                     (zipWith fzip idents bodies), ";;"])
-      else never
-    else never
+    let f = lam env. lam bind.
+      match pprintVarName env bind.ident with (env, ident) in
+      match collectParameters env bind.body with (env, parameters, body) in
+      let indent = pprintIncr (pprintIncr indent) in
+      match pprintCode indent env body with (env, body) in
+      ( env
+      , join
+        [ ident, join (map (cons ' ') parameters), " ="
+        , pprintNewline indent , body
+        ]
+      ) in
+    match mapAccumL f env bindings with (env, bindings) in
+    ( env
+    , join
+      [ "let rec ", strJoin (concat (pprintNewline indent) "and ") bindings
+      , ";;"
+      ]
+    )
   | OTopExpr {expr = expr} ->
     let indent = 0 in
     match pprintCode indent env expr with (env, code) then
@@ -423,6 +424,21 @@ lang OCamlPrettyPrint =
       (env, join ["try", pprintNewline i, try, pprintNewline 0,
                   "with", join arms])
     else never
+
+  sem collectParameters : PprintEnv -> Expr -> (PprintEnv, [String], Expr)
+  sem collectParameters env =
+  | TmLam x ->
+    match pprintVarName env x.ident with (env, param) in
+    match collectParameters env x.body with (env, params, body) in
+    (env, cons param params, body)
+  | OTmLam x ->
+    match pprintVarName env x.ident with (env, param) in
+    let param = match x.label with Some label
+      then join ["~", label, ":", param]
+      else param in
+    match collectParameters env x.body with (env, params, body) in
+    (env, cons param params, body)
+  | tm -> (env, [], tm)
 
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
@@ -451,35 +467,23 @@ lang OCamlPrettyPrint =
     match mapAccumL (pprintCode indent) env args with (env, args) then
       (env, join [ident, " (", strJoin ", " args, ")"])
     else never
-  | TmLam {ident = id, body = b} ->
-    match pprintVarName env id with (env,str) then
-      match pprintCode (pprintIncr indent) env b with (env,body) then
-        (env,join ["fun ", str, " ->", pprintNewline (pprintIncr indent), body])
-      else never
-    else never
-  | OTmLam {label = label, ident = id, body = b} ->
-    match pprintVarName env id with (env,str) then
-      let str =
-        match label with Some label then join ["~", label, ":", str]
-        else match label with None _ then str
-        else never
-      in
-      match pprintCode (pprintIncr indent) env b with (env,body) then
-        (env,join ["fun ", str, " ->", pprintNewline (pprintIncr indent), body])
-      else never
-    else never
+  | t & (TmLam _ | OTmLam _) ->
+    match collectParameters env t with (env, params, body) in
+    match pprintCode (pprintIncr indent) env body with (env, body) in
+    (env, join ["fun ", strJoin " " params, " ->", pprintNewline (pprintIncr indent), body])
   | TmLet t ->
-    match pprintVarName env t.ident with (env,str) then
-      match pprintCode (pprintIncr indent) env t.body with (env,body) then
-        match pprintCode indent env t.inexpr with (env,inexpr) then
-          (env,
-           join ["let ", str, " =", pprintNewline (pprintIncr indent),
-                 body, pprintNewline indent,
-                 "in", pprintNewline indent,
-                 inexpr])
-        else never
-      else never
-    else never
+    match pprintVarName env t.ident with (env,str) in
+    match collectParameters env t.body with (env, parameters, body) in
+    match pprintCode (pprintIncr indent) env body with (env, body) in
+    match pprintCode indent env t.inexpr with (env, inexpr) in
+    ( env
+    , join
+      [ "let ", str, join (map (cons ' ') parameters), " =", pprintNewline (pprintIncr indent)
+      , body, pprintNewline indent
+      , "in", pprintNewline indent
+      , inexpr
+      ]
+    )
   | TmRecord t ->
     if mapIsEmpty t.bindings then (env, "()")
     else
@@ -525,31 +529,27 @@ lang OCamlPrettyPrint =
     match pprintUpdates env updates with (env, updates) in
     (env, join ["{ ", rec, pprintNewline i,
                 "with", pprintNewline i, updates, " }"])
+  | TmRecLets {bindings = [], inexpr = inexpr} -> pprintCode indent env inexpr
   | TmRecLets {bindings = bindings, inexpr = inexpr} ->
-    let lname = lam env. lam bind : RecLetBinding.
-      match pprintVarName env bind.ident with (env,str) then
-        (env, str)
-      else never in
-    let lbody = lam env. lam bind : RecLetBinding.
-      match pprintCode (pprintIncr (pprintIncr indent)) env bind.body
-      with (env,str) then (env, str)
-      else never in
-    match mapAccumL lname env bindings with (env,idents) then
-      match mapAccumL lbody env bindings with (env,bodies) then
-        match pprintCode indent env inexpr with (env,inexpr) then
-        match bodies with [] then (env,inexpr) else
-          let fzip = lam ident. lam body.
-            join [ident, " =",
-                  pprintNewline (pprintIncr (pprintIncr indent)),
-                  body]
-          in
-          (env,join ["let rec ",
-                     strJoin (join [pprintNewline indent, "and "])
-                     (zipWith fzip idents bodies),
-                     pprintNewline indent, "in ", inexpr])
-        else never
-      else never
-    else never
+    let f = lam env. lam bind.
+      match pprintVarName env bind.ident with (env, ident) in
+      match collectParameters env bind.body with (env, parameters, body) in
+      let indent = pprintIncr (pprintIncr indent) in
+      match pprintCode indent env body with (env, body) in
+      ( env
+      , join
+        [ ident, join (map (cons ' ') parameters), " ="
+        , pprintNewline indent , body
+        ]
+      ) in
+    match mapAccumL f env bindings with (env, bindings) in
+    match pprintCode indent env inexpr with (env, inexpr) in
+    ( env
+    , join
+      [ "let rec ", strJoin (concat (pprintNewline indent) "and ") bindings
+      , pprintNewline indent, "in ", inexpr
+      ]
+    )
   | OTmArray t ->
     match mapAccumL (lam env. lam tm. pprintCode (pprintIncr indent) env tm)
                     env t.tms
