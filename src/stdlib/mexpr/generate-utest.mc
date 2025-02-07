@@ -56,23 +56,15 @@ lang UtestLoader = MCoreLoader + GenerateEqLoader + GeneratePprintLoader + Strip
     let loader = remHook (lam x. match x with StripUtestHook _ then true else false) loader in
     addHook loader (UtestHook hook)
 
-  -- Should be called when the entire program has been loaded and
-  -- constructed. Inserts the code that checks if any tests have
-  -- failed and, if so, exits the program.
-  sem insertUtestExitCheck : Loader -> Loader
-  sem insertUtestExitCheck = | loader ->
-    let f = lam loader. lam x.
-      match x with UtestHook hook then
-        let decl = DeclLet
-          { ident = nameNoSym ""
-          , tyAnnot = tyunknown_
-          , tyBody = tyunknown_
-          , body = app_ (nvar_ (hook.exitOnFailure)) unit_
-          , info = NoInfo ()
-          } in
-        Some (_addDeclExn loader decl, ())
-      else None () in
-    (withHookState f loader).0
+  sem _preBuildFullAst loader = | UtestHook hook ->
+    let decl = DeclLet
+      { ident = nameNoSym ""
+      , tyAnnot = tyunknown_
+      , tyBody = tyunknown_
+      , body = app_ (nvar_ (hook.exitOnFailure)) unit_
+      , info = NoInfo ()
+      } in
+    _addDeclExn loader decl
 
   sem _postTypecheck loader decl = | UtestHook hook ->
     match decl with DeclUtest d then
