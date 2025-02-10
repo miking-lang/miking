@@ -70,7 +70,7 @@ lang GenerateEqRecord = GenerateEq + RecordTypeAst
     match mapAccumL (lam env. lam f. f env) env elems with (env, [first] ++ elems) in
 
     let f = lam acc. lam elem. if_ elem acc false_ in
-    (env, nulam_ lName (nulam_ rName (foldl f first elems)))
+    (env, nlam_ lName ty (nlam_ rName ty (foldl f first elems)))
 end
 
 lang GenerateEqApp = GenerateEq + AppTypeAst

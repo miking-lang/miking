@@ -54,16 +54,16 @@ end
 
 lang GeneratePprintString = GeneratePprint + SeqTypeAst + CharTypeAst
   sem _getPprintFunction env =
-  | TySeq {ty = TyChar _} ->
+  | ty & TySeq {ty = TyChar _} ->
     let n = nameSym "x" in
-    (env, nulam_ n (cons_ (char_ '"') (snoc_ (app_ (nvar_ env.escapeString) (nvar_ n)) (char_ '"'))))
+    (env, nlam_ n ty (cons_ (char_ '"') (snoc_ (app_ (nvar_ env.escapeString) (nvar_ n)) (char_ '"'))))
 end
 
 lang GeneratePprintChar = GeneratePprint + CharTypeAst
   sem _getPprintFunction env =
-  | TyChar _ ->
+  | ty & TyChar _ ->
     let n = nameSym "c" in
-    (env, nulam_ n (seq_ [char_ '\'', app_ (nvar_ env.escapeChar) (nvar_ n), char_ '\'']))
+    (env, nlam_ n ty (seq_ [char_ '\'', app_ (nvar_ env.escapeChar) (nvar_ n), char_ '\'']))
 end
 
 lang GeneratePprintRecord = GeneratePprint + RecordTypeAst + MExprIdentifierPrettyPrint
@@ -96,7 +96,7 @@ lang GeneratePprintRecord = GeneratePprint + RecordTypeAst + MExprIdentifierPret
         (char_ (if isTuple then '(' else '{'))
         (foldr withComma last rest))
       (char_ (if isTuple then ')' else '}')) in
-    (env, nulam_ recName body)
+    (env, nlam_ recName ty body)
 end
 
 lang GeneratePprintApp = GeneratePprint + AppTypeAst
