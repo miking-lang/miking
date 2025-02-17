@@ -37,7 +37,7 @@ let distExtMap =
     ]),
     ("externalGammaPpf", [
       { expr = "Owl_stats.gamma_ppf",
-      ty = tyarrows_ [otylabel_ "o" tyfloat_, otylabel_ "shape" tyfloat_, otylabel_ "scale" tyfloat_, tyfloat_],
+      ty = tyarrows_ [tyfloat_, otylabel_ "shape" tyfloat_, otylabel_ "scale" tyfloat_, tyfloat_],
       libraries =["owl"],
       cLibraries = []
       }
