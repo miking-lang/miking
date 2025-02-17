@@ -950,6 +950,13 @@ testMain
       let files = api.glob ["test", "extrec-ill-typed"] (IncludeSubs ()) (SuffixFile ".mc") in
       for_ files (lam mc.
         api.fail {input = mc, cmd = "%m compile --test --experimental-records --exit-before %i", tag = "experimental-records-ill-typed"})
+    , exclusions = lam api.
+      -- NOTE(voorberg, 2025-02-17): The files in "src/test/extrec" and
+      -- "src/test/extrec-ill-typed" require experimental features that are
+      -- not supported in boot or mi without the "--experimental-records" flag.
+
+      api.mark noTasks (api.glob ["test", "extrec"] (IncludeSubs ()) (SuffixFile ".mc"));
+      api.mark noTasks (api.glob ["test", "extrec-ill-typed"] (IncludeSubs ()) (SuffixFile ".mc"))
     }
 
   , { testColl "java"
