@@ -1,0 +1,30 @@
+include_rules
+
+STDLIB := MCORE_LIBS=stdlib=$(ROOT)/src/stdlib OCAMLPATH=$(VARIANT_SRC)/lib${OCAMLPATH:+:}$OCAMLPATH
+
+# NOTE(vipa, 2023-05-16): This is ugly, but appears stable and does
+# seem to work
+BOOT_LIB_FILES += lib/boot/META
+BOOT_LIB_FILES += lib/boot/boot.a
+BOOT_LIB_FILES += lib/boot/boot.cma
+BOOT_LIB_FILES += lib/boot/boot.cmxa
+BOOT_LIB_FILES += lib/boot/intrinsics.mli
+BOOT_LIB_FILES += lib/boot/parser.mli
+BOOT_LIB_FILES += lib/boot/rope.mli
+BOOT_LIB_FILES += lib/boot/tensor.mli
+BOOT_LIB_FILES += lib/boot/ustring.mli
+
+preload boot
+
+: |> ^b dune build^ OCAMLRUNPARAM=b ../misc/scripts/with-tmp-dir dune build --root=boot/ --build-dir="{}" "&&" mv "{}/default/"{META.boot,lib/META} "&&" shopt -s nullglob "&&" ocamlfind install -destdir $(VARIANT_SRC)/lib boot "{}/default/lib/"{META,*.mli,*.cmi,*.cmo,*.cmx,*.cma,*.cmxa,*.a} "&&" mv "{}"/default/boot.exe %1o |> mi-boot | $(BOOT_LIB_FILES) <boot-lib>
+
+: main/mi-lite.mc | mi-boot $(BOOT_LIB_FILES) |> ^ ./boot eval %f -- 0 %f %o^ $(STDLIB) ./%1i eval %f -- 0 %f %o |> mi-lite
+: main/mi.mc | mi-lite $(BOOT_LIB_FILES) |> ^ ./mi-lite 1 %f %o^ $(STDLIB) ./%1i 1 %f %o |> mi1
+: main/mi.mc | mi1 $(BOOT_LIB_FILES) |> ^ ./mi1 compile %f --output %o^ $(STDLIB) ./%1i compile %f --output %o |> mi <mi>
+
+: main/mi.mc | mi-boot $(BOOT_LIB_FILES) |> ^ mi compile %f --output %o^ $(STDLIB) mi compile %f --output %o |> mi-cheat <mi-cheat>
+
+: |> ld -lev  | tee %o |> ld-test-thing
+: |> env > %o |> env
+: |> file `which ld` | tee %o |> ld
+: |> echo $NIX_LDFLAGS | tee %o |> ld-flags

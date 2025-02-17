@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+
+set -e
+
+DIR=$(dirname "$(dirname "$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )")")
+TARGETDIR=$(realpath --relative-to="$DIR" .)
+cd "$DIR"
+
+# NOTE(vipa, 2023-05-17): Tup doesn't like it if we write to files
+# here, since this script is only supposed to list build targets, thus
+# we don't check if test-spec is up to date here, even if it would
+# make some form of sense to do so.
+
+misc/test-spec --tup-rules -- "$TARGETDIR"

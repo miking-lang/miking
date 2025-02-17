@@ -1,0 +1,23 @@
+ROOT := $(TUP_CWD)/..
+VARIANT_SRC := $(TUP_VARIANTDIR)
+
+# MCore specific
+export MCORE_LIBS
+
+# OCaml specific
+export OCAMLPATH
+export OPAM_SWITCH_PREFIX
+export CAML_LD_LIBRARY_PATH
+export OCAML_TOPLEVEL_PATH
+export PKG_CONFIG_PATH
+
+# Nix specific
+
+# NOTE(vipa, 2024-11-14): The first two make nix-wrapped linker and
+# compiler add flags for this particular kind of build
+# target. Unfortunately I don't see a better way to ensure they're
+# present inside than to just export each of them, and then add new
+# combinations of these for new targets.
+export NIX_BINTOOLS_WRAPPER_TARGET_HOST_x86_64_unknown_linux_gnu
+export NIX_CC_WRAPPER_TARGET_HOST_x86_64_unknown_linux_gnu
+export NIX_LDFLAGS

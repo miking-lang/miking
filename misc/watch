@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+
+set -e
+
+DIR=$(dirname "$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )")
+
+"$DIR/misc/scripts/repo-files" | entr -rc "$DIR/misc/test" "$@"

@@ -1,0 +1,16 @@
+#!/usr/bin/env sh
+
+if command -v git >/dev/null 2>&1 && git ls-files --exclude-standard --other --cached 2>/dev/null; then
+   exit 0
+fi
+
+if command -v jj >/dev/null 2>&1 && jj file list --no-pager 2>/dev/null; then
+   exit 0
+fi
+
+if command -v sl >/dev/null 2>&1 && sl files 2>/dev/null; then
+  exit 0
+fi
+
+echo "Not a known kind of repository" >&2
+exit 1

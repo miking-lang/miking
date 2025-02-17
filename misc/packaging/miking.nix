@@ -1,48 +1,66 @@
 { lib, stdenv,
   coreutils,
   makeWrapper,
-  ocamlPackages
+  ocamlPackages,
+  writeText
 }:
 
 with ocamlPackages;
 
-stdenv.mkDerivation rec {
+stdenv.mkDerivation (finalAttrs: rec {
   pname = "miking";
   version = "0.0.0+git";
 
-  # Unlike Guix, Nix does not seem to expose the filter used by the git fetcher.
-  # Each new commit will result in a different derivation.
-  src = fetchGit {
-    url = ../..;
-    ref = "HEAD";
-  };
+  withLwt = true;   # For async-ext.mc
+  withToml = true;  # For dist-ext.mc
+  withOwl = true;   # For toml-ext.mc
+
+  src = ../..;
 
   nativeBuildInputs = [
+    makeWrapper
+    menhir
+    dune_3
+    coreutils
     ocaml
     findlib
-    dune_3
-    makeWrapper
+    linenoise
+  ]
+    ++ lib.lists.optional finalAttrs.withLwt lwt
+    ++ lib.lists.optional finalAttrs.withOwl owl
+    ++ lib.lists.optional finalAttrs.withToml toml;
 
-    lwt        # For async-ext.mc
-    owl        # For dist-ext.mc
-    toml       # For toml-ext.mc
-  ];
-
-  buildInputs = [
+  propagatedBuildInputs = [
     coreutils  # Miking currently requires mkdir to be able to run
+    ocaml
+    findlib
     linenoise
   ];
 
   makeFlags = [ "prefix=$(out)" "ocamllibdir=$(out)/lib/ocaml/${ocaml.version}/site-lib" ];
 
+  preConfigure = ''
+    for f in $(find misc -type f -a -executable); do patchShebangs --build $f; done
+  '';
+
   postInstall = ''
     wrapProgram $out/bin/mi \
       --suffix PATH : ${coreutils}/bin \
-      --suffix OCAMLPATH : ${linenoise}/lib/ocaml/${ocaml.version}/site-lib
+      --prefix PATH : ${ocaml}/bin \
   '';
 
-  doCheck = true;
-  checkTarget = "test-compile";
+  # doCheck = true;
+  # checkTarget = "test-compile";
+
+  setupHook = writeText "setupHook.sh" ''
+    addMCorePath() {
+      echo test $1
+      for dir in "''$1"/lib/mcore/*; do
+        export MCORE_LIBS="''${MCORE_LIBS-}''${MCORE_LIBS:+:}''$(basename ''$dir)=''$dir"
+      done
+    }
+    addEnvHooks "$targetOffset" addMCorePath
+  '';
 
   meta = with lib; {
     description     = "Meta language system for creating embedded DSLs";
@@ -61,4 +79,4 @@ stdenv.mkDerivation rec {
       when targeting the JVM.
     '';
   };
-}
+})

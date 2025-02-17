@@ -1,179 +1,119 @@
-###################################################
-#  Miking is licensed under the MIT license.
-#  Copyright (C) David Broman. See file LICENSE.txt
-#
-#  To make the build system platform independent,
-#  all scripts are done in OCaml instead of being
-#  dependent on make. If make is installed on
-#  the system, we just run the batch make.sh file.
-###################################################
+BOOT_NAME=mi-boot
+MI_LITE_NAME=mi-lite
+MI_MID_NAME=mi-mid
+MI_NAME=mi
+MI_CHEAT_NAME=mi-cheat
 
-export prefix
-export bindir
-export libdir
-export ocamllibdir
+ifndef prefix
+prefix=$(HOME)/.local
+endif
+ifndef bindir
+bindir=$(prefix)/bin
+endif
+ifndef libdir
+libdir=$(prefix)/lib
+endif
+ifdef OPAM_SWITCH_PREFIX
+opamlibdir=$(OPAM_SWITCH_PREFIX)/lib
+endif
+ifndef ocamllibdir
+ifdef opamlibdir
+ocamllibdir=$(opamlibdir)
+else
+ocamllibdir=$(libdir)/ocaml/site-lib
+endif
+endif
+mcoredir=$(libdir)/mcore
 
-.PHONY :\
-  all\
-  boot\
-  install-boot\
-  build\
-  build-mi\
-  install\
-  lite\
-  lint\
-  fix\
-  clean\
-  uninstall\
-  test\
-  test-all\
-  test-boot-compile\
-  test-boot-compile-all\
-  test-compile\
-  test-compile-all\
-  test-all-prune-utests\
-  test-boot-compile-prune-utests\
-  test-boot-compile-prune-utests-all\
-  test-compile-prune-utests\
-  test-compile-prune-utests-all\
-  test-run\
-  test-run-all\
-  test-run-boot\
-  test-run-boot-all\
-  test-boot\
-  test-boot-all\
-  test-boot-py\
-  test-par\
-  test-tune\
-  test-sundials\
-  test-ipopt\
-  test-accelerate\
-  test-jvm
+mkfile_path := $(abspath $(lastword $(MAKEFILE_LIST)))
+current_dir := $(dir $(mkfile_path))
+SET_STDLIB=MCORE_LIBS=stdlib=$(current_dir)/src/stdlib
+ifdef OCAMLPATH
+SET_OCAMLPATH=OCAMLPATH=$(current_dir)/build/lib:$(OCAMLPATH)
+else
+SET_OCAMLPATH=OCAMLPATH=$(current_dir)/build/lib
+endif
 
-all: build
+.PHONY: default
+default: bootstrap
 
-boot:
-	@./make.sh boot
 
-install-boot: boot
-	@./make.sh install-boot
-
-lite: boot
-	@./make.sh lite
-
-test: test-boot
-
-build: boot
-# Run the complete bootstrapping process to compile `mi`.
-# If you made any changes to `boot` you must run `make boot` and 
-# `make install-boot` beforehand.
-	@./make.sh
-
-build-mi:
-# Build `mi` using the current version in `build`, skipping bootstrapping.
-# The result is named `build/mi-tmp`.
-	@./make.sh build-mi
-
-install: build install-boot
-	@./make.sh install
-
-lint:
-	@./make.sh lint
-
-fix:
-	@./make.sh fix
-
+# NOTE(vipa, 2023-03-29): This removes all ignored files in the build
+# directory, which should coincide with generated files
+.PHONY: clean
 clean:
-	@./make.sh clean
+	misc/scripts/repo-ignored-files build | tr "\n" "\0" | xargs -r0 rm -f
+	find build -depth -type d -empty -delete
 
+
+# The OCaml library and executables (`boot`)
+
+.PHONY: boot
+boot:
+	misc/scripts/with-tmp-dir dune build --root=src/boot/ --build-dir="{}" \
+	"&&" dune install --root=src/boot/ --build-dir="{}" --prefix=$(current_dir)/build ">/dev/null" "2>&1"
+	mv $(current_dir)"/build/bin/boot" build/$(BOOT_NAME)
+	rm -f $(current_dir)"/build/lib/boot/dune-package"
+
+.PHONY: install-boot
+install-boot:
+	misc/scripts/with-tmp-dir dune build --root=src/boot/ --build-dir="{}" \
+	"&&" dune install --root=src/boot/ --build-dir="{}" --prefix=$(prefix) --libdir=$(ocamllibdir) ">/dev/null 2>&1"
+
+.PHONY: uninstall-boot
+uninstall-boot:
+	misc/scripts/with-tmp-dir dune uninstall --root=src/boot --build-dir="{}" --prefix=$(prefix) --libdir=$(ocamllibdir) ">/dev/null 2>&1"
+
+
+## Formatting, checking and autoformatting respectively
+
+.PHONY: lint
+lint:
+	misc/scripts/with-tmp-dir dune fmt --root=src/boot/ --build-dir="{}"
+
+.PHONY: fix
+fix:
+	misc/scripts/with-tmp-dir dune fmt --root=src/boot/ --build-dir="{}" --auto-promote
+
+
+# Bootstrapping the `mi` executable
+
+.PHONY: bootstrap
+bootstrap: $(if $(wildcard build/$(BOOT_NAME)),,boot)
+	$(SET_STDLIB) $(SET_OCAMLPATH) build/$(BOOT_NAME) eval src/main/mi-lite.mc -- 0 src/main/mi-lite.mc build/$(MI_LITE_NAME)
+	$(SET_STDLIB) $(SET_OCAMLPATH) build/$(MI_LITE_NAME) 1 src/main/mi.mc build/$(MI_MID_NAME)
+	$(SET_STDLIB) $(SET_OCAMLPATH) build/$(MI_MID_NAME) compile src/main/mi.mc --output build/$(MI_NAME)
+
+.PHONY: cheat
+cheat:
+	$(SET_STDLIB) $(SET_OCAMLPATH) mi compile src/main/mi.mc --output build/$(MI_CHEAT_NAME)
+
+
+# Installing and uninstalling `mi` and the standard library
+
+.PHONY: install
+install: $(if $(wildcard build/$(MI_NAME)),,bootstrap) install-boot
+	mkdir -p $(bindir) $(mcoredir)
+	cp -f build/$(MI_NAME) $(bindir)
+	rm -rf $(mcoredir)/stdlib || true
+	cp -rf src/stdlib $(mcoredir)
+
+.PHONY: uninstall
 uninstall:
-	@./make.sh uninstall
+	rm -f $(bindir)/$(MI_NAME)
+	rm -rf $(mcoredir)/stdlib
 
-# Tests everything except some files with very special external dependencies
-test-all:\
-  test-mlang-pipeline\
-  test-boot-all\
-  test-compile\
-  test-run\
-  test-js\
-  test-tune\
-  test-jvm
-	@./make.sh lint
 
-# The same as test-all but prunes utests whose external dependencies are not met
-# on this system
-test-all-prune-utests:\
-  test-boot-all\
-  test-compile-prune-utests\
-  test-run\
-	test-tune
-	@./make.sh lint
+# Basic testing (for more granular control, use `misc/test` directly,
+# or `misc/watch` to autorun tests when files change)
 
-test-boot-compile: boot
-	@$(MAKE) -s -f test-boot-compile.mk selected
+.PHONY: test test-all test-quick
+test test-all test-quick: $(if $(wildcard .tup/.),,build/$(MI_NAME))
+test:
+	exec misc/test --bootstrapped smart
 
-test-boot-compile-all: boot
-	@$(MAKE) -s -f test-boot-compile.mk all
+test-all:
+	exec misc/test --bootstrapped all
 
-test-compile: build
-	@$(MAKE) -s -f test-compile.mk selected
-
-test-compile-all: build
-	@$(MAKE) -s -f test-compile.mk all
-
-test-boot-compile-prune-utests: boot
-	@$(MAKE) -s -f test-boot-compile-prune-utests.mk selected
-
-test-boot-compile-prune-utests-all: boot
-	@$(MAKE) -s -f test-boot-compile-prune-utests.mk all
-
-test-compile-prune-utests: build
-	@$(MAKE) -s -f test-compile-prune-utests.mk selected
-
-test-compile-prune-utests-all: build
-	@$(MAKE) -s -f test-compile-prune-utests.mk all
-
-test-run: build
-	@$(MAKE) -s -f test-run.mk selected
-
-test-run-all: build
-	@$(MAKE) -s -f test-run.mk all
-
-test-boot-run: boot
-	@$(MAKE) -s -f test-boot-run.mk selected
-
-test-boot-run-all: boot
-	@$(MAKE) -s -f test-boot-run.mk all
-
-test-boot: boot
-	@$(MAKE) -s -f test-boot.mk selected
-
-test-boot-py: boot
-	@$(MAKE) -s -f test-boot.mk py
-
-test-boot-all: boot
-	@$(MAKE) -s -f test-boot.mk all
-
-test-par: build
-	@$(MAKE) -s -f test-par.mk
-
-test-tune: build
-	@$(MAKE) -s -f test-tune.mk
-
-test-sundials: build
-	@$(MAKE) -s -f test-sundials.mk
-
-test-ipopt: build
-	@$(MAKE) -s -f test-ipopt.mk
-
-test-accelerate: build
-	@$(MAKE) -s -f test-accelerate.mk
-
-test-jvm: build
-	@$(MAKE) -s -f test-jvm.mk
-
-test-js: build
-	@$(MAKE) -s -f test-js.mk
-
-test-mlang-pipeline: build
-	@$(MAKE) -s -f test-mlang-pipeline.mk
+test-quick:
+	exec misc/test --bootstrapped
