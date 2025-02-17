@@ -940,6 +940,18 @@ testMain
         api.success {input = exe, cmd = "./%i", tag = "mlang-run"})
     }
 
+  , { testColl "experimental-records"
+    with newTests = lam api.
+      let files = api.glob ["test", "extrec"] (IncludeSubs ()) (SuffixFile ".mc") in
+      for_ files (lam mc.
+        let exe = api.mid {input = mc, cmd = "%m compile --test --experimental-records %i --output %o", tag = "experimental-records"} in
+        api.success {input = exe, cmd = "./%i", tag = "experimental-records-run"});
+
+      let files = api.glob ["test", "extrec-ill-typed"] (IncludeSubs ()) (SuffixFile ".mc") in
+      for_ files (lam mc.
+        api.fail {input = mc, cmd = "%m compile --test --experimental-records --exit-before %i", tag = "experimental-records-ill-typed"})
+    }
+
   , { testColl "java"
     with checkCondition = lam.
       if sysCommandExists "javac"
