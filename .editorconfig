@@ -5,12 +5,14 @@ root = true
 
 # Default rules
 [*]
-end_of_line = lf                # Use Unix line endings
+# Use Unix line endings
+end_of_line = lf
 charset = utf-8
 trim_trailing_whitespace = true
 insert_final_newline = true
-max_line_length = 80            # A line should not have more than this amount
-                                # of chars (not supported by all plugins)
+# A line should not have more than this amount
+# of chars (not supported by all plugins)
+max_line_length = 80
 
 [*.mc]
 indent_style = space
