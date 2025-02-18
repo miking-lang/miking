@@ -1,13 +1,13 @@
 language Selfhost
 
-start File
+start SHFile
 
-type File
-type Decl
-type Regex {
+type SHFile
+type SHDecl
+type SHRegex {
   grouping = "(" ")",
 }
-type Expr {
+type SHExpr {
   grouping = "(" ")",
 }
 
@@ -54,25 +54,25 @@ token {fragment = LineCommentParser,}
 token {fragment = MultilineCommentParser,}
 token {fragment = WhitespaceParser,}
 
-prod Lang: File =
+prod Lang: SHFile =
   "language" name:UIdent
-  decls:Decl+
+  decls:SHDecl+
 
-prod Start: Decl = "start" name:UName
-prod Include: Decl = "include" path:String
-prod Type: Decl =
+prod Start: SHDecl = "start" name:UName
+prod Include: SHDecl = "include" path:String
+prod Type: SHDecl =
   "type" name:UName
   ( "{"
-    properties:{name:LIdent "=" val:Expr ","}*
+    properties:{name:LIdent "=" val:SHExpr ","}*
   "}"
   )?
-prod TokenDecl: Decl =
+prod TokenSHDecl: SHDecl =
   "token" name:UName?
   ( "{"
-    properties:{name:LIdent "=" val:Expr ","}*
+    properties:{name:LIdent "=" val:SHExpr ","}*
   "}"
   )?
-prod PrecedenceTable: Decl =
+prod PrecedenceTable: SHDecl =
   "precedence" "{"
     levels:{noeq:"~"? operators:UName+ ";"}*
   "}"
@@ -80,20 +80,20 @@ prod PrecedenceTable: Decl =
     exceptions:{lefts:UName+ "?" rights:UName+ ";"}*
   "}"
   )?
-prod Production: Decl =
+prod Production: SHDecl =
   (kprod:"prod" | kinf:"infix" | kpref:"prefix" | kpostf:"postfix")
-  assoc:LIdent? name:UName ":" nt:UName "=" regex:Regex
+  assoc:LIdent? name:UName ":" nt:UName "=" regex:SHRegex
 
-prod Record: Regex = "{" regex:Regex "}"
-prod Empty: Regex = "empty"
-prod Literal: Regex = val:String
-prod Token: Regex = name:UName ("[" arg:Expr "]")?
-postfix RepeatPlus: Regex = "+"
-postfix RepeatStar: Regex = "*"
-postfix RepeatQuestion: Regex = "?"
-prefix Named: Regex = name:LIdent ":"
-infix left Alternative: Regex = "|"
-infix left Concat: Regex = empty
+prod Record: SHRegex = "{" regex:SHRegex "}"
+prod Empty: SHRegex = "empty"
+prod Literal: SHRegex = val:String
+prod Token: SHRegex = name:UName ("[" arg:SHExpr "]")?
+postfix RepeatPlus: SHRegex = "+"
+postfix RepeatStar: SHRegex = "*"
+postfix RepeatQuestion: SHRegex = "?"
+prefix Named: SHRegex = name:LIdent ":"
+infix left Alternative: SHRegex = "|"
+infix left Concat: SHRegex = empty
 
 precedence {
   Named;
@@ -102,12 +102,12 @@ precedence {
   Alternative;
 }
 
-infix left App: Expr = empty
-prod Con: Expr = name:UName
-prod String: Expr = val:String
-prod Variable: Expr = name:LName
-prod RecordExpr: Expr =
+infix left App: SHExpr = empty
+prod Con: SHExpr = name:UName
+prod String: SHExpr = val:String
+prod Variable: SHExpr = name:LName
+prod RecordSHExpr: SHExpr =
   "{"
-    (fields:{name:LIdent "=" val:Expr}
-     fields:{"," name:LIdent "=" val:Expr}*)?
+    (fields:{name:LIdent "=" val:SHExpr}
+     fields:{"," name:LIdent "=" val:SHExpr}*)?
   "}"

@@ -112,7 +112,7 @@ let runParserGenerator : {synFile : String, outFile : String} -> () = lam args.
   let filename = args.synFile in
   let destinationFile = args.outFile in
   let content = readFile filename in
-  match parseSelfhostExn filename content with LangFile {decls = decls, name = {v = langName}} in
+  match parseSelfhostExn filename content with LangSHFile {decls = decls, name = {v = langName}} in
 
   let simpleHighlight
     : Info -> String
@@ -147,9 +147,9 @@ let runParserGenerator : {synFile : String, outFile : String} -> () = lam args.
   -- needs a bit of conversion to create proper MExpr code (though most
   -- of it is just switching from XExpr to TmX).
   recursive let exprToMExpr
-    : Expr -> Res MExpr
+    : SHExpr -> Res MExpr
     = lam e. switch e
-      case AppExpr (x & {left = ConExpr c}) then
+      case AppSHExpr (x & {left = ConSHExpr c}) then
         result.map
           (lam r. TmConApp
             { ident = c.name.v
@@ -158,7 +158,7 @@ let runParserGenerator : {synFile : String, outFile : String} -> () = lam args.
             , info = x.info
             })
           (exprToMExpr x.right)
-      case AppExpr x then
+      case AppSHExpr x then
         result.map2
           (lam l. lam r. TmApp
             { lhs = l
@@ -168,19 +168,19 @@ let runParserGenerator : {synFile : String, outFile : String} -> () = lam args.
             })
           (exprToMExpr x.left)
           (exprToMExpr x.right)
-      case ConExpr x then
+      case ConSHExpr x then
         result.err (simpleMsg x.info "A constructor must be applied to an argument.")
-      case StringExpr x then
+      case StringSHExpr x then
         result.ok (withInfo x.info (str_ x.val.v))
-      case VariableExpr x then
+      case VariableSHExpr x then
         result.ok (TmVar
           { ident = x.name.v
           , ty = tyunknown_
           , info = x.info
           , frozen = false
           })
-      case RecordExpr x then
-        let f : {name : {v: String, i: Info}, val: Expr} -> Res (String, MExpr) = lam field.
+      case RecordSHExpr x then
+        let f : {name : {v: String, i: Info}, val: SHExpr} -> Res (String, MExpr) = lam field.
           result.map (lam e. (field.name.v, e)) (exprToMExpr field.val) in
         result.map (lam pairs. withInfo x.info (urecord_ pairs)) (result.mapM f x.fields)
       end
@@ -190,9 +190,9 @@ let runParserGenerator : {synFile : String, outFile : String} -> () = lam args.
   -- syntactically as much as possible with `Type` in MExpr, so a
   -- similar approach to exprToMExpr is needed for conversion.
   recursive let exprToMExprTy
-    : Expr -> Res MType
+    : SHExpr -> Res MType
     = lam e. switch e
-      case AppExpr x then
+      case AppSHExpr x then
         result.map2
           (lam l. lam r. TyApp
             { lhs = l
@@ -201,62 +201,62 @@ let runParserGenerator : {synFile : String, outFile : String} -> () = lam args.
             })
           (exprToMExprTy x.left)
           (exprToMExprTy x.right)
-      case ConExpr x then
+      case ConSHExpr x then
         result.ok (TyCon
           { ident = x.name.v
           , info = x.info
           , data = tyunknown_
           })
-      case VariableExpr x then
+      case VariableSHExpr x then
         result.ok (TyVar
           { ident = x.name.v
           , info = x.info
           })
-      case RecordExpr (x & {fields = []}) then
+      case RecordSHExpr (x & {fields = []}) then
         result.ok (tyWithInfo x.info tyunit_)
-      case RecordExpr x then
+      case RecordSHExpr x then
         result.err (simpleMsg x.info "Non-unit record types are not yet supported.")
       end
   in
 
-  let decls : [Decl] =
-    let makeNamedRegex : Info -> {v: Name, i: Info} -> String -> Regex = lam info. lam synName. lam field.
-      NamedRegex
+  let decls : [SHDecl] =
+    let makeNamedRegex : Info -> {v: Name, i: Info} -> String -> SHRegex = lam info. lam synName. lam field.
+      NamedSHRegex
         { name = {v = field, i = info}
-        , right = TokenRegex {name = synName, info = info, arg = None ()}
+        , right = TokenSHRegex {name = synName, info = info, arg = None ()}
         , info = info
         } in
     let desugarProds = lam d.
-      match d with ProductionDecl x then
-        let regexInfo = get_Regex_info x.regex in
+      match d with ProductionSHDecl x then
+        let regexInfo = get_SHRegex_info x.regex in
         let regex = x.regex in
         let regex = match (x.kinf, x.kpostf) with (Some info, _) | (_, Some info)
-          then ConcatRegex {info = regexInfo, left = makeNamedRegex info x.nt "left", right = regex}
+          then ConcatSHRegex {info = regexInfo, left = makeNamedRegex info x.nt "left", right = regex}
           else regex in
         let regex = match (x.kinf, x.kpref) with (Some info, _) | (_, Some info)
-          then ConcatRegex {info = regexInfo, left = regex, right = makeNamedRegex info x.nt "right"}
+          then ConcatSHRegex {info = regexInfo, left = regex, right = makeNamedRegex info x.nt "right"}
           else regex in
-        ProductionDecl {x with regex = regex}
+        ProductionSHDecl {x with regex = regex}
       else d in
     map desugarProds decls
   in
 
-  let includes : [IncludeDeclRecord] = mapOption
-    (lam x. match x with IncludeDecl x then Some x else None ())
+  let includes : [IncludeSHDeclRecord] = mapOption
+    (lam x. match x with IncludeSHDecl x then Some x else None ())
     decls
   in
 
   -- NOTE(vipa, 2022-03-18): Find all definitions in the file
   type PreNameEnv = {types : Map String [(Info, Name)], productions : Map String [(Info, Name)]} in
   let pullDefinition
-    : PreNameEnv -> Decl -> PreNameEnv
+    : PreNameEnv -> SHDecl -> PreNameEnv
     = lam env. lam decl.
       switch decl
-      case TypeDecl x then
+      case TypeSHDecl x then
         {env with types = mapInsertWith concat (nameGetStr x.name.v) [(x.name.i, nameSetNewSym x.name.v)] env.types}
-      case ProductionDecl x then
+      case ProductionSHDecl x then
         {env with productions = mapInsertWith concat (nameGetStr x.name.v) [(x.name.i, nameSetNewSym x.name.v)] env.productions}
-      case TokenDecl {name = Some n} then
+      case TokenSHDecl {name = Some n} then
         let n : {v : Name, i : Info} = n in
         {env with types = mapInsertWith concat (nameGetStr n.v) [(n.i, nameSetNewSym n.v)] env.types}
       case _ then
@@ -304,20 +304,20 @@ let runParserGenerator : {synFile : String, outFile : String} -> () = lam args.
   -- expressions in regexes. Presumably I should call out to
   -- symbolize.mc, but I'll postpone that until later
   recursive let resolveRegex
-    : Regex -> Res Regex
+    : SHRegex -> Res SHRegex
     = lam reg.
-      let smapM : (Regex -> Res Regex) -> Regex -> Res Regex = lam f. lam reg.
+      let smapM : (SHRegex -> Res SHRegex) -> SHRegex -> Res SHRegex = lam f. lam reg.
         let inner = lam annot. lam here.
           let res = f here in
           let here = match result.consume res with (_, Right x) then x else here in
           (result.withAnnotations res annot, here) in
-        match smapAccumL_Regex_Regex inner (result.ok ()) reg with (annot, res) in
+        match smapAccumL_SHRegex_SHRegex inner (result.ok ()) reg with (annot, res) in
         result.withAnnotations annot (result.ok res)
       in
       switch reg
-      case TokenRegex x then
+      case TokenSHRegex x then
         result.map
-          (lam name. TokenRegex {x with name = name})
+          (lam name. TokenSHRegex {x with name = name})
           (lookupName x.name nameEnv.types)
       case other then
         smapM resolveRegex other
@@ -336,7 +336,7 @@ let runParserGenerator : {synFile : String, outFile : String} -> () = lam args.
     let defs = result.map (lam x. match x with [x] ++ _ then Some x else None ()) defs in
     result.withAnnotations multi defs
   in
-  type TokenDeclDesugaredRecord =
+  type TokenSHDeclDesugaredRecord =
     { repr : Option (Info, MExpr)
     , constructor : Option (Info, {v: Name, i: Info})
     , fragment : Option (Info, {v: String, i: Info})
@@ -344,7 +344,7 @@ let runParserGenerator : {synFile : String, outFile : String} -> () = lam args.
     , base : Option (Info, {v: Name, i: Info})
     , wrap : Option (Info, MExpr)
     } in
-  type TokenDeclPropertyMass =
+  type TokenSHDeclPropertyMass =
     { repr : [(Info, Res MExpr)]
     , constructor : [(Info, Res {v: Name, i: Info})]
     , fragment : [(Info, Res {v: String, i: Info})]
@@ -353,7 +353,7 @@ let runParserGenerator : {synFile : String, outFile : String} -> () = lam args.
     , wrap : [(Info, Res MExpr)]
     , unknown : [Info]
     } in
-  let emptyTokenDeclPropertyMass : TokenDeclPropertyMass =
+  let emptyTokenDeclPropertyMass : TokenSHDeclPropertyMass =
     { repr = []
     , constructor = []
     , fragment = []
@@ -363,7 +363,7 @@ let runParserGenerator : {synFile : String, outFile : String} -> () = lam args.
     , unknown = []
     } in
   let mergeTokenDeclPropertyMass
-    : TokenDeclPropertyMass -> TokenDeclPropertyMass -> TokenDeclPropertyMass
+    : TokenSHDeclPropertyMass -> TokenSHDeclPropertyMass -> TokenSHDeclPropertyMass
     = lam a. lam b.
       { repr = concat a.repr b.repr
       , constructor = concat a.constructor b.constructor
@@ -374,27 +374,27 @@ let runParserGenerator : {synFile : String, outFile : String} -> () = lam args.
       , unknown = concat a.unknown b.unknown
       } in
   let resolveTokenProperty
-    : {name: {v: String, i: Info}, val: Expr} -> TokenDeclPropertyMass
+    : {name: {v: String, i: Info}, val: SHExpr} -> TokenSHDeclPropertyMass
     = lam prop.
       let field = prop.name in
       let value = prop.val in
       switch field.v
       case "repr" then {emptyTokenDeclPropertyMass with repr = [(field.i, exprToMExpr value)]}
       case "constructor" then
-        let res = match value with ConExpr x
+        let res = match value with ConSHExpr x
           then result.ok x.name
-          else result.err (simpleMsg (get_Expr_info value) "The constructor must be a single constructor name.")
+          else result.err (simpleMsg (get_SHExpr_info value) "The constructor must be a single constructor name.")
         in {emptyTokenDeclPropertyMass with constructor = [(field.i, res)]}
       case "fragment" then
-        let res = match value with ConExpr x
+        let res = match value with ConSHExpr x
           then result.ok {v = nameGetStr x.name.v, i = x.name.i}
-          else result.err (simpleMsg (get_Expr_info value) "The language fragment must be a single fragment name.")
+          else result.err (simpleMsg (get_SHExpr_info value) "The language fragment must be a single fragment name.")
         in {emptyTokenDeclPropertyMass with fragment = [(field.i, res)]}
       case "ty" then {emptyTokenDeclPropertyMass with ty = [(field.i, exprToMExprTy value)]}
       case "base" then
-        let res = match value with ConExpr x
+        let res = match value with ConSHExpr x
           then result.ok x.name
-          else result.err (simpleMsg (get_Expr_info value) "The base token must be a single token name.")
+          else result.err (simpleMsg (get_SHExpr_info value) "The base token must be a single token name.")
         in {emptyTokenDeclPropertyMass with base = [(field.i, res)]}
       case "wrap" then {emptyTokenDeclPropertyMass with wrap = [(field.i, exprToMExpr value)]}
       case _ then
@@ -402,9 +402,9 @@ let runParserGenerator : {synFile : String, outFile : String} -> () = lam args.
       end
   in
   let desugarAndResolveTokenDecl
-    : TokenDeclRecord -> Res TokenDeclDesugaredRecord
+    : TokenSHDeclRecord -> Res TokenSHDeclDesugaredRecord
     = lam x.
-      let mass: TokenDeclPropertyMass = foldl mergeTokenDeclPropertyMass emptyTokenDeclPropertyMass
+      let mass: TokenSHDeclPropertyMass = foldl mergeTokenDeclPropertyMass emptyTokenDeclPropertyMass
         (map resolveTokenProperty x.properties) in
       let unknownError = match mass.unknown with [] then result.ok () else
         let msg = match mass.unknown with [_] then "Unknown property:\n" else "Unknown properties:\n" in
@@ -431,7 +431,7 @@ let runParserGenerator : {synFile : String, outFile : String} -> () = lam args.
             wrap)
   in
   let desugaredTokenToTokenInfo
-    : Info -> Option {v: Name, i: Info} -> TokenDeclDesugaredRecord -> (Option (Res String), Option (Res TokenInfo))
+    : Info -> Option {v: Name, i: Info} -> TokenSHDeclDesugaredRecord -> (Option (Res String), Option (Res TokenInfo))
     = lam surround. lam name. lam record.
       -- TODO(vipa, 2022-04-21): It would be nice to warn about unused
       -- properties, but it's annoying to implement atm
@@ -481,50 +481,50 @@ let runParserGenerator : {synFile : String, outFile : String} -> () = lam args.
         let fragErr = (result.err (simpleMsg surround "A token declaration without a name must have a 'fragment' property.\n")) in
         (Some fragErr, None ())
   in
-  type TypeDeclDesugaredRecord =
+  type TypeSHDeclDesugaredRecord =
     { grouping : Option (Info, ({v: Either Name String, i: Info}, {v: Either Name String, i: Info}))
     } in
-  type TypeDeclPropertyMass =
+  type TypeSHDeclPropertyMass =
     { grouping : [(Info, Res ({v: Either Name String, i: Info}, {v: Either Name String, i: Info}))]
     , unknown : [Info]
     } in
   let emptyTypeDeclPropertyMass =
     { grouping = [], unknown = [] } in
   let mergeTypeDeclPropertyMass
-    : TypeDeclPropertyMass -> TypeDeclPropertyMass -> TypeDeclPropertyMass
+    : TypeSHDeclPropertyMass -> TypeSHDeclPropertyMass -> TypeSHDeclPropertyMass
     = lam l. lam r.
       { grouping = concat l.grouping r.grouping
       , unknown = concat l.unknown r.unknown
       } in
   let resolveTypeProperty
-    : {name: {v: String, i: Info}, val: Expr} -> TypeDeclPropertyMass
+    : {name: {v: String, i: Info}, val: SHExpr} -> TypeSHDeclPropertyMass
     = lam prop.
       let field = prop.name in
       let value = prop.val in
       switch field.v
       case "grouping" then
-        let mkParen : Expr -> Res {v: Either Name String, i: Info} = lam e. switch e
-          case ConExpr c then
+        let mkParen : SHExpr -> Res {v: Either Name String, i: Info} = lam e. switch e
+          case ConSHExpr c then
             result.map
               (lam name. {v = Left name.v, i = c.name.i})
               (lookupName c.name nameEnv.types)
-          case StringExpr s then
+          case StringSHExpr s then
             result.ok {v = Right s.val.v, i = s.val.i}
           case e then
-            result.err (simpleMsg (get_Expr_info e) "Expected a string literal or token name.")
+            result.err (simpleMsg (get_SHExpr_info e) "Expected a string literal or token name.")
           end in
-        let res = match value with AppExpr x
+        let res = match value with AppSHExpr x
           then result.map2 (lam a. lam b. (a, b)) (mkParen x.left) (mkParen x.right)
-          else result.err (simpleMsg (get_Expr_info value) "Grouping must be two tokens (string literals or token names).")
+          else result.err (simpleMsg (get_SHExpr_info value) "Grouping must be two tokens (string literals or token names).")
         in {emptyTypeDeclPropertyMass with grouping = [(field.i, res)]}
       case _ then
         {emptyTypeDeclPropertyMass with unknown = [field.i]}
       end
   in
   let desugarAndResolveTypeDecl
-    : TypeDeclRecord -> Res TypeDeclDesugaredRecord
+    : TypeSHDeclRecord -> Res TypeSHDeclDesugaredRecord
     = lam x.
-      let mass: TypeDeclPropertyMass = foldl mergeTypeDeclPropertyMass emptyTypeDeclPropertyMass
+      let mass: TypeSHDeclPropertyMass = foldl mergeTypeDeclPropertyMass emptyTypeDeclPropertyMass
         (map resolveTypeProperty x.properties) in
       let unknownError = match mass.unknown with [] then result.ok () else
         let msg = match mass.unknown with [_] then "Unknown property:\n" else "Unknown properties:\n" in
@@ -539,13 +539,13 @@ let runParserGenerator : {synFile : String, outFile : String} -> () = lam args.
           grouping)
   in
   let resolveDecl
-    : Decl -> Res Decl
+    : SHDecl -> Res SHDecl
     = lam decl.
       switch decl
-      case TypeDecl x then
+      case TypeSHDecl x then
         let name = lookupName x.name nameEnv.types in
         let record = desugarAndResolveTypeDecl x in
-        let f = lam name: {v: Name, i: Info}. lam x: TypeDeclDesugaredRecord.
+        let f = lam name: {v: Name, i: Info}. lam x: TypeSHDeclDesugaredRecord.
           { ty = ntycon_ name.v
           , ensureSuffix = true
           , commonFields = mapEmpty cmpString
@@ -559,8 +559,8 @@ let runParserGenerator : {synFile : String, outFile : String} -> () = lam args.
         );
         result.withAnnotations
           record
-          (result.map (lam name. TypeDecl {x with name = name}) name)
-      case TokenDecl x then
+          (result.map (lam name. TypeSHDecl {x with name = name}) name)
+      case TokenSHDecl x then
         let name = match x.name with Some name
           then result.map (lam x. Some x) (lookupName name nameEnv.types)
           else result.ok (None ()) in
@@ -577,13 +577,13 @@ let runParserGenerator : {synFile : String, outFile : String} -> () = lam args.
              else ())
           tinfo;
         result.map
-          (lam name. TokenDecl {x with name = name})
+          (lam name. TokenSHDecl {x with name = name})
           name
-      case StartDecl x then
+      case StartSHDecl x then
         result.map
-          (lam name. StartDecl {x with name = name})
+          (lam name. StartSHDecl {x with name = name})
           (lookupName x.name nameEnv.types)
-      case PrecedenceTableDecl x then
+      case PrecedenceTableSHDecl x then
         let resolveLevel = lam level: {noeq : Option Info, operators : [{v: Name, i: Info}]}.
           result.map
             (lam operators. {level with operators = operators})
@@ -594,12 +594,12 @@ let runParserGenerator : {synFile : String, outFile : String} -> () = lam args.
             (result.mapM (lam n. lookupName n nameEnv.productions) exception.lefts)
             (result.mapM (lam n. lookupName n nameEnv.productions) exception.rights) in
         result.map2
-          (lam levels. lam exceptions. PrecedenceTableDecl {{x with levels = levels} with exceptions = exceptions})
+          (lam levels. lam exceptions. PrecedenceTableSHDecl {{x with levels = levels} with exceptions = exceptions})
           (result.mapM resolveLevel x.levels)
           (result.mapM resolveException x.exceptions)
-      case ProductionDecl x then
+      case ProductionSHDecl x then
         result.map3
-          (lam name. lam nt. lam regex. ProductionDecl {{{x with name = name} with nt = nt} with regex = regex})
+          (lam name. lam nt. lam regex. ProductionSHDecl {{{x with name = name} with nt = nt} with regex = regex})
           (lookupName x.name nameEnv.productions)
           (lookupName x.nt nameEnv.types)
           (resolveRegex x.regex)
@@ -611,14 +611,14 @@ let runParserGenerator : {synFile : String, outFile : String} -> () = lam args.
   -- type `Res ()` that is ok iff all declarations name resolve
   -- properly, and one list of only the declarations without binding
   -- errors
-  let decls: [Res Decl] = map resolveDecl decls in
+  let decls: [Res SHDecl] = map resolveDecl decls in
   let allResolved: Res () = result.map (lam. ()) (result.mapM identity decls) in
-  let decls: [Decl] = mapOption result.toOption decls in
+  let decls: [SHDecl] = mapOption result.toOption decls in
   let typeMap: Map Name (Either (Res TypeInfo) (Res TokenInfo)) = deref typeMap in
 
   -- NOTE(vipa, 2022-03-21): Compute the required sfunctions
   let ntsWithInfo: [{v: Name, i: Info}] =
-    let inner = lam x. match x with TypeDecl x then Some x.name else None () in
+    let inner = lam x. match x with TypeSHDecl x then Some x.name else None () in
     mapOption inner decls in
   let nts: [Name] =
     map (lam name: {v: Name, i: Info}. name.v) ntsWithInfo in
@@ -637,7 +637,7 @@ let runParserGenerator : {synFile : String, outFile : String} -> () = lam args.
 
   -- NOTE(vipa, 2022-03-22): Find the starting non-terminal
   let start: Res Name =
-    let inner = lam x. match x with StartDecl x then Some (x.info, x.name.v) else None () in
+    let inner = lam x. match x with StartSHDecl x then Some (x.info, x.name.v) else None () in
     let starts: [(Info, Name)] = mapOption inner decls in
     switch starts
     case [(_, start)] then result.ok start
@@ -681,14 +681,14 @@ let runParserGenerator : {synFile : String, outFile : String} -> () = lam args.
   -- NOTE(vipa, 2022-03-28): Compute a canonicalized form of a regex, with embedded type information
   recursive
     let inner
-    : Option (Info, String) -> Regex -> Res [SRegex]
+    : Option (Info, String) -> SHRegex -> Res [SRegex]
     = lam field. lam reg.
       let suggestLabel: String -> Res () = lam msg.
         match field with Some _ then result.ok () else
-        let info = get_Regex_info reg in
+        let info = get_SHRegex_info reg in
         result.withAnnotations (result.warn (simpleMsg info msg)) (result.ok ()) in
       let res = switch reg
-        case RecordRegex x then
+        case RecordSHRegex x then
           let suggest = suggestLabel "You probably want to save this record to a field (otherwise you should use parentheses for grouping).\n" in
           let mkReg = lam. lam content. [RecordReg
             { content = content
@@ -696,9 +696,9 @@ let runParserGenerator : {synFile : String, outFile : String} -> () = lam args.
             , info = x.info
             }] in
           result.map2 mkReg suggest (regexToSRegex x.regex)
-        case LiteralRegex x then
+        case LiteralSHRegex x then
           result.ok [TerminalReg {term = LitTerm x.val.v, info = x.info, field = field}]
-        case TokenRegex x then
+        case TokenSHRegex x then
           switch mapFindExn x.name.v typeMap
           case Left config then
             let suggest = suggestLabel "You probably want to save this type to a field.\n" in
@@ -707,42 +707,42 @@ let runParserGenerator : {synFile : String, outFile : String} -> () = lam args.
           case Right config then
             result.ok [TerminalReg {term = TokenTerm config, field = field, info = x.info}]
           end
-        case ConcatRegex x then
+        case ConcatSHRegex x then
           result.map2 concat (regexToSRegex x.left) (regexToSRegex x.right)
-        case AlternativeRegex x then
+        case AlternativeSHRegex x then
           let sregAlts = lam info. lam regs. match regs with [AltReg x]
             then x.alts
             else [{v = regs, i = info}] in
           let combine = lam ls. lam rs.
             [ AltReg
               { alts = concat
-                (sregAlts (get_Regex_info x.left) ls)
-                (sregAlts (get_Regex_info x.right) rs)
+                (sregAlts (get_SHRegex_info x.left) ls)
+                (sregAlts (get_SHRegex_info x.right) rs)
               }
             ] in
           result.map2 combine (regexToSRegex x.left) (regexToSRegex x.right)
-        case EmptyRegex _ then
+        case EmptySHRegex _ then
           result.ok []
-        case NamedRegex x then
+        case NamedSHRegex x then
           inner (Some (x.name.i, x.name.v)) x.right
-        case RepeatPlusRegex x then
-          let mkReg = lam regs. snoc regs (KleeneReg {content = {v = regs, i = get_Regex_info x.left}, info = x.info}) in
+        case RepeatPlusSHRegex x then
+          let mkReg = lam regs. snoc regs (KleeneReg {content = {v = regs, i = get_SHRegex_info x.left}, info = x.info}) in
           result.map mkReg (regexToSRegex x.left)
-        case RepeatStarRegex x then
-          let mkReg = lam regs. [KleeneReg {content = {v = regs, i = get_Regex_info x.left}, info = x.info}] in
+        case RepeatStarSHRegex x then
+          let mkReg = lam regs. [KleeneReg {content = {v = regs, i = get_SHRegex_info x.left}, info = x.info}] in
           result.map mkReg (regexToSRegex x.left)
-        case RepeatQuestionRegex x then
+        case RepeatQuestionSHRegex x then
           let mkReg = lam regs.
-            [AltReg {alts = [{v = [], i = x.info}, {v = regs, i = get_Regex_info x.left}]}] in
+            [AltReg {alts = [{v = [], i = x.info}, {v = regs, i = get_SHRegex_info x.left}]}] in
           result.map mkReg (regexToSRegex x.left)
         end
       in
-      match (field, reg) with (Some (info, _), !(RecordRegex _ | TokenRegex _ | LiteralRegex _)) then
+      match (field, reg) with (Some (info, _), !(RecordSHRegex _ | TokenSHRegex _ | LiteralSHRegex _)) then
         let err = result.err (simpleMsg info "Only tokens, types, literals, and records can be saved in a field.\n") in
         result.withAnnotations err res
       else res
     let regexToSRegex
-    : Regex -> Res [SRegex]
+    : SHRegex -> Res [SRegex]
     = lam reg. inner (None ()) reg
   in
 
@@ -1238,7 +1238,7 @@ let runParserGenerator : {synFile : String, outFile : String} -> () = lam args.
 
   -- NOTE(vipa, 2022-04-01): Figure out the operatorness of a production
   let findOperator
-    : ProductionDeclRecord -> Name -> [SRegex] -> Res Operator
+    : ProductionSHDeclRecord -> Name -> [SRegex] -> Res Operator
     = lam x. lam name. lam reg.
       let temp =
         match reg with [TerminalReg {field = Some (_, field), term = NtTerm {name = lname}}] ++ rest then
@@ -1364,9 +1364,9 @@ let runParserGenerator : {synFile : String, outFile : String} -> () = lam args.
     } in
   let constructors : Res [ConstructorInfo] =
     let check = lam decl.
-      match decl with ProductionDecl x then
+      match decl with ProductionSHDecl x then
         let name = computeConstructorName {constructor = x.name, nt = x.nt} in
-        let regInfo = get_Regex_info x.regex in
+        let regInfo = get_SHRegex_info x.regex in
         let reg = regexToSRegex x.regex in
         let content = result.map concatted reg in
         let content = result.map (addInfoField x.info) content in
@@ -1416,8 +1416,8 @@ let runParserGenerator : {synFile : String, outFile : String} -> () = lam args.
         then mapInsertWith concat pair [def]
         else mapInsertWith concat (pair.1, pair.0) [{def with ordering = flipOrdering def.ordering}]
     in
-    let computeOrders : Acc -> Decl -> Acc = lam acc. lam decl.
-      match decl with PrecedenceTableDecl x then
+    let computeOrders : Acc -> SHDecl -> Acc = lam acc. lam decl.
+      match decl with PrecedenceTableSHDecl x then
         let ensureNonAtomic : Info -> Operator -> Res Operator = lam info. lam op.
           match (op.lfield, op.rfield) with !(None _, None _) then result.ok op else
           result.err (simpleMsg info "This is not an operator") in
