@@ -81,8 +81,8 @@ let uniformContinuousSample = lam a. lam b.
 let uniformContinuousLogPdf = lam a. lam b. lam x.
   if geqf x a then
     if leqf x b then subf (log 1.0) (log (subf b a))
-    else 0.
-  else 0.
+    else log 0.
+  else log 0.
 let uniformContinuousPdf = lam a. lam b. lam x.
   if geqf x a then
     if leqf x b then divf 1.0 (subf b a)
@@ -99,8 +99,8 @@ let uniformDiscreteSample = lam a:Int. lam b:Int.
 let uniformDiscreteLogPdf : Int -> Int -> Int -> Float = lam a. lam b. lam x.
   if geqi x a then
     if leqi x b then subf (log 1.0) (log (int2float (addi 1 (subi b a))))
-    else 0.
-  else 0.
+    else log 0.
+  else log 0.
 let uniformDiscretePdf : Int -> Int -> Int -> Float = lam a. lam b. lam x.
   if geqi x a then
     if leqi x b then divf 1.0 (int2float (addi 1 (subi b a)))
