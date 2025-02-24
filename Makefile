@@ -4,26 +4,14 @@ MI_MID_NAME=mi-mid
 MI_NAME=mi
 MI_CHEAT_NAME=mi-cheat
 
-ifndef prefix
-prefix=$(HOME)/.local
-endif
-ifndef bindir
-bindir=$(prefix)/bin
-endif
-ifndef libdir
-libdir=$(prefix)/lib
-endif
+prefix ?= $(HOME)/.local
+bindir ?= $(prefix)/bin
+libdir ?= $(prefix)/lib
+mcoredir = $(libdir)/mcore
 ifdef OPAM_SWITCH_PREFIX
-opamlibdir=$(OPAM_SWITCH_PREFIX)/lib
+opamlibdir = $(OPAM_SWITCH_PREFIX)/lib
 endif
-ifndef ocamllibdir
-ifdef opamlibdir
-ocamllibdir=$(opamlibdir)
-else
-ocamllibdir=$(libdir)/ocaml/site-lib
-endif
-endif
-mcoredir=$(libdir)/mcore
+ocamllibdir ?= $(or $(opamlibdir), $(libdir)/ocaml/site-lib)
 
 mkfile_path := $(abspath $(lastword $(MAKEFILE_LIST)))
 current_dir := $(dir $(mkfile_path))
@@ -108,12 +96,23 @@ uninstall:
 # or `misc/watch` to autorun tests when files change)
 
 .PHONY: test test-all test-quick
-test test-all test-quick: $(if $(wildcard .tup/.),,build/$(MI_NAME))
+test test-all test-quick:
 test:
-	exec misc/test --bootstrapped smart
+	+ exec misc/test --bootstrapped smart
 
 test-all:
-	exec misc/test --bootstrapped all
+	+ exec misc/test --bootstrapped all
 
 test-quick:
-	exec misc/test --bootstrapped
+	+ exec misc/test --bootstrapped
+
+test-info:
+	@echo "Tasks run:" `find build/src/ -name '*.out' | wc -l`
+	@misc/test-spec --bootstrapped smart 2>&1 >/dev/null
+
+
+# Building and testing via tup
+
+.PHONY: setup-tup
+setup-tup:
+	misc/scripts/setup-tup

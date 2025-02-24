@@ -20,25 +20,25 @@ if [ misc/test-spec -ot misc/test-spec.mc ]; then
   if command -v mi >/dev/null 2>&1; then
     # NOTE(vipa, 2024-11-22): Use built-in mi, with built-in stdlib
     mi compile misc/test-spec.mc --output misc/test-spec
-  else
+  elif [ -f build/mi ]; then
     # NOTE(vipa, 2024-11-22): Use bootstrapped mi, with repo-local stdlib and boot
     MCORE_LIBS=stdlib=$DIR/src/stdlib OCAMLPATH=$DIR/build/lib:$OCAMLPATH build/mi compile misc/test-spec.mc --output misc/test-spec
+  else
+    echo "You need 'mi' to setup tup, e.g., by bootstrapping via 'make'"
+    exit 1
   fi
 fi
 
 # NOTE(vipa, 2024-11-22): Unconditionally overwrite MCORE_LIBS, since
 # tests should run with this value.
 export MCORE_LIBS=stdlib=$DIR/src/stdlib
-if [[ ! (":$OCAMLPATH:" == *":$DIR/build/lib:"*) ]]; then
-  export OCAMLPATH=$DIR/build/lib:$OCAMLPATH
-fi
 
 if command -v tup >/dev/null 2>&1; then
   if [ -d ".tup" ]; then
     useTup=1
   else
     useTup=0
-    echo "'tup' installed, but not initialized. Run 'tup init' if you want to use 'tup'."
+    echo "'tup' installed, but not initialized. Run 'make setup-tup' if you want to use 'tup'."
   fi
 else
   useTup=0
@@ -46,8 +46,14 @@ fi
 
 if [ $useTup -eq 1 ]; then
   echo "Using 'tup' as a test runner"
-  misc/test-spec --tup-filter "$@" | tr "\n" "\0" | xargs -0r tup -k
+  if TUPTARGETS=`misc/test-spec --tup-filter "$@"`; then
+      IFS=$'\n'
+      exec tup $TUPTARGETS
+  fi
 else
   echo "Using 'make' as a test runner"
+  if [[ ! (":$OCAMLPATH:" == *":$DIR/build/lib:"*) ]]; then
+      export OCAMLPATH=$DIR/build/lib:$OCAMLPATH
+  fi
   exec make -f <(misc/test-spec --make "$@")
 fi

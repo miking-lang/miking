@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+
+set -e
+
+DIR=$(dirname $(dirname "$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"))
+cd "$DIR"
+
+if ! command -v tup >/dev/null 2>&1; then
+  echo "Cannot find 'tup' in environment, refusing to run."
+fi
+
+if ! command -v rsync >/dev/null 2>&1; then
+  echo "Cannot find 'rsync' in environment, refusing to run."
+fi
+
+if [ -e .tup ]; then
+  read -p "'.tup' already exists. Remove it and re-run setup? [yN] " -n 1 -r
+  echo
+  case "$REPLY" in
+    y|Y ) rm -rf .tup;;
+    * ) echo "Exiting"; exit 1;;
+  esac
+fi
+
+if [ ! -f misc/test-spec ]; then
+  if command -v mi >/dev/null 2>&1; then
+    # NOTE(vipa, 2024-11-22): Use built-in mi, with built-in stdlib
+    mi compile misc/test-spec.mc --output misc/test-spec
+  elif [ -f build/mi ]; then
+    # NOTE(vipa, 2024-11-22): Use bootstrapped mi, with repo-local stdlib and boot
+    MCORE_LIBS=stdlib=$DIR/src/stdlib OCAMLPATH=$DIR/build/lib:$OCAMLPATH build/mi compile misc/test-spec.mc --output misc/test-spec
+  else
+    echo "You need 'mi' to setup tup, e.g., by bootstrapping via 'make'"
+    exit 1
+  fi
+fi
+
+if [ -e build/src ]; then
+  echo "This will clear 'build/src', which contains logs and intermediate"
+  echo "executables from previous tests. This is typically not an issue as"
+  echo "they will be rebuilt by tup when re-running the tests, but it"
+  echo "seems polite to ask."
+  read -p "Proceed? [yN] " -n 1 -r
+  echo
+  case "$REPLY" in
+      y|Y ) rm -rf build/src;;
+      * ) echo "Exiting"; exit 1;;
+  esac
+fi
+
+# NOTE(vipa, 2025-02-18): This dance is here because 'tup' wants to be
+# the sole owner of everything in the 'build' directory, but we have
+# constructed things in such a way that tup will only ever build to
+# the 'build/src' directory, while the 'Makefile' builds to other
+# places in 'build'. Fortunately 'tup' only checks if there are files
+# it does not own when it initially adds a variant, not later on. Thus
+# we move 'build' out of the way, present a clean directory to 'tup',
+# then move everything else back.
+mv build build-bak
+mkdir build
+mv build-bak/tup.config build
+tup init
+tup build/src/marker # NOTE(vipa, 2025-02-18): This is when 'tup' wants the directory to be empty
+rsync -a build-bak/* build --remove-source-files
+rm -rf build-bak
+
+echo "Done, test builds will now use tup"
