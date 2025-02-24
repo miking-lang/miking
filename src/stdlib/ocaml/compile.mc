@@ -50,7 +50,7 @@ let ocamlCompileWithConfig : CompileOptions -> String -> CompileResult
 
     let r = sysRunCommand command "" dir in
     if neqi r.returncode 0 then
-        print (join ["'ocamlfind ocamlopt' failed on program:\n\n",
+        print (join ["'", strJoin " " command, "' failed on program:\n\n",
                      readFile (tempfile "program.ml"),
                      "\n\nexit code: ",
                      int2string r.returncode,
