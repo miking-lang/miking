@@ -1790,11 +1790,10 @@ lang MExprTypeCheckMost =
   MetaVarTypeCmp + MetaVarTypeEq + MetaVarTypePrettyPrint
 end
 
-lang MExprTypeCheck = MExprTypeCheckMost + MExprTypeCheckLamLetVar +
-                      RecordUpdateTypeCheck
+lang MExprTypeCheck = MExprTypeCheckMost + MExprTypeCheckLamLetVar + RecordUpdateTypeCheck
 end
 
-lang RepTypesTypeCheck = OpDeclTypeCheck + ReprDeclTypeCheck + OpVarTypeCheck + OpImplTypeCheck + RepTypesUnify
+lang RepTypesTypeCheck = OpDeclTypeCheck + ReprDeclTypeCheck + OpVarTypeCheck + OpImplTypeCheck + RepTypesUnify + RecordUpdateTypeCheck
 end
 
 -- NOTE(vipa, 2022-10-07): This can't use AnnotateMExprBase because it

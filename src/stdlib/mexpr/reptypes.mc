@@ -398,7 +398,7 @@ end
 lang RepTypesAnalysis = LamRepTypesAnalysis + LetRepTypesAnalysis + RecLetsRepTypesAnalysis + VarRepTypesAnalysis + OpImplRepTypesAnalysis + OpDeclTypeCheck + RepTypesUnify + OpVarTypeCheck + ReprDeclTypeCheck
 end
 
-lang MExprRepTypesAnalysis = MExprTypeCheckMost + RepTypesAnalysis + MExprPrettyPrint + RepTypesPrettyPrint
+lang MExprRepTypesAnalysis = MExprTypeCheckMost + RecordUpdateTypeCheck + RepTypesAnalysis + MExprPrettyPrint + RepTypesPrettyPrint
 end
 
 lang RepTypesFragments = ReprTypeAst + ReprSubstAst + ReprTypeUnify + OpDeclAst + OpDeclSym + OpDeclTypeCheck + TyWildAst + TyWildUnify + RepTypesPrettyPrint

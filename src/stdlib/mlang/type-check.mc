@@ -99,7 +99,7 @@ lang DeclRecLetsTypeCheck = DeclTypeCheck + RecLetsDeclAst +
   | DeclRecLets t ->
     -- NOTE(aathn, 2024-05-24): This code assumes that each recursive let-binding
     -- is a syntactic lambda, so that generalization is always safe.
-    let newLvl = 0 in 
+    let newLvl = addi 1 env.currentLvl in
     -- First: Generate a new environment containing the recursive bindings
     let recLetEnvIteratee = lam acc. lam b: RecLetBinding.
       let tyAnnot = resolveType t.info env false b.tyAnnot in

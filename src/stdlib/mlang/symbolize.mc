@@ -77,25 +77,21 @@ lang DeclLetSym = DeclSym + LetDeclAst + LetSym
   | DeclLet t ->
     match symbolizeTyAnnot env t.tyAnnot with (tyVarEnv, tyAnnot) in
     match setSymbol env.currentEnv.varEnv t.ident with (varEnv, ident) in
-    let env = symbolizeUpdateVarEnv env varEnv in
-    let env = symbolizeUpdateTyVarEnv env tyVarEnv in
     let decl = DeclLet {t with ident = ident,
                         tyAnnot = tyAnnot,
-                        body = symbolizeExpr env t.body} in
-    (env, decl)
+                        body = symbolizeExpr (symbolizeUpdateTyVarEnv env tyVarEnv) t.body} in
+    (symbolizeUpdateVarEnv env varEnv, decl)
 end
 
 lang DeclTypeSym = DeclSym + TypeDeclAst
   sem symbolizeDecl env =
   | DeclType t ->
     match setSymbol env.currentEnv.tyConEnv t.ident with (tyConEnv, ident) in
-    let env = symbolizeUpdateTyConEnv env tyConEnv in
     match mapAccumL setSymbol env.currentEnv.tyVarEnv t.params with (tyVarEnv, params) in
     let decl = DeclType {t with ident = ident,
                                 params = params,
                                 tyIdent = symbolizeType (symbolizeUpdateTyVarEnv env tyVarEnv) t.tyIdent} in
-    let env = symbolizeUpdateTyVarEnv env tyVarEnv in
-    (env, decl)
+    (symbolizeUpdateTyConEnv env tyConEnv, decl)
 end
 
 
@@ -127,8 +123,7 @@ lang DeclConDefSym = DeclSym + DataDeclAst
 
     let decl = DeclConDef {t with ident = ident,
                                   tyIdent = symbolizeType env t.tyIdent} in
-    let env = symbolizeUpdateConEnv env conEnv in
-    (env, decl)
+    (symbolizeUpdateConEnv env conEnv, decl)
 end
 
 lang DeclUtestSym = DeclSym + UtestDeclAst
