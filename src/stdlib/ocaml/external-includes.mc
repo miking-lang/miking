@@ -21,6 +21,7 @@ include "multicore/thread.ext-ocaml.mc"
 include "multicore/mutex.ext-ocaml.mc"
 include "multicore/cond.ext-ocaml.mc"
 include "ipopt/ipopt.ext-ocaml.mc"
+include "ext/reflection-ext.ext-ocaml.mc"
 
 
 type ExternalImpl = {
@@ -55,7 +56,8 @@ let globalExternalImplsMap : Map String [ExternalImpl] =
       ipoptExtMap,
       tomlExtMap,
       asyncExtMap,
-      rtpplExtMap
+      rtpplExtMap,
+      reflectionMap
     ]
 
 -- List OCaml packages available on the system. These are returned on the format

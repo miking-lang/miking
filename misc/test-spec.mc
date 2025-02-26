@@ -817,6 +817,7 @@ testMain
         , "stdlib/ext/cblas-ext.mc"
         , "stdlib/ext/vec-ext.mc"
         , "stdlib/ext/mat-ext.mc"
+        , "stdlib/ext/reflection-ext.mc"
         , "test/examples/external/ext-list-map.mc"
         , "test/examples/external/ext-list-concat-map.mc"
         , "stdlib/multicore/atomic.mc"
