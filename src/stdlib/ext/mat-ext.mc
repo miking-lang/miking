@@ -11,12 +11,14 @@ include "cblas-ext.mc"
 -- Enumerates matrix operation errors.
 type MatError
 con DimensionMismatch : () -> MatError
+con NotSquare : () -> MatError
 
 -- String representation of a matrix error.
 let matErrorToString : MatError -> String
   = lam err.
     switch err
     case DimensionMismatch _ then "Dimension mismatch"
+    case NotSquare _ then "Not square"
     end
 
 --------------------------------------------------------------------------------
@@ -126,6 +128,9 @@ let matHasSameShape2 = lam a. lam b. and (eqi a.m b.m) (eqi a.n b.n)
 -- Three matrices has the same shape.
 let matHasSameShape3 = lam a. lam b. lam c.
   and (matHasSameShape2 a b) (matHasSameShape2 b c)
+
+-- Matrix is square.
+let matIsSqure = lam a. eqi a.m a.n
 
 external externalMatTranspose : Int -> Int -> ExtArr Float -> ExtArr Float -> ()
 
@@ -464,16 +469,23 @@ external externalMatExp : Int -> Int -> ExtArr Float -> ExtArr Float
 
 -- Computes the matrix exponential. Returns a fresh matrix.
 -- .see https://ocaml.xyz/owl/owl/Owl_linalg/Generic/index.html#val-expm
-let matExp : Mat Float -> Mat Float =
-  lam a. { a with arr = externalMatExp a.m a.n a.arr }
+let matExp : Mat Float -> Either MatError (Mat Float) =
+  lam a.
+    if matIsSqure a then Right { a with arr = externalMatExp a.m a.n a.arr }
+    else Left (NotSquare ())
 
+let matExpExn : Mat Float -> Mat Float
+  = lam a.
+    eitherEither
+      (lam err. error (matErrorToString err)) (lam x. x) (matExp a)
 
 utest
   let test = lam kind.
     let extArrOfSeq = extArrOfSeq kind in
+    utest matExp (matMakeUninit kind 2 3) with Left (NotSquare ()) in
     let as = [1., 2., 3., 4.] in
     let a = matFromArrExn 2 2 (extArrOfSeq as) in
-    let b = matExp a in
+    let b = matExpExn a in
     utest extArrToSeq a.arr with as in
     utest map floorfi (extArrToSeq b.arr) with [51, 74, 112, 164] in
     ()
