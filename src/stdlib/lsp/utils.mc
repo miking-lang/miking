@@ -1,5 +1,11 @@
 include "ext/file-ext.mc"
 
+let stripUriProtocol = lam uri. match uri
+  with "file://" ++ rest then rest
+  else uri
+
+-- BEGIN IO --
+
 -- returns Option content if the requested number of bytes could be read
 -- otherwise, None is returned
 let readBytesBuffered : ReadChannel -> Int -> Option [Int] =
@@ -15,6 +21,33 @@ let readBytesBuffered : ReadChannel -> Int -> Option [Int] =
     end
   in work len []
 
-let stripUriProtocol = lam uri. match uri
-  with "file://" ++ rest then rest
-  else uri
+let eprint: String -> () = lam s.
+  fileWriteString fileStderr s;
+  flushStderr()
+
+let eprintln: String -> () = lam s.
+  fileWriteString fileStderr (join [s, "\n"]);
+  flushStderr()
+
+let print: String -> () = lam s.
+  fileWriteString fileStdout s;
+  flushStdout()
+
+let println: String -> () = lam s.
+  fileWriteString fileStdout (join [s, "\n"]);
+  flushStdout()
+
+let rpcprint: String -> () = lam value.
+  let len = addi 1 (length value) in
+  println (join ["Content-Length: ", int2string len, "\r\n\r\n", value])
+
+-- END IO --
+
+-- BEGIN JSON --
+
+let jsonKeyObject: [(String, JsonValue)] -> JsonValue = lam content.
+  JsonObject (
+    mapFromSeq cmpString content
+  )
+
+-- END JSON --
