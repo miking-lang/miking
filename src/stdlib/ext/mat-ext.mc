@@ -130,7 +130,7 @@ let matHasSameShape3 = lam a. lam b. lam c.
 external externalMatTranspose : Int -> Int -> ExtArr Float -> ExtArr Float -> ()
 
 -- General matrix transpose. assumes that both operands has the same layout.
-let matTranposeInplace : Mat Float -> Mat Float ->  Either MatError ()
+let matTranposeNoAlloc : Mat Float -> Mat Float ->  Either MatError ()
   = lam a. lam b.
     if and (eqi a.m b.n) (eqi a.n b.m) then
       externalMatTranspose a.m a.n a.arr b.arr;
@@ -143,12 +143,12 @@ utest
     let as = [1., 2., 3., 4., 5., 6.] in
     let a = matFromArrExn 3 2 (extArrOfSeq as) in
     let b = matMakeUninit kind 2 3 in
-    utest matTranposeInplace a b with Right () in
+    utest matTranposeNoAlloc a b with Right () in
     utest extArrToSeq a.arr with as in
     utest extArrToSeq b.arr with [1., 3., 5., 2., 4., 6.] in
     let b = matMakeUninit kind 3 2 in
     utest extArrToSeq a.arr with as in
-    utest matTranposeInplace a b with Left (DimensionMismatch ()) in
+    utest matTranposeNoAlloc a b with Left (DimensionMismatch ()) in
     ()
   in
   test extArrKindFloat32;
@@ -160,7 +160,7 @@ external externalMatElemMul
   : Int -> Int -> ExtArr Float -> ExtArr Float -> ExtArr Float -> ()
 
 -- General matrix element-wise addition.
-let matElemMulInplace
+let matElemMulNoAlloc
   : Mat Float -> Mat Float -> Mat Float ->  Either MatError ()
   = lam a. lam b. lam c.
     if matHasSameShape3 a b c then
@@ -176,14 +176,14 @@ utest
     let a = matFromArrExn 3 2 (extArrOfSeq as) in
     let b = matFromArrExn 3 2 (extArrOfSeq bs) in
     let c = matMakeUninit kind 3 2 in
-    utest matElemMulInplace a b c with Right () in
+    utest matElemMulNoAlloc a b c with Right () in
     utest extArrToSeq a.arr with as in
     utest extArrToSeq b.arr with bs in
     utest extArrToSeq c.arr with [7.,16.,27.,40.,55.,72.] in
     let a = matMakeUninit kind 3 2 in
     let b = matMakeUninit kind 3 3 in
     let c = matMakeUninit kind 3 3 in
-    utest matElemMulInplace a b c with Left (DimensionMismatch ()) in
+    utest matElemMulNoAlloc a b c with Left (DimensionMismatch ()) in
     ()
   in
   test extArrKindFloat32;
@@ -260,7 +260,7 @@ utest
 let matTranspose : Mat Float -> Mat Float
   = lam a.
     let b = matMakeUninit (externalExtArrKind a.arr) a.n a.m in
-    matTranposeInplace a b;
+    matTranposeNoAlloc a b;
     b
 
 utest
@@ -283,7 +283,7 @@ let matElemMul : Mat Float -> Mat Float -> Either MatError (Mat Float)
   = lam a. lam b.
     if matHasSameShape2 a b then
       let c = matMakeUninit (externalExtArrKind a.arr) a.m a.n in
-      matElemMulInplace a b c;
+      matElemMulNoAlloc a b c;
       Right c
     else Left (DimensionMismatch ())
 
