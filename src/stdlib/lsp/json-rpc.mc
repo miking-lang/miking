@@ -1,3 +1,4 @@
+include "common.mc"
 include "json.mc"
 include "./utils.mc"
 
