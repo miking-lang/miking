@@ -60,20 +60,20 @@ let cblasAxpyArg : CBLASAxpyArg = {
   incy = 1
 }
 
---  *- .brief Computes y := a*x + y.
---  *
---  *  .see https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2024-0/cblas-axpy.html
---  *
---  *  .lam[arg.n]    Number of elements in x and y (default:
---  *                 `min(length(x), lenth(y))`).
---  *
---  *  .lam[arg.incx] Increment for the elements of x (default: 1).
---  *  .lam[arg.incy] Increment for the elements of y (default: 1).
---  *  .lam[a]        The scalar a.
---  *  .lam[x]        The vector x.
---  *  .lam[y]        The vector y that will also hold the result of the
---  *                 computation.
--- -*
+-- .brief Computes y := a*x + y.
+--
+-- .see https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2024-0/cblas-axpy.html
+--
+-- .lam[arg.n]    Number of elements in x and y (default:
+--                `min(length(x), lenth(y))`).
+--
+-- .lam[arg.incx] Increment for the elements of x (default: 1).
+-- .lam[arg.incy] Increment for the elements of y (default: 1).
+-- .lam[a]        The scalar a.
+-- .lam[x]        The vector x.
+-- .lam[y]        The vector y that will also hold the result of the
+--                computation.
+--
 let cblasAxpy : all a. CBLASAxpyArg -> a -> ExtArr a -> ExtArr a -> ()
   = lam arg. lam a. lam x. lam y.
     let n =
@@ -108,19 +108,19 @@ let cblasCopyArg : CBLASAxpyArg = {
   incy = 1
 }
 
---  *- .brief Copies x to y.
---  *
---  *  .see https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2024-0/cblas-copy.html
---  *
---  *  .lam[arg.n]    Number of elements in x and y (default:
---  *                 `min(length(x), lenth(y))`).
---  *
---  *  .lam[arg.incx] Increment for the elements of x (default: 1).
---  *  .lam[arg.incy] Increment for the elements of y (default: 1).
---  *  .lam[x]        The vector x.
---  *  .lam[y]        The vector y that will also hold the result of the
---  *                 computation.
--- -*
+-- .brief Copies x to y.
+--
+-- .see https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2024-0/cblas-copy.html
+--
+-- .lam[arg.n]    Number of elements in x and y (default:
+--                `min(length(x), lenth(y))`).
+--
+-- .lam[arg.incx] Increment for the elements of x (default: 1).
+-- .lam[arg.incy] Increment for the elements of y (default: 1).
+-- .lam[x]        The vector x.
+-- .lam[y]        The vector y that will also hold the result of the
+--                computation.
+--
 let cblasCopy : all a. CBLASCopyArg -> ExtArr a -> ExtArr a -> ()
   = lam arg. lam x. lam y.
     let n =
@@ -153,16 +153,16 @@ let cblasScalArg : CBLASScalArg = {
   incx = 1
 }
 
---  *- .brief Computes x := a*x.
---  *
---  *  .see https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2024-0/cblas-scal.html
---  *
---  *  .lam[arg.n]    Number of elements in x (default: `length(x)`)
---  *  .lam[arg.incx] Increment for the elements of x (default: 1).
---  *  .lam[a]        The scalar a.
---  *  .lam[x]        The vector x that will also hold the result of the
---  *                 computation.
--- -*
+-- .brief Computes x := a*x.
+--
+-- .see https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2024-0/cblas-scal.html
+--
+-- .lam[arg.n]    Number of elements in x (default: `length(x)`)
+-- .lam[arg.incx] Increment for the elements of x (default: 1).
+-- .lam[a]        The scalar a.
+-- .lam[x]        The vector x that will also hold the result of the
+--                computation.
+--
 let cblasScal : all a. CBLASScalArg -> a -> ExtArr a -> ()
   = lam arg. lam a. lam x.
     let n = optionGetOrElse (lam. extArrLength x) arg.n in
@@ -213,30 +213,30 @@ let cblasGemvArg : CBLASGemvArg Float = {
   beta = 0.0
 }
 
---  *- .brief Computes y := alpha*A*x + beta*y. By default y := A*x.
---  *
---  *  .see https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2024-0/cblas-gemv.html
---  *
---  *  .lam[arg.layout]    Specifies 2D array storage layout
---  *                      (default: `cblasRowMajor`).
---  *
---  *  .lam[arg.transpose] Specifies the operation as:
---  *                      - false: y := alpha*A*x + beta*y.
---  *                      - true:  y := alpha*A*x + beta*y.
---  *                      (default: false).
---  *
---  *  .lam[arg.incx]   Increment for the elements of x (default: 1).
---  *  .lam[arg.incy]   Increment for the elements of y (default: 1).
---  *
---  *  .lam[arg.alpha]  The scalar alpha (default: 1.0)
---  *  .lam[arg.beta]   The scalar beta (default: 0.0)
---  *  .lam[m]          The number of rows in A.
---  *  .lam[n]          The number of columns in A.
---  *  .lam[a]          The m-by-n matrix A.
---  *  .lam[x]          The vector x.
---  *  .lam[y]          The vector y that will also hold the result of the
---  *                   computation.
--- -*
+-- .brief Computes y := alpha*A*x + beta*y. By default y := A*x.
+--
+-- .see https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2024-0/cblas-gemv.html
+--
+-- .lam[arg.layout]    Specifies 2D array storage layout
+--                     (default: `cblasRowMajor`).
+--
+-- .lam[arg.transpose] Specifies the operation as:
+--                     - false: y := alpha*A*x + beta*y.
+--                     - true:  y := alpha*A*x + beta*y.
+--                     (default: false).
+--
+-- .lam[arg.incx]   Increment for the elements of x (default: 1).
+-- .lam[arg.incy]   Increment for the elements of y (default: 1).
+--
+-- .lam[arg.alpha]  The scalar alpha (default: 1.0)
+-- .lam[arg.beta]   The scalar beta (default: 0.0)
+-- .lam[m]          The number of rows in A.
+-- .lam[n]          The number of columns in A.
+-- .lam[a]          The m-by-n matrix A.
+-- .lam[x]          The vector x.
+-- .lam[y]          The vector y that will also hold the result of the
+--                  computation.
+--
 let cblasGemv
   : all a. CBLASGemvArg a -> Int -> Int -> ExtArr a -> ExtArr a -> ExtArr a -> ()
   = lam arg. lam m. lam n. lam a. lam x. lam y.
@@ -294,33 +294,33 @@ let cblasGemmArg : CBLASGemmArg Float = {
   beta = 0.0
 }
 
---  *- .brief Computes C := alpha*op(A)*op(B) + beta*C. By default: C := A*B.
---  *
---  *  .see https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2024-0/cblas-gemv.html
---  *
---  *  .lam[arg.layout]     Specifies 2D array storage layout
---  *                       (default: `cblasRowMajor`).
---  *
---  *  .lam[arg.transposeA] Specifies the operation as:
---  *                       - false: op(A) = A
---  *                       - true:  op(A) = A^T
---  *                       (default: false).
---  *
---  *  .lam[arg.transposeB] Specifies the operation as:
---  *                       - false: op(B) = B
---  *                       - true:  op(B) = B^T
---  *                       (default: false).
---  *
---  *  .lam[arg.alpha]  The scalar alpha (default: 1.0)
---  *  .lam[arg.beta]   The scalar beta (default: 0.0)
---  *  .lam[m]          The number of rows in A.
---  *  .lam[n]          The number of columns in B.
---  *  .lam[k]          The number of columns in A and the number of rows in B.
---  *  .lam[a]          The m-by-k matrix A.
---  *  .lam[b]          The k-by-n matrix B.
---  *  .lam[c]          The m-by-n matrix C that will also hold the result of
---  *                   the computation.
--- -*
+-- .brief Computes C := alpha*op(A)*op(B) + beta*C. By default: C := A*B.
+--
+-- .see https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2024-0/cblas-gemv.html
+--
+-- .lam[arg.layout]     Specifies 2D array storage layout
+--                      (default: `cblasRowMajor`).
+--
+-- .lam[arg.transposeA] Specifies the operation as:
+--                      - false: op(A) = A
+--                      - true:  op(A) = A^T
+--                      (default: false).
+--
+-- .lam[arg.transposeB] Specifies the operation as:
+--                      - false: op(B) = B
+--                      - true:  op(B) = B^T
+--                      (default: false).
+--
+-- .lam[arg.alpha]  The scalar alpha (default: 1.0)
+-- .lam[arg.beta]   The scalar beta (default: 0.0)
+-- .lam[m]          The number of rows in A.
+-- .lam[n]          The number of columns in B.
+-- .lam[k]          The number of columns in A and the number of rows in B.
+-- .lam[a]          The m-by-k matrix A.
+-- .lam[b]          The k-by-n matrix B.
+-- .lam[c]          The m-by-n matrix C that will also hold the result of
+--                  the computation.
+--
 let cblasGemm
   : all a. CBLASGemmArg a -> Int -> Int -> Int -> ExtArr a -> ExtArr a -> ExtArr a -> ()
   = lam arg. lam m. lam n. lam k. lam a. lam b. lam c.
