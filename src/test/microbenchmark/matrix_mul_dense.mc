@@ -1,48 +1,46 @@
-include "matrix_mul_common.mc"
+include "benchmarkcommon.mc"
 
-let matMul : Tensor[Float] -> Tensor[Float] -> Tensor[Float] -> ()
+type Mat = Tensor[Float]
+
+let loop_ = lam n. lam f.
+  recursive let recur = lam i.
+    if geqi i n then () else f i; recur (addi i 1)
+  in
+  recur 0
+
+let matMul : Mat -> Mat -> Mat -> ()
   = lam mat1. lam mat2. lam mat3.
-  match tensorShape mat1 with [m1, n1] in
-  match tensorShape mat2 with [m2, n2] in
-  match tensorShape mat3 with [m3, n3] in
-  if
-    and
-      (eqi n1 m2)
-      (and
-         (eqi m1 m3)
-         (eqi n2 n3))
-  then
-    loop_ m3 (lam i. loop_ n3 (lam j. tensorSetExn mat3 [i, j] 0.));
-    loop_ m3 (lam i.
-      loop_ n3 (lam j.
-        loop_ m1 (lam k.
-          tensorSetExn mat3 [i, j]
-            (addf
-               (tensorGetExn mat3 [i, j])
-               (mulf
-                  (tensorGetExn mat1 [k, j])
-                  (tensorGetExn mat2 [i, k]))))))
-  else error "Invalid input"
+    match (tensorShape mat1, tensorShape mat2, tensorShape mat3) with
+      ([m1, n1], [m2, n2], [m3, n3])
+    then
+      loop_ m3 (lam i. loop_ n3 (lam j. tensorSetExn mat3 [i, j] 0.));
+      loop_ m3 (lam i.
+        loop_ n3 (lam j.
+          loop_ m1 (lam k.
+            tensorSetExn mat3 [i, j]
+              (addf
+                 (tensorGetExn mat3 [i, j])
+                 (mulf
+                    (tensorGetExn mat1 [k, j])
+                    (tensorGetExn mat2 [i, k]))))))
+    else error "Invalid input"
+
+let n = 100
+
+let mat1 = tensorCreateDense [n, n] (lam. 0.)
+let mat2 = tensorCreateDense [n, n] (lam. 0.)
+let mat3 = tensorCreateDense [n, n] (lam. 0.)
+let acc = ref 0.
+
+let benchmark = lam.
+  bc_repeat (lam.
+    tensorSetExn mat1 [randIntU 0 n, randIntU 0 n] (int2float (randIntU 0 1));
+    tensorSetExn mat2 [randIntU 0 n, randIntU 0 n] (int2float (randIntU 0 1));
+    matMul mat1 mat2 mat3;
+    modref acc (addf (deref acc) (tensorGetExn mat3 [randIntU 0 n, randIntU 0 n])));
+  print (float2string (deref acc))
 
 mexpr
 
 -- Benchmark
-benchmark tensorCreateDense matMul ();
-
--- Test
--- test mat_mul;
--- Expect
--- [
--- 	[0., 1., 2.],
--- 	[3., 4., 5.],
--- 	[6., 7., 8.]
--- ][
--- 	[0., 1., 2.],
--- 	[3., 4., 5.],
--- 	[6., 7., 8.]
--- ][
--- 	[15., 18., 21.],
--- 	[42., 54., 66.],
--- 	[69., 90., 111.]
--- ]
-()
+benchmark ()
