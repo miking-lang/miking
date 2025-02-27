@@ -10,6 +10,8 @@ include "ext/toml-ext.ext-ocaml.mc"
 include "ext/async-ext.ext-ocaml.mc"
 include "ext/rtppl-ext.ext-ocaml.mc"
 include "ext/arr-ext.ext-ocaml.mc"
+include "ext/mat-ext.ext-ocaml.mc"
+include "ext/cblas-ext.ext-ocaml.mc"
 include "sundials/sundials.ext-ocaml.mc"
 include "sundials/ida.ext-ocaml.mc"
 include "sundials/cvode.ext-ocaml.mc"
@@ -36,7 +38,9 @@ let globalExternalImplsMap : Map String [ExternalImpl] =
     [
       extTestMap,               -- For testing purposes
       mathExtMap,
-      arrayExtMap,
+      arrExtMap,
+      matExtMap,
+      cblasExtMap,
       sundialsExtMap,
       idaExtMap,
       cvodeExtMap,
