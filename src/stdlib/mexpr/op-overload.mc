@@ -58,6 +58,23 @@ lang OverloadedOpDesugar = Desugar + OverloadedOpAst + FunTypeAst
     else errorSingle [x.info] "Wrong type shape in desugarExpr"
 end
 
+lang OverloadedOpDesugarLoader = DesugarLoader + OverloadedOpAst + FunTypeAst
+  sem desugarExpr loader =
+  | TmOverloadedOp x ->
+    match unwrapType x.ty with TyArrow t then
+      recursive let flattenArrow = lam acc. lam t.
+        match unwrapType t with TyArrow t then flattenArrow (snoc acc t.from) t.to
+        else snoc acc t
+      in
+      let types = map unwrapType (flattenArrow [t.from] t.to) in
+      resolveOpLoader loader x.info {params = init types, return = last types, op = x.op}
+    else errorSingle [x.info] "Wrong type shape in desugarExpr"
+
+  sem resolveOpLoader : Loader -> Info -> {params: [Type], return: Type, op: Op} -> (Loader, Expr)
+  sem resolveOpLoader loader info = | params ->
+    (loader, resolveOp info params)
+end
+
 lang OverloadedOpPrettyPrint = OverloadedOpAst + PrettyPrint
   sem getOpStringCode: Int -> PprintEnv -> Op -> (PprintEnv, String)
   sem opIsAtomic: Op -> Bool
