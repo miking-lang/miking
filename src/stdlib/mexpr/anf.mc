@@ -263,7 +263,7 @@ lang NeverANF = ANF + NeverAst
 
 end
 
-lang ExtANF = ANF + ExtAst + FunTypeAst + UnknownTypeAst + LamAst + AppAst
+lang ExtANF = ANF + ExtAst + FunTypeAst + UnknownTypeAst + LamAst + AppAst + FunArity
 
   sem normalize (k : Expr -> Expr) =
   | TmExt ({inexpr = inexpr} & t) ->

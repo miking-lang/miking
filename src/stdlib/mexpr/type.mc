@@ -192,9 +192,13 @@ lang AppTypeUtils = AppTypeAst + FunTypeAst
     else error "Invalid type in getConDefType"
 end
 
--- Returns the arity of a function type
-recursive let arityFunType = use MExprAst in lam ty.
-  match ty with TyArrow t then addi 1 (arityFunType t.to) else 0
+
+lang FunArity = FunTypeAst + AllTypeAst
+  sem arityFunType : Type -> Int
+  sem arityFunType =
+  | TyArrow t -> addi 1 (arityFunType t.to)
+  | TyAll t -> arityFunType t.ty
+  | ty -> (rappAccumL_Type_Type (lam. lam ty. (arityFunType ty, ty)) 0 ty).0
 end
 
 let isHigherOrderFunType = use MExprAst in lam ty.

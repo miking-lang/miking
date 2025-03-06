@@ -316,12 +316,12 @@ lang NeverCPS = CPS + NeverAst
     TmLet { t with inexpr = exprCps env k t.inexpr }
 end
 
-lang ExtCPS = CPS + ExtAst
+lang ExtCPS = CPS + ExtAst + FunArity
   sem exprCps env k =
   | TmExt t ->
     errorSingle [t.info]
       "Error in CPS: Should not happen due to ANF transformation"
-  | TmExt ({ inexpr = TmLet ({ ident = ident, body = TmLam _, inexpr = inexpr } & tl) } & t) ->
+  | TmExt ({ inexpr = TmLet ({ ident = ident, body = TmLam _ | TmVar _, inexpr = inexpr } & tl) } & t) ->
     if not (transform env ident) then
       TmExt { t with inexpr = TmLet { tl with inexpr = exprCps env k inexpr } }
     else
