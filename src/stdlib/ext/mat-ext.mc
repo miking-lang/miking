@@ -130,7 +130,7 @@ let matHasSameShape3 = lam a. lam b. lam c.
   and (matHasSameShape2 a b) (matHasSameShape2 b c)
 
 -- Matrix is square.
-let matIsSqure = lam a. eqi a.m a.n
+let matIsSquare = lam a. eqi a.m a.n
 
 external externalMatTranspose : Int -> Int -> ExtArr Float -> ExtArr Float -> ()
 
@@ -471,7 +471,7 @@ external externalMatExp : Int -> Int -> ExtArr Float -> ExtArr Float
 -- .see https://ocaml.xyz/owl/owl/Owl_linalg/Generic/index.html#val-expm
 let matExp : Mat Float -> Either MatError (Mat Float) =
   lam a.
-    if matIsSqure a then Right { a with arr = externalMatExp a.m a.n a.arr }
+    if matIsSquare a then Right { a with arr = externalMatExp a.m a.n a.arr }
     else Left (NotSquare ())
 
 let matExpExn : Mat Float -> Mat Float
