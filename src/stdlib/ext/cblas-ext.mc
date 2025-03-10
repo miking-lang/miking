@@ -20,6 +20,11 @@ external cblasRowMajor : CBLASLayout
 external cblasColMajor : CBLASLayout
 external cblasLayoutEq : CBLASLayout -> CBLASLayout -> Bool
 
+utest cblasLayoutEq cblasRowMajor cblasRowMajor with true
+utest cblasLayoutEq cblasColMajor cblasColMajor with true
+utest cblasLayoutEq cblasRowMajor cblasColMajor with false
+utest cblasLayoutEq cblasColMajor cblasRowMajor with false
+
 -- Matrix transpose flag.
 type CBLASTranspose
 external cblasNoTrans : CBLASTranspose
@@ -27,11 +32,21 @@ external cblasTrans : CBLASTranspose
 -- external cblasConjTrans : CBLASTranspose -- NOTE(oerikss, 2025-02-24): Enable this when/if we add a complex kind to external arrays.
 external cblasTransEq : CBLASTranspose -> CBLASTranspose -> Bool
 
+utest cblasTransEq cblasNoTrans cblasNoTrans with true
+utest cblasTransEq cblasTrans cblasTrans with true
+utest cblasTransEq cblasNoTrans cblasTrans with false
+utest cblasTransEq cblasTrans cblasNoTrans with false
+
 -- Triangular matrix flag.
 type CBLASTriangular
 external cblasUpperTriag : CBLASTriangular
 external cblasLowerTriag : CBLASTriangular
 external cblasTriagEq : CBLASTriangular -> CBLASTriangular -> Bool
+
+utest cblasTriagEq cblasUpperTriag cblasUpperTriag with true
+utest cblasTriagEq cblasLowerTriag cblasLowerTriag with true
+utest cblasTriagEq cblasUpperTriag cblasLowerTriag with false
+utest cblasTriagEq cblasLowerTriag cblasUpperTriag with false
 
 -- Diagonal matrix flag.
 type CBLASDiagonal
@@ -39,11 +54,21 @@ external cblasNonUnitDiag : CBLASDiagonal
 external cblasUnitDiag : CBLASDiagonal
 external cblasDiagEq : CBLASDiagonal -> CBLASDiagonal -> Bool
 
+utest cblasDiagEq cblasNonUnitDiag cblasNonUnitDiag with true
+utest cblasDiagEq cblasUnitDiag cblasUnitDiag with true
+utest cblasDiagEq cblasNonUnitDiag cblasUnitDiag with false
+utest cblasDiagEq cblasUnitDiag cblasNonUnitDiag with false
+
 -- Matrix side flag.
 type CBLASSide
 external cblasLeftSide : CBLASSide
 external cblasRightSide : CBLASSide
 external cblasSideEq : CBLASSide -> CBLASSide -> Bool
+
+utest cblasSideEq cblasLeftSide cblasLeftSide with true
+utest cblasSideEq cblasRightSide cblasRightSide with true
+utest cblasSideEq cblasLeftSide cblasRightSide with false
+utest cblasSideEq cblasRightSide cblasLeftSide with false
 
 --------------------------------------------------------------------------------
 -- Level-1 BLAS: vector-vector operations
