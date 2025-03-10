@@ -367,7 +367,11 @@ lang GenerateJsonSerializers =
     let s = { serializer = app_ sl.serializer sr.serializer,
               deserializer = app_ sl.deserializer sr.deserializer } in
     (acc, s)
-  | ( TyUnknown _ | TyArrow _ | TyAll _ | TyAlias _ | TyVariant _ ) ->
+
+  | TyAlias x ->
+    _generateType env acc x.content
+
+  | ty & ( TyUnknown _ | TyArrow _ | TyAll _ | TyVariant _ ) ->
     error "Not supported when generating JSON serializers"
 
   sem _lib: () -> Expr
@@ -439,6 +443,32 @@ lang JsonSerializationLoader = MCoreLoader + GenerateJsonSerializers
       , gjsAcc = ref (mapEmpty nameCmp)
       } in
     addHook loader hook
+
+  sem _registerCustomJsonSerializer : Name -> GJSSerializer -> Loader -> Hook -> Option (Loader, ())
+  sem _registerCustomJsonSerializer tyConName pair loader =
+  | _ -> None ()
+  | JsonSerializationHook hook ->
+    match
+      match pair.serializer with TmVar x then (loader, x.ident) else
+      let serName = nameSym (concat "serialize" (nameGetStr tyConName)) in
+      let loader = _addDeclExn loader (decl_nulet_ serName pair.serializer) in
+      (loader, serName)
+    with (loader, serName) in
+    match
+      match pair.deserializer with TmVar x then (loader, x.ident) else
+      let deserName = nameSym (concat "deserialize" (nameGetStr tyConName)) in
+      let loader = _addDeclExn loader (decl_nulet_ deserName pair.deserializer) in
+      (loader, deserName)
+    with (loader, deserName) in
+    let named =
+      { serializerName = serName, deserializerName = deserName
+      , serializer = None (), deserializer = None ()
+      } in
+    Some (loader, modref hook.gjsAcc (mapInsert tyConName named (deref hook.gjsAcc)))
+
+  sem registerCustomJsonSerializer : Name -> GJSSerializer -> Loader -> Loader
+  sem registerCustomJsonSerializer tyConName pair = | loader ->
+    (withHookState (_registerCustomJsonSerializer tyConName pair) loader).0
 
   sem _serializationPairsFor : [Type] -> Loader -> Hook -> Option (Loader, [GJSSerializer])
   sem _serializationPairsFor tys loader =
