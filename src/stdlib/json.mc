@@ -454,7 +454,9 @@ let jsonDeserializeInt: JsonValue -> Option Int = lam ji.
 
 let jsonSerializeFloat: Float -> JsonValue = lam f. JsonFloat f
 let jsonDeserializeFloat: JsonValue -> Option Float = lam jf.
-  match jf with JsonFloat f then Some f else None ()
+  match jf with JsonFloat f then Some f else
+  match jf with JsonInt i then Some (int2float i) else
+  None ()
 
 let jsonSerializeChar: Char -> JsonValue = lam c. JsonString [c]
 let jsonDeserializeChar: JsonValue -> Option Char = lam jc.
