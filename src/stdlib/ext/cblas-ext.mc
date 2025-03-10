@@ -222,7 +222,7 @@ let cblasGemvArg : CBLASGemvArg Float = {
 --
 -- .lam[arg.transpose] Specifies the operation as:
 --                     - false: y := alpha*A*x + beta*y.
---                     - true:  y := alpha*A*x + beta*y.
+--                     - true:  y := alpha*A^T*x + beta*y.
 --                     (default: false).
 --
 -- .lam[arg.incx]   Increment for the elements of x (default: 1).
