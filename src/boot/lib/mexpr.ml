@@ -664,14 +664,14 @@ let getData = function
         , [] )
     | _, _ ->
         failwith "bootparser getData undefined" )
-  | PTreeTop (TopExt (Ext (fi, str, effect, ty))) ->
+  | PTreeTop (TopExt (Ext (fi, str, side_effect, ty))) ->
       ( idDeclExt
       , [fi]
       , []
       , [ty]
       , []
       , [str]
-      , [(if effect then 1 else 0)]
+      , [(if side_effect then 1 else 0)]
       , []
       , []
       , []

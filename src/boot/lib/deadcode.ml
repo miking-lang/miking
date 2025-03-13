@@ -17,8 +17,8 @@ let tm_has_side_effect nmap tm =
         if acc_se then (true, acc_prerun)
         else
           match SymbMap.find_opt s nmap with
-          | Some (_, _, effect, _) ->
-              (effect, acc_prerun)
+          | Some (_, _, side_effect, _) ->
+              (side_effect, acc_prerun)
           | None ->
               (false, acc_prerun) (* In case of lambda or pattern variables *)
         )
