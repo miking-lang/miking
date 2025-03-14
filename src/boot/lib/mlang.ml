@@ -149,7 +149,8 @@ type alias_data =
 
 type ty_in_lang = (alias_data, syn_data) Either.t
 
-type lang_data = {values: sem_data Record.t; types: ty_in_lang Record.t; fi: info}
+type lang_data =
+  {values: sem_data Record.t; types: ty_in_lang Record.t; fi: info}
 
 (* let spprint_inter_data {info; cases; _} : ustring = *)
 (*   List.map *)
@@ -342,9 +343,7 @@ let merge_langs : info -> lang_data -> lang_data -> lang_data =
       Record.union
         (fun name a b -> Some (merge_types_in_lang fi name a b))
         a.types b.types
-  ; fi=
-      a.fi
-  }
+  ; fi= a.fi }
 
 (* === Functions that facilitate renaming types and values, and thus merging them after the fact === *)
 
@@ -1099,7 +1098,7 @@ let translate_lang (env : mlang_env) (Lang (fi, name, includes, renames, decls))
     List.to_seq includes |> Seq.map fetch_include |> Record.of_seq
   in
   let includes = List.fold_left apply_rename includes renames in
-  let lang = {values= Record.empty; types= Record.empty; fi= fi} in
+  let lang = {values= Record.empty; types= Record.empty; fi} in
   let lang =
     Record.to_seq includes |> Seq.map snd
     |> Seq.fold_left (merge_langs fi) lang
