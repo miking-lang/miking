@@ -9,8 +9,9 @@ include "mexpr/symbolize.mc"
 include "mexpr/boot-parser.mc"
 
 lang FreeVars = Ast
-  -- Returns the set of free variables for a given expression. Assumes that the
-  -- expression is symbolized.
+  -- Returns the set of free variables for a given expression. Assumes
+  -- that the expression is symbolized (and no Names are defined more
+  -- than once).
   sem freeVars : Expr -> Set Name
   sem freeVars =| t -> freeVarsExpr (setEmpty nameCmp) t
 
@@ -19,9 +20,38 @@ lang FreeVars = Ast
   | t -> sfold_Expr_Expr freeVarsExpr acc t
 end
 
+lang FreeNames = Ast
+  -- A broader form of freeVars that returns free occurrences of all
+  -- Names, including variables, constructors, type constructors, and
+  -- type variables. Same assumptions as for freeVars. Does not look
+  -- at inferred types, only explicit annotations.
+  sem freeNames : Expr -> Set Name
+  sem freeNames = | tm ->
+    freeNamesExpr (setEmpty nameCmp) tm
+  sem freeNamesExpr : Set Name -> Expr -> Set Name
+  sem freeNamesExpr free = | tm ->
+    let free = sfold_Expr_Expr freeNamesExpr free tm in
+    let free = sfold_Expr_Type freeNamesType free tm in
+    free
+  sem freeNamesType : Set Name -> Type -> Set Name
+  sem freeNamesType free = | ty ->
+    let free = sfold_Type_Type freeNamesType free ty in
+    free
+  sem freeNamesPat : Set Name -> Pat -> Set Name
+  sem freeNamesPat free = | pat ->
+    let free = sfold_Pat_Pat freeNamesPat free pat in
+    let free = sfold_Pat_Type freeNamesType free pat in
+    free
+end
+
 lang VarFreeVars = FreeVars + VarAst
   sem freeVarsExpr acc =
   | TmVar r -> setInsert r.ident acc
+end
+
+lang VarFreeNames = FreeNames + VarAst
+  sem freeNamesExpr free =
+  | TmVar x -> setInsert x.ident free
 end
 
 lang LamFreeVars = FreeVars + LamAst
@@ -30,10 +60,33 @@ lang LamFreeVars = FreeVars + LamAst
     setRemove r.ident (freeVarsExpr acc r.body)
 end
 
+lang LamFreeNames = FreeNames + LamAst
+  sem freeNamesExpr free =
+  | TmLam x ->
+    let free = freeNamesExpr free x.body in
+    let free = setRemove x.ident free in
+    let free = freeNamesType free x.tyAnnot in
+    free
+end
+
 lang LetFreeVars = FreeVars + LetAst
   sem freeVarsExpr acc =
   | TmLet r ->
     setRemove r.ident (freeVarsExpr (freeVarsExpr acc r.body) r.inexpr)
+end
+
+lang LetFreeNames = FreeNames + LetAst + AllTypeAst
+  sem freeNamesExpr free =
+  | TmLet x ->
+    let free = freeNamesExpr free x.inexpr in
+    let free = setRemove x.ident free in
+    let free = freeNamesExpr free x.body in
+    match stripTyAll x.tyAnnot with (tyalls, tyAnnot) in
+    let free = freeNamesType free tyAnnot in
+    -- NOTE(vipa, 2025-03-19): This also handles removing type
+    -- variables from `.body`, not just `.tyAnnot`.
+    let free = foldl (lam free. lam pair. setRemove pair.0 free) free tyalls in
+    free
 end
 
 lang RecLetsFreeVars = FreeVars + RecLetsAst
@@ -42,6 +95,53 @@ lang RecLetsFreeVars = FreeVars + RecLetsAst
     let acc = foldl (lam acc. lam b.
       freeVarsExpr acc b.body) (freeVarsExpr acc r.inexpr) r.bindings in
     foldl (lam acc. lam b. setRemove b.ident acc) acc r.bindings
+end
+
+lang RecLetsFreeNames = FreeNames + RecLetsAst + AllTypeAst
+  sem freeNamesExpr free =
+  | TmRecLets x ->
+    let free = freeNamesExpr free x.inexpr in
+    let f = lam free. lam binding.
+      let free = freeNamesExpr free binding.body in
+      match stripTyAll binding.tyAnnot with (tyalls, tyAnnot) in
+      let free = freeNamesType free tyAnnot in
+      let free = foldl (lam free. lam pair. setRemove pair.0 free) free tyalls in
+      free in
+    let free = foldl f free x.bindings in
+    let free = foldl (lam free. lam b. setRemove b.ident free) free x.bindings in
+    free
+end
+
+lang TypeFreeNames = FreeNames + TypeAst
+  sem freeNamesExpr free =
+  | TmType x ->
+    let free = freeNamesExpr free x.inexpr in
+    let free = freeNamesType free x.tyIdent in
+    let free = foldr setRemove free x.params in
+    let free = setRemove x.ident free in
+    free
+end
+
+lang DataFreeNames = FreeNames + DataAst
+  sem freeNamesExpr free =
+  | TmConDef x ->
+    let free = freeNamesExpr free x.inexpr in
+    let free = setRemove x.ident free in
+    let free = freeNamesType free x.tyIdent in
+    free
+  | TmConApp x ->
+    let free = freeNamesExpr free x.body in
+    let free = setInsert x.ident free in
+    free
+end
+
+lang ExtFreeNames = FreeNames + ExtAst
+  sem freeNamesExpr free =
+  | TmExt x ->
+    let free = freeNamesExpr free x.inexpr in
+    let free = setRemove x.ident free in
+    let free = freeNamesType free x.tyIdent in
+    free
 end
 
 lang MatchFreeVars = FreeVars + MatchAst + NamedPat + SeqEdgePat
@@ -64,8 +164,70 @@ lang MatchFreeVars = FreeVars + MatchAst + NamedPat + SeqEdgePat
   | pat -> sfold_Pat_Pat bindVarsPat acc pat
 end
 
+lang MatchFreeNames = FreeNames + MatchAst
+  sem freeNamesExpr free =
+  | TmMatch x ->
+    let free = freeNamesExpr free x.thn in
+    -- NOTE(vipa, 2025-03-19): This will remove whatever the pattern
+    -- itself binds from free, hence the weird order
+    let free = freeNamesPat free x.pat in
+    let free = freeNamesExpr free x.target in
+    let free = freeNamesExpr free x.els in
+    free
+end
+
+lang NamedPatFreeNames = FreeNames + NamedPat
+  sem freeNamesPat free =
+  | PatNamed {ident = PName ident} -> setRemove ident free
+end
+
+lang SeqEdgePatFreeNames = FreeNames + SeqEdgePat
+  sem freeNamesPat free =
+  | PatSeqEdge (x & {middle = PName ident}) ->
+    let free = setRemove ident free in
+    let free = foldl freeNamesPat free x.prefix in
+    let free = foldl freeNamesPat free x.postfix in
+    free
+end
+
+lang DataPatFreeNames = FreeNames + DataPat
+  sem freeNamesPat free =
+  | PatCon x ->
+    let free = freeNamesPat free x.subpat in
+    let free = setInsert x.ident free in
+    free
+end
+
+-- VariantTypeFreeNames?
+
+lang ConTypeFreeNames = FreeNames + ConTypeAst
+  sem freeNamesType free =
+  | TyCon x -> setInsert x.ident free
+end
+
+-- TyData?
+
+lang VarTypeFreeNames = FreeNames + VarTypeAst
+  sem freeNamesType free =
+  | TyVar x -> setInsert x.ident free
+end
+
+lang AllTypeFreeNames = FreeNames + AllTypeAst
+  sem freeNamesType free =
+  | TyAll x ->
+    let free = freeNamesType free x.ty in
+    let free = setRemove x.ident free in
+    free
+end
+
 lang MExprFreeVars =
   VarFreeVars + LamFreeVars + LetFreeVars + RecLetsFreeVars + MatchFreeVars
+end
+
+lang MExprFreeNames =
+  LamFreeNames + LetFreeNames + RecLetsFreeNames + TypeFreeNames + DataFreeNames +
+  ExtFreeNames + MatchFreeNames + NamedPatFreeNames + SeqEdgePatFreeNames +
+  DataPatFreeNames + ConTypeFreeNames + VarTypeFreeNames + AllTypeFreeNames + VarFreeNames
 end
 
 lang TestLang = MExprFreeVars + MExprSym + BootParser end
