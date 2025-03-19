@@ -9,123 +9,71 @@ include "digraph.mc"
 include "name.mc"
 include "set.mc"
 include "mexpr/ast.mc"
-include "mexpr/call-graph.mc"
 include "mexpr/type-check.mc"
+include "mexpr/free-vars.mc"
 
-lang MExprExtract = MExprAst + MExprCallGraph
+lang MExprExtract = MExprAst + MExprAsDecl + MExprFreeNames
   sem extractAst : Set Name -> Expr -> Expr
-  sem extractAst identifiers =
-  | ast -> match extractAstH identifiers ast with (_, ast) in ast
-
-  sem extractAstH : Set Name -> Expr -> (Set Name, Expr)
-  sem extractAstH used =
-  | TmLet t ->
-    match extractAstH used t.inexpr with (used, inexpr) in
-    if setMem t.ident used then
-      let used = collectIdentifiersType used t.tyBody in
-      let used = collectIdentifiersExpr used t.body in
-      (used, TmLet {t with inexpr = inexpr, ty = tyTm inexpr})
-    else (used, inexpr)
-  | TmRecLets t ->
-    let bindingIdents = map (lam bind. bind.ident) t.bindings in
-    recursive let dfs = lam g. lam visited. lam ident.
-      if setMem ident visited then visited
-      else
-        let visited = setInsert ident visited in
-        foldl
-          (lam visited. lam ident. dfs g visited ident)
-          visited (digraphSuccessors ident g) in
-    let collectBindIdents = lam used. lam bind.
-      let used = collectIdentifiersType used bind.tyBody in
-      collectIdentifiersExpr used bind.body in
-    match extractAstH used t.inexpr with (used, inexpr) in
-    let g = constructCallGraph (TmRecLets t) in
-    let visited = setEmpty nameCmp in
-    let usedIdents =
-      foldl
-        (lam visited. lam ident.
-          if setMem ident used then dfs g visited ident else visited)
-        visited bindingIdents in
-    let usedBinds =
-      filter
-        (lam bind. setMem bind.ident usedIdents)
-        t.bindings in
-    let used = foldl collectBindIdents used usedBinds in
-    if null usedBinds then (used, inexpr)
-    else (used, TmRecLets {t with bindings = usedBinds, inexpr = inexpr})
-  | TmType t ->
-    match extractAstH used t.inexpr with (used, inexpr) in
-    if setMem t.ident used then (used, TmType {t with inexpr = inexpr})
-    else (used, inexpr)
-  | TmConDef t ->
-    let constructorIsUsed = lam used.
-      match t.tyIdent with TyArrow {to = TyCon {ident = varTyId}} then
-        or (setMem t.ident used) (setMem varTyId used)
-      else setMem t.ident used in
-    match extractAstH used t.inexpr with (used, inexpr) in
-    let used = collectIdentifiersType used t.tyIdent in
-    if constructorIsUsed used then (used, TmConDef {t with inexpr = inexpr})
-    else (used, inexpr)
-  | TmUtest t -> extractAstH used t.next
-  | TmExt t ->
-    let used = collectIdentifiersType used t.tyIdent in
-    match extractAstH used t.inexpr with (used, inexpr) in
-    if setMem t.ident used then (used, TmExt {t with inexpr = inexpr})
-    else (used, inexpr)
-  | t ->
+  sem extractAst identifiers = | ast ->
     -- NOTE(larshum, 2022-09-06): In the base case, we return the integer
     -- literal 0, rather than an empty record, as the former works better in
     -- our C compiler.
-    (used, TmConst {val = CInt {val = 0}, ty = TyInt {info = infoTm t},
-                    info = infoTm t})
+    let defaultBase = TmConst
+      { val = CInt {val = 0}
+      , ty = TyInt {info = NoInfo ()}
+      , info = NoInfo ()
+      } in
+    (extractAstExpr identifiers defaultBase ast).1
 
-  sem collectIdentifiersExpr : Set Name -> Expr -> Set Name
-  sem collectIdentifiersExpr used =
-  | ast -> collectIdentifiersExprH (setEmpty nameCmp) used ast
+  sem extractAstExpr : Set Name -> Expr -> Expr -> (Set Name, Expr)
+  sem extractAstExpr used base = | tm ->
+    match exprAsDecl tm with Some (decl, expr) then
+      match extractAstExpr used base expr with (used, expr) in
+      match extractAstDecl used decl with Some (used, decl)
+      then (used, declAsExpr expr decl)
+      else (used, expr)
+    else (used, base)
 
-  sem collectIdentifiersExprH : Set Name -> Set Name -> Expr -> Set Name
-  sem collectIdentifiersExprH bound used =
-  | TmVar t ->
-    if setMem t.ident bound then used else setInsert t.ident used
-  | TmLam t ->
-    let bound = setInsert t.ident bound in
-    collectIdentifiersExprH bound used t.body
-  | TmMatch t ->
-    let used = collectIdentifiersExprH bound used t.target in
-    match collectIdentifiersPat (bound, used) t.pat with (bound, used) in
-    let used = collectIdentifiersExprH bound used t.thn in
-    collectIdentifiersExprH bound used t.els
-  | TmConApp t ->
-    let used =
-      if setMem t.ident bound then used else setInsert t.ident used
-    in
-    collectIdentifiersExprH bound used t.body
-  | ast -> sfold_Expr_Expr (collectIdentifiersExprH bound) used ast
+  sem extractAstDecl : Set Name -> Decl -> Option (Set Name, Decl)
+  sem extractAstDecl used =
+  -- NOTE(vipa, 2025-03-19): Utests cannot be used; they don't define
+  -- anything
+  | DeclUtest _ -> None ()
 
-  sem collectIdentifiersType : Set Name -> Type -> Set Name
-  sem collectIdentifiersType used =
-  | TyCon t -> setInsert t.ident used
-  | ty -> sfold_Type_Type collectIdentifiersType used ty
+  -- NOTE(vipa, 2025-03-19): All these define exactly one name that's
+  -- only in scope after the Decl, thus they can be treated
+  -- identically
+  | decl & (DeclConDef {ident = ident} | DeclLet {ident = ident} | DeclType {ident = ident} | DeclExt {ident = ident}) ->
+    if setMem ident used then
+      let used = mapRemove ident used in
+      let used = sfold_Decl_Expr freeNamesExpr used decl in
+      let used = sfold_Decl_Type freeNamesType used decl in
+      Some (used, decl)
+    else None ()
 
-  sem collectIdentifiersPat : (Set Name, Set Name) -> Pat -> (Set Name, Set Name)
-  sem collectIdentifiersPat boundUsed =
-  | PatNamed t ->
-    match boundUsed with (bound, used) in
-    (bound, _collectPatNamed bound used t.ident)
-  | PatSeqEdge t ->
-    match foldl collectIdentifiersPat boundUsed t.prefix with (bound, used) in
-    let used = _collectPatNamed bound used t.middle in
-    foldl collectIdentifiersPat (bound, used) t.postfix
-  | PatCon t ->
-    match boundUsed with (bound, used) in
-    let used = if setMem t.ident bound then used else setInsert t.ident used in
-    collectIdentifiersPat (bound, used) t.subpat
-  | pat -> sfold_Pat_Pat collectIdentifiersPat boundUsed pat
-
-  sem _collectPatNamed : Set Name -> Set Name -> PatName -> Set Name
-  sem _collectPatNamed bound used =
-  | PName id -> if setMem id bound then used else setInsert id used
-  | PWildcard _ -> used
+  -- NOTE(vipa, 2025-03-19): RecLets are harder because they define
+  -- multiple things simultaneously with potential mutual dependency
+  | DeclRecLets x ->
+    let bindingToUsed = lam acc. lam binding.
+      let usedHere = freeNames binding.body in
+      let usedHere = freeNamesType usedHere binding.tyAnnot in
+      mapInsert binding.ident usedHere acc in
+    let usedInBindings = foldl bindingToUsed (mapEmpty nameCmp) x.bindings in
+    let transitiveClosure
+      : all x. (Map x (Set x)) -> Set x -> Set x
+      = lam trans. lam initial.
+        recursive let work = lam curr. lam new.
+          let findNew = lam acc. lam x.
+            optionMapOr acc (setUnion acc) (mapLookup x trans) in
+          let new = setSubtract (setFold findNew (setEmpty (mapGetCmpFun curr)) new) curr in
+          if setIsEmpty new then curr else
+          work (setUnion curr new) new in
+        work initial initial in
+    let used = transitiveClosure usedInBindings used in
+    match filter (lam b. setMem b.ident used) x.bindings with bindings & ([_] ++ _) then
+      let used = foldl (lam used. lam b. setRemove b.ident used) used bindings in
+      Some (used, DeclRecLets {x with bindings = bindings})
+    else None ()
 end
 
 lang TestLang =
@@ -268,7 +216,6 @@ with expr2str extConApp using eqString in
 let multiConExtract = preprocess (bindall_ [
   type_ "T" [] (tyvariant_ []),
   condef_ "A" (tyarrow_ tyint_ (tycon_ "T")),
-  condef_ "B" (tyarrow_ tyint_ (tycon_ "T")),
   nlet_ f (tyarrow_ tyint_ (tycon_ "T")) (ulam_ "x" (conapp_ "A" (var_ "x"))),
   int_ 0
 ]) in
