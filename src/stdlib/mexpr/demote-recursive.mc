@@ -1,8 +1,9 @@
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
-include "mexpr/call-graph.mc"
+include "mexpr/free-vars.mc"
 include "mexpr/eq.mc"
 include "mexpr/symbolize.mc"
+include "digraph.mc"
 
 -- Performs a "demotion" of all recursive bindings in the given expression.
 -- The result is that
@@ -10,56 +11,39 @@ include "mexpr/symbolize.mc"
 --    let-expressions.
 -- 2. Bindings are split up into multiple recursive let-expressions, such that
 --    all bindings of each resulting recursive let are dependent on each other.
-lang MExprDemoteRecursive = MExprAst + MExprCallGraph
+lang MExprDemoteRecursive = MExprAst + MExprFreeVars
   sem demoteRecursive : Expr -> Expr
   sem demoteRecursive =
+  | tm -> smap_Expr_Expr demoteRecursive tm
   | TmRecLets t ->
-    let demoteBindingBody = lam bind.
-      {bind with body = demoteRecursive bind.body}
-    in
-    let bindingId = lam bind. (bind.ident, bind) in
-    let constructRecLets = lam acc. lam binds.
-      TmRecLets {bindings = binds, inexpr = acc, ty = tyTm acc, info = t.info}
-    in
-    let bindings = map demoteBindingBody t.bindings in
-    let g = constructCallGraph (TmRecLets {t with bindings = bindings}) in
-    let sccs = digraphTarjan g in
-    let bindMap = mapFromSeq nameCmp (map bindingId bindings) in
-    foldl
-      (lam acc. lam scc.
-        let addBind = lam binds. lam componentId.
-          -- NOTE(larshum, 2023-04-20): The call graph includes bound identifiers
-          -- in the bodies of the bindings, but we only care about the bindings.
-          match mapLookup componentId bindMap with Some binding then
-            snoc binds binding
-          else binds
-        in
-        let binds = foldl addBind [] scc in
-        switch binds
-        case [] then acc
-        case [bind] then
-          if isSelfRecursive bind.ident false bind.body then
-            constructRecLets acc [bind]
-          else toLetBinding acc bind
-        case _ then
-          -- NOTE(larshum, 2023-04-20): We intentionally reverse the bindings
-          -- to keep them in declaration order.
-          constructRecLets acc (reverse binds)
-        end)
-      (demoteRecursive t.inexpr) (reverse sccs)
-  | t -> smap_Expr_Expr demoteRecursive t
-
-  sem isSelfRecursive : Name -> Bool -> Expr -> Bool
-  sem isSelfRecursive ident acc =
-  | TmVar {ident = id} -> if nameEq ident id then true else acc
-  | t -> sfold_Expr_Expr (isSelfRecursive ident) acc t
-
-  sem toLetBinding : Expr -> RecLetBinding -> Expr
-  sem toLetBinding inexpr =
-  | bind ->
-    TmLet {
-      ident = bind.ident, tyAnnot = bind.tyAnnot, tyBody = bind.tyBody,
-      body = bind.body, inexpr = inexpr, ty = tyTm inexpr, info = bind.info }
+    let f = lam acc. lam binding.
+      ( mapInsert binding.ident (binding, freeVars binding.body) acc
+      , {binding with body = demoteRecursive binding.body}
+      ) in
+    match mapAccumL f (mapEmpty nameCmp) t.bindings with (usedMap, bindings) in
+    let g = mapFoldWithKey (lam g. lam k. lam. digraphMaybeAddVertex k g)
+      (digraphEmpty nameCmp (lam. lam. true))
+      usedMap in
+    let f = lam g. lam from. lam pair.
+      setFold (lam g. lam to. if mapMem to usedMap then digraphAddEdge from to () g else g) g pair.1 in
+    let g = mapFoldWithKey f g usedMap in
+    let attachGroup = lam group. lam inexpr.
+      switch group
+      case [] then
+        -- TODO(vipa, 2025-03-19): Is this even possible? It's in the
+        -- old code
+        inexpr
+      case [name] then
+        match mapFindExn name usedMap with (binding, free) in
+        if setMem name free
+        then TmRecLets {t with inexpr = inexpr, bindings = [binding]}
+        else TmLet {ident = binding.ident, tyAnnot = binding.tyAnnot, tyBody = binding.tyBody, body = binding.body, inexpr = inexpr, ty = t.ty, info = binding.info}
+      case names then
+        let bindings = mapReverse (lam name. (mapFindExn name usedMap).0) names in
+        TmRecLets {t with inexpr = inexpr, bindings = bindings}
+      end in
+    let inexpr = demoteRecursive t.inexpr in
+    foldr attachGroup inexpr (digraphTarjan g)
 end
 
 lang TestLang = MExprDemoteRecursive + MExprEq end
