@@ -814,9 +814,6 @@ testMain
         , "stdlib/ext/ext-test.mc"
         , "stdlib/ext/local-search.mc"
         , "stdlib/ext/arr-ext.mc"
-        , "stdlib/ext/cblas-ext.mc"
-        , "stdlib/ext/vec-ext.mc"
-        , "stdlib/ext/mat-ext.mc"
         , "stdlib/ext/reflection-ext.mc"
         , "test/examples/external/ext-list-map.mc"
         , "test/examples/external/ext-list-concat-map.mc"
@@ -1062,6 +1059,9 @@ testMain
         [ "stdlib/ext/math-ext.mc"
         , "stdlib/ext/matrix-ext.mc"
         , "stdlib/ext/dist-ext.mc"
+        , "stdlib/ext/cblas-ext.mc"
+        , "stdlib/ext/mat-ext.mc"
+        , "stdlib/ext/vec-ext.mc"
         ] )
     }
 
