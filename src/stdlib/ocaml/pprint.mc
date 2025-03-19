@@ -554,6 +554,11 @@ lang OCamlPrettyPrint =
       ]
     )
   | OTmArray t ->
+    let asChar = lam x. match x with TmConst {val = CChar {val = c}} then Some c else None () in
+    let strComment =
+      match optionMapM asChar t.tms with Some str then
+        join [" (* \"", escapeString str, "\" *)"]
+      else "" in
     match mapAccumL (lam env. lam tm. pprintCode (pprintIncr indent) env tm)
                     env t.tms
     with (env,tms) then
@@ -561,7 +566,7 @@ lang OCamlPrettyPrint =
         strJoin (concat ";" (pprintNewline (pprintIncr indent)))
                 (map (lam t. join ["(", t, ")"]) tms)
       in
-      (env,join ["[| ", merged, " |]"])
+      (env,join ["[| ", merged, " |]", strComment])
     else never
   | OTmTuple {values = values} ->
     match mapAccumL (pprintCode indent) env values
