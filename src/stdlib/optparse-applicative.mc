@@ -1,0 +1,605 @@
+-- This file implements an argument parser using an applicative
+-- interface, inspired by (but with many less features than)
+-- https://hackage.haskell.org/package/optparse-applicative
+
+-- The key idea of the interface is to have a central type `OptParser
+-- a` that represents a set of options that can be parsed from a
+-- commandline to produce a value of type `a`. This type is a functor
+-- (via `optMap`), an applicative (via `optPure` and `optApply`), and
+-- supports alternatives (via `optOr`). Parsing a command line is done
+-- with `optParse`, and an auto-generated `--help` command can be
+-- added with `optParserWithHelp`. For examples, see the tests at the
+-- end of the file.
+
+-- TODO(vipa, 2025-03-28): Some features missing from this library
+-- that are present in the Haskell package seem particularly
+-- interesting to port:
+-- * Subcommands (e.g., `eval` and `compile` for `mi`).
+-- * The ability to specify repeatable flags (`some` and `many` in
+--   Haskell)
+-- * Automatic generation of auto-complete interfaces.
+
+include "common.mc"
+include "option.mc"
+include "either.mc"
+include "seq.mc"
+include "string.mc"
+
+type OptName
+con OptShort : Char -> OptName
+con OptLong : String -> OptName
+
+let eqOptName : OptName -> OptName -> Bool
+  = lam a. lam b. switch (a, b)
+    case (OptShort a, OptShort b) then eqc a b
+    case (OptLong a, OptLong b) then eqString a b
+    case _ then false
+    end
+
+let optNameToStr : OptName -> String
+  = lam a. switch a
+    case OptShort c then ['-', c]
+    case OptLong str then concat "--" str
+    end
+
+type OptReader a
+con OptWithArg : all a. {names : [OptName], parse : String -> Either String a} -> OptReader a
+con OptNoArg : all a. {names : [OptName], value : a} -> OptReader a
+con OptPositional : all a. {parse : String -> Either String a} -> OptReader a
+
+type OptItem a = {reader : OptReader a, shortForm : String, description : String}
+
+type OptParser a
+con NilP : all a. a -> OptParser a
+con OptP : all a. OptItem a -> OptParser a
+con AltP : all a. (OptParser a, OptParser a) -> OptParser a
+-- NOTE(vipa, 2025-03-26): We don't actually handle existentials
+-- properly, when we pattern match on `MultP` the `x` will be
+-- instantiated to *anything*, instead of some unknowable type. Be
+-- *very* cautious when unwrapping it.
+con MultP : all x. all a. (OptParser (x -> a), OptParser x) -> OptParser a
+
+let optPure
+  : all a. a -> OptParser a
+  = lam a. NilP a
+
+let optApply
+  : all a. all b. OptParser (a -> b) -> OptParser a -> OptParser b
+  = lam f. lam a.
+    MultP (f, a)
+
+let optOr
+  : all a. OptParser a -> OptParser a -> OptParser a
+  = lam a. lam b. AltP (a, b)
+
+let _optItemMap : all a. all b. (a -> b) -> OptItem a -> OptItem b
+  = lam f. lam o.
+    { reader = switch o.reader
+      case OptWithArg x then
+        OptWithArg {names = x.names, parse = lam s. eitherMapRight f (x.parse s)}
+      case OptNoArg x then
+        OptNoArg {names = x.names, value = f x.value}
+      case OptPositional x then
+        OptPositional {parse = lam s. eitherMapRight f (x.parse s)}
+      end
+    , shortForm = o.shortForm
+    , description = o.description
+    }
+
+recursive let optMap
+  : all a. all b. (a -> b) -> OptParser a -> OptParser b
+  = lam f. lam p. switch p
+    case NilP o then NilP (f o)
+    case OptP o then OptP (_optItemMap f o)
+    case AltP (a, b) then AltP (optMap f a, optMap f b)
+    case MultP (a, b) then
+      -- NOTE(vipa, 2025-03-26): Emulate an existential type by
+      -- creating a new empty type
+      type Never in
+      let a : OptParser (Never -> a) = a in
+      MultP (optMap (lam f2. lam x. f (f2 x)) a, b)
+    end
+end
+
+let optMap2
+  : all a. all b. all c. (a -> b -> c) -> OptParser a -> OptParser b -> OptParser c
+  = lam f. lam a. lam b. optApply (optMap f a) b
+
+let optMap3
+  : all a. all b. all c. all d. (a -> b -> c -> d) -> OptParser a -> OptParser b -> OptParser c -> OptParser d
+  = lam f. lam a. lam b. lam c. optApply (optApply (optMap f a) b) c
+
+let optMap4
+  : all a. all b. all c. all d. all e. (a -> b -> c -> d -> e) -> OptParser a -> OptParser b -> OptParser c -> OptParser d -> OptParser e
+  = lam f. lam a. lam b. lam c. lam d. optApply (optApply (optApply (optMap f a) b) c) d
+
+let optMap5
+  : all a. all b. all c. all d. all e. all f. (a -> b -> c -> d -> e -> f) -> OptParser a -> OptParser b -> OptParser c -> OptParser d -> OptParser e -> OptParser f
+  = lam f. lam a. lam b. lam c. lam d. lam e. optApply (optApply (optApply (optApply (optMap f a) b) c) d) e
+
+let optArgDef : all a. {long : String, short : String, parse : String -> Either String a, arg : String, description : String} =
+  { long = ""
+  , short = ""
+  , parse = lam. never
+  , arg = "ARG"
+  , description = ""
+  }
+let optArg : all a. {long : String, short : String, parse : String -> Either String a, arg : String, description : String} -> OptParser a = lam conf.
+  let names = map (lam c. OptShort c) conf.short in
+  let names = if null conf.long
+    then names
+    else cons (OptLong conf.long) names in
+  let shortForm = match names with [name] ++ _
+    then join [optNameToStr name, " ", conf.arg]
+    else error "optArg called with neither 'long' nor 'short'" in
+  OptP
+  { reader = OptWithArg
+    { names = names
+    , parse = conf.parse
+    }
+  , shortForm = shortForm
+  , description = conf.description
+  }
+
+let optNoArgDef : all a. a -> {long : String, short : String, value : a, description : String} = lam value.
+  { long = ""
+  , short = ""
+  , value = value
+  , description = ""
+  }
+let optNoArg : all a. {long : String, short : String, value : a, description : String} -> OptParser a = lam conf.
+  let names = map (lam c. OptShort c) conf.short in
+  let names = if null conf.long
+    then names
+    else cons (OptLong conf.long) names in
+  let shortForm = match names with [name] ++ _
+    then optNameToStr name
+    else error "optNoArg called with neither 'long' nor 'short'" in
+  OptP
+  { reader = OptNoArg
+    { names = names
+    , value = conf.value
+    }
+  , shortForm = shortForm
+  , description = conf.description
+  }
+
+let optFlagDef =
+  { long = ""
+  , short = ""
+  , description = ""
+  }
+let optFlag = lam conf.
+  let names = map (lam c. OptShort c) conf.short in
+  let names = if null conf.long
+    then names
+    else cons (OptLong conf.long) names in
+  let shortForm = match names with [name] ++ _
+    then optNameToStr name
+    else error "optNoArg called with neither 'long' nor 'short'" in
+  let present = OptP
+    { reader = OptNoArg
+      { names = names
+      , value = true
+      }
+    , shortForm = shortForm
+    , description = conf.description
+    } in
+  optOr present (optPure false)
+
+let optPosDef : all a. {parse : String -> Either String a, arg : String, description : String} =
+  { parse = lam. never
+  , arg = "ARG"
+  , description = ""
+  }
+let optPos : all a. {parse : String -> Either String a, arg : String, description : String} -> OptParser a
+  = lam conf. OptP
+    { reader = OptPositional {parse = conf.parse}
+    , shortForm = conf.arg
+    , description = conf.description
+    }
+let optPosStrDef =
+  { arg = "STRING"
+  , description = ""
+  }
+let optPosStr : {arg : String, description : String} -> OptParser String
+  = lam conf. optPos {parse = lam s. Right s, arg = conf.arg, description = conf.description}
+
+type ParserSearchRet r
+con PSROk : all r. ([String], OptParser r) -> ParserSearchRet r
+con PSRNotFound : all r. () -> ParserSearchRet r
+con PSRError : all r. String -> ParserSearchRet r
+
+recursive let _searchParser
+  : all a. (all r. OptItem r -> ParserSearchRet r) -> OptParser a -> ParserSearchRet a
+  = lam f. lam p. switch p
+    case NilP _ then PSRNotFound ()
+    case OptP o then f o
+    case AltP (a, b) then
+      switch (_searchParser #frozen"f" a, _searchParser #frozen"f" b)
+      case (PSROk (args, a), PSROk (_, b)) then
+        PSROk (args, AltP (a, b))
+      case (res & PSRError _, _) | (_, res & PSRError _) then
+        res
+      case (res & PSROk _, _) | (_, res & PSROk _) then
+        res
+      case (PSRNotFound _, PSRNotFound _) then
+        PSRNotFound ()
+      end
+    case MultP (a, b) then
+      -- NOTE(vipa, 2025-03-26): Emulate an existential type by
+      -- creating a new empty type
+      type Never in
+      let a : OptParser (Never -> a) = a in
+      switch _searchParser #frozen"f" a
+      case PSROk (args, a) then
+        PSROk (args, optApply a b)
+      case PSRNotFound _ then
+        switch _searchParser #frozen"f" b
+        case PSROk (args, b) then
+          PSROk (args, optApply a b)
+        case PSRNotFound _ then
+          PSRNotFound ()
+        case PSRError err then
+          PSRError err
+        end
+      case PSRError err then
+        PSRError err
+      end
+    end
+end
+
+type OptParseMode
+con OPMBoth : () -> OptParseMode
+con OPMPositional : () -> OptParseMode
+
+let _processOpt : all r. OptName -> [String] -> OptItem r -> ParserSearchRet r
+  = lam name. lam args. lam item. switch item.reader
+    case OptWithArg x then
+      if seqMem eqOptName x.names name then
+        match args with [arg] ++ args then
+          switch x.parse arg
+          case Left err then
+            PSRError (join ["Option '", optNameToStr name, "' was given a malformed argument: ", err])
+          case Right a then
+            PSROk (args, NilP a)
+          end
+        else PSRError (join ["Option '", optNameToStr name, "' requires an argument."])
+      else PSRNotFound ()
+    case OptNoArg x then
+      if seqMem eqOptName x.names name then
+        PSROk (args, NilP x.value)
+      else PSRNotFound ()
+    case OptPositional _ then
+      PSRNotFound ()
+    end
+
+let _processPos : all r. String -> [String] -> OptItem r -> ParserSearchRet r
+  = lam arg. lam args. lam item. switch item.reader
+    case OptPositional x then
+      switch x.parse arg
+      case Left err then
+        PSRError (join ["Could not parse positional argument: ", err])
+      case Right a then
+        PSROk (args, NilP a)
+      end
+    case OptWithArg _ | OptNoArg _ then
+      PSRNotFound ()
+    end
+
+let _optStepParser
+  : all a. OptParseMode -> String -> [String] -> OptParser a -> (OptParseMode, ParserSearchRet a)
+  = lam mode. lam arg. lam args. lam p.
+    switch (mode, arg)
+    case (OPMBoth _, "--") then (OPMPositional (), PSROk (args, p))
+    case (OPMBoth _, "--" ++ long) then
+      let name = OptLong long in
+      let f = lam item. _processOpt name args item in
+      (mode, _searchParser #frozen"f" p)
+    case (OPMBoth _, "-" ++ shorts) then
+      recursive let work = lam args. lam p. lam names.
+        match names with [n] ++ names then
+          let name = OptShort n in
+          let f = lam item. _processOpt name args item in
+          switch _searchParser #frozen"f" p
+          case PSROk (args, p) then work args p names
+          case res & (PSRError _ | PSRNotFound _) then res
+          end
+        else PSROk (args, p)
+      in
+      (mode, work args p shorts)
+    case (_, positional) then
+      let f = lam item. _processPos positional args item in
+      (mode, _searchParser #frozen"f" p)
+    end
+
+type OptMissing
+con OptMissingOpt : String -> OptMissing
+con OptMissingMult : [OptMissing] -> OptMissing
+con OptMissingAlt : [OptMissing] -> OptMissing
+
+let _optMissingMult : OptMissing -> OptMissing -> OptMissing
+  = lam a. lam b. switch (a, b)
+    case (OptMissingMult as, OptMissingMult bs) then OptMissingMult (concat as bs)
+    case (OptMissingMult as, a) then OptMissingMult (snoc as a)
+    case (b, OptMissingMult bs) then OptMissingMult (cons b bs)
+    case (a, b) then OptMissingMult [a, b]
+    end
+
+let _optMissingAlt : OptMissing -> OptMissing -> OptMissing
+  = lam a. lam b. switch (a, b)
+    case (OptMissingAlt as, OptMissingAlt bs) then OptMissingAlt (concat as bs)
+    case (OptMissingAlt as, a) then OptMissingAlt (snoc as a)
+    case (b, OptMissingAlt bs) then OptMissingAlt (cons b bs)
+    case (a, b) then OptMissingAlt [a, b]
+    end
+
+recursive let _optMissingToString : OptMissing -> String
+  = lam o.
+    let mWithParens = lam o. match o with OptMissingAlt _
+      then snoc (cons '(' (_optMissingToString o)) ')'
+      else _optMissingToString o in
+    switch o
+    case OptMissingOpt str then str
+    case OptMissingMult ms then strJoin " " (map mWithParens ms)
+    case OptMissingAlt ms then strJoin " | " (map _optMissingToString ms)
+    end
+end
+
+type OptParseResult a
+con OptParseOk : all a. a -> OptParseResult a
+con OptParseMissing : all a. OptMissing -> OptParseResult a
+con OptParseError : all a. String -> OptParseResult a
+
+recursive let optParserEval
+  : all w. all a. OptParser a -> Either OptMissing a
+  = lam p. switch p
+    case NilP a then Right a
+    case OptP x then
+      Left (OptMissingOpt x.shortForm)
+    case AltP (a, b) then
+      switch (optParserEval a, optParserEval b)
+      case (Right x, _) | (_, Right x) then Right x
+      case (Left a, Left b) then Left (_optMissingAlt a b)
+      end
+    case MultP (a, b) then
+      -- NOTE(vipa, 2025-03-26): Emulate an existential type by
+      -- creating a new empty type
+      type Never in
+      let a : OptParser (Never -> a) = a in
+      switch (optParserEval a, optParserEval b)
+      case (Right a, Right b) then Right (a b)
+      case (Left a, Left b) then Left (_optMissingMult a b)
+      case (Left x, _) | (_, Left x) then Left x
+      end
+    end
+end
+
+let optParse
+  : all a. all w. [String] -> OptParser a -> Either String a
+  = lam args. lam p.
+    recursive let work = lam mode. lam args. lam p.
+      match args with [arg] ++ args then
+        switch _optStepParser mode arg args p
+        case (mode, PSROk (args, p)) then
+          work mode args p
+        case (_, PSRNotFound _) then
+          Left (join ["Unexpected argument '", arg, "'"])
+        case (_, PSRError err) then
+          Left err
+        end
+      else switch optParserEval p
+        case Left missing then
+          Left (concat "Missing argument(s):\n" (_optMissingToString missing))
+        case Right a then
+          Right a
+        end
+    in work (OPMBoth ()) args p
+
+type DescTree
+con DescTreeOpt : String -> DescTree
+con DescTreeMult : [DescTree] -> DescTree
+con DescTreeAlt : {alts : [DescTree], optional : Bool} -> DescTree
+
+let _optDescTreeMult : DescTree -> DescTree -> DescTree
+  = lam a. lam b. switch (a, b)
+    case (DescTreeMult [], dt) | (dt, DescTreeMult []) then dt
+    case (DescTreeMult as, DescTreeMult bs) then DescTreeMult (concat as bs)
+    case (DescTreeMult as, a) then DescTreeMult (snoc as a)
+    case (b, DescTreeMult bs) then DescTreeMult (cons b bs)
+    case (a, b) then DescTreeMult [a, b]
+    end
+
+let _optDescTreeAlt : DescTree -> DescTree -> DescTree
+  = lam a. lam b. switch (a, b)
+    case (DescTreeAlt as, DescTreeAlt bs) then
+      DescTreeAlt {alts = concat as.alts bs.alts, optional = or as.optional bs.optional}
+    case (DescTreeAlt as, a) then
+      DescTreeAlt {as with alts = snoc as.alts a}
+    case (b, DescTreeAlt bs) then
+      DescTreeAlt {bs with alts = cons b bs.alts}
+    case (a, b) then
+      DescTreeAlt {alts = [a, b], optional = false}
+    end
+
+recursive let _optDescTreeToString : DescTree -> String
+  = lam t.
+    let mWithParens = lam o. match o with DescTreeAlt {optional = false}
+      then snoc (cons '(' (_optDescTreeToString o)) ')'
+      else _optDescTreeToString o in
+    switch t
+    case DescTreeOpt str then str
+    case DescTreeMult dts then strJoin " " (map mWithParens dts)
+    case DescTreeAlt x then
+      let res = strJoin " | " (map _optDescTreeToString x.alts) in
+      if x.optional then snoc (cons '[' res) ']' else res
+    end
+end
+
+recursive let _describeTree : all a. OptParser a -> (DescTree, [(String, String)])
+  = lam p. switch p
+    case NilP _ then (DescTreeAlt {alts = [], optional = true}, [])
+    case OptP x then (DescTreeOpt x.shortForm, [(x.shortForm, x.description)])
+    case AltP (a, b) then
+      match _describeTree a with (aDesc, aOpts) in
+      match _describeTree b with (bDesc, bOpts) in
+      (_optDescTreeAlt aDesc bDesc, concat aOpts bOpts)
+    case MultP (a, b) then
+      -- NOTE(vipa, 2025-03-26): Emulate an existential type by
+      -- creating a new empty type
+      type Never in
+      let a : OptParser (Never -> a) = a in
+      match _describeTree a with (aDesc, aOpts) in
+      match _describeTree b with (bDesc, bOpts) in
+      (_optDescTreeMult aDesc bDesc, concat aOpts bOpts)
+    end
+end
+
+let optParserHelpText : all a. String -> String -> OptParser a -> String
+  = lam appName. lam bigDescription. lam p.
+    let bigDescription = switch bigDescription
+      case "" then ""
+      case _ ++ "\n\n" then bigDescription
+      case _ ++ "\n" then snoc bigDescription '\n'
+      case _ then concat bigDescription "\n\n"
+      end in
+    match _describeTree p with (dt, options) in
+    -- OPT(vipa, 2025-03-26): `distinct` is quadratic, could reduce to n log n
+    let options = distinct (lam a. lam b. if eqString a.0 b.0 then eqString a.1 b.1 else false) options in
+    let dts = match dt with DescTreeAlt {alts = alts} then alts else [dt] in
+    let shortUsage = strJoin "\n" (map (lam dt. join [appName, " ", _optDescTreeToString dt]) dts) in
+    let longest = foldl (lam acc. lam pair. maxi acc (length pair.0)) 0 options in
+    let padToLength = lam l. lam str. concat str (make (subi l (length str)) ' ') in
+    let optToStr = lam pair. join ["  ", padToLength longest pair.0, " ", pair.1] in
+    let options = strJoin "\n" (map optToStr options) in
+    join [shortUsage, "\n\n", bigDescription, "Options:\n", options]
+
+let optParserWithHelp : all a. String -> String -> OptParser a -> OptParser a
+  = lam appName. lam bigDescription. lam p.
+    let help = optFlag
+      { optFlagDef with
+        short = "h"
+      , long = "help"
+      } in
+    let f = lam help.
+      if help then printLn (optParserHelpText appName bigDescription p); exit 1 else lam x. x in
+    optMap2 f help p
+
+mexpr
+
+type Example in
+con Ex1 : {shared : Int, opt1 : Bool, extra : Bool} -> Example in
+con Ex2 : {shared : Int, opt2 : Int} -> Example in
+
+let shared : OptParser Int = optArg
+  { optArgDef with
+    long = "shared"
+  , short = "s"
+  , parse = lam s.
+    if stringIsInt s then Right (string2int s) else Left "not an integer"
+  , arg = "INT"
+  , description = "shared is a thing"
+  } in
+let parseEx1 : OptParser Example =
+  let mk = lam shared. lam opt1. lam extra. Ex1 {shared = shared, opt1 = opt1, extra = extra} in
+  let opt1 : OptParser Bool = optNoArg
+    { optNoArgDef true with
+      long = "opt1"
+    , description = "opt1 is here"
+    } in
+  let opt1 : OptParser Bool = optOr opt1 (optPure false) in
+  let extra = optFlag {optFlagDef with long = "extra", description = "extra extra"} in
+  optMap3 mk shared opt1 extra in
+let parseEx2 : OptParser Example =
+  let mk = lam shared. lam opt2. Ex2 {shared = shared, opt2 = opt2} in
+  let yes : OptParser Int = optNoArg
+    { optNoArgDef 0 with
+      long = "yes"
+    , description = "yes yes"
+    } in
+  let no : OptParser Int = optNoArg
+    { optNoArgDef 1 with
+      long = "no"
+    , description = "no no"
+    } in
+  optApply (optMap mk shared) (optOr yes no) in
+
+let thing : OptParser Float = optArg
+  { optArgDef with
+    long = "thing"
+  , parse = lam s.
+    if stringIsFloat s then Right (string2float s) else Left "not an float"
+  , arg = "FLOAT"
+  , description = "thing is a thing"
+  } in
+
+let filename : OptParser String = optPosStr {arg = "FILENAME", description = "file and stuff"} in
+let parser = optMap3 (lam a. lam b. lam c. (a, b, c)) (optOr parseEx1 parseEx2) thing (optOr filename (optPure "")) in
+
+let test : [String] -> Either String (Example, Float, String)
+  = lam args. optParse args parser in
+
+utest test []
+with Left "Missing argument(s):\n(--shared INT | --shared INT (--yes | --no)) --thing FLOAT" in
+
+utest test ["--shared"]
+with Left "Option '--shared' requires an argument." in
+
+utest test ["--shared", "blue"]
+with Left "Option '--shared' was given a malformed argument: not an integer" in
+
+utest test ["--shared", "7", "--thing", "30"]
+with Right ((Ex1 {opt1 = false, shared = 7, extra = false}), 30., "") in
+
+utest test ["--shared", "7", "--opt1", "--thing", "30"]
+with Right ((Ex1 {opt1 = true, shared = 7, extra = false}), 30., "") in
+
+utest test ["--shared", "7", "file", "--opt1", "--thing", "30"]
+with Right ((Ex1 {opt1 = true, shared = 7, extra = false}), 30., "file") in
+
+utest test ["--opt1", "--shared", "7", "--thing", "30"]
+with Right ((Ex1 {opt1 = true, shared = 7, extra = false}), 30., "") in
+
+utest test ["--opt1"]
+with Left "Missing argument(s):\n--shared INT --thing FLOAT" in
+
+utest test ["--shared", "7", "--yes", "--thing", "30"]
+with Right ((Ex2 {opt2 = 0, shared = 7}), 30., "") in
+
+utest test ["--thing", "42.7", "--shared", "7", "--no"]
+with Right ((Ex2 {opt2 = 1, shared = 7}), 42.7, "") in
+
+utest test ["--shared", "7", "--no", "--opt1"]
+with Left "Unexpected argument '--opt1'" in
+
+let helpText = strJoin "\n"
+  [ "test (--shared INT [--opt1] [--extra] | --shared INT (--yes | --no)) --thing FLOAT [FILENAME]"
+  , ""
+  , "This thing can do stuff."
+  , ""
+  , "Options:"
+  , "  --shared INT  shared is a thing"
+  , "  --opt1        opt1 is here"
+  , "  --extra       extra extra"
+  , "  --yes         yes yes"
+  , "  --no          no no"
+  , "  --thing FLOAT thing is a thing"
+  , "  FILENAME      file and stuff"
+  ] in
+utest optParserHelpText "test" "This thing can do stuff." parser with helpText using eqString else lam l. lam. l in
+
+let helpText = strJoin "\n"
+  [ "test (--shared INT [--opt1] [--extra] | --shared INT (--yes | --no)) --thing FLOAT [FILENAME]"
+  , ""
+  , "Options:"
+  , "  --shared INT  shared is a thing"
+  , "  --opt1        opt1 is here"
+  , "  --extra       extra extra"
+  , "  --yes         yes yes"
+  , "  --no          no no"
+  , "  --thing FLOAT thing is a thing"
+  , "  FILENAME      file and stuff"
+  ] in
+utest optParserHelpText "test" "" parser with helpText using eqString else lam l. lam. l in
+
+()

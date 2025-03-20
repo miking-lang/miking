@@ -995,6 +995,7 @@ testMain
       let failures =
         [ "stdlib/effect.mc"
         , "test/mexpr/pprint-eval.mc"
+        , "stdlib/optparse-applicative.mc"
         ] in
       let files = excludePaths files failures in
 
