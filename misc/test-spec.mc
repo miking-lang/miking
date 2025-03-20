@@ -754,43 +754,7 @@ mexpr
 testMain
   [ { testColl "accelerate"
     with checkCondition = lam.
-      if scallb [
-        lam. sysCommandExists "nvcc",
-        lam. sysCommandExists "futhark",
-        lam. sysWithTempDir (lam td.
-          let checkProgPath = sysJoinPath td "check.cu" in
-          let contents = "
-          int main()
-          {
-              int c = 0;
-              cudaError_t r = cudaGetDeviceCount(&c);
-              if (r != cudaSuccess) {
-                 std::cout << cudaGetErrorString(r) << std::endl;
-                 return 0;
-              }
-              return c;
-          }
-          " in
-          writeFile checkProgPath contents;
-          let run = lam cmd. sysRunCommandWithTimingTimeout (Some 60.0) cmd "" td in
-
-          match run ["nvcc", "check.cu", "--output-file", "check.out"]
-          with (execTime, _) in
-          if gtf execTime 59.0 then
-            -- Assume it timed out or something else went wrong, should not
-            -- take more than a second...
-            false
-          else -- continue
-
-          match run ["./check.out"]
-          with (execTime, execResult) in
-          if gtf execTime 59.0 then
-            false
-          else
-            -- The return code should be positive if we have a CUDA device to run on
-            gti execResult.returncode 0
-        )
-      ]
+      if and (sysCommandExists "nvcc") (sysCommandExists "futhark")
       then ConditionsMet ()
       else ConditionsImpossible () -- TODO(vipa, 2023-04-25): figure out how to check if we have nvidia hardware
     , exclusions = lam api.
