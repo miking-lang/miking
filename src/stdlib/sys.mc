@@ -90,6 +90,36 @@ utest
   [exists, sysFileExists (sysTempDirName d)]
 with [true, false]
 
+let sysWithTempDir: all a. (String -> a) -> a = lam f.
+  let path = sysTempDirMake () in
+  let output = f path in
+  -- NOTE(johnwikman,2025-03-20): This assumes `rm -rf` semantics, as opposed
+  -- to the rmdir semantics which won't remove the directory unless it's empty.
+  sysDeleteDir path;
+  output
+
+utest
+  match sysWithTempDir (lam path.
+    (sysFileExists path, path)
+  ) with (inExists, path) in
+  let outExists = sysFileExists path in
+  [inExists, outExists]
+with [true, false]
+
+let sysWithTempFile: all a. (String -> a) -> a = lam f.
+  let path = sysTempFileMake () in
+  let output = f path in
+  sysDeleteFile path;
+  output
+
+utest
+  match sysWithTempFile (lam path.
+    (sysFileExists path, path)
+  ) with (inExists, path) in
+  let outExists = sysFileExists path in
+  [inExists, outExists]
+with [true, false]
+
 let sysRunCommandWithTimingTimeoutFileIO
     : Option Float -> [String] -> String -> String -> String -> String
       -> (Float, ReturnCode) =

@@ -5,13 +5,17 @@
 -- its truth table.
 
 
+
+-- ┌────────────────────┐
+-- │ Pure Boolean Logic │
+-- └────────────────────┘
+
 -- Logical NOT
 let not: Bool -> Bool =
   lam a. if a then false else true
 
 utest not true with false
 utest not false with true
-
 
 -- Logical AND
 let and: Bool -> Bool -> Bool =
@@ -49,7 +53,6 @@ utest someb [true] with true
 utest someb [false] with false
 utest someb [] with false
 
-
 -- Logical XOR
 let xor: Bool -> Bool -> Bool =
   lam a. lam b. if a then not b else b
@@ -70,10 +73,79 @@ utest xnor false true with false
 utest xnor false false with true
 
 
+-- ┌─────────────────────────────┐
+-- │ Short-circuit Boolean Logic │
+-- └─────────────────────────────┘
+
+-- Short-circuited Logical AND
+let scand: (() -> Bool) -> (() -> Bool) -> Bool =
+  lam a. lam b. if a () then b () else false
+
+utest scand (lam. true) (lam. true) with true
+utest scand (lam. true) (lam. false) with false
+utest scand (lam. false) (lam. true) with false
+utest scand (lam. false) (lam. false) with false
+
+utest
+  let r = ref 0 in
+  scand (lam. true) (lam. modref r 1; true);
+  deref r
+with 1
+
+utest
+  let r = ref 0 in
+  scand (lam. false) (lam. modref r 1; true);
+  deref r
+with 0
+
+-- Short-circuited Logical AND of sequence
+let scallb : [() -> Bool] -> Bool =
+  foldl (lam acc. lam p. scand (lam. acc) p) true
+
+utest scallb [lam. true, lam. true, lam. true] with true
+utest scallb [lam. false, lam. true, lam. true] with false
+utest scallb [lam. true] with true
+utest scallb [lam. false] with false
+utest scallb [] with true
+
+-- Short-circuited Logical OR
+let scor: (() -> Bool) -> (() -> Bool) -> Bool =
+  lam a. lam b. if a () then true else b ()
+
+utest scor (lam. true) (lam. true) with true
+utest scor (lam. true) (lam. false) with true
+utest scor (lam. false) (lam. true) with true
+utest scor (lam. false) (lam. false) with false
+
+utest
+  let r = ref 0 in
+  scor (lam. true) (lam. modref r 1; true);
+  deref r
+with 0
+
+utest
+  let r = ref 0 in
+  scor (lam. false) (lam. modref r 1; true);
+  deref r
+with 1
+
+-- Short-circuited Logical OR of sequence
+let scsomeb : [(() -> Bool)] -> Bool =
+  foldl (lam acc. lam p. scor (lam. acc) p) false
+
+utest scsomeb [lam. false, lam. false, lam. false] with false
+utest scsomeb [lam. false, lam. true, lam. true] with true
+utest scsomeb [lam. true] with true
+utest scsomeb [lam. false] with false
+utest scsomeb [] with false
+
+
+-- ┌───────────────────────────┐
+-- │ Boolean Utility Functions │
+-- └───────────────────────────┘
+
 -- Boolean equality
-let eqBool: Bool -> Bool -> Bool =
-  lam b1: Bool. lam b2: Bool.
-  if b1 then b2 else (if b2 then false else true)
+let eqBool: Bool -> Bool -> Bool = xnor
 
 utest eqBool false false with true
 utest eqBool false true  with false
