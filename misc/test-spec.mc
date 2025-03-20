@@ -1022,19 +1022,6 @@ testMain
       api.mark interpretFail (api.strsToPaths ["test/meta/recursive-let.mc"])
     }
 
-  , { testColl "ipopt"
-    with checkCondition = lam.
-      if eqi 0 (command "ocamlfind query ipoptml >/dev/null 2>&1")
-      then ConditionsMet ()
-      else ConditionsUnmet ()
-    , conditionalInclusions = lam api.
-      api.mark defaultTasks
-        (api.glob ["stdlib", "ipopt"] (IncludeSubs ()) (SuffixFile ".mc"));
-      api.mark {defaultTasks with interpret = Fail ()} (api.strsToPaths
-        [ "stdlib/ipopt/ipopt.mc"
-        ] )
-    }
-
   , { testColl "sundials"
     with checkCondition = lam.
       if eqi 0 (command "ocamlfind query sundialsml >/dev/null 2>&1")

@@ -20,7 +20,6 @@ include "multicore/atomic.ext-ocaml.mc"
 include "multicore/thread.ext-ocaml.mc"
 include "multicore/mutex.ext-ocaml.mc"
 include "multicore/cond.ext-ocaml.mc"
-include "ipopt/ipopt.ext-ocaml.mc"
 include "ext/reflection-ext.ext-ocaml.mc"
 
 
@@ -53,7 +52,6 @@ let globalExternalImplsMap : Map String [ExternalImpl] =
       distExtMap,
       matrixExtMap,
       fileExtMap,
-      ipoptExtMap,
       tomlExtMap,
       asyncExtMap,
       rtpplExtMap,
