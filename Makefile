@@ -96,7 +96,7 @@ uninstall:
 # or `misc/watch` to autorun tests when files change)
 
 .PHONY: test test-all test-quick
-test test-all test-quick:
+test test-all test-quick: lint
 test:
 	+ exec misc/test --bootstrapped smart
 
