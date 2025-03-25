@@ -5,7 +5,7 @@ include "../sys.mc"
 -- Returns the number of CUDA devices available on the system. Uses nvcc to
 -- retrieve the device count, so will also fail if nvcc is not present on the
 -- system.
-let cudaSysGetDeviceCount : () -> Option Int = lam.
+let cudaGetDeviceCount : () -> Option Int = lam.
     if not (sysCommandExists "nvcc") then
         None ()
     else -- continue
