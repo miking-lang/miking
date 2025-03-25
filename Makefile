@@ -73,7 +73,7 @@ bootstrap: $(if $(wildcard build/$(BOOT_NAME)),,boot)
 	$(SET_STDLIB) $(SET_OCAMLPATH) build/$(MI_MID_NAME) compile src/main/mi.mc --output build/$(MI_NAME)
 
 .PHONY: cheat
-cheat:
+cheat: install
 	$(SET_STDLIB) $(SET_OCAMLPATH) mi compile src/main/mi.mc --output build/$(MI_CHEAT_NAME)
 
 

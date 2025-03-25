@@ -7,6 +7,8 @@ CURR=$(pwd)
 TARGETDIR=".${CURR#"$DIR"}"
 cd "$DIR"
 
+source "$DIR/misc/test-utils.sh"
+
 # TODO(vipa, 2023-05-15): We later want to transform arguments given
 # after "--" to be resolved relative to $TARGETDIR but given to
 # test-spec as relative to $DIR, but I don't know how to do that
@@ -16,6 +18,11 @@ if [ ! "$DIR" -ef "$TARGETDIR" ]; then
   exit 1
 fi
 
+# NOTE(wmuth, 2025-03-25): This function makes sure that installed mi exists if
+# user passes --installed and same for --bootstrapped, --cheated or none of them
+# Defined in ./test-utils.sh
+ensure_mi_exists "$@"
+
 if [ misc/test-spec -ot misc/test-spec.mc ]; then
   if command -v mi >/dev/null 2>&1; then
     # NOTE(vipa, 2024-11-22): Use built-in mi, with built-in stdlib
@@ -24,7 +31,7 @@ if [ misc/test-spec -ot misc/test-spec.mc ]; then
     # NOTE(vipa, 2024-11-22): Use bootstrapped mi, with repo-local stdlib and boot
     MCORE_LIBS=stdlib=$DIR/src/stdlib OCAMLPATH=$DIR/build/lib:$OCAMLPATH build/mi compile misc/test-spec.mc --output misc/test-spec
   else
-    echo "You need 'mi' to setup tup, e.g., by bootstrapping via 'make'"
+    echo "'mi' seems to have been removed after existance check. Please re-reun this script."
     exit 1
   fi
 fi
