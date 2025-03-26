@@ -47,7 +47,22 @@ con OptWithArg : all a. {names : [OptName], parse : String -> Either String a} -
 con OptNoArg : all a. {names : [OptName], value : a} -> OptReader a
 con OptPositional : all a. {parse : String -> Either String a} -> OptReader a
 
-type OptItem a = {reader : OptReader a, shortForm : String, description : String}
+-- NOTE(vipa, 2025-04-11): This kind of option is experimental, and
+-- notably absent from the original Haskell library. Normal options
+-- with arguments match regardless of the shape of their arguments,
+-- but can raise an error if the argument is malformed. A "Specific"
+-- option can check its argument to determine if it should match, but
+-- cannot raise an error if it is malformed. For example, given a
+-- "Specific" option with short name "-x" that only matches the
+-- argument "true", means that the command line "-x" raises "-x
+-- requires an argument" and "-x false" raises "unexpected option -x".
+con OptWithSpecificArg : all a. {names : [OptName], parse : String -> Option a} -> OptReader a
+
+type OptItem a =
+  { reader : OptReader a
+  , shortForm : String
+  , description : String
+  }
 
 type OptParser a
 con NilP : all a. a -> OptParser a
@@ -77,6 +92,8 @@ let _optItemMap : all a. all b. (a -> b) -> OptItem a -> OptItem b
     { reader = switch o.reader
       case OptWithArg x then
         OptWithArg {names = x.names, parse = lam s. eitherMapRight f (x.parse s)}
+      case OptWithSpecificArg x then
+        OptWithSpecificArg {names = x.names, parse = lam s. optionMap f (x.parse s)}
       case OptNoArg x then
         OptNoArg {names = x.names, value = f x.value}
       case OptPositional x then
@@ -117,12 +134,27 @@ let optMap5
   : all a. all b. all c. all d. all e. all f. (a -> b -> c -> d -> e -> f) -> OptParser a -> OptParser b -> OptParser c -> OptParser d -> OptParser e -> OptParser f
   = lam f. lam a. lam b. lam c. lam d. lam e. optApply (optApply (optApply (optApply (optMap f a) b) c) d) e
 
-let optArgDef : all a. {long : String, short : String, parse : String -> Either String a, arg : String, description : String} =
+let optArgDef : all x. {long : String, short : String, parse : String -> x, arg : String, description : String} =
   { long = ""
   , short = ""
-  , parse = lam. never
+  , parse = lam. error "No parser specified for optArgDef"
   , arg = "ARG"
   , description = ""
+  }
+let optArgDefString =
+  { optArgDef with parse = lam str.
+    Right str
+  , arg = "ARG"
+  }
+let optArgDefInt =
+  { optArgDef with parse = lam str.
+    if stringIsInt str then Right (string2int str) else Left "not an integer"
+  , arg = "INT"
+  }
+let optArgDefFloat =
+  { optArgDef with parse = lam str.
+    if stringIsFloat str then Right (string2float str) else Left "not a float"
+  , arg = "FLOAT"
   }
 let optArg : all a. {long : String, short : String, parse : String -> Either String a, arg : String, description : String} -> OptParser a = lam conf.
   let names = map (lam c. OptShort c) conf.short in
@@ -134,6 +166,27 @@ let optArg : all a. {long : String, short : String, parse : String -> Either Str
     else error "optArg called with neither 'long' nor 'short'" in
   OptP
   { reader = OptWithArg
+    { names = names
+    , parse = conf.parse
+    }
+  , shortForm = shortForm
+  , description = conf.description
+  }
+let optExactArg = lam str.
+  { optArgDef with arg = str
+  , parse = lam other.
+    if eqString str other then Some () else None ()
+  }
+let optSpecificArg : all a. {long : String, short : String, parse : String -> Option a, arg : String, description : String} -> OptParser a = lam conf.
+  let names = map (lam c. OptShort c) conf.short in
+  let names = if null conf.long
+    then names
+    else cons (OptLong conf.long) names in
+  let shortForm = match names with [name] ++ _
+    then join [optNameToStr name, " ", conf.arg]
+    else error "optSpecificArg called with neither 'long' nor 'short'" in
+  OptP
+  { reader = OptWithSpecificArg
     { names = names
     , parse = conf.parse
     }
@@ -164,6 +217,9 @@ let optNoArg : all a. {long : String, short : String, value : a, description : S
   , description = conf.description
   }
 
+let optOptional : all a. OptParser a -> OptParser (Option a)
+  = lam o. optOr (optMap (lam x. Some x) o) (optPure (None ()))
+
 let optFlagDef =
   { long = ""
   , short = ""
@@ -188,9 +244,12 @@ let optFlag = lam conf.
   optOr present (optPure false)
 
 let optPosDef : all a. {parse : String -> Either String a, arg : String, description : String} =
-  { parse = lam. never
+  { parse = lam. error "No parse function given to optPosDef"
   , arg = "ARG"
   , description = ""
+  }
+let optPosDefString =
+  { optPosDef with parse = lam str. Right str
   }
 let optPos : all a. {parse : String -> Either String a, arg : String, description : String} -> OptParser a
   = lam conf. OptP
@@ -198,12 +257,6 @@ let optPos : all a. {parse : String -> Either String a, arg : String, descriptio
     , shortForm = conf.arg
     , description = conf.description
     }
-let optPosStrDef =
-  { arg = "STRING"
-  , description = ""
-  }
-let optPosStr : {arg : String, description : String} -> OptParser String
-  = lam conf. optPos {parse = lam s. Right s, arg = conf.arg, description = conf.description}
 
 type ParserSearchRet r
 con PSROk : all r. ([String], OptParser r) -> ParserSearchRet r
@@ -266,6 +319,14 @@ let _processOpt : all r. OptName -> [String] -> OptItem r -> ParserSearchRet r
           end
         else PSRError (join ["Option '", optNameToStr name, "' requires an argument."])
       else PSRNotFound ()
+    case OptWithSpecificArg x then
+      if seqMem eqOptName x.names name then
+        match args with [arg] ++ args then
+          match x.parse arg with Some a then
+            PSROk (args, NilP a)
+          else PSRNotFound ()
+        else PSRError (join ["Option '", optNameToStr name, "' requires an argument."])
+      else PSRNotFound ()
     case OptNoArg x then
       if seqMem eqOptName x.names name then
         PSROk (args, NilP x.value)
@@ -283,7 +344,7 @@ let _processPos : all r. String -> [String] -> OptItem r -> ParserSearchRet r
       case Right a then
         PSROk (args, NilP a)
       end
-    case OptWithArg _ | OptNoArg _ then
+    case OptWithArg _ | OptWithSpecificArg _ | OptNoArg _ then
       PSRNotFound ()
     end
 
@@ -320,6 +381,7 @@ con OptMissingAlt : [OptMissing] -> OptMissing
 
 let _optMissingMult : OptMissing -> OptMissing -> OptMissing
   = lam a. lam b. switch (a, b)
+    case (OptMissingMult [], x) | (x, OptMissingMult []) then x
     case (OptMissingMult as, OptMissingMult bs) then OptMissingMult (concat as bs)
     case (OptMissingMult as, a) then OptMissingMult (snoc as a)
     case (b, OptMissingMult bs) then OptMissingMult (cons b bs)
@@ -376,8 +438,8 @@ recursive let optParserEval
 end
 
 let optParse
-  : all a. all w. [String] -> OptParser a -> Either String a
-  = lam args. lam p.
+  : all a. all w. OptParser a -> [String] -> Either String a
+  = lam p. lam args.
     recursive let work = lam mode. lam args. lam p.
       match args with [arg] ++ args then
         switch _optStepParser mode arg args p
@@ -397,7 +459,8 @@ let optParse
     in work (OPMBoth ()) args p
 
 type DescTree
-con DescTreeOpt : String -> DescTree
+type OptDesc = {shortForm : String, description : String}
+con DescTreeOpt : OptDesc -> DescTree
 con DescTreeMult : [DescTree] -> DescTree
 con DescTreeAlt : {alts : [DescTree], optional : Bool} -> DescTree
 
@@ -427,8 +490,8 @@ recursive let _optDescTreeToString : DescTree -> String
     let mWithParens = lam o. match o with DescTreeAlt {optional = false}
       then snoc (cons '(' (_optDescTreeToString o)) ')'
       else _optDescTreeToString o in
-    switch t
-    case DescTreeOpt str then str
+      switch t
+    case DescTreeOpt {shortForm = shortForm} then shortForm
     case DescTreeMult dts then strJoin " " (map mWithParens dts)
     case DescTreeAlt x then
       let res = strJoin " | " (map _optDescTreeToString x.alts) in
@@ -436,22 +499,73 @@ recursive let _optDescTreeToString : DescTree -> String
     end
 end
 
-recursive let _describeTree : all a. OptParser a -> (DescTree, [(String, String)])
+recursive let _optDescTreeRemoveUnconditionalOptional : DescTree -> Option DescTree
+  = lam dt. switch dt
+    case DescTreeOpt _ then Some dt
+    case DescTreeMult dts then
+      switch mapOption _optDescTreeRemoveUnconditionalOptional dts
+      case [] then None ()
+      case [dt] then Some dt
+      case dts then Some (DescTreeMult dts)
+      end
+    case DescTreeAlt {alts = [] | [_], optional = true} then None ()
+    case DescTreeAlt _ then Some dt
+    end
+end
+
+recursive let _optDescGetDescs : DescTree -> [OptDesc]
+  = lam dt. switch dt
+    case DescTreeOpt desc then
+      if null desc.description then [] else [desc]
+    case DescTreeMult dts then
+      foldl (lam acc. lam dt. concat acc (_optDescGetDescs dt)) [] dts
+    case DescTreeAlt x then
+      foldl (lam acc. lam dt. concat acc (_optDescGetDescs dt)) [] x.alts
+    end
+end
+
+let _optDescSplitOnce : DescTree -> [DescTree]
+  = lam dt. switch dt
+    case DescTreeOpt _ then [dt]
+    case DescTreeMult dts then
+      let f : all a. ([a], [a]) -> Option (([a], a, [a]), ([a], [a])) = lam split.
+        match split with (pre ++ [here], rest)
+        then Some ((pre, here, rest), (pre, cons here rest))
+        else None () in
+      let complexity = lam dt. match dt with DescTreeAlt {alts = alts}
+        then foldl muli 1 (map (lam dt. match dt with DescTreeMult dts then length dts else 1) alts)
+        else 1 in
+      let foci = unfoldr f (dts, []) in
+      let foci = map (lam x. (complexity x.1, x)) foci in
+      let mostComplex = max (lam a. lam b. subi a.0 b.0) foci in
+      match mostComplex with Some (_, (pre, here, post)) in
+      let here = match here with DescTreeAlt x
+        then if x.optional then cons (DescTreeMult []) x.alts else x.alts
+        else [here] in
+      let pre = DescTreeMult pre in
+      let post = DescTreeMult post in
+      map (lam here. _optDescTreeMult (_optDescTreeMult pre here) post) here
+    case DescTreeAlt x then
+      if x.optional then cons (DescTreeMult []) x.alts else x.alts
+    end
+
+recursive let _describeTree : all a. OptParser a -> DescTree
   = lam p. switch p
-    case NilP _ then (DescTreeAlt {alts = [], optional = true}, [])
-    case OptP x then (DescTreeOpt x.shortForm, [(x.shortForm, x.description)])
+    case NilP _ then DescTreeAlt {alts = [], optional = true}
+    case OptP x then
+      DescTreeOpt {shortForm = x.shortForm, description = x.description}
     case AltP (a, b) then
-      match _describeTree a with (aDesc, aOpts) in
-      match _describeTree b with (bDesc, bOpts) in
-      (_optDescTreeAlt aDesc bDesc, concat aOpts bOpts)
+      let aDesc = _describeTree a in
+      let bDesc = _describeTree b in
+      _optDescTreeAlt aDesc bDesc
     case MultP (a, b) then
       -- NOTE(vipa, 2025-03-26): Emulate an existential type by
       -- creating a new empty type
       type Never in
       let a : OptParser (Never -> a) = a in
-      match _describeTree a with (aDesc, aOpts) in
-      match _describeTree b with (bDesc, bOpts) in
-      (_optDescTreeMult aDesc bDesc, concat aOpts bOpts)
+      let aDesc = _describeTree a in
+      let bDesc = _describeTree b in
+      _optDescTreeMult aDesc bDesc
     end
 end
 
@@ -463,27 +577,43 @@ let optParserHelpText : all a. String -> String -> OptParser a -> String
       case _ ++ "\n" then snoc bigDescription '\n'
       case _ then concat bigDescription "\n\n"
       end in
-    match _describeTree p with (dt, options) in
+    let dt = _describeTree p in
+
+    let options = _optDescGetDescs dt in
     -- OPT(vipa, 2025-03-26): `distinct` is quadratic, could reduce to n log n
-    let options = distinct (lam a. lam b. if eqString a.0 b.0 then eqString a.1 b.1 else false) options in
-    let dts = match dt with DescTreeAlt {alts = alts} then alts else [dt] in
-    let shortUsage = strJoin "\n" (map (lam dt. join [appName, " ", _optDescTreeToString dt]) dts) in
-    let longest = foldl (lam acc. lam pair. maxi acc (length pair.0)) 0 options in
+    let options = distinct (lam a. lam b. if eqString a.shortForm b.shortForm then eqString a.description b.description else false) options in
+    let longest = foldl (lam acc. lam pair. maxi acc (length pair.shortForm)) 0 options in
     let padToLength = lam l. lam str. concat str (make (subi l (length str)) ' ') in
-    let optToStr = lam pair. join ["  ", padToLength longest pair.0, " ", pair.1] in
+    let optToStr = lam pair. join ["  ", padToLength longest pair.shortForm, " ", pair.description] in
     let options = strJoin "\n" (map optToStr options) in
+
+    let dt = _optDescTreeRemoveUnconditionalOptional dt in
+    let dts = optionMapOr [] _optDescSplitOnce dt in
+    let shortUsage = strJoin "\n" (map (lam dt. join [appName, " ", _optDescTreeToString dt]) dts) in
+
     join [shortUsage, "\n\n", bigDescription, "Options:\n", options]
 
-let optParserWithHelp : all a. String -> String -> OptParser a -> OptParser a
+let optParserWithHelp : all a. String -> String -> OptParser a -> OptParser (Either String a)
   = lam appName. lam bigDescription. lam p.
-    let help = optFlag
-      { optFlagDef with
-        short = "h"
+    let help = optNoArg
+      { optNoArgDef (Left (optParserHelpText appName bigDescription p)) with short = "h"
       , long = "help"
       } in
-    let f = lam help.
-      if help then printLn (optParserHelpText appName bigDescription p); exit 1 else lam x. x in
-    optMap2 f help p
+    optOr (optMap (lam x. Right x) p) help
+
+let optParseWithHelp : all a. String -> String -> OptParser a -> [String] -> a
+  = lam appName. lam bigDescription. lam p. lam args.
+    let p = optParserWithHelp appName bigDescription p in
+    switch optParse p args
+    case Left err then
+      printLn err;
+      exit 1
+    case Right (Left help) then
+      printLn help;
+      exit 0
+    case Right (Right res) then
+      res
+    end
 
 mexpr
 
@@ -533,11 +663,11 @@ let thing : OptParser Float = optArg
   , description = "thing is a thing"
   } in
 
-let filename : OptParser String = optPosStr {arg = "FILENAME", description = "file and stuff"} in
+let filename : OptParser String = optPos {optPosDefString with arg = "FILENAME", description = "file and stuff"} in
 let parser = optMap3 (lam a. lam b. lam c. (a, b, c)) (optOr parseEx1 parseEx2) thing (optOr filename (optPure "")) in
 
 let test : [String] -> Either String (Example, Float, String)
-  = lam args. optParse args parser in
+  = lam args. optParse parser args in
 
 utest test []
 with Left "Missing argument(s):\n(--shared INT | --shared INT (--yes | --no)) --thing FLOAT" in
@@ -573,7 +703,8 @@ utest test ["--shared", "7", "--no", "--opt1"]
 with Left "Unexpected argument '--opt1'" in
 
 let helpText = strJoin "\n"
-  [ "test (--shared INT [--opt1] [--extra] | --shared INT (--yes | --no)) --thing FLOAT [FILENAME]"
+  [ "test --shared INT [--opt1] [--extra] --thing FLOAT"
+  , "test --shared INT (--yes | --no) --thing FLOAT"
   , ""
   , "This thing can do stuff."
   , ""
@@ -589,7 +720,8 @@ let helpText = strJoin "\n"
 utest optParserHelpText "test" "This thing can do stuff." parser with helpText using eqString else lam l. lam. l in
 
 let helpText = strJoin "\n"
-  [ "test (--shared INT [--opt1] [--extra] | --shared INT (--yes | --no)) --thing FLOAT [FILENAME]"
+  [ "test --shared INT [--opt1] [--extra] --thing FLOAT"
+  , "test --shared INT (--yes | --no) --thing FLOAT"
   , ""
   , "Options:"
   , "  --shared INT  shared is a thing"
