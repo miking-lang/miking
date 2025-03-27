@@ -22,18 +22,8 @@ if [ -e .tup ]; then
   esac
 fi
 
-if [ ! -f misc/test-spec ]; then
-  if command -v mi >/dev/null 2>&1; then
-    # NOTE(vipa, 2024-11-22): Use built-in mi, with built-in stdlib
-    mi compile misc/test-spec.mc --output misc/test-spec
-  elif [ -f build/mi ]; then
-    # NOTE(vipa, 2024-11-22): Use bootstrapped mi, with repo-local stdlib and boot
-    MCORE_LIBS=stdlib=$DIR/src/stdlib OCAMLPATH=$DIR/build/lib:$OCAMLPATH build/mi compile misc/test-spec.mc --output misc/test-spec
-  else
-    echo "You need 'mi' to setup tup, e.g., by bootstrapping via 'make'"
-    exit 1
-  fi
-fi
+source "$DIR/misc/scripts/test-utils"
+util_compile_test_spec
 
 if [ -e build/src ]; then
   echo "This will clear 'build/src', which contains logs and intermediate"

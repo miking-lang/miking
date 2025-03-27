@@ -7,8 +7,6 @@ CURR=$(pwd)
 TARGETDIR=".${CURR#"$DIR"}"
 cd "$DIR"
 
-source "$DIR/misc/test-utils.sh"
-
 # TODO(vipa, 2023-05-15): We later want to transform arguments given
 # after "--" to be resolved relative to $TARGETDIR but given to
 # test-spec as relative to $DIR, but I don't know how to do that
@@ -18,49 +16,41 @@ if [ ! "$DIR" -ef "$TARGETDIR" ]; then
   exit 1
 fi
 
-# NOTE(wmuth, 2025-03-25): This function makes sure that installed mi exists if
-# user passes --installed and same for --bootstrapped, --cheated or none of them
-# Defined in ./test-utils.sh
-ensure_mi_exists "$@"
-
-if [ misc/test-spec -ot misc/test-spec.mc ]; then
-  if command -v mi >/dev/null 2>&1; then
-    # NOTE(vipa, 2024-11-22): Use built-in mi, with built-in stdlib
-    mi compile misc/test-spec.mc --output misc/test-spec
-  elif [ -f build/mi ]; then
-    # NOTE(vipa, 2024-11-22): Use bootstrapped mi, with repo-local stdlib and boot
-    MCORE_LIBS=stdlib=$DIR/src/stdlib OCAMLPATH=$DIR/build/lib:$OCAMLPATH build/mi compile misc/test-spec.mc --output misc/test-spec
-  else
-    echo "'mi' seems to have been removed after existance check. Please re-reun this script."
-    exit 1
-  fi
-fi
-
 # NOTE(vipa, 2024-11-22): Unconditionally overwrite MCORE_LIBS, since
 # tests should run with this value.
 export MCORE_LIBS=stdlib=$DIR/src/stdlib
 
-if command -v tup >/dev/null 2>&1; then
-  if [ -d ".tup" ]; then
-    useTup=1
-  else
-    useTup=0
-    echo "'tup' installed, but not initialized. Run 'make setup-tup' if you want to use 'tup'."
-  fi
-else
-  useTup=0
-fi
+# NOTE(wmuth, 2025-03-27): Import utils, create cleaned args array (remove
+# script flags), set vars
+source "$DIR/misc/scripts/test-utils"
+declare -a TEST_SPEC_ARGS
+util_set_vars "$@"
 
-if [ $useTup -eq 1 ]; then
+if util_use_tup; then
   echo "Using 'tup' as a test runner"
-  if TUPTARGETS=`misc/test-spec --tup-filter "$@"`; then
+
+  util_compile_test_spec
+
+  if TUPTARGETS=`"$DIR/misc/test-spec" --tup-filter "$@"`; then
       IFS=$'\n'
       exec tup $TUPTARGETS
   fi
 else
   echo "Using 'make' as a test runner"
+  if ! util_mi_exists; then
+    message="The 'mi' you wanted does not exist. Would you like to compile/install it?"
+    if util_user_consent "$message"; then
+      util_install_desired_mi
+    else
+      echo "Please bootstrap or install the desired 'mi'."
+      exit 1
+    fi
+  fi
+
+  util_compile_test_spec
+
   if [[ ! (":$OCAMLPATH:" == *":$DIR/build/lib:"*) ]]; then
       export OCAMLPATH=$DIR/build/lib:$OCAMLPATH
   fi
-  exec make -f <(misc/test-spec --make "$@")
+  exec make -f <("$DIR/misc/test-spec" --make "${TEST_SPEC_ARGS[@]}")
 fi

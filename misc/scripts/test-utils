@@ -1,0 +1,161 @@
+#!/usr/bin/env bash
+
+declare -A util_vars=(
+  [bootstrapped]=0
+  [cheated]=0
+  [installed]=0
+  [is_bootstrapped]=0
+  [is_cheated]=0
+  [is_installed]=0
+  [interactive]=0
+  [use_tup]=0
+)
+
+util_set_vars() {
+  local args=("$@")
+  local clean_args=()
+
+  for arg in "${args[@]}"; do
+    case "$arg" in
+      "--bootstrapped") util_vars[bootstrapped]=1; clean_args+=("$arg") ;;
+      "--cheated") util_vars[cheated]=1; clean_args+=("$arg") ;;
+      "--installed") util_vars[installed]=1; clean_args+=("$arg") ;;
+      "--interactive") util_vars[interactive]=1 ;;
+      *) clean_args+=("$arg") ;;
+    esac
+  done
+
+  TEST_SPEC_ARGS=("${clean_args[@]}")
+
+  if command -v tup >/dev/null 2>&1; then
+    if [[ -d "$DIR/.tup" ]]; then
+      util_vars[use_tup]=1
+    else
+      echo "'tup' installed, but not set up."
+      if util_user_consent "Would you like set up 'tup' now?"; then
+        make_setup_tup
+      else
+        echo "Run 'make setup-tup' if you want to use 'tup'."
+      fi
+    fi
+  fi
+
+  if (( util_vars[bootstrapped] == 0 && util_vars[cheated] == 0 && util_vars[installed] == 0 )); then
+    util_vars[cheated]=1
+  fi
+
+  [[ -f "$DIR/build/mi" ]] && util_vars[is_bootstrapped]=1
+
+  [[ -f "$DIR/build/mi-cheat" ]] && util_vars[is_cheated]=1
+
+  command -v mi >/dev/null 2>&1 && util_vars[is_installed]=1
+
+  return 0
+}
+
+# NOTE(wmuth, 2025-03-26): This function moved from misc/test and
+# misc/scripts/setup-tup
+util_compile_test_spec() {
+  if [[ "$DIR/misc/test-spec" -ot "$DIR/misc/test-spec.mc" ]]; then
+    if (( util_vars[is_installed] == 1 )); then
+      # NOTE(vipa, 2024-11-22): Use built-in mi, with built-in stdlib
+      mi compile "$DIR/misc/test-spec.mc" --output "$DIR/misc/test-spec"
+
+    elif (( util_vars[is_bootstrapped] == 1 )); then
+      # NOTE(vipa, 2024-11-22): Use bootstrapped mi, with repo-local stdlib and boot
+      MCORE_LIBS=stdlib=$DIR/src/stdlib OCAMLPATH=$DIR/build/lib:$OCAMLPATH "$DIR/build/mi" compile "$DIR/misc/test-spec.mc" --output "$DIR/misc/test-spec"
+
+    else
+      echo "No available 'mi' found for compiling test_spec.mc. Please bootstrap or install a version of 'mi'."
+      exit 1
+    fi
+  fi
+}
+
+util_use_tup() {
+  (( util_vars[use_tup] == 1 ))
+}
+
+util_mi_exists() {
+  (( (util_vars[bootstrapped] == 1 && util_vars[is_bootstrapped] == 1) ||
+     (util_vars[cheated] == 1 && util_vars[is_cheated] == 1) ||
+     (util_vars[installed] == 1 && util_vars[is_installed] == 1) ))
+}
+
+util_user_consent() {
+  echo -n "$1 (y/N): "
+
+  if (( util_vars[interactive] == 0 )); then
+    echo "Non-interactive mode, assuming no."
+    return 1
+  fi
+
+  read -r response
+  case "$response" in
+    [yY][eE][sS]|[yY]) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+
+util_install_desired_mi() {
+  if (( util_vars[bootstrapped] == 1 )); then
+    util_make_bootstrap
+    util_vars[is_bootstrapped]=1
+  fi
+
+  if (( util_vars[cheated] == 1 )); then
+    util_make_cheat
+    util_vars[is_cheated]=1
+  fi
+
+  if (( util_vars[installed] == 1 )); then
+    util_make_install
+    util_vars[is_installed]=1
+  fi
+}
+
+util_make_bootstrap() {
+  echo "Bootstrapping 'mi'..."
+  make -C "$DIR" bootstrap || {
+    echo "Bootstrapping 'mi' failed."
+    exit 1
+  }
+  echo "Bootstrapped 'mi'."
+}
+
+util_make_cheat() {
+  if (( util_vars[is_installed] == 0 )); then
+    local message="'mi' needs to be installed before compiling cheat. Would you like to install 'mi' now?"
+    if util_user_consent "$message"; then
+      util_make_install
+    else
+      echo "Can not compile 'mi-cheat' without an installed 'mi'."
+      exit 1
+    fi
+  fi
+
+  echo "Compiling 'mi-cheat'..."
+  make -C "$DIR" cheat || {
+    echo "Compiling 'mi-cheat' failed."
+    exit 1
+  }
+  echo "Compiled 'mi-cheat'."
+}
+
+util_make_install() {
+  echo "Installing 'mi'..."
+  make -C "$DIR" install || {
+    echo "Installing 'mi' failed."
+    exit 1
+  }
+  echo "Installed 'mi'."
+}
+
+util_make_setup_tup() {
+  echo "Setting up 'tup'..."
+  make -C "$DIR" setup-tup || {
+    echo "Setting up 'tup' failed. Continuing without 'tup'."
+  }
+  util_vars[use_tup]=1
+}
