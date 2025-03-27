@@ -101,7 +101,7 @@ test:
 	+ exec misc/test --bootstrapped smart
 
 test-all:
-	+ exec misc/test --bootstrapped all
+	+ exec misc/test --bootstrapped --non-interactive all
 
 test-quick:
 	+ exec misc/test --bootstrapped

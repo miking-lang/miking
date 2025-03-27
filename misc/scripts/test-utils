@@ -7,35 +7,40 @@ declare -A util_vars=(
   [is_bootstrapped]=0
   [is_cheated]=0
   [is_installed]=0
-  [interactive]=0
+  [non_interactive]=0
   [use_tup]=0
 )
 
 util_set_vars() {
   local args=("$@")
   local clean_args=()
+  local use_make=0
 
   for arg in "${args[@]}"; do
     case "$arg" in
       "--bootstrapped") util_vars[bootstrapped]=1; clean_args+=("$arg") ;;
       "--cheated") util_vars[cheated]=1; clean_args+=("$arg") ;;
       "--installed") util_vars[installed]=1; clean_args+=("$arg") ;;
-      "--interactive") util_vars[interactive]=1 ;;
+      "--non-interactive") util_vars[non_interactive]=1 ;;
+      "--use-make") use_make=1 ;;
       *) clean_args+=("$arg") ;;
     esac
   done
 
   TEST_SPEC_ARGS=("${clean_args[@]}")
 
-  if command -v tup >/dev/null 2>&1; then
-    if [[ -d "$DIR/.tup" ]]; then
-      util_vars[use_tup]=1
-    else
-      echo "'tup' installed, but not set up."
-      if util_user_consent "Would you like set up 'tup' now?"; then
-        make_setup_tup
+  if (( use_make == 0 )); then
+    if command -v tup >/dev/null 2>&1; then
+      if [[ -d "$DIR/.tup" ]]; then
+        util_vars[use_tup]=1
       else
-        echo "Run 'make setup-tup' if you want to use 'tup'."
+        echo "'tup' installed, but not set up."
+        if util_user_consent "Would you like set up 'tup' now?"; then
+          util_make_setup_tup
+          util_vars[use_tup]=1
+        else
+          echo "Run 'make setup-tup' if you want to use 'tup'."
+        fi
       fi
     fi
   fi
@@ -43,19 +48,20 @@ util_set_vars() {
   if (( util_vars[bootstrapped] == 0 && util_vars[cheated] == 0 && util_vars[installed] == 0 )); then
     util_vars[cheated]=1
   fi
+}
 
+util_update_available() {
   [[ -f "$DIR/build/mi" ]] && util_vars[is_bootstrapped]=1
-
   [[ -f "$DIR/build/mi-cheat" ]] && util_vars[is_cheated]=1
-
   command -v mi >/dev/null 2>&1 && util_vars[is_installed]=1
-
   return 0
 }
 
 # NOTE(wmuth, 2025-03-26): This function moved from misc/test and
 # misc/scripts/setup-tup
 util_compile_test_spec() {
+  util_update_available
+
   if [[ "$DIR/misc/test-spec" -ot "$DIR/misc/test-spec.mc" ]]; then
     if (( util_vars[is_installed] == 1 )); then
       # NOTE(vipa, 2024-11-22): Use built-in mi, with built-in stdlib
@@ -77,6 +83,8 @@ util_use_tup() {
 }
 
 util_mi_exists() {
+  util_update_available
+
   (( (util_vars[bootstrapped] == 1 && util_vars[is_bootstrapped] == 1) ||
      (util_vars[cheated] == 1 && util_vars[is_cheated] == 1) ||
      (util_vars[installed] == 1 && util_vars[is_installed] == 1) ))
@@ -85,7 +93,7 @@ util_mi_exists() {
 util_user_consent() {
   echo -n "$1 (y/N): "
 
-  if (( util_vars[interactive] == 0 )); then
+  if (( util_vars[non_interactive] == 1 )); then
     echo "Non-interactive mode, assuming no."
     return 1
   fi
@@ -157,5 +165,4 @@ util_make_setup_tup() {
   make -C "$DIR" setup-tup || {
     echo "Setting up 'tup' failed. Continuing without 'tup'."
   }
-  util_vars[use_tup]=1
 }
