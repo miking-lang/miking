@@ -12,18 +12,19 @@ let cudaGetDeviceCount : () -> Option Int = lam.
     sysWithTempDir (lam td.
       let checkProgPath = sysJoinPath td "check.cu" in
       let contents = "
-      int main()
-      {
-          int c = 0;
-          cudaError_t r = cudaGetDeviceCount(&c);
-          if (r != cudaSuccess) {
-             std::cout << cudaGetErrorString(r) << std::endl;
-             return -1;
-          } else {
-             std::cout << c << std::endl;
-             return 0;
-          }
-      }
+#include <iostream>
+int main()
+{
+    int c = 0;
+    cudaError_t r = cudaGetDeviceCount(&c);
+    if (r != cudaSuccess) {
+       std::cout << cudaGetErrorString(r) << std::endl;
+       return -1;
+    } else {
+       std::cout << c << std::endl;
+       return 0;
+    }
+}
       " in
       writeFile checkProgPath contents;
       let run = lam cmd. sysRunCommandWithTimingTimeout (Some 60.0) cmd "" td in
