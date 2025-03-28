@@ -17,6 +17,7 @@ include "map.mc"
 include "set.mc"
 include "common.mc"
 include "tuple.mc"
+include "cuda/sys.mc"
 
 -- A path representing some file in the repository, either source or
 -- generated through some command.
@@ -754,7 +755,13 @@ mexpr
 testMain
   [ { testColl "accelerate"
     with checkCondition = lam.
-      if and (sysCommandExists "nvcc") (sysCommandExists "futhark")
+      if scallb [
+        lam. sysCommandExists "nvcc",
+        lam. sysCommandExists "futhark",
+        -- NOTE(johnwikman, 2025-03-28): Checking 0 < n_devices and that we can
+        -- run CUDA programs
+        lam. optionMapOr false (lti 0) (cudaGetDeviceCount ())
+      ]
       then ConditionsMet ()
       else ConditionsImpossible () -- TODO(vipa, 2023-04-25): figure out how to check if we have nvidia hardware
     , exclusions = lam api.
