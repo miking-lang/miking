@@ -763,7 +763,7 @@ testMain
         lam. optionMapOr false (lti 0) (cudaGetDeviceCount ())
       ]
       then ConditionsMet ()
-      else ConditionsImpossible () -- TODO(vipa, 2023-04-25): figure out how to check if we have nvidia hardware
+      else ConditionsImpossible ()
     , exclusions = lam api.
       -- NOTE(vipa, 2023-04-25): Accelerate isn't supported in
       -- interpreted mode, and compiled mode is already tested via the
