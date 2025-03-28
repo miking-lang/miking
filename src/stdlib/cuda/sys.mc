@@ -27,21 +27,19 @@ int main()
 }
       " in
       writeFile checkProgPath contents;
-      let run = lam cmd. sysRunCommandWithTimingTimeout (Some 60.0) cmd "" td in
+      let run = lam cmd. sysRunCommand cmd "" td in
 
       match run ["nvcc", "check.cu", "--output-file", "check.out"]
-      with (execTime, _) in
-      if gtf execTime 59.0 then
+      with execResult in
+      if neqi execResult.returncode 0 then
         -- Assume it timed out or something else went wrong, should not
         -- take more than a second...
         None ()
       else -- continue
 
       match run ["./check.out"]
-      with (execTime, execResult) in
-      if gtf execTime 59.0 then
-        None ()
-      else if eqi execResult.returncode 0 then
+      with execResult in
+      if eqi execResult.returncode 0 then
         -- The return code should be 0 if we could retrieve the CUDA device
         Some (string2int (strTrim execResult.stdout))
       else
