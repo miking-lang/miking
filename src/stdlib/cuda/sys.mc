@@ -32,8 +32,7 @@ int main()
       match run ["nvcc", "check.cu", "--output-file", "check.out"]
       with execResult in
       if neqi execResult.returncode 0 then
-        -- Assume it timed out or something else went wrong, should not
-        -- take more than a second...
+        -- Assuming return code 0 indicated successful compilation here...
         None ()
       else -- continue
 
