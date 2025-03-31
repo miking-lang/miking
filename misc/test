@@ -31,7 +31,7 @@ if util_use_tup; then
 
   util_compile_test_spec
 
-  if TUPTARGETS=`"$DIR/misc/test-spec" --tup-filter "${TEST_SPEC_ARGS}"`; then
+  if TUPTARGETS=`"$DIR/misc/test-spec" --tup-filter "${TEST_SPEC_ARGS[@]}"`; then
       IFS=$'\n'
       exec tup $TUPTARGETS
   fi
