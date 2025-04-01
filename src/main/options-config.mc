@@ -35,6 +35,10 @@ let optionsConfig : ParseConfig Options = [
     "Print the AST after constant folding and constant propagation",
      lam p: ArgPart Options.
       let o: Options = p.options in {o with debugConstantFold = true}),
+  ([("--debug-dprint", "", "")],
+    "Replace dprint with a generated pprint. Warning: might introduce 'unbound' errors if some functions aren't imported.",
+     lam p: ArgPart Options.
+      let o: Options = p.options in {o with debugDprint = true}),
   ([("--debug-phases", "", "")],
     "Show debug and profiling information about each pass",
     lam p: ArgPart Options.

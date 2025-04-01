@@ -26,6 +26,7 @@ include "tuning/tune-file.mc"
 include "jvm/compile.mc"
 include "mlang/main.mc"
 include "peval/compile.mc"
+include "mexpr/generate-pprint.mc"
 
 include "extrec/main.mc"
 
@@ -41,6 +42,7 @@ lang MCoreCompile =
   MExprConstantFold +
   OCamlTryWithWrap + MCoreCompileLang + PhaseStats +
   SpecializeCompile +
+  OldDPrintViaPprint + MExprGeneratePprint + GeneratePprintMissingCase +
   PprintTyAnnot + HtmlAnnotator +
   MExprToJson
 end
@@ -115,6 +117,11 @@ let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
     endPhaseStatsExpr log "pattern-lowering" ast;
     (if options.debugShallow then
       printLn (expr2str ast) else ());
+
+    let ast = if options.debugDprint
+      then dprintToPprint ast
+      else ast in
+    endPhaseStatsExpr log "dprintToPprint" ast;
 
     let res =
       if options.toJVM then compileMCoreToJVM ast else

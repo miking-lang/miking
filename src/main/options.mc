@@ -13,6 +13,7 @@ let optionsDefault : Options = {
   debugProfile = false,
   debugShallow = false,
   debugConstantFold = false,
+  debugDprint = false,
   debugPhases = false,
   debugDumpPhases = setEmpty cmpString,
   exitBefore = false,

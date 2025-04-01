@@ -81,9 +81,9 @@ lang GenerateEqApp = GenerateEq + AppTypeAst
     (env, app_ lhs rhs)
 end
 
-lang GenerateEqCon = GenerateEq + ConTypeAst
+lang GenerateEqCon = GenerateEq + ConTypeAst + Generalize + UnifyPure
   sem _getEqFunction env =
-  | TyCon x ->
+  | ty & TyCon x ->
     -- TODO(vipa, 2025-01-27): Invalidate old eq functions if
     -- we've introduced constructors to pre-existing types
     match mapLookup x.ident env.conFunctions with Some n then (env, nvar_ n) else
@@ -97,6 +97,7 @@ lang GenerateEqCon = GenerateEq + ConTypeAst
       then params
       else errorSingle [x.info] (concat "Typecheck environment does not contain information about type " (nameGetStr x.ident)) in
     let paramFNames = foldl (lam acc. lam n. mapInsert n (nameSetNewSym n) acc) (mapEmpty nameCmp) params in
+    let fullType = tyapps_ ty (map ntyvar_ (mapKeys paramFNames)) in
     let prevVarFunctions = env.varFunctions in
     let env = {env with varFunctions = mapUnion env.varFunctions paramFNames} in
 
@@ -109,15 +110,19 @@ lang GenerateEqCon = GenerateEq + ConTypeAst
     let rName = nameSym "r" in
     let addMatch = lam acc. lam c. lam t.
       match acc with (env, tm) in
-      match getEqFunction env t with (env, subf) in
-      let subl = nameSym "subl" in
-      let subr = nameSym "subr" in
-      let tm = match_ (nvar_ lName) (npcon_ c (npvar_ subl))
-        (match_ (nvar_ rName) (npcon_ c (npvar_ subr))
-          (appf2_ subf (nvar_ subl) (nvar_ subr))
-          false_)
-        tm in
-      (env, tm) in
+      match inst (infoTy t) 0 t with TyArrow {from = from, to = to} in
+      let uni = emptyUnification () in
+      match unifyPure uni to fullType with Some uni then
+        match getEqFunction env t with (env, subf) in
+        let subl = nameSym "subl" in
+        let subr = nameSym "subr" in
+        let tm = match_ (nvar_ lName) (npcon_ c (npvar_ subl))
+          (match_ (nvar_ rName) (npcon_ c (npvar_ subr))
+            (appf2_ subf (nvar_ subl) (nvar_ subr))
+            false_)
+          tm in
+        (env, tm)
+      else error "Unification should always be possible here" in
     match mapFoldWithKey addMatch (env, never_) constructors with (env, matchChain) in
     let matchChain = nulam_ lName (nulam_ rName matchChain) in
     let body = foldr (lam pname. lam body. nulam_ (mapFindExn pname paramFNames) body) matchChain params in

@@ -11,6 +11,7 @@ type Options = {
   debugProfile : Bool,
   debugShallow : Bool,
   debugConstantFold : Bool,
+  debugDprint : Bool,
   debugPhases : Bool,
   debugDumpPhases : Set String,
   exitBefore : Bool,
