@@ -8,6 +8,7 @@ declare -A util_vars=(
   [is_cheated]=0
   [is_installed]=0
   [non_interactive]=0
+  [use_threads]=1
   [use_tup]=0
 )
 
@@ -22,6 +23,7 @@ util_set_vars() {
       "--cheated") util_vars[cheated]=1; clean_args+=("$arg") ;;
       "--installed") util_vars[installed]=1; clean_args+=("$arg") ;;
       "--non-interactive") util_vars[non_interactive]=1 ;;
+      "--sequential") util_vars[use_threads]=0 ;;
       "--use-make") use_make=1 ;;
       *) clean_args+=("$arg") ;;
     esac
@@ -78,6 +80,10 @@ util_compile_test_spec() {
   fi
 }
 
+util_use_threads() {
+  (( util_vars[use_threads] == 1 ))
+}
+
 util_use_tup() {
   (( util_vars[use_tup] == 1 ))
 }
@@ -105,6 +111,13 @@ util_user_consent() {
   esac
 }
 
+util_get_threads() {
+  case $(uname -s) in
+    "Darwin") echo $(sysctl -n hw.logicalcpu) ;;
+    "Linux") echo $(nproc) ;;
+    *) echo "1" ;;
+  esac
+}
 
 util_install_desired_mi() {
   if (( util_vars[bootstrapped] == 1 )); then

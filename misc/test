@@ -52,5 +52,10 @@ else
   if [[ ! (":$OCAMLPATH:" == *":$DIR/build/lib:"*) ]]; then
       export OCAMLPATH=$DIR/build/lib:$OCAMLPATH
   fi
-  exec make -f <("$DIR/misc/test-spec" --make "${TEST_SPEC_ARGS[@]}")
+
+  if util_use_threads; then
+    exec make -j$(util_get_threads) -f <("$DIR/misc/test-spec" --make "${TEST_SPEC_ARGS[@]}")
+  else
+    exec make -f <("$DIR/misc/test-spec" --make "${TEST_SPEC_ARGS[@]}")
+  fi
 fi
