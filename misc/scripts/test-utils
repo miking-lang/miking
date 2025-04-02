@@ -23,11 +23,16 @@ util_set_vars() {
       "--bootstrapped") util_vars[bootstrapped]=1; clean_args+=("$arg") ;;
       "--cheated") util_vars[cheated]=1; clean_args+=("$arg") ;;
       "--installed") util_vars[installed]=1; clean_args+=("$arg") ;;
-      "-j"[0-9]*) util_vars[use_threads]=1; util_vars[num_threads]=${arg#-j} ;;
       "-j") util_vars[use_threads]=1 ;;
       "--non-interactive") util_vars[non_interactive]=1 ;;
       "--use-make") use_make=1 ;;
-      *) clean_args+=("$arg") ;;
+      *)
+        if [[ "$arg" =~ ^-j[0-9]+$ ]]; then
+          util_vars[use_threads]=1;
+          util_vars[num_threads]=${arg#-j}
+        else
+          clean_args+=("$arg")
+        fi ;;
     esac
   done
 
