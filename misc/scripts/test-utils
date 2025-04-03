@@ -8,8 +8,7 @@ declare -A util_vars=(
   [is_cheated]=0
   [is_installed]=0
   [non_interactive]=0
-  [num_threads]=0
-  [use_threads]=0
+  [num_threads]="0"
   [use_tup]=0
 )
 
@@ -23,12 +22,11 @@ util_set_vars() {
       "--bootstrapped") util_vars[bootstrapped]=1; clean_args+=("$arg") ;;
       "--cheated") util_vars[cheated]=1; clean_args+=("$arg") ;;
       "--installed") util_vars[installed]=1; clean_args+=("$arg") ;;
-      "-j") util_vars[use_threads]=1 ;;
+      "-j") util_set_threads ;;
       "--non-interactive") util_vars[non_interactive]=1 ;;
       "--use-make") use_make=1 ;;
       *)
         if [[ "$arg" =~ ^-j[0-9]+$ ]]; then
-          util_vars[use_threads]=1;
           util_vars[num_threads]=${arg#-j}
         else
           clean_args+=("$arg")
@@ -88,7 +86,21 @@ util_compile_test_spec() {
 }
 
 util_use_threads() {
-  (( util_vars[use_threads] == 1 ))
+  (( util_vars[num_threads] != "0" ))
+}
+
+util_get_threads() {
+  echo "${util_vars[num_threads]}"
+}
+
+util_set_threads() {
+  case $(uname -s) in
+    "Darwin") util_vars[num_threads]=$(sysctl -n hw.logicalcpu) ;;
+    "Linux") util_vars[num_threads]=$(nproc) ;;
+    *)
+      echo "Unsure how to get logical CPUs. Defaulting to 1."
+      util_vars[num_threads]="1" ;;
+  esac
 }
 
 util_use_tup() {
@@ -116,18 +128,6 @@ util_user_consent() {
     [yY][eE][sS]|[yY]) return 0 ;;
     *) return 1 ;;
   esac
-}
-
-util_get_threads() {
-  if (( util_vars[num_threads] != 0 )); then
-    echo "${util_vars[num_threads]}"
-  else
-    case $(uname -s) in
-      "Darwin") echo $(sysctl -n hw.logicalcpu) ;;
-      "Linux") echo $(nproc) ;;
-      *) echo "1" ;;
-    esac
-  fi
 }
 
 util_install_desired_mi() {
