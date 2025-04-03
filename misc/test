@@ -32,8 +32,13 @@ if util_use_tup; then
   util_compile_test_spec
 
   if TUPTARGETS=`"$DIR/misc/test-spec" --tup-filter "${TEST_SPEC_ARGS}"`; then
-      IFS=$'\n'
+    IFS=$'\n'
+
+    if util_use_threads; then
+      exec tup -j$(util_get_threads) $TUPTARGETS
+    else
       exec tup $TUPTARGETS
+    fi
   fi
 else
   echo "Using 'make' as a test runner"
@@ -53,7 +58,7 @@ else
       export OCAMLPATH=$DIR/build/lib:$OCAMLPATH
   fi
 
-  if util_use_threads; then
+  if util_use_threads && ! [[ $MAKEFLAGS =~ .*-j.* ]]; then
     exec make -j$(util_get_threads) -f <("$DIR/misc/test-spec" --make "${TEST_SPEC_ARGS[@]}")
   else
     exec make -f <("$DIR/misc/test-spec" --make "${TEST_SPEC_ARGS[@]}")

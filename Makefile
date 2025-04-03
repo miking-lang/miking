@@ -22,6 +22,8 @@ else
 SET_OCAMLPATH=OCAMLPATH=$(current_dir)/build/lib
 endif
 
+j_flag := $(filter -j%, $(MAKEFLAGS))
+
 .PHONY: default
 default: bootstrap
 
@@ -98,13 +100,13 @@ uninstall:
 .PHONY: test test-all test-quick
 test test-all test-quick: lint
 test:
-	+ exec misc/test --bootstrapped smart
+	+ exec misc/test $(j_flag) --bootstrapped smart
 
 test-all:
-	+ exec misc/test --bootstrapped --non-interactive all
+	+ exec misc/test $(j_flag) --bootstrapped --non-interactive all
 
 test-quick:
-	+ exec misc/test --bootstrapped
+	+ exec misc/test $(j_flag) --bootstrapped
 
 test-info:
 	@echo "Tasks run:" `find build/src/ -name '*.out' | wc -l`

@@ -48,7 +48,6 @@ util_set_vars() {
         echo "'tup' installed, but not set up."
         if util_user_consent "Would you like set up 'tup' now?"; then
           util_make_setup_tup
-          util_vars[use_tup]=1
         else
           echo "Run 'make setup-tup' if you want to use 'tup'."
         fi
@@ -190,7 +189,9 @@ util_make_install() {
 
 util_make_setup_tup() {
   echo "Setting up 'tup'..."
-  make -C "$DIR" setup-tup || {
+  if make -C "$DIR" setup-tup; then
+    util_vars[use_tup]=1
+  else
     echo "Setting up 'tup' failed. Continuing without 'tup'."
-  }
+  fi
 }
