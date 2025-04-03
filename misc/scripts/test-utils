@@ -8,6 +8,10 @@ declare -A util_vars=(
   [is_cheated]=0
   [is_installed]=0
   [non_interactive]=0
+  # NOTE(wmuth, 2025-04-03):
+  # Using "0" as a sentinel for don't use threads instead of 1 since a user could
+  # have set their own value using env vars or aliases so we don't always
+  # want to overwrite the value with e.g. a default of "1"
   [num_threads]="0"
   [use_tup]=0
 )
