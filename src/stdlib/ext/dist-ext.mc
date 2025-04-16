@@ -1,6 +1,22 @@
 include "math.mc"
 include "bool.mc"
 
+-- Chi2
+external externalChi2LogPdf : Float -> Float -> Float
+external externalChi2Sample ! : Float -> Float
+external externalChi2Cdf : Float -> Float -> Float
+external externalChi2Ppf : Float -> Float -> Float
+let chi2Pdf = lam df:Int. lam x:Float.
+  exp (externalChi2LogPdf x (int2float df))
+let chi2LogPdf = lam df:Int. lam x:Float.
+  externalChi2LogPdf x (int2float df)
+let chi2Sample = lam df:Int.
+  externalChi2Sample (int2float df)
+let chi2Cdf = lam df:Int. lam x:Float.
+  externalChi2Cdf x (int2float df)
+let chi2Ppf = lam df:Int. lam q:Float.
+  externalChi2Ppf q (int2float df)
+
 -- Gamma
 external externalGammaLogPdf : Float -> Float -> Float -> Float
 external externalGammaSample ! : Float -> Float -> Float
@@ -212,6 +228,13 @@ let intRange = lam lower. lam upper. lam r. lam l.
   and (and (leqi r upper) (geqi r lower)) (and (leqi l upper) (geqi l lower)) in
 let floatRange = lam lower. lam upper. lam r. lam l.
   and (and (leqf r upper) (geqf r lower)) (and (leqf l upper) (geqf l lower)) in
+
+-- Testing Chi2
+utest chi2Pdf 5 0.5 with 0.0366159407890 using _eqf in
+utest exp (chi2LogPdf 6 3.2) with 0.1292137715166 using _eqf in
+utest chi2Sample 6 with 1. using floatRange 0. inf in
+utest chi2Cdf 4 4.1 with 0.6073585440572 using _eqf in
+utest chi2Ppf 3 0.95 with 7.8147279032512 using _eqf in
 
 -- Testing Gamma
 utest gammaPdf 1. 2. 1. with 0.303265329856 using _eqf in
