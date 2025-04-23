@@ -129,8 +129,7 @@ let discretizedGammaSample = lam shape:Float. lam scale:Float. lam n:Int.
   let ind = uniformDiscreteSample 0 (subi n 1) in
   get scaledMedians ind
 let discretizedGammaLogPmf = lam shape:Float. lam scale:Float. lam n:Int. lam x:Float.
-  let support = discretizedGammaSupport shape scale n in
-  if any (lam s. eqfApprox 1e-12 x s) support then log (divf 1. (int2float n))
+  if geqf x 0. then log (divf 1. (int2float n))
   else negf inf
 
 -- Poisson
@@ -291,8 +290,8 @@ utest uniformDiscretePdf 1 2 1 with 0.5 using _eqf in
 utest discretizedGammaSupport 0.5 2. 4 with [0.0290777547619,0.28071453714,0.924773065114,2.76543464298] using eqSeq _eqf in
 utest let s = (discretizedGammaSample 0.5 2. 4) in
   any (lam x. _eqf x s) [0.0290777547619,0.28071453714,0.924773065114,2.76543464298] with true in
-utest discretizedGammaLogPmf 0.5 2. 4 0.0290777547619 with negf 1.38629436112 using _eqf in
-utest discretizedGammaLogPmf 0.5 2. 4 5. with negf inf in
+utest discretizedGammaLogPmf 0.5 2. 4 0.02 with negf 1.38629436112 using _eqf in
+utest discretizedGammaLogPmf 0.5 2. 4 (negf 1.) with negf inf in
 
 -- Testing Poisson
 utest poissonPmf 2.0 2 with 0.270670566473 using _eqf in
