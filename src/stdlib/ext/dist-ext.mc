@@ -1,5 +1,6 @@
 include "math.mc"
 include "bool.mc"
+include "seq.mc"
 
 -- Gamma
 external externalGammaLogPdf : Float -> Float -> Float -> Float
@@ -114,6 +115,23 @@ let uniformDiscretePdf : Int -> Int -> Int -> Float = lam a. lam b. lam x.
     if leqi x b then divf 1.0 (int2float (addi 1 (subi b a)))
     else 0.
   else 0.
+
+-- Discretized Gamma
+let discretizedGammaSupport = lam shape:Float. lam scale:Float. lam n:Int.
+  let bins = (linspace 0. 1. (addi n 1)) in
+  let quantilesX = map (lam b. gammaPpf shape scale b) bins in
+  let medians = mapi (lam ind. lam x. gammaPpf shape scale (divf (addf (gammaCdf shape scale x) (gammaCdf shape scale (get quantilesX (addi ind 1)))) 2.)) (init quantilesX) in
+  let factor = divf (int2float n) (foldl addf 0. medians) in
+  let scaledMedians = map (lam e. mulf e factor) medians in
+  scaledMedians
+let discretizedGammaSample = lam shape:Float. lam scale:Float. lam n:Int.
+  let scaledMedians = discretizedGammaSupport shape scale n in
+  let ind = uniformDiscreteSample 0 (subi n 1) in
+  get scaledMedians ind
+let discretizedGammaLogPmf = lam shape:Float. lam scale:Float. lam n:Int. lam x:Float.
+  let support = discretizedGammaSupport shape scale n in
+  if any (lam s. eqfApprox 1e-12 x s) support then log (divf 1. (int2float n))
+  else negf inf
 
 -- Poisson
 let poissonLogPmf = lam lambda:Float. lam x:Int.
@@ -268,6 +286,13 @@ utest uniformSample () with 0. using floatRange 0. 1. in
 utest uniformDiscreteSample 3 8 with 3 using intRange 3 8 in
 utest exp (uniformDiscreteLogPdf 1 2 1) with 0.5 using _eqf in
 utest uniformDiscretePdf 1 2 1 with 0.5 using _eqf in
+
+-- Testing Discretized Gamma
+utest discretizedGammaSupport 0.5 2. 4 with [0.0290777547619,0.28071453714,0.924773065114,2.76543464298] using eqSeq _eqf in
+utest let s = (discretizedGammaSample 0.5 2. 4) in
+  any (lam x. _eqf x s) [0.0290777547619,0.28071453714,0.924773065114,2.76543464298] with true in
+utest discretizedGammaLogPmf 0.5 2. 4 0.0290777547619 with negf 1.38629436112 using _eqf in
+utest discretizedGammaLogPmf 0.5 2. 4 5. with negf inf in
 
 -- Testing Poisson
 utest poissonPmf 2.0 2 with 0.270670566473 using _eqf in
