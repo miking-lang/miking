@@ -116,7 +116,7 @@ let uniformDiscretePdf : Int -> Int -> Int -> Float = lam a. lam b. lam x.
     else 0.
   else 0.
 
--- Discretized Gamma, n categorized are used to approximate the continous distribution with equal probability for each category. The median is used to represent the average rate.
+-- Discretized Gamma, n categories are used to approximate the continous distribution with equal probability for each category. The median is used to represent the average rate.
 let discretizedGammaSupport = lam shape:Float. lam scale:Float. lam n:Int.
   let bins = (linspace 0. 1. (addi n 1)) in
   let quantilesX = map (lam b. gammaPpf shape scale b) bins in
