@@ -118,3 +118,11 @@ utest pascalrow 2 with [1, 2, 1]
 utest pascalrow 3 with [1, 3, 3, 1]
 utest pascalrow 4 with [1, 4, 6, 4, 1]
 utest pascalrow 5 with [1, 5, 10, 10, 5, 1]
+
+let linspace = lam start. lam stop. lam n.
+  let step = divf (subf stop start) (int2float (subi n 1)) in
+  create n (lam i. addf start (mulf (int2float i) step))
+
+utest linspace 0. 1. 0 with []
+utest linspace 0. 1. 5 with [0.,0.25,0.5,0.75,1.]
+utest linspace 0. 0. 4 with [0.,0.,0.,0.]

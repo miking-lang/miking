@@ -897,11 +897,3 @@ utest subseqReplace eqi [3,4,5] [42,42] [1,2,3,4,5,6,7] with [1,2,42,42,6,7]
 utest subseqReplace eqi [1,1] [100,101,100] [0,1,0,1,2,1,1,3,4,0,0,1,1,0,1,0] with [0,1,0,1,2,100,101,100,3,4,0,0,100,101,100,0,1,0]
 utest subseqReplace eqi [1,1] [2] [3,4,3] with [3,4,3]
 utest subseqReplace eqi [0,1,2] [88] [0,0,1,2,100,0,1] with [0,88,100,0,1]
-
-let linspace = lam start. lam stop. lam n.
-  let step = divf (subf stop start) (int2float (subi n 1)) in
-  create n (lam i. addf start (mulf (int2float i) step))
-
-utest linspace 0. 1. 0 with []
-utest linspace 0. 1. 5 with [0.,0.25,0.5,0.75,1.]
-utest linspace 0. 0. 4 with [0.,0.,0.,0.]
