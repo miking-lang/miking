@@ -100,7 +100,7 @@ lang MCoreLoader
   -- which case only type-checking is run) or `Typechecked` (in which
   -- case neither is run). The `WithEnv` variant runs symbolize with
   -- the given environment instead of the running one. Note that new
-  -- names are still added to the running environment as well.
+  -- names are *not* added to the running environment.
   sem _addDeclExn : Loader -> Decl -> Loader
   sem _addDeclWithEnvExn : SymEnv -> Loader -> Decl -> (SymEnv, Loader)
   sem _addSymbolizedDeclExn : Loader -> Decl -> Loader
@@ -275,10 +275,9 @@ lang BootParserLoader = MCorePathResolution + DeclAst + ExprAsDecl + BootParser
     else loader
 
   sem _addDeclWithEnvExn symEnv loader = | decl ->
-    match _doHook _preSymbolize loader decl with (Loader x, decl) in
-    match symbolizeDecl symEnv decl with (newEnv, decl) in
-    let symEnv = _addDefinition x.symEnv decl in
-    match _doHook _postSymbolize (Loader {x with symEnv = symEnv}) decl with (loader, decl) in
+    match _doHook _preSymbolize loader decl with (loader, decl) in
+    match symbolizeDecl symEnv decl with (symEnv, decl) in
+    match _doHook _postSymbolize loader decl with (loader, decl) in
 
     match _doHook _preTypecheck loader decl with (Loader x, decl) in
     match typeCheckDecl x.tcEnv decl with (tcEnv, decl) in
@@ -291,7 +290,7 @@ lang BootParserLoader = MCorePathResolution + DeclAst + ExprAsDecl + BootParser
     let loader = Loader {x with decls = snoc x.decls decl, includedFiles = includedFiles} in
     let loader = _drainQueueExn loader in
 
-    (newEnv, loader)
+    (symEnv, loader)
 
   sem _addDeclExn loader = | decl ->
     match _doHook _preSymbolize loader decl with (Loader x, decl) in
