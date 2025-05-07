@@ -29,16 +29,16 @@ lang SpecializeCompile = SpecializeAst + MExprPEval + MExprAst
 
   sem rmCopy : Name -> Expr -> Expr
   sem rmCopy rm =
-  | TmLet t ->
+  | tm & TmDecl {decl = DeclLet t, inexpr = inexpr} ->
     if nameEq t.ident rm then
-      t.inexpr
-    else smap_Expr_Expr (rmCopy rm) (TmLet t)
+      inexpr
+    else smap_Expr_Expr (rmCopy rm) tm
   | t -> smap_Expr_Expr (rmCopy rm) t
 
   sem specializePass : SpecializeNames -> SpecializeArgs -> Map Name Name ->
                   Expr -> (Map Name Name, Expr)
   sem specializePass pnames args idMap =
-  | TmLet t ->
+  | tm & TmDecl (x & {decl = DeclLet t}) ->
     match mapLookup t.ident args.extractMap with Some e then
       -- Remove the copy of this let binding in the extracted bindings
       let e = rmCopy t.ident e in
@@ -63,8 +63,8 @@ lang SpecializeCompile = SpecializeAst + MExprPEval + MExprAst
       let fff = print_ ff in
       -- Update the specialize let-binding
       let bodyn = updateBody (semi_ fff never_) t.body in
-      (args.idMapping, TmLet {t with body = bodyn})
-    else smapAccumL_Expr_Expr (specializePass pnames args) idMap (TmLet t)
+      (args.idMapping, TmDecl {x with decl = DeclLet {t with body = bodyn}})
+    else smapAccumL_Expr_Expr (specializePass pnames args) idMap tm
   | t -> smapAccumL_Expr_Expr (specializePass pnames args) idMap t
 
   sem hasSpecializeTerm : Bool -> Expr -> Bool

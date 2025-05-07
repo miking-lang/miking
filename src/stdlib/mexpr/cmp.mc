@@ -24,6 +24,17 @@ lang Cmp = ConstAst
         "Missing case in cmpExprH for expressions with equal indices."
     else res
 
+  sem cmpDecl (lhs : Decl) =
+  | rhs -> cmpDeclH (lhs, rhs)
+
+  sem cmpDeclH =
+  | (lhs, rhs) ->
+    let res = subi (constructorTag lhs) (constructorTag rhs) in
+    if eqi res 0 then
+      errorMulti [(infoDecl lhs, ""), (infoDecl rhs, "")]
+        "Missing case in cmpDeclH for declarations with equal indices."
+    else res
+
   sem cmpConst (lhs: Const) =
   | rhs /- : Const -/ -> cmpConstH (lhs, rhs)
 
@@ -93,34 +104,34 @@ lang LamCmp = Cmp + LamAst
     else identDiff
 end
 
-lang LetCmp = Cmp + LetAst
+lang DeclCmp = Cmp + DeclAst
   sem cmpExprH =
-  | (TmLet l, TmLet r) ->
-    let identDiff = nameCmp l.ident r.ident in
-    if eqi identDiff 0 then
-      let bodyDiff = cmpExpr l.body r.body in
-      if eqi bodyDiff 0 then cmpExpr l.inexpr r.inexpr
-      else bodyDiff
-    else identDiff
+  | (TmDecl l, TmDecl r) ->
+    let res = cmpDecl l.decl r.decl in
+    if neqi res 0 then res else
+    cmpExpr l.inexpr r.inexpr
 end
 
-lang RecLetBindingCmp = Cmp + RecLetsAst
-  sem cmpRecLetBinding (lhs : RecLetBinding) =
+lang LetBindingCmp = Cmp + LetDeclAst
+  sem cmpLetBindRec (lhs : DeclLetRecord) =
   | rhs ->
-    let rhs : RecLetBinding = rhs in
+    let rhs : DeclLetRecord = rhs in
     let identDiff = nameCmp lhs.ident rhs.ident in
     if eqi identDiff 0 then
       cmpExpr lhs.body rhs.body
     else identDiff
 end
 
-lang RecLetsCmp = Cmp + RecLetsAst + RecLetBindingCmp
-  sem cmpExprH =
-  | (TmRecLets l, TmRecLets r) ->
-    let bindingsDiff = seqCmp cmpRecLetBinding l.bindings r.bindings in
-    if eqi bindingsDiff 0 then
-      cmpExpr l.inexpr r.inexpr
-    else bindingsDiff
+lang LetCmp = Cmp + LetDeclAst + LetBindingCmp
+  sem cmpDeclH =
+  | (DeclLet l, DeclLet r) ->
+    cmpLetBindRec l r
+end
+
+lang RecLetsCmp = Cmp + RecLetsDeclAst + LetBindingCmp
+  sem cmpDeclH =
+  | (DeclRecLets l, DeclRecLets r) ->
+    seqCmp cmpLetBindRec l.bindings r.bindings
 end
 
 lang ConstCmp = Cmp + ConstAst
@@ -145,29 +156,27 @@ lang RecordCmp = Cmp + RecordAst
     else recDiff
 end
 
-lang TypeCmp = Cmp + TypeAst
-  sem cmpExprH =
-  | (TmType l, TmType r) ->
+lang TypeCmp = Cmp + TypeDeclAst
+  sem cmpDeclH =
+  | (DeclType l, DeclType r) ->
     let identDiff = nameCmp l.ident r.ident in
     if eqi identDiff 0 then
-      let tyIdentDiff = cmpType l.tyIdent r.tyIdent in
-      if eqi tyIdentDiff 0 then cmpExpr l.inexpr r.inexpr
-      else tyIdentDiff
+      cmpType l.tyIdent r.tyIdent
     else identDiff
 end
 
-lang DataCmp = Cmp + DataAst
+lang DataCmp = Cmp + DataAst + DataDeclAst
   sem cmpExprH =
-  | (TmConDef l, TmConDef r) ->
-    let identDiff = nameCmp l.ident r.ident in
-    if eqi identDiff 0 then
-      let tyIdentDiff = cmpType l.tyIdent r.tyIdent in
-      if eqi tyIdentDiff 0 then cmpExpr l.inexpr r.inexpr
-      else tyIdentDiff
-    else identDiff
   | (TmConApp l, TmConApp r) ->
     let identDiff = nameCmp l.ident r.ident in
     if eqi identDiff 0 then cmpExpr l.body r.body
+    else identDiff
+
+  sem cmpDeclH =
+  | (DeclConDef l, DeclConDef r) ->
+    let identDiff = nameCmp l.ident r.ident in
+    if eqi identDiff 0 then
+      cmpType l.tyIdent r.tyIdent
     else identDiff
 end
 
@@ -185,32 +194,29 @@ lang MatchCmp = Cmp + MatchAst
     else targetDiff
 end
 
-lang UtestCmp = Cmp + UtestAst
-  sem cmpExprH =
-  | (TmUtest l, TmUtest r) ->
+lang UtestCmp = Cmp + UtestDeclAst
+  sem cmpDeclH =
+  | (DeclUtest l, DeclUtest r) ->
     let testDiff = cmpExpr l.test r.test in
     if eqi testDiff 0 then
       let expectedDiff = cmpExpr l.expected r.expected in
       if eqi expectedDiff 0 then
-        let nextDiff = cmpExpr l.next r.next in
-        if eqi nextDiff 0 then
-          let usingDiff =
-            switch (l.tusing, r.tusing)
-            case (Some a, Some b) then cmpExpr a b
-            case (Some _, None _) then 1
-            case (None _, Some _) then negi 1
-            case _ then 0
-            end
-          in
-          if eqi usingDiff 0 then
-            switch (l.tonfail, r.tonfail)
-            case (Some a, Some b) then cmpExpr a b
-            case (Some _, None _) then 1
-            case (None _, Some _) then negi 1
-            case _ then 0
-            end
-          else usingDiff
-        else nextDiff
+        let usingDiff =
+          switch (l.tusing, r.tusing)
+          case (Some a, Some b) then cmpExpr a b
+          case (Some _, None _) then 1
+          case (None _, Some _) then negi 1
+          case _ then 0
+          end
+        in
+        if eqi usingDiff 0 then
+          switch (l.tonfail, r.tonfail)
+          case (Some a, Some b) then cmpExpr a b
+          case (Some _, None _) then 1
+          case (None _, Some _) then negi 1
+          case _ then 0
+          end
+        else usingDiff
       else expectedDiff
     else testDiff
 end
@@ -220,18 +226,16 @@ lang NeverCmp = Cmp + NeverAst
   | (TmNever _, TmNever _) -> 0
 end
 
-lang ExtCmp = Cmp + ExtAst
-  sem cmpExprH =
-  | (TmExt l, TmExt r) ->
+lang ExtCmp = Cmp + ExtDeclAst
+  sem cmpDeclH =
+  | (DeclExt l, DeclExt r) ->
     let identDiff = nameCmp l.ident r.ident in
     if eqi identDiff 0 then
       let tyIdentDiff = cmpType l.tyIdent r.tyIdent in
       if eqi tyIdentDiff 0 then
         let leffect = if l.effect then 1 else 0 in
         let reffect = if r.effect then 1 else 0 in
-        let effectDiff = subi leffect reffect in
-        if eqi effectDiff 0 then cmpExpr l.inexpr r.inexpr
-        else effectDiff
+        subi leffect reffect
       else tyIdentDiff
     else identDiff
 end
@@ -528,6 +532,7 @@ lang MExprCmp =
   -- Terms
   VarCmp + AppCmp + LamCmp + RecordCmp + LetCmp + TypeCmp + RecLetsCmp +
   ConstCmp + DataCmp + MatchCmp + UtestCmp + SeqCmp + NeverCmp + ExtCmp +
+  DeclCmp +
 
   -- Constants
   IntCmp + FloatCmp + BoolCmp + CharCmp + SymbCmp +
@@ -581,8 +586,8 @@ utest cmpExpr (bind_ (ulet_ "a" (var_ "b")) (var_ "b"))
 utest cmpExpr (bind_ (ulet_ "a" (var_ "a")) (var_ "b"))
               (bind_ (ulet_ "a" (var_ "a")) (var_ "a")) with 0 using neqi in
 
-utest cmpExpr (ureclets_ []) (ureclets_ []) with 0 in
-utest cmpExpr (ureclets_ [("a", ulam_ "b" (var_ "a"))])
+utest cmpDecl (ureclets_ []) (ureclets_ []) with 0 in
+utest cmpDecl (ureclets_ [("a", ulam_ "b" (var_ "a"))])
               (ureclets_ [("a", ulam_ "a" (var_ "a"))]) with 0 using neqi in
 
 utest cmpExpr (int_ 0) (int_ 0) with 0 in
@@ -609,13 +614,13 @@ utest cmpExpr (recordupdate_ r "a" (int_ 0))
 utest cmpExpr (recordupdate_ r "b" (int_ 0))
               (recordupdate_ r "a" (int_ 1)) with 0 using neqi in
 
-utest cmpExpr (type_ "a" [] tyint_) (type_ "a" [] tyint_) with 0 in
-utest cmpExpr (type_ "b" [] tyint_) (type_ "a" [] tyint_) with 0 using neqi in
-utest cmpExpr (type_ "a" [] tyfloat_) (type_ "a" [] tyint_) with 0 using neqi in
+utest cmpDecl (type_ "a" [] tyint_) (type_ "a" [] tyint_) with 0 in
+utest cmpDecl (type_ "b" [] tyint_) (type_ "a" [] tyint_) with 0 using neqi in
+utest cmpDecl (type_ "a" [] tyfloat_) (type_ "a" [] tyint_) with 0 using neqi in
 
-utest cmpExpr (condef_ "a" tyint_) (condef_ "a" tyint_) with 0 in
-utest cmpExpr (condef_ "b" tyint_) (condef_ "a" tyint_) with 0 using neqi in
-utest cmpExpr (condef_ "a" tyfloat_) (condef_ "a" tyint_) with 0 using neqi in
+utest cmpDecl (condef_ "a" tyint_) (condef_ "a" tyint_) with 0 in
+utest cmpDecl (condef_ "b" tyint_) (condef_ "a" tyint_) with 0 using neqi in
+utest cmpDecl (condef_ "a" tyfloat_) (condef_ "a" tyint_) with 0 using neqi in
 utest cmpExpr (conapp_ "a" (var_ "b")) (conapp_ "a" (var_ "b")) with 0 in
 utest cmpExpr (conapp_ "b" (var_ "b")) (conapp_ "a" (var_ "b")) with 0
 using neqi in
@@ -634,43 +639,43 @@ utest cmpExpr (if_ (var_ "a") (int_ 1) (int_ 1))
 utest cmpExpr (if_ (var_ "a") (int_ 0) (int_ 2))
               (if_ (var_ "a") (int_ 0) (int_ 1)) with 0 using neqi in
 
-utest cmpExpr (utest_ (var_ "a") (var_ "a") unit_)
-              (utest_ (var_ "a") (var_ "a") unit_) with 0 in
-utest cmpExpr (utest_ (var_ "b") (var_ "a") unit_)
-              (utest_ (var_ "a") (var_ "a") unit_) with 0 using neqi in
-utest cmpExpr (utest_ (var_ "a") (var_ "b") unit_)
-        (utest_ (var_ "a") (var_ "a") unit_) with 0 using neqi in
-utest cmpExpr
-        (utestu_ (var_ "a") (var_ "a") unit_ (var_ "cmp"))
-        (utestu_ (var_ "a") (var_ "a") unit_ (var_ "cmp")) with 0 in
-utest cmpExpr
-        (utesto_ (var_ "a") (var_ "a") unit_ (var_ "fail"))
-        (utesto_ (var_ "a") (var_ "a") unit_ (var_ "fail")) with 0 in
-utest cmpExpr
-        (utestuo_ (var_ "a") (var_ "a") unit_ (var_ "cmp") (var_ "fail"))
-        (utestuo_ (var_ "a") (var_ "a") unit_ (var_ "cmp") (var_ "fail"))
+utest cmpDecl (utest_ (var_ "a") (var_ "a"))
+              (utest_ (var_ "a") (var_ "a")) with 0 in
+utest cmpDecl (utest_ (var_ "b") (var_ "a"))
+              (utest_ (var_ "a") (var_ "a")) with 0 using neqi in
+utest cmpDecl (utest_ (var_ "a") (var_ "b"))
+        (utest_ (var_ "a") (var_ "a")) with 0 using neqi in
+utest cmpDecl
+        (utestu_ (var_ "a") (var_ "a") (var_ "cmp"))
+        (utestu_ (var_ "a") (var_ "a") (var_ "cmp")) with 0 in
+utest cmpDecl
+        (utesto_ (var_ "a") (var_ "a") (var_ "fail"))
+        (utesto_ (var_ "a") (var_ "a") (var_ "fail")) with 0 in
+utest cmpDecl
+        (utestuo_ (var_ "a") (var_ "a") (var_ "cmp") (var_ "fail"))
+        (utestuo_ (var_ "a") (var_ "a") (var_ "cmp") (var_ "fail"))
   with 0 in
-utest cmpExpr
-        (utestu_ (var_ "a") (var_ "a") unit_ (var_ "cmp"))
-        (utest_ (var_ "a") (var_ "a") unit_) with 0 using neqi in
-utest cmpExpr
-        (utesto_ (var_ "a") (var_ "a") unit_ (var_ "fail"))
-        (utest_ (var_ "a") (var_ "a") unit_) with 0 using neqi in
-utest cmpExpr
-        (utestuo_ (var_ "a") (var_ "a") unit_ (var_ "cmp") (var_ "fail"))
-        (utestu_ (var_ "a") (var_ "a") unit_ (var_ "cmp")) with 0 using neqi in
-utest cmpExpr
-        (utestuo_ (var_ "a") (var_ "a") unit_ (var_ "cmp") (var_ "fail"))
-        (utesto_ (var_ "a") (var_ "a") unit_ (var_ "fail")) with 0 using neqi in
+utest cmpDecl
+        (utestu_ (var_ "a") (var_ "a") (var_ "cmp"))
+        (utest_ (var_ "a") (var_ "a"))  with 0 using neqi in
+utest cmpDecl
+        (utesto_ (var_ "a") (var_ "a") (var_ "fail"))
+        (utest_ (var_ "a") (var_ "a"))  with 0 using neqi in
+utest cmpDecl
+        (utestuo_ (var_ "a") (var_ "a") (var_ "cmp") (var_ "fail"))
+        (utestu_ (var_ "a") (var_ "a") (var_ "cmp")) with 0 using neqi in
+utest cmpDecl
+        (utestuo_ (var_ "a") (var_ "a") (var_ "cmp") (var_ "fail"))
+        (utesto_ (var_ "a") (var_ "a") (var_ "fail")) with 0 using neqi in
 
 utest cmpExpr never_ never_ with 0 in
 
-utest cmpExpr (ext_ "a" false tyint_) (ext_ "a" false tyint_) with 0 in
-utest cmpExpr (ext_ "a" false tyint_) (ext_ "b" false tyint_) with 0
+utest cmpDecl (ext_ "a" false tyint_) (ext_ "a" false tyint_) with 0 in
+utest cmpDecl (ext_ "a" false tyint_) (ext_ "b" false tyint_) with 0
 using neqi in
-utest cmpExpr (ext_ "a" true tyint_) (ext_ "a" false tyint_) with 0
+utest cmpDecl (ext_ "a" true tyint_) (ext_ "a" false tyint_) with 0
 using neqi in
-utest cmpExpr (ext_ "a" true tyunknown_) (ext_ "a" false tyint_) with 0
+utest cmpDecl (ext_ "a" true tyunknown_) (ext_ "a" false tyint_) with 0
 using neqi in
 
 -- Constants

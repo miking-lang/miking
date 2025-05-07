@@ -363,7 +363,7 @@ let constructLookup : use Ast in PatternMatchState -> Map VarPattern (Name, Expr
 
 let matchPattern =
   use PMExprAst in
-  lam binding : RecLetBinding. lam pattern : Pattern.
+  lam binding : DeclLetRecord. lam pattern : Pattern.
   let initState =
     {{emptyPatternMatchState pattern
         with active = pattern.activePatterns}

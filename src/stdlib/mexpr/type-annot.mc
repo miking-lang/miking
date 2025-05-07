@@ -351,14 +351,14 @@ lang RecLetsTypeAnnot = TypeAnnot + TypePropagation + RecLetsAst + LamAst + Unkn
     -- Add mapping from binding identifier to annotated type before doing type
     -- annotations of the bindings. This is to make annotations work for
     -- mutually recursive functions, given correct type annotations.
-    let foldBindingInit = lam acc. lam binding : RecLetBinding.
+    let foldBindingInit = lam acc. lam binding : DeclLetRecord.
       mapInsert binding.ident binding.tyBody acc
     in
     -- Add mapping from binding identifier to the inferred type.
-    let foldBindingAfter = lam acc. lam binding : RecLetBinding.
+    let foldBindingAfter = lam acc. lam binding : DeclLetRecord.
       mapInsert binding.ident binding.tyBody acc
     in
-    let annotBinding = lam env : TypeEnv. lam binding : RecLetBinding.
+    let annotBinding = lam env : TypeEnv. lam binding : DeclLetRecord.
       let body = match binding.tyBody with TyUnknown _ then binding.body else
         match inspectType binding.tyBody with tyBody in
         propagateExpectedType env.tyEnv (tyBody, binding.body) in
@@ -835,9 +835,9 @@ let recLets = typeAnnot (bindall_ [
 utest tyTm recLets with tyunit_ using eqType in
 
 (match recLets with TmRecLets {bindings = bindings} then
-  let b0 : RecLetBinding = get bindings 0 in
-  let b1 : RecLetBinding = get bindings 1 in
-  let b2 : RecLetBinding = get bindings 2 in
+  let b0 : DeclLetRecord = get bindings 0 in
+  let b1 : DeclLetRecord = get bindings 1 in
+  let b2 : DeclLetRecord = get bindings 2 in
   let xTy = tyarrow_ tyunit_ tyint_ in
   let yTy = tyarrow_ tyunit_ tyint_ in
   let zTy = tyarrow_ tyunit_ tyint_ in

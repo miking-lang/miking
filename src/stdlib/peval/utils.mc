@@ -98,20 +98,23 @@ lang SpecializeUtils = SpecializeAst + SpecializeInclude + MExprFindSym
   sem tmMatchName : SpecializeNames -> Name
   sem tmMatchName = | names -> getName (names.consNames) "MatchAst_TmMatch"
 
-  sem tmLetName : SpecializeNames -> Name
-  sem tmLetName = | names -> getName (names.consNames) "LetAst_TmLet"
+  sem tmDeclName : SpecializeNames -> Name
+  sem tmDeclName = | names -> getName (names.consNames) "DeclAst_TmDecl"
 
-  sem tmRecLetsName : SpecializeNames -> Name
-  sem tmRecLetsName = | names -> getName (names.consNames) "RecLetsAst_TmRecLets"
+  sem declLetName : SpecializeNames -> Name
+  sem declLetName = | names -> getName (names.consNames) "LetDeclAst_DeclLet"
 
-  sem tmConDefName : SpecializeNames -> Name
-  sem tmConDefName = | names -> getName (names.consNames) "DataAst_TmConDef"
+  sem declRecLetsName : SpecializeNames -> Name
+  sem declRecLetsName = | names -> getName (names.consNames) "RecLetsDeclAst_DeclRecLets"
+
+  sem declConDefName : SpecializeNames -> Name
+  sem declConDefName = | names -> getName (names.consNames) "DataDeclAst_DeclConDef"
 
   sem tmConAppName : SpecializeNames -> Name
   sem tmConAppName = | names -> getName (names.consNames) "DataAst_TmConApp"
 
-  sem tmTypeName : SpecializeNames -> Name
-  sem tmTypeName = | names -> getName (names.consNames) "TypeAst_TmType"
+  sem declTypeName : SpecializeNames -> Name
+  sem declTypeName = | names -> getName (names.consNames) "TypeDeclAst_DeclType"
 
   sem tmNeverName : SpecializeNames -> Name
   sem tmNeverName = | names -> getName (names.consNames) "NeverAst_TmNever"

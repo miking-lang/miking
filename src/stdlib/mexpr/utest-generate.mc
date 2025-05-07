@@ -855,7 +855,7 @@ lang MExprUtestGenerate =
                  info = _utestInfo} )
 
   sem generatePrettyPrintBindingsH : Info -> UtestEnv -> Type
-                                  -> (UtestEnv, [RecLetBinding])
+                                  -> (UtestEnv, [DeclLetRecord])
   sem generatePrettyPrintBindingsH info env =
   | (TySeq {ty = elemTy} | TyTensor {ty = elemTy}) & ty ->
     if setMem ty env.pprintDef then
@@ -902,7 +902,7 @@ lang MExprUtestGenerate =
     , TmRecLets {bindings = binds, inexpr = _unit, ty = _unitTy, info = _utestInfo} )
 
   sem generateEqualityBindingsH : Info -> UtestEnv -> Type
-                               -> (UtestEnv, [RecLetBinding])
+                               -> (UtestEnv, [DeclLetRecord])
   sem generateEqualityBindingsH info env =
   | (TySeq {ty = elemTy} | TyTensor {ty = elemTy}) & ty ->
     if setMem ty env.eqDef then

@@ -16,9 +16,9 @@ lang TailPositions = MExprAst
     -> (a, Expr)
   sem tailPositionsReclet baseCase tailCall letexpr lacc acc =
   | TmRecLets t ->
-    let lets: [Name] = map (lam b: RecLetBinding. b.ident) t.bindings in
+    let lets: [Name] = map (lam b: DeclLetRecord. b.ident) t.bindings in
     let lets = setOfSeq nameCmp lets in
-    match mapAccumL (lam acc: a. lam b: RecLetBinding.
+    match mapAccumL (lam acc: a. lam b: DeclLetRecord.
         match visitTailPositions baseCase tailCall letexpr (lets, acc, lacc) b.body
         with ((_,acc,_), body)
         in (acc, {b with body = body})
@@ -297,7 +297,7 @@ let letexpr = lam flag: Bool. lam e: Expr.
   match e with TmLet t in
   if flag then (true, lam x. x) else
     let newFlag = setMem (nameGetStr t.ident) strs in
-    if newFlag then (true, lam e. bindSemi_ (negi_ (int_ 1)) e)
+    if newFlag then (true, lam e. semi_ (negi_ (int_ 1)) e)
     else (false, lam x. x)
 in
 

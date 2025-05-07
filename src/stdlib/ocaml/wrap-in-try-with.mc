@@ -19,11 +19,11 @@ lang OCamlTryWithWrap = MExprAst + OCamlAst
       inexpr = unit_, ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()} in
     (bind_ acc.0 letExpr, acc.1)
   | OTopRecLets t ->
-    let toRecLetBinding = lam bind : OCamlTopBinding.
+    let toDeclLetRecord = lam bind : OCamlTopBinding.
       { ident = bind.ident, tyAnnot = bind.tyBody, tyBody = bind.tyBody
       ,  body = bind.body, info = NoInfo ()} in
     let recLetExpr = TmRecLets {
-      bindings = map toRecLetBinding t.bindings, inexpr = unit_,
+      bindings = map toDeclLetRecord t.bindings, inexpr = unit_,
       ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()} in
     (bind_ acc.0 recLetExpr, acc.1)
   | OTopExpr t -> (bind_ acc.0 t.expr, acc.1)

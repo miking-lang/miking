@@ -90,7 +90,7 @@ end
 lang RecLetsIndex = Index + RecLetsAst
   sem indexAdd (acc: IndexAcc) =
   | TmRecLets { bindings = bindings } ->
-    foldl (lam acc: IndexAcc. lam b: RecLetBinding. addKey b.ident acc)
+    foldl (lam acc: IndexAcc. lam b: DeclLetRecord. addKey b.ident acc)
       acc bindings
 end
 

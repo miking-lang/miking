@@ -179,25 +179,34 @@ lang BootParser = MExprAst + ConstTransformer
            ty = TyUnknown { info = ginfo t 0 },
            info = ginfo t 0,
            body = gterm t 0}
-  | 103 /-TmLet-/ ->
-    TmLet {ident = gname t 0,
-           tyAnnot = gtype t 0,
-           tyBody = TyUnknown { info = ginfo t 0 },
-           body = gterm t 0,
-           inexpr = gterm t 1,
-           ty = TyUnknown { info = ginfo t 0 },
-           info = ginfo t 0}
-  | 104 /-TmRecLets-/ ->
-    TmRecLets {bindings =
-               create (glistlen t 0)
-                      (lam n. {ident = gname t n,
-                               tyAnnot = gtype t n,
-                               tyBody = TyUnknown { info = ginfo t (addi n 1)},
-                               body = gterm t n,
-                               info = ginfo t (addi n 1)}),
-               inexpr = gterm t (glistlen t 0),
-               ty = TyUnknown { info = ginfo t 0 },
-               info = ginfo t 0}
+  | 103 /-TmLet-/ -> TmDecl
+    { decl = DeclLet
+      { ident = gname t 0
+      , tyAnnot = gtype t 0
+      , tyBody = TyUnknown { info = ginfo t 0 }
+      , body = gterm t 0
+      , info = ginfo t 0
+      }
+    , inexpr = gterm t 1
+    , ty = TyUnknown { info = ginfo t 0 }
+    , info = ginfo t 0
+    }
+  | 104 /-TmRecLets-/ -> TmDecl
+    { decl = DeclRecLets
+      { bindings = create (glistlen t 0)
+        (lam n.
+          { ident = gname t n
+          , tyAnnot = gtype t n
+          , tyBody = TyUnknown { info = ginfo t (addi n 1)}
+          , body = gterm t n
+          , info = ginfo t (addi n 1)
+          })
+      , info = ginfo t 0
+      }
+    , inexpr = gterm t (glistlen t 0)
+    , ty = TyUnknown { info = ginfo t 0 }
+    , info = ginfo t 0
+    }
   | 105 /-TmConst-/ ->
     let c = gconst t 0 in
     TmConst {val = gconst t 0,
@@ -220,19 +229,27 @@ lang BootParser = MExprAst + ConstTransformer
                    value = gterm t 1,
                    ty = TyUnknown { info = ginfo t 0 },
                    info = ginfo t 0}
-  | 109 /-TmType-/ ->
-    TmType {ident = gname t 0,
-            params = map (gname t) (range 1 (glistlen t 0) 1),
-            tyIdent = gtype t 0,
-            ty = TyUnknown { info = ginfo t 0 },
-            inexpr = gterm t 0,
-            info = ginfo t 0}
-  | 110 /-TmConDef-/ ->
-    TmConDef {ident = gname t 0,
-              tyIdent = gtype t 0,
-              ty = TyUnknown { info = ginfo t 0 },
-              inexpr = gterm t 0,
-              info = ginfo t 0}
+  | 109 /-TmType-/ -> TmDecl
+    { decl = DeclType
+      { ident = gname t 0
+      , params = map (gname t) (range 1 (glistlen t 0) 1)
+      , tyIdent = gtype t 0
+      , info = ginfo t 0
+      }
+    , ty = TyUnknown { info = ginfo t 0 }
+    , inexpr = gterm t 0
+    , info = ginfo t 0
+    }
+  | 110 /-TmConDef-/ -> TmDecl
+    { decl = DeclConDef
+      { ident = gname t 0
+      , tyIdent = gtype t 0
+      , info = ginfo t 0
+      }
+    , ty = TyUnknown { info = ginfo t 0 }
+    , inexpr = gterm t 0
+    , info = ginfo t 0
+    }
   | 111 /-TmConApp-/ ->
     TmConApp {ident = gname t 0,
               body = gterm t 0,
@@ -254,24 +271,32 @@ lang BootParser = MExprAst + ConstTransformer
       case _ then error "BootParser.matchTerm: Invalid list length for tmUtest"
       end
       with (tusing, tonfail)
-    in
-    TmUtest {test = gterm t 0,
-             expected = gterm t 1,
-             next = gterm t 2,
-             tusing = tusing,
-             tonfail = tonfail,
-             ty = TyUnknown { info = ginfo t 0 },
-             info = ginfo t 0}
+    in TmDecl
+    { decl = DeclUtest
+      { test = gterm t 0
+      , expected = gterm t 1
+      , tusing = tusing
+      , tonfail = tonfail
+      , info = ginfo t 0
+      }
+    , inexpr = gterm t 2
+    , ty = TyUnknown { info = ginfo t 0 }
+    , info = ginfo t 0
+    }
   | 114 /-TmNever-/ ->
     TmNever {ty = TyUnknown { info = ginfo t 0 },
              info = ginfo t 0}
-  | 115 /-TmExt-/ ->
-    TmExt {ident = gname t 0,
-           tyIdent = gtype t 0,
-           effect = neqi (gint t 0) 0,
-           ty = TyUnknown { info = ginfo t 0 },
-           inexpr = gterm t 0,
-           info = ginfo t 0}
+  | 115 /-TmExt-/ -> TmDecl
+    { decl = DeclExt
+      { ident = gname t 0
+      , tyIdent = gtype t 0
+      , effect = neqi (gint t 0) 0
+      , info = ginfo t 0
+      }
+    , inexpr = gterm t 0
+    , ty = TyUnknown { info = ginfo t 0 }
+    , info = ginfo t 0
+    }
   | _ -> error "Unknown expression"
 
   -- Get type help function
@@ -532,7 +557,7 @@ let s = "let y = lam x.x in y" in
 utest lsideClosed s with rside s in
 utest l_infoClosed "  \n lam x.x" with r_info 2 1 2 8 in
 utest
-  match parseMExprStringKeywordsExn [] s with TmLet r
+  match parseMExprStringKeywordsExn [] s with TmDecl {decl = DeclLet r}
   then infoTm r.body else NoInfo ()
 with r_info 1 8 1 15 in
 utest l_info ["y"] "  let x = 4 in y  " with r_info 1 2 1 14 in
@@ -547,8 +572,8 @@ utest lsideClosed s with rside s in
 let s = "   recursive let x = 5 \n let foo = 7 in x " in
 utest l_infoClosed s with r_info 1 3 2 15 in
 utest
-  match parseMExprStringKeywordsExn [] s with TmRecLets r then
-    let fst : RecLetBinding = head r.bindings in
+  match parseMExprStringKeywordsExn [] s with TmDecl {decl = DeclRecLets r} then
+    let fst : DeclLetRecord = head r.bindings in
     fst.info
   else never
 with r_info 1 13 1 22 in
@@ -754,7 +779,7 @@ utest l_infoClosed "   \n  external y! : Int in 1" with r_info 2 2 2 24 in
 let s = "let y:Unknown = lam x.x in y" in
 utest lsideClosed s with rside "let y = lam x.x in y" in
 utest
-  match parseMExprStringKeywordsExn [] s with TmLet l
+  match parseMExprStringKeywordsExn [] s with TmDecl {decl = DeclLet l}
   then infoTy l.tyAnnot else NoInfo ()
 with r_info 1 6 1 13 in
 let s = "lam x:Int. lam y:Char. x" in
@@ -769,7 +794,7 @@ with r_info 2 7 2 10 in
 let s = "let y:Int = lam x.x in y" in
 utest lsideClosed s with rside s in
 utest
-  match parseMExprStringKeywordsExn [] s with TmLet l
+  match parseMExprStringKeywordsExn [] s with TmDecl {decl = DeclLet l}
   then infoTy l.tyAnnot else NoInfo ()
 with r_info 1 6 1 9 in
 
@@ -777,7 +802,7 @@ with r_info 1 6 1 9 in
 let s = "let y:Float = lam x.x in y" in
 utest lsideClosed s with rside s in
 utest
-  match parseMExprStringKeywordsExn [] s with TmLet l
+  match parseMExprStringKeywordsExn [] s with TmDecl {decl = DeclLet l}
   then infoTy l.tyAnnot else NoInfo ()
 with r_info 1 6 1 11 in
 
@@ -785,7 +810,7 @@ with r_info 1 6 1 11 in
 let s = "let y:Char = lam x.x in y" in
 utest lsideClosed s with rside s in
 utest
-  match parseMExprStringKeywordsExn [] s with TmLet l
+  match parseMExprStringKeywordsExn [] s with TmDecl {decl = DeclLet l}
   then infoTy l.tyAnnot else NoInfo ()
 with r_info 1 6 1 10 in
 
@@ -793,7 +818,7 @@ with r_info 1 6 1 10 in
 let s = "let y:Int->Int = lam x.x in y" in
 utest lsideClosed s with rside s in
 utest
-  match parseMExprStringKeywordsExn [] s with TmLet l
+  match parseMExprStringKeywordsExn [] s with TmDecl {decl = DeclLet l}
   then infoTy l.tyAnnot else NoInfo ()
 with r_info 1 6 1 14 in
 
@@ -801,7 +826,7 @@ with r_info 1 6 1 14 in
 let s = "let y:[Float]->Int = lam x.x in y" in
 utest lsideClosed s with rside s in
 utest
-  match parseMExprStringKeywordsExn [] s with TmLet l
+  match parseMExprStringKeywordsExn [] s with TmDecl {decl = DeclLet l}
   then infoTy l.tyAnnot else NoInfo ()
 with r_info 1 6 1 18 in
 
@@ -809,7 +834,7 @@ with r_info 1 6 1 18 in
 let s = "let y:[Int] = lam x.x in y" in
 utest lsideClosed s with rside s in
 utest
-  match parseMExprStringKeywordsExn [] s with TmLet l
+  match parseMExprStringKeywordsExn [] s with TmDecl {decl = DeclLet l}
   then infoTy l.tyAnnot else NoInfo ()
 with r_info 1 6 1 11 in
 
@@ -829,7 +854,7 @@ let typedLet = lam letTy.
         (var_ "y") in
 utest parseMExprStringKeywordsExn [] s with typedLet recTy using eqExpr in
 utest
-  match parseMExprStringKeywordsExn [] s with TmLet l
+  match parseMExprStringKeywordsExn [] s with TmDecl {decl = DeclLet l}
   then infoTy l.tyAnnot else NoInfo ()
 with r_info 1 6 1 56 in
 
@@ -837,7 +862,7 @@ with r_info 1 6 1 56 in
 let s = "let y:Tensor[Int] = lam x.x in y" in
 utest lsideClosed s with rside s in
 utest
-  match parseMExprStringKeywordsExn [] s with TmLet l
+  match parseMExprStringKeywordsExn [] s with TmDecl {decl = DeclLet l}
   then infoTy l.tyAnnot else NoInfo ()
 with r_info 1 6 1 17 in
 
@@ -853,7 +878,7 @@ let typedLet = lam letTy.
         (var_ "y") in
 utest parseMExprStringKeywordsExn [] s with typedLet recTy using eqExpr in
 utest
-  match parseMExprStringKeywordsExn [] s with TmLet l
+  match parseMExprStringKeywordsExn [] s with TmDecl {decl = DeclLet l}
   then infoTy l.tyAnnot else NoInfo ()
 with r_info 1 6 1 30 in
 
@@ -862,7 +887,7 @@ let s = "let y:{a:Int,b:[Char]} = lam x.x in y" in
 let recTy = tyrecord_ [("a", tyint_), ("b", tystr_)] in
 utest parseMExprStringKeywordsExn [] s with typedLet recTy using eqExpr in
 utest
-  match parseMExprStringKeywordsExn [] s with TmLet l
+  match parseMExprStringKeywordsExn [] s with TmDecl {decl = DeclLet l}
   then infoTy l.tyAnnot else NoInfo ()
 with r_info 1 6 1 22 in
 
@@ -879,7 +904,7 @@ let recTy = tyrecord_ [
     ("b_2", tyfloat_)])] in
 utest parseMExprStringKeywordsExn [] s with typedLet recTy using eqExpr in
 utest
-  match parseMExprStringKeywordsExn [] s with TmLet l
+  match parseMExprStringKeywordsExn [] s with TmDecl {decl = DeclLet l}
   then infoTy l.tyAnnot else NoInfo ()
 with r_info 1 6 1 54 in
 
@@ -887,14 +912,14 @@ with r_info 1 6 1 54 in
 -- NOTE(caylak,2021-03-17): Parsing of TyVariant is not supported yet
 -- let s = "let y:<> = lam x.x in y" in
 -- --utest lsideClosed s with rside s in
--- utest match parseMExprStringKeywordsExn [] s with TmLet l then infoTy l.tyAnnot else NoInfo ()
+-- utest match parseMExprStringKeywordsExn [] s with TmDecl {decl = DeclLet l} then infoTy l.tyAnnot else NoInfo ()
 -- with r_info 1 6 1 8 in
 
 -- TyVar
 let s = "let y:_asd = lam x.x in y" in
 utest lsideClosed s with rside s in
 utest
-  match parseMExprStringKeywordsExn [] s with TmLet l
+  match parseMExprStringKeywordsExn [] s with TmDecl {decl = DeclLet l}
   then infoTy l.tyAnnot else NoInfo ()
 with r_info 1 6 1 10 in
 
@@ -902,7 +927,7 @@ with r_info 1 6 1 10 in
 let s = "let y:all x.x = lam x.x in y" in
 utest lsideClosed s with rside s in
 utest
-  match parseMExprStringKeywordsExn [] s with TmLet l
+  match parseMExprStringKeywordsExn [] s with TmDecl {decl = DeclLet l}
   then infoTy l.tyAnnot else NoInfo ()
 with r_info 1 6 1 13 in
 
@@ -910,7 +935,7 @@ with r_info 1 6 1 13 in
 let s = "let y:all x.(all y.all z.z)->all w.w = lam x.x in y" in
 utest lsideClosed s with rside s in
 utest
-  match parseMExprStringKeywordsExn [] s with TmLet l
+  match parseMExprStringKeywordsExn [] s with TmDecl {decl = DeclLet l}
   then infoTy l.tyAnnot else NoInfo ()
 with r_info 1 6 1 36 in
 
@@ -918,27 +943,27 @@ with r_info 1 6 1 36 in
 let s = "let y:Foo = lam x.x in y" in
 utest lsideClosed s with rside s in
 utest
-  match parseMExprStringKeywordsExn [] s with TmLet l
+  match parseMExprStringKeywordsExn [] s with TmDecl {decl = DeclLet l}
   then infoTy l.tyAnnot else NoInfo ()
 with r_info 1 6 1 9 in
 
 -- TyCon with literal constructor list
 let s = "let y:Foo[F1 F2] = lam x.x in y" in
 utest lsideClosed s with rside s in
-utest match parseMExprStringKeywordsExn [] s with TmLet l then infoTy l.tyAnnot else NoInfo ()
+utest match parseMExprStringKeywordsExn [] s with TmDecl {decl = DeclLet l} then infoTy l.tyAnnot else NoInfo ()
 with r_info 1 6 1 16 in
 
 -- TyCon with variable constructor list
 let s = "let y:all d::{Foo[> F1 F2]}. Foo{d} = lam x.x in y" in
 utest lsideClosed s with rside s in
-utest match parseMExprStringKeywordsExn [] s with TmLet l then infoTy l.tyAnnot else NoInfo ()
+utest match parseMExprStringKeywordsExn [] s with TmDecl {decl = DeclLet l} then infoTy l.tyAnnot else NoInfo ()
 with r_info 1 6 1 35 in
 
 -- TyApp
 let s = "let y:(Int->Int)Int = lam x.x in y" in
 utest lsideClosed s with rside s in
 utest
-  match parseMExprStringKeywordsExn [] s with TmLet l
+  match parseMExprStringKeywordsExn [] s with TmDecl {decl = DeclLet l}
   then infoTy l.tyAnnot else NoInfo ()
 with r_info 1 7 1 19 in
 
@@ -946,7 +971,7 @@ with r_info 1 7 1 19 in
 let s = "let y:((Int->Int)Int->Int)Int = lam x.x in y" in
 utest lsideClosed s with rside s in
 utest
-  match parseMExprStringKeywordsExn [] s with TmLet l
+  match parseMExprStringKeywordsExn [] s with TmDecl {decl = DeclLet l}
   then infoTy l.tyAnnot else NoInfo ()
 with r_info 1 8 1 29 in
 

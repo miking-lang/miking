@@ -151,11 +151,11 @@ lang MExprSideEffect =
   | TmRecLets t ->
     -- NOTE(larshum, 2022-02-01): The call graph implementation stores bindings
     -- by name, not index, so we need to use a map for binding lookup.
-    let bindMap : Map Name RecLetBinding =
+    let bindMap : Map Name DeclLetRecord =
       mapFromSeq nameCmp
-        (map (lam bind : RecLetBinding. (bind.ident, bind)) t.bindings) in
+        (map (lam bind : DeclLetRecord. (bind.ident, bind)) t.bindings) in
     let sideEffectsScc = lam env : SideEffectEnv. lam scc : [Name].
-      let sccBindings : [RecLetBinding] =
+      let sccBindings : [DeclLetRecord] =
         foldl
           (lam acc. lam id. optionMapOr acc (snoc acc) (mapLookup id bindMap))
           []
@@ -167,12 +167,12 @@ lang MExprSideEffect =
       -- each other.
       let sccHasSideEffect =
         foldl
-          (lam acc : Bool. lam bind : RecLetBinding.
+          (lam acc : Bool. lam bind : DeclLetRecord.
             exprHasSideEffectH env false acc bind.body)
           false sccBindings in
       -- Update the entries for all the bindings in this SCC.
       foldl
-        (lam env : SideEffectEnv. lam bind : RecLetBinding.
+        (lam env : SideEffectEnv. lam bind : DeclLetRecord.
           let lambdaCount = countArityExpr 0 bind.body in
           updateSideEffectEnv env bind.ident lambdaCount sccHasSideEffect)
       env sccBindings in
@@ -181,7 +181,7 @@ lang MExprSideEffect =
     let env = foldl sideEffectsScc env (reverse sccs) in
     let env =
       foldl
-        (lam env : SideEffectEnv. lam bind : RecLetBinding.
+        (lam env : SideEffectEnv. lam bind : DeclLetRecord.
           constructSideEffectEnvH env bind.body)
         env t.bindings in
     constructSideEffectEnvH env t.inexpr

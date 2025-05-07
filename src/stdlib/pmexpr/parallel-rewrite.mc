@@ -5,7 +5,7 @@ include "pmexpr/promote.mc"
 lang PMExprParallelPattern = PMExprAst + PMExprPromote + PMExprVariableSub
   sem tryPatterns (patterns : [Pattern]) =
   | t ->
-    let binding : RecLetBinding = t in
+    let binding : DeclLetRecord = t in
     let n = length patterns in
     recursive let tryPattern = lam i.
       if lti i n then
@@ -30,7 +30,7 @@ lang PMExprParallelPattern = PMExprAst + PMExprPromote + PMExprVariableSub
     -- Collect the parameters
     let replacements =
       foldl
-        (lam replacements. lam binding : RecLetBinding.
+        (lam replacements. lam binding : DeclLetRecord.
           match functionParametersAndBody binding.body with (params, _) then
             match tryPatterns patterns binding with Some replacement then
               mapInsert binding.ident (params, replacement) replacements
@@ -42,7 +42,7 @@ lang PMExprParallelPattern = PMExprAst + PMExprPromote + PMExprVariableSub
     -- Remove bindings that have been replaced by parallel patterns
     let retainedBindings =
       filter
-        (lam binding : RecLetBinding.
+        (lam binding : DeclLetRecord.
           optionIsNone (mapLookup binding.ident replacements))
         t.bindings in
 
@@ -53,7 +53,7 @@ lang PMExprParallelPattern = PMExprAst + PMExprPromote + PMExprVariableSub
       -- bindings that remain.
       let bindings =
         map
-          (lam binding : RecLetBinding.
+          (lam binding : DeclLetRecord.
             match parallelPatternRewriteH patterns replacements binding.body
             with (_, body) in
             {binding with body = body})

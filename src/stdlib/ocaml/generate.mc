@@ -85,7 +85,7 @@ lang OCamlTopGenerate = MExprAst + OCamlAst + OCamlGenerateExternalNaive
     let later: ([Top], Expr) = generateTopsAndExpr env t.inexpr in
     (cons here later.0, later.1)
   | TmRecLets t ->
-    let f = lam binding : RecLetBinding.
+    let f = lam binding : DeclLetRecord.
       { ident = binding.ident
       , tyBody = binding.tyBody
       , body = generate env binding.body

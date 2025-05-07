@@ -10,40 +10,40 @@ include "mexpr/type-check.mc"
 
 lang MExprCallGraph = MExprAst
   sem constructCallGraph =
-  | TmRecLets t ->
+  | TmDecl (x & {decl = DeclRecLets t}) ->
     let g : Digraph Name Int = digraphEmpty nameCmp eqi in
-    let g = _addGraphVertices g (TmRecLets {t with inexpr = unit_}) in
+    let g = _addGraphVertices g (TmDecl {x with inexpr = unit_}) in
     _addGraphCallEdges g t.bindings
   | t ->
     errorSingle [infoTm t] (join ["A call graph can only be constructed ",
                                     "from a recursive let-expression"])
 
   sem _addGraphVertices (g : Digraph Name Int) =
-  | TmLet t ->
+  | TmDecl {decl = DeclLet t, inexpr = inexpr} ->
     let g =
       match t.tyBody with TyArrow _ then digraphAddVertex t.ident g
       else g
     in
     let g = _addGraphVertices g t.body in
-    _addGraphVertices g t.inexpr
-  | TmRecLets t ->
+    _addGraphVertices g inexpr
+  | TmDecl {decl = DeclRecLets t, inexpr = inexpr} ->
     let g =
       foldl
-        (lam g. lam bind : RecLetBinding. digraphAddVertex bind.ident g)
+        (lam g. lam bind : DeclLetRecord. digraphAddVertex bind.ident g)
         g t.bindings in
     let g =
       foldl
-        (lam g. lam bind : RecLetBinding.
+        (lam g. lam bind : DeclLetRecord.
           _addGraphVertices g bind.body)
         g t.bindings in
-    _addGraphVertices g t.inexpr
+    _addGraphVertices g inexpr
   | t -> sfold_Expr_Expr _addGraphVertices g t
 
   sem _addGraphCallEdges (g : Digraph Name Int) =
-  | bindings /- : [RecLetBinding] -/ ->
+  | bindings /- : [DeclLetRecord] -/ ->
     let edges =
       foldl
-        (lam edges. lam bind : RecLetBinding.
+        (lam edges. lam bind : DeclLetRecord.
           _findCallEdges bind.ident g edges bind.body)
         (mapEmpty nameCmp) bindings in
     mapFoldWithKey
@@ -64,17 +64,17 @@ lang MExprCallGraph = MExprAst
         else setOfSeq nameCmp [t.ident] in
       mapInsert src outEdges edges
     else edges
-  | TmLet t ->
+  | TmDecl {decl = DeclLet t, inexpr = inexpr} ->
     let letSrc = match t.tyBody with TyArrow _ then t.ident else src in
     let edges = _findCallEdges letSrc g edges t.body in
-    _findCallEdges src g edges t.inexpr
-  | TmRecLets t ->
+    _findCallEdges src g edges inexpr
+  | TmDecl {decl = DeclRecLets t, inexpr = inexpr} ->
     let edges =
       foldl
-        (lam edges : Map Name (Set Name). lam bind : RecLetBinding.
+        (lam edges : Map Name (Set Name). lam bind : DeclLetRecord.
           _findCallEdges bind.ident g edges bind.body)
         edges t.bindings in
-    _findCallEdges src g edges t.inexpr
+    _findCallEdges src g edges inexpr
   | t -> sfold_Expr_Expr (_findCallEdges src g) edges t
 end
 
@@ -93,14 +93,14 @@ let a = nameSym "a" in
 let b = nameSym "b" in
 let c = nameSym "c" in
 let d = nameSym "d" in
-let t = preprocess (nureclets_ [
+let t = preprocess (bind_ (nureclets_ [
   (a, ulam_ "x" (bindall_ [
     nulet_ b (ulam_ "x" (addi_ (var_ "x") (int_ 1))),
     nulet_ c (ulam_ "x" (app_ (nvar_ b) (var_ "x"))),
-    nulet_ d (ulam_ "x" (app_ (nvar_ b) (var_ "x"))),
-    addi_ (addi_ (app_ (nvar_ b) (var_ "x"))
+    nulet_ d (ulam_ "x" (app_ (nvar_ b) (var_ "x")))]
+    (addi_ (addi_ (app_ (nvar_ b) (var_ "x"))
                  (app_ (nvar_ c) (var_ "x")))
-          (app_ (nvar_ d) (int_ 2))]))]) in
+          (app_ (nvar_ d) (int_ 2)))))]) unit_) in
 let g = constructCallGraph t in
 utest digraphSuccessors a g with [b, c, d] using eqSeq nameEq in
 utest digraphSuccessors b g with [] using eqSeq nameEq in

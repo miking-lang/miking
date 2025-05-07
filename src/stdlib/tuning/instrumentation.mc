@@ -73,7 +73,7 @@ lang Instrumentation = MExprAst + HoleAst + TailPositions
   -- Recursive helper for instrument
   sem instrumentH (env : CallCtxEnv) (graph : DependencyGraph) (str2name : String -> Name) =
   | TmRecLets r ->
-    let lets : [Name] = map (lam b: RecLetBinding. b.ident) r.bindings in
+    let lets : [Name] = map (lam b: DeclLetRecord. b.ident) r.bindings in
     match lets with [] then instrumentH env graph str2name r.inexpr
     else
       -- Identify a reclet by the ident of its first binding
@@ -128,7 +128,7 @@ lang Instrumentation = MExprAst + HoleAst + TailPositions
           -- Contains a tail call?
           if setMem (head ids) tailCallsSet then
             -- Yes, acquire lock. The lock is released in a base case.
-            (ids, lam e. bindSemi_ (app_ (nvar_ acquireLock) id) e)
+            (ids, lam e. semi_ (app_ (nvar_ acquireLock) id) e)
           else
             -- No, acquire and release lock directly after.
             let f = lam e.
@@ -168,7 +168,7 @@ lang Instrumentation = MExprAst + HoleAst + TailPositions
     let releaseExpr =
       if null ids then uunit_ else
       let releaseLock = str2name "releaseLock" in
-      foldr1 bindSemi_ (map (lam id. app_ (nvar_ releaseLock) (int_ id)) ids)
+      foldr1 semi_ (map (lam id. app_ (nvar_ releaseLock) (int_ id)) ids)
     in
     let semi = nameSym "" in
     bindall_

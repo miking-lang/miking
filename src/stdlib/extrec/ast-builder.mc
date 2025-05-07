@@ -9,16 +9,6 @@ let ext_record_ = lam s. lam b.
                ty = tyunknown_,
                info = NoInfo ()}
 
-recursive let extrec_bindF_ = use MLangAst in
-  lam f : Expr -> Expr -> Expr. lam letexpr. lam expr.
-  bindF_ (lam letexpr. lam expr.
-    match letexpr with TmUse t then
-      TmUse {t with inexpr = extrec_bindF_ f t.inexpr expr}
-    else
-      f letexpr expr -- Insert at the end of the chain
-  ) letexpr expr
-end
-
 let placeholder_ = use PlaceholderAst in
   TmPlaceholder {info = NoInfo (),
                  ty = tyunknown_}

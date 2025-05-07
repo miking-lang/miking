@@ -518,7 +518,7 @@ lang GraphColoring = HoleAst + HoleCallGraph
 
   | TmRecLets ({ bindings = bindings, inexpr = inexpr } & t) ->
     match
-      mapAccumL (lam env : CallCtxEnv. lam bind : RecLetBinding.
+      mapAccumL (lam env : CallCtxEnv. lam bind : DeclLetRecord.
         let curBody =
           match bind with { body = TmLam lm } then (bind.ident, bind.info)
           else cur
@@ -569,7 +569,7 @@ lang GraphColoring = HoleAst + HoleCallGraph
 
   | TmRecLets ({ bindings = bindings, inexpr = inexpr } & t) ->
     let newBinds = foldl
-      (lam acc : [RecLetBinding]. lam bind : RecLetBinding.
+      (lam acc : [DeclLetRecord]. lam bind : DeclLetRecord.
         match bind with { body = TmLam lm } then
           match mapLookup bind.ident pub2priv
           with Some local then
@@ -601,7 +601,7 @@ lang GraphColoring = HoleAst + HoleCallGraph
 
   | TmRecLets t ->
     concat
-      (foldl (lam acc. lam bind: RecLetBinding.
+      (foldl (lam acc. lam bind: DeclLetRecord.
          let cur =
            match bind with { body = TmLam lm } then (bind.ident, bind.info)
            else cur

@@ -170,7 +170,7 @@ end
 lang RecLetsCPS = CPS + RecLetsAst + LamAst
   sem exprCps env k =
   | TmRecLets t ->
-    let bindings = map (lam b: RecLetBinding. { b with body =
+    let bindings = map (lam b: DeclLetRecord. { b with body =
         match b.body with TmLam t then
           if not (or (transform env b.ident) (transform env t.ident)) then
             TmLam { t with body = exprCps env (None ()) t.body }

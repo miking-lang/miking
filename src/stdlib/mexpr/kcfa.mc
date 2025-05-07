@@ -573,7 +573,7 @@ lang RecLetsKCFA = KCFA + LamKCFA + RecLetsAst
     let idents = map (lam b. name2int im b.info b.ident) bindings in
     let envBody = foldl (lam env. lam i.
         ctxEnvAdd i ctx env) (ctxEnvFilterFree im (TmRecLets t) env) idents in
-    let cstrs = map (lam identBind: (IName, RecLetBinding).
+    let cstrs = map (lam identBind: (IName, DeclLetRecord).
       match identBind with (ident, b) in
       match b.body with TmLam t then
         let av: AbsVal = AVLam {

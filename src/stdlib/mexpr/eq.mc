@@ -137,6 +137,14 @@ lang Eq = ConstAst
   --   updated bijection between free variables.
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
   -- Intentionally left blank
+
+  sem eqDecl (d1: Decl) =
+  | d2 ->
+    let empty = {varEnv = biEmpty, conEnv = biEmpty} in
+    match eqDeclH empty empty d1 d2 with Some _ then true else false
+
+  sem eqDeclH : EqEnv -> EqEnv -> Decl -> Decl -> Option (EqEnv, EqEnv)
+  sem eqDeclH env free lhs =
 end
 
 lang VarEq = Eq + VarAst
@@ -195,42 +203,49 @@ lang RecordEq = Eq + RecordAst
     else None ()
 end
 
-lang LetEq = Eq + LetAst
-  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
-  | TmLet {ident = i2, body = b2, inexpr = ie2} ->
-    match lhs with TmLet {ident = i1, body = b1, inexpr = ie1} then
-      match eqExprH env free b1 b2 with Some free then
-        match env with {varEnv = varEnv} then
-          let varEnv = biInsert (i1,i2) varEnv in
-          eqExprH {env with varEnv = varEnv} free ie1 ie2
-        else never
+lang DeclEq = Eq + DeclAst
+  sem eqExprH env free lhs =
+  | TmDecl {decl = d2, inexpr = e2} ->
+    match lhs with TmDecl {decl = d1, inexpr = e1} then
+      match eqDeclH env free d1 d2 with Some (env, free) then
+        eqExprH env free e1 e2
       else None ()
     else None ()
 end
 
-lang RecLetsEq = Eq + RecLetsAst
-  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
-  | TmRecLets {bindings = bs2, inexpr = ie2} ->
+lang LetEq = Eq + LetDeclAst
+  sem eqDeclH (env : EqEnv) (free : EqEnv) lhs =
+  | DeclLet {ident = i2, body = b2} ->
+    match lhs with DeclLet {ident = i1, body = b1} then
+      match eqExprH env free b1 b2 with Some free then
+        Some ({env with varEnv = biInsert (i1,i2) env.varEnv}, free)
+      else None ()
+    else None ()
+end
+
+lang RecLetsEq = Eq + RecLetsDeclAst
+  sem eqDeclH (env : EqEnv) (free : EqEnv) (lhs : Decl) =
+  | DeclRecLets {bindings = bs2} ->
     -- NOTE(dlunde,2020-09-25): This requires the bindings to occur in the same
     -- order. Do we want to allow equality of differently ordered (but equal)
     -- bindings as well?
     match env with {varEnv = varEnv} then
-      match lhs with TmRecLets {bindings = bs1, inexpr = ie1} then
+      match lhs with DeclRecLets {bindings = bs1} then
         if eqi (length bs1) (length bs2) then
           let bszip = zipWith (lam b1. lam b2. (b1, b2)) bs1 bs2 in
           let varEnv =
             foldl
-              (lam varEnv. lam t : (RecLetBinding, RecLetBinding).
+              (lam varEnv. lam t : (DeclLetRecord, DeclLetRecord).
                  biInsert ((t.0).ident,(t.1).ident) varEnv)
               varEnv bszip
           in
           let env = {env with varEnv = varEnv} in
           match optionFoldlM
-            (lam free. lam t : (RecLetBinding, RecLetBinding).
+            (lam free. lam t : (DeclLetRecord, DeclLetRecord).
               eqExprH env free (t.0).body (t.1).body)
             free bszip
           with Some free then
-            eqExprH env free ie1 ie2
+            Some (env, free)
           else None ()
         else None ()
       else None ()
@@ -245,21 +260,22 @@ lang ConstEq = Eq + ConstAst
     else None ()
 end
 
-lang TypeEq = Eq + TypeAst
-  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
-  | TmType _ -> error "eqExpr not implemented for TmType!"
+lang TypeEq = Eq + TypeDeclAst
+  sem eqDeclH (env : EqEnv) (free : EqEnv) (lhs : Decl) =
+  | DeclType _ -> error "eqDecl not implemented for DeclType!"
 end
 
-lang DataEq = Eq + DataAst
-  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
-  | TmConDef {ident = i2, inexpr = ie2, ty = ty2} ->
+lang DataEq = Eq + DataDeclAst + DataAst
+  sem eqDeclH env free lhs =
+  | DeclConDef {ident = i2, tyIdent = ty2} ->
     match env with {conEnv = conEnv} then
-      match lhs with TmConDef {ident = i1, inexpr = ie1, ty = ty1} then
+      match lhs with DeclConDef {ident = i1, tyIdent = ty1} then
         let conEnv = biInsert (i1,i2) conEnv in
-        eqExprH {env with conEnv = conEnv} free ie1 ie2
+        Some ({env with conEnv = conEnv}, free)
       else None ()
     else never
 
+  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
   | TmConApp {ident = i2, body = b2, ty = ty2} ->
     match lhs with TmConApp {ident = i1, body = b1, ty = ty1} then
       match (env,free) with ({conEnv = conEnv},{conEnv = freeConEnv}) then
@@ -294,11 +310,11 @@ lang MatchEq = Eq + MatchAst
 
 end
 
-lang UtestEq = Eq + UtestAst
-  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
-  | TmUtest {test = t2, expected = e2, next = n2, tusing = u2, tonfail = o2} ->
+lang UtestEq = Eq + UtestDeclAst
+  sem eqDeclH (env : EqEnv) (free : EqEnv) (lhs : Decl) =
+  | DeclUtest {test = t2, expected = e2, tusing = u2, tonfail = o2} ->
     match lhs with
-      TmUtest {test = t1, expected = e1, next = n1, tusing = u1, tonfail = o1}
+      DeclUtest {test = t1, expected = e1, tusing = u1, tonfail = o1}
     then
       match eqExprH env free t1 t2 with Some free then
         match eqExprH env free e1 e2 with Some free then
@@ -306,22 +322,22 @@ lang UtestEq = Eq + UtestAst
             match eqExprH env free tu1 tu2 with Some free then
               match (o1, o2) with (Some to1, Some to2) then
                 match eqExprH env free to1 to2 with Some free then
-                  eqExprH env free n1 n2
+                  Some (env, free)
                 else None ()
               else
                 match (o1, o2) with (None (), None ()) then
-                  eqExprH env free n1 n2
+                  Some (env, free)
                 else None ()
             else None ()
           else
             match (u1, u2) with (None (), None ()) then
               match (o1, o2) with (Some to1, Some to2) then
                 match eqExprH env free to1 to2 with Some free then
-                  eqExprH env free n1 n2
+                  Some (env, free)
                 else None ()
               else
                 match (o1, o2) with (None (), None ()) then
-                  eqExprH env free n1 n2
+                  Some (env, free)
                 else None ()
             else None ()
         else None ()
@@ -345,14 +361,14 @@ lang NeverEq = Eq + NeverAst
   | TmNever _ -> match lhs with TmNever _ then Some free else None ()
 end
 
-lang ExtEq = Eq + ExtAst
-  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
-  | TmExt {ident = i2, inexpr = ie2} ->
-    match lhs with TmExt {ident = i1, inexpr = ie1} then
+lang ExtEq = Eq + ExtDeclAst
+  sem eqDeclH (env : EqEnv) (free : EqEnv) (lhs : Decl) =
+  | DeclExt {ident = i2} ->
+    match lhs with DeclExt {ident = i1} then
       match env with {varEnv = varEnv} in
       if nameEqStr i1 i2 then -- Externals are a bit special, as the string component of their names are required to be identical
         let varEnv = biInsert (i1,i2) varEnv in
-        eqExprH {env with varEnv = varEnv} free ie1 ie2
+        Some ({env with varEnv = varEnv}, free)
       else None ()
     else None ()
 end
@@ -728,7 +744,7 @@ lang MExprEq =
 
   -- Terms
   + VarEq + AppEq + LamEq + RecordEq + LetEq + RecLetsEq + ConstEq + DataEq +
-  TypeEq + MatchEq + UtestEq + SeqEq + NeverEq + ExtEq
+  TypeEq + MatchEq + UtestEq + SeqEq + NeverEq + ExtEq + DeclAst + DeclEq
 
   -- Constants
   + IntEq + FloatEq + BoolEq + CharEq + SymbEq
@@ -825,9 +841,9 @@ let rlet1 = ureclets_ [("x", a1), ("y", lam1)] in
 let rlet2 = ureclets_ [("x", a2), ("y", lam2)] in
 let rlet3 = ureclets_ [("y", a2), ("x", lam2)] in
 let rlet4e = ureclets_ [("y", lam1), ("x", a1)] in -- Order matters
-utest rlet1 with rlet2 using eqExpr in
-utest rlet1 with rlet3 using eqExpr in
-utest eqExpr rlet1 rlet4e with false in
+utest rlet1 with rlet2 using eqDecl in
+utest rlet1 with rlet3 using eqDecl in
+utest eqDecl rlet1 rlet4e with false in
 
 -- Constants
 let c1 = (int_ 1) in
@@ -853,10 +869,10 @@ utest cda1 with cda2 using eqExpr in
 utest eqExpr cda1 cd3e with false in
 
 -- Match and patterns
-let m1 = match_ c1 (pint_ 1) cda1 rlet1 in
-let m2 = match_ c1 (pint_ 1) cda2 rlet2 in
-let m3e = match_ rlet1 (pint_ 1) cda2 rlet2 in
-let m4e = match_ c1 (pint_ 1) c1 rlet2 in
+let m1 = match_ c1 (pint_ 1) cda1 (bind_ rlet1 unit_) in
+let m2 = match_ c1 (pint_ 1) cda2 (bind_ rlet2 unit_) in
+let m3e = match_ (bind_ rlet1 unit_) (pint_ 1) cda2 (bind_ rlet2 unit_) in
+let m4e = match_ c1 (pint_ 1) c1 (bind_ rlet2 unit_) in
 let m5e = match_ c1 (pint_ 1) cda2 cda1 in
 utest m1 with m2 using eqExpr in
 utest eqExpr m1 m3e with false in
@@ -1170,20 +1186,20 @@ utest eqType tyAll2 tyAll4 with false in
 utest eqType tyAll4 tyAll6 with false in
 
 -- Utest
-let ut1 = utest_ lam1 lam2 v3 in
-let ut2 = utest_ lam2 lam1 v4 in
-let ut3e = utest_ v5e lam2 v3 in
-let ut4e = utest_ lam1 v5e v3 in
-let ut5e = utest_ lam1 lam2 v5e in
+let ut1 = bind_ (utest_ lam1 lam2) v3 in
+let ut2 = bind_ (utest_ lam2 lam1) v4 in
+let ut3e = bind_ (utest_ v5e lam2) v3 in
+let ut4e = bind_ (utest_ lam1 v5e) v3 in
+let ut5e = bind_ (utest_ lam1 lam2) v5e in
 utest ut1 with ut2 using eqExpr in
 utest eqExpr ut1 ut3e with false in
 utest eqExpr ut1 ut4e with false in
 utest eqExpr ut1 ut5e with false in
-let ut1 = utestu_ lam1 lam2 v3 v4 in
-let ut2 = utestu_ lam2 lam1 v4 v3 in
+let ut1 = bind_ (utestu_ lam1 lam2 v4) v3 in
+let ut2 = bind_ (utestu_ lam2 lam1 v3) v4 in
 utest ut1 with ut2 using eqExpr in
-let ut1 = utestuo_ lam1 lam2 v3 v4 v3 in
-let ut2 = utestuo_ lam2 lam1 v4 v3 v4 in
+let ut1 = bind_ (utestuo_ lam1 lam2 v4 v3) v3 in
+let ut2 = bind_ (utestuo_ lam2 lam1 v3 v4) v4 in
 utest ut1 with ut2 using eqExpr in
 
 -- Sequences

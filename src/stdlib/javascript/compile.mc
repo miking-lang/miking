@@ -321,7 +321,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
 
   | TmRecLets { bindings = bindings, inexpr = e, ty = ty } ->
     match compileMExpr ctx e with (ctx, e) in
-    match foldl (lam acc: (CompileJSContext, [JSExpr]). lam bind : RecLetBinding.
+    match foldl (lam acc: (CompileJSContext, [JSExpr]). lam bind : DeclLetRecord.
       match acc with (ctx, es) in
       match bind with { ident = ident, body = body, info = info } in
       match body with TmLam _ then

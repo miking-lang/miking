@@ -43,7 +43,7 @@ lang PMExprClassify = PMExprAst + PMExprExtractAccelerate + MExprCallGraph
     let env = classifyH env t.ident t.body in
     classifyH env id t.inexpr
   | TmRecLets t ->
-    let bindMap : Map Name RecLetBinding =
+    let bindMap : Map Name DeclLetRecord =
       mapFromSeq nameCmp
         (map (lam bind. (bind.ident, bind)) t.bindings) in
     let f : ClassificationEnv -> [Name] -> ClassificationEnv = lam env. lam binds.

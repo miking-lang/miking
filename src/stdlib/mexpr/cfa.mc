@@ -529,7 +529,7 @@ lang RecLetsCFA = CFA + LamCFA + RecLetsAst
 
   sem generateConstraints graph =
   | TmRecLets { bindings = bindings } ->
-    let cstrs = map (lam b: RecLetBinding.
+    let cstrs = map (lam b: DeclLetRecord.
         match b.body with TmLam t then
           let av: AbsVal = AVLam {
             ident = name2intAcc graph.ia t.info t.ident,

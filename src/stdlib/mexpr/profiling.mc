@@ -205,7 +205,7 @@ lang MExprProfileInstrument = MExprAst + BootParser
       else env in
     collectToplevelFunctions env t.inexpr
   | TmRecLets t ->
-    let collectBinding : ProfileEnv -> RecLetBinding -> ProfileEnv =
+    let collectBinding : ProfileEnv -> DeclLetRecord -> ProfileEnv =
       lam env. lam binding.
       match binding.body with TmLam _ then
         let idx = mapSize env in
@@ -233,7 +233,7 @@ lang MExprProfileInstrument = MExprAst + BootParser
                 with inexpr = instrumentProfilingH env t.inexpr}
     else TmLet {t with inexpr = instrumentProfilingH env t.inexpr}
   | TmRecLets t ->
-    let instrumentBinding : RecLetBinding -> RecLetBinding =
+    let instrumentBinding : DeclLetRecord -> DeclLetRecord =
       lam binding.
       match mapLookup binding.ident env with Some (idx, _) then
         {binding with body = instrumentProfilingCalls idx binding.body}

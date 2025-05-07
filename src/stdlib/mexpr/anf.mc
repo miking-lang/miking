@@ -15,7 +15,7 @@ include "info.mc"
 include "error.mc"
 include "map.mc"
 
-lang ANF = LetAst + VarAst + UnknownTypeAst
+lang ANF = LetDeclAst + VarAst + UnknownTypeAst
 
   -- By default, everything is lifted (except variables)
   sem liftANF =
@@ -38,13 +38,18 @@ lang ANF = LetAst + VarAst + UnknownTypeAst
       frozen = false
     } in
     let inexpr = k var in
-    TmLet {ident = ident,
-           tyAnnot = TyUnknown {info = infoTm n},
-           tyBody = tyTm n,
-           body = n,
-           inexpr = inexpr,
-           ty = tyTm inexpr,
-           info = infoTm n }
+    TmDecl
+    { decl = DeclLet
+      { ident = ident
+      , tyAnnot = TyUnknown {info = infoTm n}
+      , tyBody = tyTm n
+      , body = n
+      , info = infoTm n
+      }
+    , inexpr = inexpr
+    , ty = tyTm inexpr
+    , info = infoTm n
+    }
 
   sem normalizeName (k : Expr -> Expr) =
   | m -> normalize (lam n. if (liftANF n) then bind k n else k n) m
@@ -139,40 +144,37 @@ lang RecordANF = ANF + RecordAst
 
 end
 
-lang LetANF = ANF + LetAst
+lang DeclANF = ANF + DeclAst
+  sem normalize k =
+  | TmDecl x ->
+    TmDecl {x with inexpr = normalizeName k x.inexpr}
+end
+
+lang LetANF = ANF + LetDeclAst
 
   sem normalize (k : Expr -> Expr) =
-  | TmLet t ->
+  | TmDecl (x & { decl = DeclLet t, inexpr = inexpr }) ->
     normalize
-      (lam n1. (TmLet {{t with body = n1}
-                          with inexpr = normalizeName k t.inexpr}))
+      (lam n1. TmDecl {x with decl = DeclLet {t with body = n1}, inexpr = normalizeName k inexpr})
       t.body
 
 end
 
-lang TypeANF = ANF + TypeAst
-
-  sem normalize (k : Expr -> Expr) =
-  | TmType t ->
-    TmType {t with inexpr = normalizeName k t.inexpr}
-end
-
-lang RecLetsANFBase = ANF + NormalizeLams + RecLetsAst + LamAst
+lang RecLetsANFBase = ANF + NormalizeLams + RecLetsDeclAst + LamAst
 
   sem normalize (k : Expr -> Expr) =
   -- We do not allow lifting things outside of reclets, since they might
   -- inductively depend on what is being defined.
-  | TmRecLets t ->
+  | TmDecl (x & { decl = DeclRecLets t, inexpr = inexpr }) ->
     let bindings = map (
-      lam b: RecLetBinding. { b with body =
+      lam b: DeclLetRecord. { b with body =
         match b.body with TmLam _ & t then normalizeLams t
         else errorSingle [infoTm b.body]
           "Error: Not a TmLam in TmRecLet binding in ANF transformation"
       }
     )
     t.bindings in
-    TmRecLets {{t with bindings = bindings}
-                  with inexpr = normalize k t.inexpr}
+    TmDecl {x with decl = DeclRecLets {t with bindings = bindings}, inexpr = normalize k inexpr}
 
 end
 
@@ -190,9 +192,6 @@ end
 lang DataANF = ANF + DataAst
 
   sem normalize (k : Expr -> Expr) =
-  | TmConDef t ->
-    TmConDef {t with inexpr = normalize k t.inexpr}
-
   | TmConApp t ->
     normalizeName
       (lam b. k (TmConApp {t with body = b})) t.body
@@ -211,22 +210,25 @@ lang MatchANF = ANF + MatchAst
 
 end
 
-lang UtestANF = ANF + UtestAst
+lang UtestANF = ANF + UtestDeclAst
 
   sem normalize (k : Expr -> Expr) =
-  | TmUtest t -> let tusing = optionMap normalizeTerm t.tusing in
+  | TmDecl (x & { decl = DeclUtest t, inexpr = inexpr }) ->
+    let tusing = optionMap normalizeTerm t.tusing in
     normalizeName
       (lam test.
          normalizeName
            (lam expected.
-             let inner = lam x.
-               match x with (tusing, tonfail) in
-               TmUtest {
-                 t with test = test,
-                 expected = expected,
-                 next = normalize k t.next,
-                 tusing = tusing,
-                 tonfail = tonfail
+             let inner = lam pair.
+               match pair with (tusing, tonfail) in
+               TmDecl
+               { x with inexpr = normalize k inexpr
+               , decl = DeclUtest
+                 { t with test = test
+                 , expected = expected
+                 , tusing = tusing
+                 , tonfail = tonfail
+                 }
                }
               in
              switch (t.tusing, t.tonfail)
@@ -263,10 +265,10 @@ lang NeverANF = ANF + NeverAst
 
 end
 
-lang ExtANF = ANF + ExtAst + FunTypeAst + UnknownTypeAst + LamAst + AppAst + FunArity
+lang ExtANF = ANF + ExtDeclAst + FunTypeAst + UnknownTypeAst + LamAst + AppAst + FunArity
 
   sem normalize (k : Expr -> Expr) =
-  | TmExt ({inexpr = inexpr} & t) ->
+  | TmDecl (x & {decl = d & DeclExt t, inexpr = inexpr}) ->
     -- NOTE(dlunde,2022-06-14): Externals must always be fully applied
     -- (otherwise the parser throws an error). To make this compatible with
     -- ANF, we eta expand definitions of externals. In this way, the only
@@ -326,19 +328,30 @@ lang ExtANF = ANF + ExtAst + FunTypeAst + UnknownTypeAst + LamAst + AppAst + Fun
             body = acc, ty = TyArrow {from = ty, to = tyTm acc, info = t.info},
             info = t.info})
         inner varNameTypes in
-    TmExt { t with
-      inexpr = TmLet {
-        ident = t.ident, tyAnnot = TyUnknown {info = t.info},
-        tyBody = t.tyIdent, body = etaExpansion, inexpr = normalize k t.inexpr,
-        ty = tyTm t.inexpr, info = t.info} }
+    TmDecl
+    { x with decl = d
+    , inexpr = TmDecl
+      { decl = DeclLet
+        { ident = t.ident
+        , tyAnnot = TyUnknown {info = t.info}
+        , tyBody = t.tyIdent
+        , body = etaExpansion
+        , info = t.info
+        }
+      , inexpr = normalize k inexpr
+      , ty = tyTm inexpr
+      , info = x.info
+      }
+    }
 
 end
 
 -- The default ANF transformation for MExpr. Only lifts non-values, and does
 -- not lift individual terms in sequences of lambdas or applications.
 lang MExprANF =
-  VarANF + AppANF + LamANF + RecordANF + LetANF + TypeANF + RecLetsANF +
-  ConstANF + DataANF + MatchANF + UtestANF + SeqANF + NeverANF + ExtANF
+  VarANF + AppANF + LamANF + RecordANF + LetANF + RecLetsANF +
+  ConstANF + DataANF + MatchANF + UtestANF + SeqANF + NeverANF + ExtANF +
+  DeclANF
 
   sem liftANF =
   | TmLam _ -> false
@@ -352,8 +365,9 @@ end
 
 -- Full ANF transformation. Lifts everything.
 lang MExprANFAll =
-  VarANF + AppANFAll + LamANFAll + RecordANF + LetANF + TypeANF + RecLetsANFAll +
-  ConstANF + DataANF + MatchANF + UtestANF + SeqANF + NeverANF + ExtANF
+  VarANF + AppANFAll + LamANFAll + RecordANF + LetANF + RecLetsANFAll +
+  ConstANF + DataANF + MatchANF + UtestANF + SeqANF + NeverANF + ExtANF +
+  DeclANF
 end
 
 -----------

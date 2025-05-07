@@ -20,6 +20,11 @@ lang NonExpansive = Ast
   | t ->
     sfold_Expr_Expr (lam v. lam tm.
       if v then nonExpansive false tm else false) true t
+
+  sem nonExpansiveDecl : Decl -> Bool
+  sem nonExpansiveDecl =
+  | d ->
+    sfold_Decl_Expr (lam v. lam tm. if v then nonExpansive false tm else false) true d
 end
 
 lang VarNonExpansive = NonExpansive + VarAst
@@ -37,29 +42,17 @@ lang LamNonExpansive = NonExpansive + LamAst
   | TmLam t -> true
 end
 
-lang LetNonExpansive = NonExpansive + LetAst
-  sem nonExpansive (guarded : Guarded) =
-  | TmLet t ->
-    if nonExpansive false t.body then nonExpansive guarded t.inexpr
+lang DeclNonExpansive = NonExpansive + DeclAst
+  sem nonExpansive guarded =
+  | TmDecl x ->
+    if nonExpansiveDecl x.decl
+    then nonExpansive guarded x.inexpr
     else false
 end
 
-lang RecLetsNonExpansive = NonExpansive + RecLetsAst
-  sem nonExpansive (guarded : Guarded) =
-  | TmRecLets t ->
-    if forAll (lam b. nonExpansive false b.body) t.bindings
-    then nonExpansive guarded t.inexpr
-    else false
-end
-
-lang TypeNonExpansive = NonExpansive + TypeAst
-  sem nonExpansive (guarded : Guarded) =
-  | TmType t -> nonExpansive guarded t.inexpr
-end
-
-lang DataNonExpansive = NonExpansive + DataAst
-  sem nonExpansive (guarded : Guarded) =
-  | TmConDef t -> nonExpansive guarded t.inexpr
+lang UtestNonExpansive = NonExpansive + UtestDeclAst
+  sem nonExpansiveDecl =
+  | DeclUtest _ -> true
 end
 
 lang MatchNonExpansive = NonExpansive + MatchAst
@@ -72,20 +65,9 @@ lang MatchNonExpansive = NonExpansive + MatchAst
     else false
 end
 
-lang UtestNonExpansive = NonExpansive + UtestAst
-  sem nonExpansive (guarded : Guarded) =
-  | TmUtest t -> nonExpansive guarded t.next
-end
-
-lang ExtNonExpansive = NonExpansive + ExtAst
-  sem nonExpansive (guarded : Guarded) =
-  | TmExt t -> nonExpansive guarded t.inexpr
-end
-
 lang MExprNonExpansive =
-  MExprAst + NonExpansive +
-  VarNonExpansive + AppNonExpansive + LamNonExpansive + LetNonExpansive + RecLetsNonExpansive +
-  TypeNonExpansive + DataNonExpansive + MatchNonExpansive + UtestNonExpansive + ExtNonExpansive
+  MExprAst + NonExpansive + DeclNonExpansive + VarNonExpansive +
+  AppNonExpansive + LamNonExpansive + MatchNonExpansive + UtestNonExpansive
 end
 
 mexpr
@@ -121,7 +103,7 @@ utest nonExpansive true (utuple_ [freeze_ (var_ "x"), int_ 0]) with true in
 utest nonExpansive false (utuple_ [app_ (var_ "y") (var_ "x"), int_ 0]) with false in
 
 -- Utest
-utest nonExpansive true (utest_ (app_ (var_ "y") (var_ "x"))
-                           (int_ 0) (int_ 0)) with true in
+utest nonExpansive true (bind_ (utest_ (app_ (var_ "y") (var_ "x"))
+                           (int_ 0)) unit_) with true in
 
 ()

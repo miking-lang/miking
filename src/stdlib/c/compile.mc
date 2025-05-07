@@ -886,7 +886,7 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile + RecordTypeUtils
       else never
 
   | TmRecLets { bindings = bindings, inexpr = inexpr } ->
-    let f = lam env. lam binding: RecLetBinding.
+    let f = lam env. lam binding: DeclLetRecord.
       match binding with { ident = ident, tyBody = tyBody, body = body } then
         compileFun env ident tyBody body
       else never

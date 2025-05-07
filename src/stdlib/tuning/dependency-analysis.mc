@@ -162,7 +162,7 @@ lang DependencyAnalysis = MExprHoleCFA
   -- Possibly update cur inside bodies of bindings
   | TmRecLets ({ bindings = bindings, inexpr = inexpr } & t) ->
     match
-      mapAccumL (lam acc : (DependencyGraph, Int). lam bind : RecLetBinding.
+      mapAccumL (lam acc : (DependencyGraph, Int). lam bind : DeclLetRecord.
         let curBody =
           match bind with {body = TmLam lm, ident = ident} then
             if graphHasVertex (ident, t.info) env.callGraph then

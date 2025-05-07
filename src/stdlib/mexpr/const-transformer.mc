@@ -21,7 +21,7 @@ let _constWithInfos: Info -> use Ast in Expr -> use Ast in Expr =
       TmConst {{t with info = i} with ty = TyUnknown {ty with info = i}}
     else tm
 
-lang ConstTransformer = VarAst + LamAst + LetAst + RecLetsAst + MatchAst + ExtAst + NamedPat + ConstAst
+lang ConstTransformer = VarAst + LamAst + LetDeclAst + RecLetsDeclAst + MatchAst + ExtDeclAst + NamedPat + ConstAst
 
   sem constTransform builtin =
   | t ->
@@ -32,12 +32,24 @@ lang ConstTransformer = VarAst + LamAst + LetAst + RecLetsAst + MatchAst + ExtAs
       --dprint t2;
       t2
 
+  sem ctWorkerDecl (env: Map String (Option Expr)) =
+  | DeclLet r ->
+    let body = ctWorker env r.body in
+    (mapInsert (nameGetStr r.ident) (None()) env, DeclLet {r with body = body})
+  | DeclRecLets r ->
+    let fEnv = lam acc. lam b:DeclLetRecord. mapInsert (nameGetStr b.ident) (None()) acc in
+    let env = foldl fEnv env r.bindings in
+    let bindings = map (lam b:DeclLetRecord. {b with body = ctWorker env b.body}) r.bindings in
+    (env, DeclRecLets {r with bindings = bindings})
+  | d & DeclExt r ->
+    (mapInsert (nameGetStr r.ident) (None()) env, d)
+  | d -> (env, smap_Decl_Expr (ctWorker env) d)
+
   sem ctWorker (env: Map String (Option Expr)) =
-  | TmLet r ->
-    let t1 = ctWorker env r.body in
-    let env = mapInsert (nameGetStr r.ident) (None()) env in
-    let t2 = ctWorker env r.inexpr in
-    TmLet {r with body = t1, inexpr = t2}
+  | TmDecl x ->
+    match ctWorkerDecl env x.decl with (env, decl) in
+    let inexpr = ctWorker env x.inexpr in
+    TmDecl {x with decl = decl, inexpr = inexpr}
   | TmLam r ->
     let t = ctWorker (mapInsert (nameGetStr r.ident) (None()) env) r.body in
     TmLam {r with body = t}
@@ -45,20 +57,12 @@ lang ConstTransformer = VarAst + LamAst + LetAst + RecLetsAst + MatchAst + ExtAs
     let ident = nameGetStr r.ident in
     match mapFindOrElse (lam. Some (TmVar r)) ident env with Some tm
     then _constWithInfos r.info tm else TmVar r
-  | TmRecLets r ->
-    let fEnv = lam acc. lam b:RecLetBinding. mapInsert (nameGetStr b.ident) (None()) acc in
-    let env = foldl fEnv env r.bindings in
-    let bindings = map (lam b:RecLetBinding. {b with body = ctWorker env b.body}) r.bindings in
-    TmRecLets {r with bindings = bindings, inexpr = ctWorker env r.inexpr}
   | TmMatch r ->
     let fEnv = lam acc. lam x. mapInsert x (None()) acc in
     let env2 = foldl fEnv env (ctGetPatVars [] r.pat) in
     TmMatch {r with target = ctWorker env r.target
                   , thn = ctWorker env2 r.thn
                   , els = ctWorker env r.els}
-  | TmExt r ->
-    let t = ctWorker (mapInsert (nameGetStr r.ident) (None()) env) r.inexpr in
-    TmExt {r with inexpr = t}
   | t -> smap_Expr_Expr (ctWorker env) t
 
 

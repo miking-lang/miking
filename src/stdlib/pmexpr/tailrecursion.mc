@@ -78,7 +78,7 @@ lang PMExprTailRecursion = PMExprAst + PMExprFunctionProperties +
   -- the given binding into a tail-recursive form. Otherwise, None is returned.
   sem getTailRecursiveRewriteEnv =
   | t ->
-    let binding : RecLetBinding = t in
+    let binding : DeclLetRecord = t in
     recursive let findExpressionsAtTailPosition : Expr -> [Expr] = lam expr.
       match expr with TmLam t then findExpressionsAtTailPosition t.body
       else match expr with TmLet t then findExpressionsAtTailPosition t.inexpr
@@ -126,7 +126,7 @@ lang PMExprTailRecursion = PMExprAst + PMExprFunctionProperties +
   sem toTailRecursiveForm (env : TailRecursiveEnv) =
   | t ->
     -- env = {binop : Expr, ne : Expr, leftArgRecursion : Bool}
-    let binding : RecLetBinding = t in
+    let binding : DeclLetRecord = t in
 
     -- Generate a new symbol for the name so that we can easily identify calls
     -- to which we need to add an accumulator argument.
@@ -232,11 +232,11 @@ lang PMExprTailRecursion = PMExprAst + PMExprFunctionProperties +
 
   sem tailRecursiveRewrite (subMap : Map Name (Info -> Expr)) =
   | t ->
-    let t : RecLetBinding = t in
+    let t : DeclLetRecord = t in
     match getTailRecursiveRewriteEnv t with Some env then
       let env : TailRecursiveEnv = env in
       match toTailRecursiveForm env t with Some tailRecursiveBinding then
-        let binding : RecLetBinding = tailRecursiveBinding in
+        let binding : DeclLetRecord = tailRecursiveBinding in
         let oldIdent = t.ident in
         let replacementFunctionCall = lam info.
           TmApp {
@@ -261,7 +261,7 @@ lang PMExprTailRecursion = PMExprAst + PMExprFunctionProperties +
       (subMap, subFn t.info)
     else (subMap, TmVar t)
   | TmRecLets t ->
-    let tailRecursiveBinding = lam subMap. lam binding : RecLetBinding.
+    let tailRecursiveBinding = lam subMap. lam binding : DeclLetRecord.
       optionGetOrElse
         (lam. (subMap, binding))
         (tailRecursiveRewrite subMap binding)
@@ -272,7 +272,7 @@ lang PMExprTailRecursion = PMExprAst + PMExprFunctionProperties +
       -- Translate calls to rewritten bindings within each binding.
       let bindings =
         map
-          (lam bind : RecLetBinding.
+          (lam bind : DeclLetRecord.
             match tailRecursiveH subMap bind.body with (_, body) then
               {bind with body = body}
             else never)

@@ -33,7 +33,7 @@ lang CudaPMExprKernelCalls = CudaPMExprAst + MExprCallGraph
     let bindMap : Map Name Expr =
       mapFromSeq nameCmp
         (map
-          (lam bind : RecLetBinding. (bind.ident, bind.body))
+          (lam bind : DeclLetRecord. (bind.ident, bind.body))
           t.bindings) in
     let markFunctionsInComponent = lam marked. lam comp.
       if any (lam e. setMem e marked) comp then
@@ -76,7 +76,7 @@ lang CudaPMExprKernelCalls = CudaPMExprAst + MExprCallGraph
       let body = promoteKernelsBody t.body in
       TmLet {{t with body = body} with inexpr = inexpr}
   | TmRecLets t ->
-    let promoteKernelBinding = lam binding : RecLetBinding.
+    let promoteKernelBinding = lam binding : DeclLetRecord.
       if setMem binding.ident marked then binding
       else {binding with body = promoteKernelsBody binding.body}
     in

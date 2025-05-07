@@ -75,7 +75,7 @@ lang HoleCallGraph = LetAst + AppAst + LamAst + RecLetsAst
 
   | TmRecLets t ->
     let res =
-      foldl (lam acc. lam b : RecLetBinding.
+      foldl (lam acc. lam b : DeclLetRecord.
                concat acc
                  (_handleLetVertex _findVertices
                    {ident = b.ident, body = b.body, info = b.info}))
@@ -98,7 +98,7 @@ lang HoleCallGraph = LetAst + AppAst + LamAst + RecLetsAst
 
   | TmRecLets t ->
     let res =
-      let handleBinding = lam g. lam b : RecLetBinding.
+      let handleBinding = lam g. lam b : DeclLetRecord.
         match b with { body = TmLam { body = lambody }, ident = ident, info = info } then
           _findEdges g (ident, info) name2info [] lambody
         else

@@ -215,6 +215,48 @@ lang MonomorphizeResymbolize = Monomorphize
   sem resymbolizeBindings =
   | ast -> resymbolizeBindingsExpr (mapEmpty nameCmp) ast
 
+  sem resymbolizeBindingsDecl : Map Name Name -> Decl -> (Map Name Name, Decl)
+  sem resymbolizeBindingsDecl nameMap =
+  | d -> (nameMap, smap_Decl_Expr (resymbolizeBindingsExpr nameMap) d)
+  | DeclLet t ->
+    let body = resymbolizeBindingsExpr nameMap t.body in
+    let newId = nameSetNewSym t.ident in
+    let nameMap = mapInsert t.ident newId nameMap in
+    ( nameMap
+    , DeclLet
+      { t with ident = newId
+      , tyAnnot = resymbolizeBindingsType nameMap t.tyAnnot
+      , tyBody = resymbolizeBindingsType nameMap t.tyBody
+      , body = body
+      }
+    )
+  | DeclRecLets t ->
+    let addNewIdBinding = lam nameMap. lam bind.
+      let newId = nameSetNewSym bind.ident in
+      (mapInsert bind.ident newId nameMap, {bind with ident = newId})
+    in
+    match mapAccumL addNewIdBinding nameMap t.bindings with (nameMap, bindings) in
+    let resymbolizeBind = lam bind.
+      {bind with tyAnnot = resymbolizeBindingsType nameMap bind.tyAnnot,
+                 tyBody = resymbolizeBindingsType nameMap bind.tyBody,
+                 body = resymbolizeBindingsExpr nameMap bind.body}
+    in
+    let bindings = map resymbolizeBind bindings in
+    (nameMap, DeclRecLets {t with bindings = bindings})
+  | DeclType t ->
+    let newId = nameSetNewSym t.ident in
+    let nameMap = mapInsert t.ident newId nameMap in
+    ( nameMap
+    , DeclType
+      { t with ident = newId
+      , tyIdent = resymbolizeBindingsType nameMap t.tyIdent
+      }
+    )
+  | DeclConDef t ->
+    let newId = nameSetNewSym t.ident in
+    let nameMap = mapInsert t.ident newId nameMap in
+    (nameMap, DeclConDef {t with ident = newId, tyIdent = resymbolizeBindingsType nameMap t.tyIdent})
+
   sem resymbolizeBindingsExpr : Map Name Name -> Expr -> Expr
   sem resymbolizeBindingsExpr nameMap =
   | TmVar t ->
@@ -231,44 +273,10 @@ lang MonomorphizeResymbolize = Monomorphize
                   tyParam = resymbolizeBindingsType nameMap t.tyParam,
                   body = resymbolizeBindingsExpr nameMap t.body,
                   ty = resymbolizeBindingsType nameMap t.ty}
-  | TmLet t ->
-    let body = resymbolizeBindingsExpr nameMap t.body in
-    let newId = nameSetNewSym t.ident in
-    let nameMap = mapInsert t.ident newId nameMap in
-    TmLet {t with ident = newId,
-                  tyAnnot = resymbolizeBindingsType nameMap t.tyAnnot,
-                  tyBody = resymbolizeBindingsType nameMap t.tyBody,
-                  body = body,
-                  inexpr = resymbolizeBindingsExpr nameMap t.inexpr,
-                  ty = resymbolizeBindingsType nameMap t.ty}
-  | TmRecLets t ->
-    let addNewIdBinding = lam nameMap. lam bind.
-      let newId = nameSetNewSym bind.ident in
-      (mapInsert bind.ident newId nameMap, {bind with ident = newId})
-    in
-    match mapAccumL addNewIdBinding nameMap t.bindings with (nameMap, bindings) in
-    let resymbolizeBind = lam bind.
-      {bind with tyAnnot = resymbolizeBindingsType nameMap bind.tyAnnot,
-                 tyBody = resymbolizeBindingsType nameMap bind.tyBody,
-                 body = resymbolizeBindingsExpr nameMap bind.body}
-    in
-    let bindings = map resymbolizeBind bindings in
-    TmRecLets {t with bindings = bindings,
-                      inexpr = resymbolizeBindingsExpr nameMap t.inexpr,
-                      ty = resymbolizeBindingsType nameMap t.ty}
-  | TmType t ->
-    let newId = nameSetNewSym t.ident in
-    let nameMap = mapInsert t.ident newId nameMap in
-    TmType {t with ident = newId,
-                   tyIdent = resymbolizeBindingsType nameMap t.tyIdent,
-                   inexpr = resymbolizeBindingsExpr nameMap t.inexpr,
-                   ty = resymbolizeBindingsType nameMap t.ty}
-  | TmConDef t ->
-    let newId = nameSetNewSym t.ident in
-    let nameMap = mapInsert t.ident newId nameMap in
-    TmConDef {t with ident = newId,
-                     inexpr = resymbolizeBindingsExpr nameMap t.inexpr,
-                     ty = resymbolizeBindingsType nameMap t.ty}
+  | TmDecl t ->
+    match resymbolizeBindingsDecl nameMap t.decl with (nameMap, decl) in
+    let inexpr = resymbolizeBindingsExpr nameMap t.inexpr in
+    TmDecl {t with decl = decl, inexpr = inexpr}
   | TmConApp t ->
     let newId =
       match mapLookup t.ident nameMap with Some newId then newId
@@ -439,7 +447,7 @@ lang MonomorphizeCollect =
     in
     collectInstantiationsExpr instantiations env t.body
   | TmRecLets t ->
-    let bindMap : Map Name RecLetBinding =
+    let bindMap : Map Name DeclLetRecord =
       mapFromSeq nameCmp (map (lam bind. (bind.ident, bind)) t.bindings)
     in
     recursive let collectInstantiationsPerScc = lam inst. lam env. lam g. lam sccs.
@@ -812,34 +820,36 @@ lang MExprMonomorphizeTest =
   -- all duplicated definitions.
   sem distinctSymbols : Expr -> Bool
   sem distinctSymbols =
-  | ast -> distinctSymbolsExpr (setEmpty nameCmp) true ast
+  | ast -> distinctSymbolsExpr (setEmpty nameCmp) ast
 
-  sem distinctSymbolsExpr : Set Name -> Bool -> Expr -> Bool
-  sem distinctSymbolsExpr syms acc =
+  sem distinctSymbolsDecl : Set Name -> Decl -> Option (Set Name)
+  sem distinctSymbolsDecl syms =
+  | DeclLet t ->
+    if setMem t.ident syms then None () else
+    if distinctSymbolsExpr syms t.body
+    then Some (setInsert t.ident syms)
+    else None ()
+  | DeclRecLets t ->
+    if any (lam bind. setMem bind.ident syms) t.bindings then None () else
+    let syms = foldl (lam syms. lam bind. setInsert bind.ident syms) syms t.bindings in
+    if forAll (lam bind. distinctSymbolsExpr syms bind.body) t.bindings
+    then Some syms
+    else None ()
+  | DeclType t -> if setMem t.ident syms then Some (setInsert t.ident syms) else None ()
+  | DeclConDef t -> if setMem t.ident syms then Some (setInsert t.ident syms) else None ()
+  | DeclExt t -> if setMem t.ident syms then Some (setInsert t.ident syms) else None ()
+  | d -> Some syms
+
+  sem distinctSymbolsExpr : Set Name -> Expr -> Bool
+  sem distinctSymbolsExpr syms =
   | TmLam t ->
     if setMem t.ident syms then false
-    else distinctSymbolsExpr (setInsert t.ident syms) acc t.body
-  | TmLet t ->
-    if setMem t.ident syms then false
-    else
-      let acc = distinctSymbolsExpr syms acc t.body in
-      distinctSymbolsExpr (setInsert t.ident syms) acc t.inexpr
-  | TmRecLets t ->
-    if any (lam bind. setMem bind.ident syms) t.bindings then false
-    else
-      let syms = foldl (lam syms. lam bind. setInsert bind.ident syms) syms t.bindings in
-      let acc = foldl (lam acc. lam bind. distinctSymbolsExpr syms acc bind.body) acc t.bindings in
-      distinctSymbolsExpr syms acc t.inexpr
-  | TmType t ->
-    if setMem t.ident syms then false
-    else distinctSymbolsExpr (setInsert t.ident syms) acc t.inexpr
-  | TmConDef t ->
-    if setMem t.ident syms then false
-    else distinctSymbolsExpr (setInsert t.ident syms) acc t.inexpr
-  | TmExt t ->
-    if setMem t.ident syms then false
-    else distinctSymbolsExpr (setInsert t.ident syms) acc t.inexpr
-  | t -> sfold_Expr_Expr (distinctSymbolsExpr syms) acc t
+    else distinctSymbolsExpr (setInsert t.ident syms) t.body
+  | TmDecl x ->
+    match distinctSymbolsDecl syms x.decl with Some syms
+    then distinctSymbolsExpr syms x.inexpr
+    else false
+  | t -> sfold_Expr_Expr (lam acc. lam tm. if acc then distinctSymbolsExpr syms tm else acc) true t
 end
 
 mexpr

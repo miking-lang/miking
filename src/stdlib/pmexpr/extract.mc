@@ -181,14 +181,14 @@ lang PMExprExtractAccelerate = PMExprAst + MExprExtract
       else TmLet {t with inexpr = inexpr}
     else TmLet {t with inexpr = inexpr}
   | TmRecLets t ->
-    let isAccelerateBinding = lam bind : RecLetBinding.
+    let isAccelerateBinding = lam bind : DeclLetRecord.
       if mapMem bind.ident accelerated then
         match mapLookup bind.ident solutions with Some idSols then
           true
         else false
       else false
     in
-    let eliminateBinding = lam acc. lam bind : RecLetBinding.
+    let eliminateBinding = lam acc. lam bind : DeclLetRecord.
       if mapMem bind.ident accelerated then
         match mapLookup bind.ident solutions with Some idSols then
           match

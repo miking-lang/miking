@@ -27,10 +27,10 @@ lang CudaLanguageFragmentFix = PMExprAst
     TmNever {ty = TyUnknown {info = info}, info = info}
   | t -> t
 
-  sem _eliminateFailureCodeInSemanticFunction : RecLetBinding -> RecLetBinding
+  sem _eliminateFailureCodeInSemanticFunction : DeclLetRecord -> DeclLetRecord
   sem _eliminateFailureCodeInSemanticFunction =
   | recLetBinding ->
-    let recLetBinding : RecLetBinding = recLetBinding in
+    let DeclLetRecord : DeclLetRecord = DeclLetRecord in
     let body = _eliminateFailureCodeInSemanticFunctionBody recLetBinding.body in
     {recLetBinding with body = body}
 

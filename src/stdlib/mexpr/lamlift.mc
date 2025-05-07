@@ -88,7 +88,7 @@ lang LambdaLiftNameAnonymous = MExprAst
   | TmRecLets t ->
     let bindings =
       map
-        (lam bind : RecLetBinding.
+        (lam bind : DeclLetRecord.
           {bind with body = nameAnonymousLambdasInBody bind.body})
         t.bindings in
     TmRecLets {{t with bindings = bindings}
@@ -270,7 +270,7 @@ lang LambdaLiftFindFreeVariables =
         else state
     in
     let findFreeVariablesBinding
-      : LambdaLiftState -> RecLetBinding -> LambdaLiftState
+      : LambdaLiftState -> DeclLetRecord -> LambdaLiftState
       = lam state. lam bind.
         let tyvars = concat (stripTyAll bind.tyAnnot).0 (stripTyAll bind.tyBody).0 in
         let state = foldl (lam acc. lam pair. {acc with tyVars = mapInsert pair.0 pair.1 acc.tyVars}) state tyvars in
@@ -368,11 +368,11 @@ lang LambdaLiftLiftGlobal = MExprAst
     case _ then rest
     end
 
-  sem liftRecursiveBindingH (bindings : [RecLetBinding]) =
+  sem liftRecursiveBindingH (bindings : [DeclLetRecord]) =
   | TmLet t ->
     match liftRecursiveBindingH bindings t.body with (bindings, body) in
     match t.body with TmLam _ then
-      let bind : RecLetBinding =
+      let bind : DeclLetRecord =
         { ident = t.ident, tyAnnot = t.tyAnnot, tyBody = t.tyBody
         , body = body, info = t.info } in
       let bindings = snoc bindings bind in
@@ -380,7 +380,7 @@ lang LambdaLiftLiftGlobal = MExprAst
     else match liftRecursiveBindingH bindings t.inexpr with (bindings, inexpr) in
       (bindings, TmLet {{t with body = body} with inexpr = inexpr})
   | TmRecLets t ->
-    let liftBinding : [RecLetBinding] -> RecLetBinding -> [RecLetBinding] =
+    let liftBinding : [DeclLetRecord] -> DeclLetRecord -> [DeclLetRecord] =
       lam bindings. lam bind.
       match liftRecursiveBindingH bindings bind.body with (bindings, body) in
       snoc bindings {bind with body = body}
@@ -391,7 +391,7 @@ lang LambdaLiftLiftGlobal = MExprAst
 
   sem liftRecursiveBinding =
   | TmRecLets t /- : Expr -> Expr -/ ->
-    let liftBinding : [RecLetBinding] -> RecLetBinding -> [RecLetBinding] =
+    let liftBinding : [DeclLetRecord] -> DeclLetRecord -> [DeclLetRecord] =
       lam bindings. lam bind.
       match liftRecursiveBindingH bindings bind.body with (bindings, body) in
       snoc bindings {bind with body = body}
@@ -588,7 +588,7 @@ lang MExprLambdaLiftAllowSpineCapture =
         else state
     in
     let findFreeVariablesBinding
-      : LambdaLiftState -> RecLetBinding -> LambdaLiftState
+      : LambdaLiftState -> DeclLetRecord -> LambdaLiftState
       = lam state. lam bind.
         let tyvars = concat (stripTyAll bind.tyAnnot).0 (stripTyAll bind.tyBody).0 in
         let state = foldl (lam acc. lam pair. {acc with tyVars = mapInsert pair.0 pair.1 acc.tyVars}) state tyvars in
