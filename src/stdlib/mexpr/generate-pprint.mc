@@ -227,6 +227,18 @@ lang GeneratePprintLoader = MCoreLoader + GeneratePprint
       } in
     addHook loader hook
 
+  sem _registerCustomPprintFunction : Name -> Expr -> Loader -> Hook -> Option (Loader, ())
+  sem _registerCustomPprintFunction tyConName f loader =
+  | _ -> None ()
+  | PprintHook hook ->
+    let pprintName = nameSym (concat "pprint" (nameGetStr tyConName)) in
+    let loader = _addDeclExn loader (decl_nulet_ pprintName f) in
+    Some (loader, modref hook.functions (mapInsert tyConName pprintName (deref hook.functions)))
+
+  sem registerCustomPprintFunction : Name -> Expr -> Loader -> Loader
+  sem registerCustomPprintFunction tyConName f = | loader ->
+    (withHookState (_registerCustomPprintFunction tyConName f) loader).0
+
   sem _pprintFunctionsFor : [Type] -> Loader -> Hook -> Option (Loader, [Expr])
   sem _pprintFunctionsFor tys loader =
   | _ -> None ()
