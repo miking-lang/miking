@@ -82,24 +82,24 @@ lang LamIndex = Index + LamAst
   | TmLam { ident = ident } -> addKey ident acc
 end
 
-lang LetIndex = Index + LetAst
+lang LetIndex = Index + LetDeclAst
   sem indexAdd (acc: IndexAcc) =
   | TmLet { ident = ident } -> addKey ident acc
 end
 
-lang RecLetsIndex = Index + RecLetsAst
+lang RecLetsIndex = Index + RecLetsDeclAst
   sem indexAdd (acc: IndexAcc) =
   | TmRecLets { bindings = bindings } ->
     foldl (lam acc: IndexAcc. lam b: DeclLetRecord. addKey b.ident acc)
       acc bindings
 end
 
-lang ExtIndex = Index + ExtAst
+lang ExtIndex = Index + ExtDeclAst
   sem indexAdd (acc: IndexAcc) =
   | TmExt { ident = ident } -> addKey ident acc
 end
 
-lang TypeIndex = Index + TypeAst
+lang TypeIndex = Index + TypeDeclAst
   sem indexAdd (acc: IndexAcc) =
   | TmType { ident = ident } -> addKey ident acc
 end

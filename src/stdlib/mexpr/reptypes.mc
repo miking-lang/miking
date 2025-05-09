@@ -29,7 +29,7 @@ lang LamRepTypesAnalysis = TypeCheck + LamAst + SubstituteNewReprs
     TmLam {t with body = body, tyParam = tyParam, ty = tyLam}
 end
 
-lang LetRepTypesAnalysis = TypeCheck + LetAst + SubstituteNewReprs + OpImplAst + OpDeclAst + NonExpansive + MetaVarDisableGeneralize
+lang LetRepTypesAnalysis = TypeCheck + LetDeclAst + SubstituteNewReprs + OpImplAst + OpDeclAst + NonExpansive + MetaVarDisableGeneralize
   sem typeCheckExpr env =
   | TmLet t ->
     let newLvl = addi 1 env.currentLvl in
@@ -109,7 +109,7 @@ lang LetRepTypesAnalysis = TypeCheck + LetAst + SubstituteNewReprs + OpImplAst +
                     ty = tyTm inexpr}
 end
 
-lang RecLetsRepTypesAnalysis = TypeCheck + RecLetsAst + MetaVarDisableGeneralize + RecordAst + OpImplAst + OpDeclAst + RepTypesHelpers + NonExpansive + SubstituteNewReprs + PropagateTypeAnnot + SubstituteUnknown + ResolveType
+lang RecLetsRepTypesAnalysis = TypeCheck + RecLetsDeclAst + MetaVarDisableGeneralize + RecordAst + OpImplAst + OpDeclAst + RepTypesHelpers + NonExpansive + SubstituteNewReprs + PropagateTypeAnnot + SubstituteUnknown + ResolveType
   sem typeCheckExpr env =
   | TmRecLets t ->
     let newLvl = addi 1 env.currentLvl in
@@ -768,7 +768,7 @@ let defaultReprSolverOptions : ReprSolverOptions =
   , solutionCacheFile = None ()
   }
 
-lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + VarAst + LetAst + OpDeclAst + ReprDeclAst + ReprTypeAst + UnifyPure + AliasTypeAst + PrettyPrint + ReprSubstAst + RepTypesHelpers
+lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + VarAst + LetDeclAst + OpDeclAst + ReprDeclAst + ReprTypeAst + UnifyPure + AliasTypeAst + PrettyPrint + ReprSubstAst + RepTypesHelpers
   -- Top interface, meant to be used outside --
   sem reprSolve : ReprSolverOptions -> Expr -> [Expr]
   sem reprSolve options = | tm ->

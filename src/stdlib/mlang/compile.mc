@@ -136,7 +136,7 @@ lang DeclCompiler = DeclAst + Ast + MExprSubstitute
   sem compileDecl : CompilationContext -> Decl -> CompilationResult
 end
 
-lang LetDeclCompiler = DeclCompiler + LetDeclAst + LetAst
+lang LetDeclCompiler = DeclCompiler + LetDeclAst + LetDeclAst
   sem compileDecl ctx = 
   | DeclLet d -> result.ok (
     withExpr ctx (TmLet {ident = d.ident,
@@ -148,7 +148,7 @@ lang LetDeclCompiler = DeclCompiler + LetDeclAst + LetAst
                          inexpr = uunit_}))
 end
 
-lang RecletsDeclCompiler = DeclCompiler + RecLetsDeclAst + RecLetsAst
+lang RecletsDeclCompiler = DeclCompiler + RecLetsDeclAst + RecLetsDeclAst
   sem compileDecl ctx = 
   | DeclRecLets d -> result.ok (
     withExpr ctx (TmRecLets {bindings = d.bindings,
@@ -157,7 +157,7 @@ lang RecletsDeclCompiler = DeclCompiler + RecLetsDeclAst + RecLetsAst
                              info = d.info}))
 end
 
-lang UtestDeclCompiler = DeclCompiler + UtestDeclAst + UtestAst
+lang UtestDeclCompiler = DeclCompiler + UtestDeclAst + UtestDeclAst
   sem compileDecl ctx = 
   | DeclUtest d -> result.ok (
     withExpr ctx (TmUtest {test = d.test,
@@ -169,7 +169,7 @@ lang UtestDeclCompiler = DeclCompiler + UtestDeclAst + UtestAst
                            info = d.info}))
 end
 
-lang TypeDeclCompiler = DeclCompiler + TypeDeclAst + TypeAst
+lang TypeDeclCompiler = DeclCompiler + TypeDeclAst + TypeDeclAst
   sem compileDecl ctx = 
   | DeclType d -> 
     result.ok (withExpr ctx (TmType {ident = d.ident,
@@ -190,7 +190,7 @@ lang ConDefDeclCompiler = DeclCompiler + DataDeclAst + DataAst
                             inexpr = uunit_}))
 end
 
-lang ExtDeclCompiler = DeclCompiler + ExtDeclAst + ExtAst
+lang ExtDeclCompiler = DeclCompiler + ExtDeclAst + ExtDeclAst
   sem compileDecl ctx = 
   -- TODO(voorberg, 2024-04-23): Add test case for the compilation of externals.
   | DeclExt d -> result.ok (
@@ -202,7 +202,7 @@ lang ExtDeclCompiler = DeclCompiler + ExtDeclAst + ExtAst
                          inexpr = uunit_}))
 end
 
-lang SynTypeDeclCompiler = SynDeclAst + TypeAst
+lang SynTypeDeclCompiler = SynDeclAst + TypeDeclAst
   sem compileSynType : CompilationContext -> Decl -> CompilationContext
   sem compileSynType ctx =
   | DeclSyn s ->

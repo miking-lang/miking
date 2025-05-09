@@ -513,7 +513,7 @@ lang TypeToJson = TypeDeclAst + AstToJson
 end
 
 -- DeclRecLets --
-lang RecLetsToJson = RecLetsDeclAst + RecLetsAst + AstToJson
+lang RecLetsToJson = RecLetsDeclAst + RecLetsDeclAst + AstToJson
   sem declToJson =
   | DeclRecLets x -> JsonObject (mapFromSeq cmpString
     [ ("con", JsonString "DeclRecLets")

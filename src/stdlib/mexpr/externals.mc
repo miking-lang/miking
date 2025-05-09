@@ -11,7 +11,7 @@ include "sys.mc"
 
 let _error = "Error in externals.mc: not an external in externalsMap"
 
-lang Externals = ExtAst + VarAst
+lang Externals = ExtDeclAst + VarAst
 
   -- Removes the given set of external definitions from the program.
   sem removeExternalDefs : Set String -> Expr -> Expr

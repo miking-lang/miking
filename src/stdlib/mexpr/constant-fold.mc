@@ -138,7 +138,7 @@ lang LamAppConstantFold = ConstantFold + AppAst + LamAst
       }
 end
 
-lang LetConstantFold = ConstantFold + LetAst
+lang LetConstantFold = ConstantFold + LetDeclAst
   sem constantFoldExpr ctx =
   | TmLet r ->
     let body = constantFoldExpr ctx r.body in

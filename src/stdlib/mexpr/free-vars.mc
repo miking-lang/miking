@@ -69,13 +69,13 @@ lang LamFreeNames = FreeNames + LamAst
     free
 end
 
-lang LetFreeVars = FreeVars + LetAst
+lang LetFreeVars = FreeVars + LetDeclAst
   sem freeVarsExpr acc =
   | TmLet r ->
     setRemove r.ident (freeVarsExpr (freeVarsExpr acc r.body) r.inexpr)
 end
 
-lang LetFreeNames = FreeNames + LetAst + AllTypeAst
+lang LetFreeNames = FreeNames + LetDeclAst + AllTypeAst
   sem freeNamesExpr free =
   | TmLet x ->
     let free = freeNamesExpr free x.inexpr in
@@ -89,7 +89,7 @@ lang LetFreeNames = FreeNames + LetAst + AllTypeAst
     free
 end
 
-lang RecLetsFreeVars = FreeVars + RecLetsAst
+lang RecLetsFreeVars = FreeVars + RecLetsDeclAst
   sem freeVarsExpr acc =
   | TmRecLets r ->
     let acc = foldl (lam acc. lam b.
@@ -97,7 +97,7 @@ lang RecLetsFreeVars = FreeVars + RecLetsAst
     foldl (lam acc. lam b. setRemove b.ident acc) acc r.bindings
 end
 
-lang RecLetsFreeNames = FreeNames + RecLetsAst + AllTypeAst
+lang RecLetsFreeNames = FreeNames + RecLetsDeclAst + AllTypeAst
   sem freeNamesExpr free =
   | TmRecLets x ->
     let free = freeNamesExpr free x.inexpr in
@@ -112,7 +112,7 @@ lang RecLetsFreeNames = FreeNames + RecLetsAst + AllTypeAst
     free
 end
 
-lang TypeFreeNames = FreeNames + TypeAst
+lang TypeFreeNames = FreeNames + TypeDeclAst
   sem freeNamesExpr free =
   | TmType x ->
     let free = freeNamesExpr free x.inexpr in
@@ -135,7 +135,7 @@ lang DataFreeNames = FreeNames + DataAst
     free
 end
 
-lang ExtFreeNames = FreeNames + ExtAst
+lang ExtFreeNames = FreeNames + ExtDeclAst
   sem freeNamesExpr free =
   | TmExt x ->
     let free = freeNamesExpr free x.inexpr in

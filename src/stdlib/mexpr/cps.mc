@@ -55,7 +55,7 @@ let _cpsEnvDefault = {
   partial = false
 }
 
-lang CPS = LamAst + VarAst + LetAst
+lang CPS = LamAst + VarAst + LetDeclAst
 
   sem cpsFullIdentity : Expr -> Expr
   sem cpsFullIdentity =
@@ -162,12 +162,12 @@ lang LamCPS = CPS + LamAst
   | TmLam _ & e -> smap_Expr_Type (tyCps env) e
 end
 
-lang LetCPS = CPS + LetAst
+lang LetCPS = CPS + LetDeclAst
   sem exprTyCps env =
   | TmLet _ & e -> smap_Expr_Type (tyCps env) e
 end
 
-lang RecLetsCPS = CPS + RecLetsAst + LamAst
+lang RecLetsCPS = CPS + RecLetsDeclAst + LamAst
   sem exprCps env k =
   | TmRecLets t ->
     let bindings = map (lam b: DeclLetRecord. { b with body =
@@ -240,7 +240,7 @@ lang RecordCPS = CPS + RecordAst
     TmLet { t with inexpr = exprCps env k t.inexpr }
 end
 
-lang TypeCPS = CPS + TypeAst
+lang TypeCPS = CPS + TypeDeclAst
   sem exprCps env k =
   | TmType t -> TmType { t with inexpr = exprCps env k t.inexpr }
 
@@ -304,7 +304,7 @@ lang MatchCPS = CPS + MatchAst
 end
 
 -- Not much needs to be done here thanks to ANF
-lang UtestCPS = CPS + UtestAst
+lang UtestCPS = CPS + UtestDeclAst
   sem exprCps env k =
   | TmUtest t -> TmUtest { t with next = exprCps env k t.next }
 
@@ -316,7 +316,7 @@ lang NeverCPS = CPS + NeverAst
     TmLet { t with inexpr = exprCps env k t.inexpr }
 end
 
-lang ExtCPS = CPS + ExtAst + FunArity
+lang ExtCPS = CPS + ExtDeclAst + FunArity
   sem exprCps env k =
   | TmExt t ->
     errorSingle [t.info]

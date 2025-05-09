@@ -212,7 +212,7 @@ type GenInput =
   , fieldAccessors : [FieldAccessorRequest]
   }
 
-let _nulet_ = lam n. lam body. lam inexpr. use LetAst in TmLet
+let _nulet_ = lam n. lam body. lam inexpr. use LetDeclAst in TmLet
   { ident = n
   , body = body
   , tyAnnot = tyunknown_

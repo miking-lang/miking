@@ -365,7 +365,7 @@ end
 
 -- Parsing let expressions
 lang LetParser =
-  ExprParser + IdentParser + KeywordUtils + LetAst + UnknownTypeAst
+  ExprParser + IdentParser + KeywordUtils + LetDeclAst + UnknownTypeAst
   sem nextIdent (p: Pos) (xs: String) =
   | "let" ->
     let r : StrPos = eatWSAC (advanceCol p 3) xs in

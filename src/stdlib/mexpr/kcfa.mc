@@ -558,12 +558,12 @@ lang LamKCFA = KCFA + KBaseConstraint + LamAst
   | TmLam t -> acc
 end
 
-lang LetKCFA = KCFA + LetAst
+lang LetKCFA = KCFA + LetDeclAst
   sem exprName =
   | TmLet t -> exprName t.inexpr
 end
 
-lang RecLetsKCFA = KCFA + LamKCFA + RecLetsAst
+lang RecLetsKCFA = KCFA + LamKCFA + RecLetsDeclAst
   sem exprName =
   | TmRecLets t -> exprName t.inexpr
 
@@ -849,7 +849,7 @@ lang SeqKCFA = KCFA + KBaseConstraint + SeqAst
     (env, join ["[{", names, "}]"])
 end
 
-lang TypeKCFA = KCFA + TypeAst
+lang TypeKCFA = KCFA + TypeDeclAst
   sem exprName =
   | TmType t -> exprName t.inexpr
 end
@@ -963,7 +963,7 @@ lang MatchKCFA = KCFA + KBaseConstraint + MatchAst + MExprCmp
 
 end
 
-lang UtestKCFA = KCFA + UtestAst
+lang UtestKCFA = KCFA + UtestDeclAst
   sem exprName =
   | TmUtest t -> exprName t.next
 end
@@ -972,7 +972,7 @@ lang NeverKCFA = KCFA + NeverAst
   -- Nothing to be done here
 end
 
-lang ExtKCFA = KCFA + ExtAst
+lang ExtKCFA = KCFA + ExtDeclAst
 
   syn AbsVal =
   -- Abstract representation of externals. Handled in a similar way as

@@ -101,7 +101,7 @@ lang KeywordMakerData = KeywordMakerBase + DataAst
      else TmConDef {r with inexpr = makeExprKeywords [] r.inexpr}
 end
 
-lang KeywordMakerType = KeywordMakerBase + TypeAst
+lang KeywordMakerType = KeywordMakerBase + TypeDeclAst
   sem makeExprKeywords (args: [Expr]) =
   | TmType r ->
      let ident = nameGetStr r.ident in
@@ -123,7 +123,7 @@ end
 
 
 -- Includes a check that a keyword cannot be used as a binding variable in a let expression
-lang KeywordMakerLet = KeywordMakerBase + LetAst
+lang KeywordMakerLet = KeywordMakerBase + LetDeclAst
   sem makeExprKeywords (args: [Expr]) =
   | TmLet r ->
      let ident = nameGetStr r.ident in

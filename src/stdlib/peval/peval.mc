@@ -208,7 +208,7 @@ lang LamPEval = PEval + PEvalApply + VarAst + LamAst + ClosPAst + AppEval
       (ctx, b.nulam newident body)
 end
 
-lang LetPEval = PEval + ClosPAst + LetAst
+lang LetPEval = PEval + ClosPAst + LetDeclAst
   sem pevalBindThis =
   | TmLet _ -> true
 
@@ -255,7 +255,7 @@ lang LetPEval = PEval + ClosPAst + LetAst
         (inexprCtx, inexpr)
 end
 
-lang RecLetsPEval = PEval + RecLetsAst + ClosPAst + LamAst
+lang RecLetsPEval = PEval + RecLetsDeclAst + ClosPAst + LamAst
   sem pevalBindThis =
   | TmRecLets _ -> true
 
@@ -358,7 +358,7 @@ lang RecordPEval = PEval + RecordAst + VarAst
       r1.rec
 end
 
-lang TypePEval = PEval + TypeAst
+lang TypePEval = PEval + TypeDeclAst
   sem pevalBindThis =
   | TmType _ -> true
 
@@ -472,7 +472,7 @@ lang MatchPEval =
   | p -> smapAccumL_Pat_Pat freshPattern env p
 end
 
-lang UtestPEval = PEval + UtestAst
+lang UtestPEval = PEval + UtestDeclAst
   sem pevalBindThis =
   | TmUtest _ -> true
 
@@ -521,7 +521,7 @@ lang NeverPEval = PEval + PEvalApply + NeverAst
   | (t & TmNever _, _) -> k t
 end
 
-lang ExtPEval = PEval + ExtAst
+lang ExtPEval = PEval + ExtDeclAst
   sem pevalBindThis =
   | TmExt _ -> true
 
@@ -684,7 +684,7 @@ type PEvalLetInlineOrRemove
 con PEvalLetInline : () -> PEvalLetInlineOrRemove
 con PEvalLetRemove : () -> PEvalLetInlineOrRemove
 
-lang PEvalLetInline = LetAst + SideEffect
+lang PEvalLetInline = LetDeclAst + SideEffect
   -- Inlines let-bindings that are only referred to once in the expression, and
   -- removes unused let-bindings. Assumes unique let-binding identifiers.
   sem pevalInlineLets : SideEffectEnv -> Expr -> Expr

@@ -32,7 +32,7 @@ type IName = Int
 -- BASE FRAGMENT --
 -------------------
 
-lang CFABase = Ast + LetAst + MExprIndex + MExprFreeVars + MExprPrettyPrint
+lang CFABase = Ast + LetDeclAst + MExprIndex + MExprFreeVars + MExprPrettyPrint
 
   syn Constraint =
   -- Intentionally left blank
@@ -518,12 +518,12 @@ lang LamCFA = CFA + BaseConstraint + LamAst
 
 end
 
-lang LetCFA = CFA + LetAst
+lang LetCFA = CFA + LetDeclAst
   sem exprName =
   | TmLet t -> exprName t.inexpr
 end
 
-lang RecLetsCFA = CFA + LamCFA + RecLetsAst
+lang RecLetsCFA = CFA + LamCFA + RecLetsDeclAst
   sem exprName =
   | TmRecLets t -> exprName t.inexpr
 
@@ -868,7 +868,7 @@ lang SeqCFA = CFA + BaseConstraint + SetCFA + SeqAst
 
 end
 
-lang TypeCFA = CFA + TypeAst
+lang TypeCFA = CFA + TypeDeclAst
   sem exprName =
   | TmType t -> exprName t.inexpr
 end
@@ -963,7 +963,7 @@ lang MatchCFA = CFA + BaseConstraint + MatchAst + MExprCmp
 
 end
 
-lang UtestCFA = CFA + UtestAst
+lang UtestCFA = CFA + UtestDeclAst
   sem exprName =
   | TmUtest t -> exprName t.next
 end
@@ -972,7 +972,7 @@ lang NeverCFA = CFA + NeverAst
   -- Nothing to be done here
 end
 
-lang ExtCFA = CFA + ExtAst
+lang ExtCFA = CFA + ExtDeclAst
 
   syn AbsVal =
   -- Abstract representation of externals. Handled in a similar way as

@@ -284,7 +284,7 @@ lang TypePropagation = TypeAnnot
   | (_, t) -> t
 end
 
-lang LetTypeAnnot = TypeAnnot + TypePropagation + LetAst +  UnknownTypeAst + AllTypeAst
+lang LetTypeAnnot = TypeAnnot + TypePropagation + LetDeclAst +  UnknownTypeAst + AllTypeAst
   sem typeAnnotExpr (env : TypeEnv) =
   | TmLet t ->
     match env with {varEnv = varEnv, tyEnv = tyEnv} then
@@ -309,12 +309,12 @@ lang LetTypeAnnot = TypeAnnot + TypePropagation + LetAst +  UnknownTypeAst + All
     else never
 end
 
-lang PropagateLetType = TypePropagation + LetAst
+lang PropagateLetType = TypePropagation + LetDeclAst
   sem propagateExpectedType (tyEnv : Map Name Type) =
   | (ty, TmLet t) -> TmLet {t with inexpr = propagateExpectedType tyEnv (ty, t.inexpr)}
 end
 
-lang PropagateRecLetsType = TypePropagation + RecLetsAst
+lang PropagateRecLetsType = TypePropagation + RecLetsDeclAst
   sem propagateExpectedType (tyEnv : Map Name Type) =
   | (ty, TmRecLets t) -> TmRecLets {t with inexpr = propagateExpectedType tyEnv (ty, t.inexpr)}
 end
@@ -334,7 +334,7 @@ lang PropagateArrowLambda = TypePropagation + FunTypeAst + LamAst
       errorSingle [t.info] msg
 end
 
-lang ExpTypeAnnot = TypeAnnot + ExtAst
+lang ExpTypeAnnot = TypeAnnot + ExtDeclAst
   sem typeAnnotExpr (env : TypeEnv) =
   | TmExt t ->
     match env with {varEnv = varEnv, tyEnv = tyEnv} then
@@ -345,7 +345,7 @@ lang ExpTypeAnnot = TypeAnnot + ExtAst
     else never
 end
 
-lang RecLetsTypeAnnot = TypeAnnot + TypePropagation + RecLetsAst + LamAst + UnknownTypeAst + AllTypeAst
+lang RecLetsTypeAnnot = TypeAnnot + TypePropagation + RecLetsDeclAst + LamAst + UnknownTypeAst + AllTypeAst
   sem typeAnnotExpr (env : TypeEnv) =
   | TmRecLets t ->
     -- Add mapping from binding identifier to annotated type before doing type
@@ -430,7 +430,7 @@ lang RecordTypeAnnot = TypeAnnot + RecordAst + RecordTypeAst
                         with ty = tyTm rec}
 end
 
-lang TypeTypeAnnot = TypeAnnot + TypeAst
+lang TypeTypeAnnot = TypeAnnot + TypeDeclAst
   sem typeAnnotExpr (env : TypeEnv) =
   | TmType t ->
     let tyEnv = mapInsert t.ident t.tyIdent env.tyEnv in
@@ -501,7 +501,7 @@ lang MatchTypeAnnot = TypeAnnot + MatchAst + MExprEq
     else never
 end
 
-lang UtestTypeAnnot = TypeAnnot + UtestAst + MExprEq
+lang UtestTypeAnnot = TypeAnnot + UtestDeclAst + MExprEq
   sem typeAnnotExpr (env : TypeEnv) =
   | TmUtest t ->
     let test = typeAnnotExpr env t.test in

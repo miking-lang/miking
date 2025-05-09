@@ -187,7 +187,7 @@ lang TypeLiftAddRecordToEnv = TypeLift + RecordTypeAst
   -- | ty -> (env, ty) -- NOTE(dlunde,2021-10-06): I commented this out, so that it gives an error if a TyRecord is not supplied (less error-prone)
 end
 
-lang TypeTypeLift = TypeLift + TypeAst + VariantTypeAst + UnknownTypeAst +
+lang TypeTypeLift = TypeLift + TypeDeclAst + VariantTypeAst + UnknownTypeAst +
                     VariantNameTypeAst + RecordTypeAst
   sem typeLiftExpr (env : TypeLiftEnv) =
   | TmType t ->
@@ -309,8 +309,8 @@ lang MExprTypeLift =
   MExprCmp +
 
   -- Default implementations (Terms)
-  VarAst + AppAst + LamAst + LetAst + RecLetsAst + ConstAst + SeqAst +
-  UtestAst + NeverAst + ExtAst +
+  VarAst + AppAst + LamAst + LetDeclAst + RecLetsDeclAst + ConstAst + SeqAst +
+  UtestDeclAst + NeverAst + ExtDeclAst +
 
   -- Default implementations (Types)
   UnknownTypeAst + BoolTypeAst + IntTypeAst + FloatTypeAst + CharTypeAst +

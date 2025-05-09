@@ -3,7 +3,7 @@ include "generate-eq.mc"
 
 include "mlang/loader.mc"
 
-lang StripUtestLoader = MCoreLoader + UtestAst
+lang StripUtestLoader = MCoreLoader + UtestDeclAst
   syn Hook =
   | StripUtestHook ()
 
