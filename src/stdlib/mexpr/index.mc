@@ -104,7 +104,7 @@ lang TypeIndex = Index + TypeDeclAst
   | TmDecl {decl = DeclType { ident = ident }} -> addKey ident acc
 end
 
-lang DataIndex = Index + DataAst
+lang DataIndex = Index + DataAst + DataDeclAst
   sem indexAdd (acc: IndexAcc) =
   | TmDecl {decl = DeclConDef { ident = ident }} -> addKey ident acc
   | TmConApp { ident = ident } -> addKey ident acc

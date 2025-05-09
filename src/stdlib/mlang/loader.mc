@@ -140,7 +140,7 @@ lang MCorePathResolution = MCoreLoader
     ({path = resolved, env = env}, loader)
 end
 
-lang BootParserLoader = MCorePathResolution + DeclAst + ExprAsDecl + BootParser
+lang BootParserLoader = MCorePathResolution + DeclAst + BootParser
   + LetDeclAst + RecLetsDeclAst + TypeDeclAst + DataDeclAst + ExtDeclAst
   + MLangPrettyPrint + AstToJson
   type LoaderRec =
@@ -193,7 +193,7 @@ lang BootParserLoader = MCorePathResolution + DeclAst + ExprAsDecl + BootParser
   sem buildFullAst = | loader & Loader x ->
     match foldl (lam loader. lam cb. _preBuildFullAst loader cb) loader x.hooks
       with loader & Loader x in
-    let ast = foldr (lam decl. lam cont. declAsExpr cont decl) unit_ x.decls in
+    let ast = foldr bind_ unit_ x.decls in
     foldl (lam ast. lam cb. _postBuildFullAst loader ast cb) ast x.hooks
 
   sem _fileType = | _ ++ ".mc" -> FMCore ()
@@ -214,7 +214,7 @@ lang BootParserLoader = MCorePathResolution + DeclAst + ExprAsDecl + BootParser
       } in
     let ast = parseMCoreFile args path in
     recursive let f = lam decls. lam ast.
-      match exprAsDecl ast with Some (decl, ast)
+      match ast with TmDecl {decl = decl, inexpr = ast}
       then f (snoc decls decl) ast
       else decls in
     match _addDeclsByFile loader (f [] ast) with loader & Loader x in
@@ -358,7 +358,7 @@ lang BootParserLoader = MCorePathResolution + DeclAst + ExprAsDecl + BootParser
 end
 
 lang MCoreLoader
-  = MCorePathResolution + BootParserLoader + MExprAsDecl
+  = MCorePathResolution + BootParserLoader
   + MExprSym + MLangSym
   + MExprTypeCheck + MLangTypeCheck
 end

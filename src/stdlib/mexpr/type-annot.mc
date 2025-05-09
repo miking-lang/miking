@@ -286,7 +286,7 @@ end
 
 lang LetTypeAnnot = TypeAnnot + TypePropagation + LetDeclAst +  UnknownTypeAst + AllTypeAst
   sem typeAnnotExpr (env : TypeEnv) =
-  | TmDecl {decl = DeclLet t} ->
+  | TmDecl (x & {decl = DeclLet t}) ->
     match env with {varEnv = varEnv, tyEnv = tyEnv} then
       let body = match t.tyBody with TyUnknown _ then t.body else
         match inspectType t.tyBody with tyBody in
@@ -294,11 +294,15 @@ lang LetTypeAnnot = TypeAnnot + TypePropagation + LetDeclAst +  UnknownTypeAst +
       let body = typeAnnotExpr env body in
       match compatibleType tyEnv t.tyBody (tyTm body) with Some tyBody then
         let env = {env with varEnv = mapInsert t.ident tyBody varEnv} in
-        let inexpr = typeAnnotExpr env t.inexpr in
-        TmDecl {decl = DeclLet {t with tyBody = tyBody,
-                      body = withType tyBody body,
-                      inexpr = inexpr,
-                      ty = tyTm inexpr}}
+        let inexpr = typeAnnotExpr env x.inexpr in
+        TmDecl
+        {x with decl = DeclLet
+          {t with tyBody = tyBody
+          , body = withType tyBody body
+          }
+        , inexpr = inexpr
+        , ty = tyTm inexpr
+        }
       else
         let msg = join [
           "Inconsistent type annotation of let-expression\n",
@@ -309,14 +313,9 @@ lang LetTypeAnnot = TypeAnnot + TypePropagation + LetDeclAst +  UnknownTypeAst +
     else never
 end
 
-lang PropagateLetType = TypePropagation + LetDeclAst
-  sem propagateExpectedType (tyEnv : Map Name Type) =
-  | (ty, TmDecl {decl = DeclLet t}) -> TmDecl {decl = DeclLet {t with inexpr = propagateExpectedType tyEnv (ty, t.inexpr)}}
-end
-
-lang PropagateRecLetsType = TypePropagation + RecLetsDeclAst
-  sem propagateExpectedType (tyEnv : Map Name Type) =
-  | (ty, TmDecl {decl = DeclRecLets t}) -> TmDecl {decl = DeclRecLets {t with inexpr = propagateExpectedType tyEnv (ty, t.inexpr)}}
+lang PropagateDeclType = TypePropagation + DeclAst
+  sem propagateExpectedType tyEnv =
+  | (ty, TmDecl x) -> TmDecl {x with inexpr = propagateExpectedType tyEnv (ty, x.inexpr)}
 end
 
 lang PropagateArrowLambda = TypePropagation + FunTypeAst + LamAst
@@ -336,18 +335,17 @@ end
 
 lang ExpTypeAnnot = TypeAnnot + ExtDeclAst
   sem typeAnnotExpr (env : TypeEnv) =
-  | TmDecl {decl = DeclExt t} ->
+  | TmDecl (x & {decl = DeclExt t}) ->
     match env with {varEnv = varEnv, tyEnv = tyEnv} then
       let env = {env with varEnv = mapInsert t.ident t.tyIdent varEnv} in
-      let inexpr = typeAnnotExpr env t.inexpr in
-      TmDecl {decl = DeclExt {{t with inexpr = inexpr}
-                with ty = tyTm inexpr}}
+      let inexpr = typeAnnotExpr env x.inexpr in
+      TmDecl {x with inexpr = inexpr, ty = tyTm inexpr}
     else never
 end
 
 lang RecLetsTypeAnnot = TypeAnnot + TypePropagation + RecLetsDeclAst + LamAst + UnknownTypeAst + AllTypeAst
   sem typeAnnotExpr (env : TypeEnv) =
-  | TmDecl {decl = DeclRecLets t} ->
+  | TmDecl (x & {decl = DeclRecLets t}) ->
     -- Add mapping from binding identifier to annotated type before doing type
     -- annotations of the bindings. This is to make annotations work for
     -- mutually recursive functions, given correct type annotations.
@@ -383,10 +381,10 @@ lang RecLetsTypeAnnot = TypeAnnot + TypePropagation + RecLetsDeclAst + LamAst + 
       let env = {env with varEnv = foldl foldBindingInit varEnv t.bindings} in
       let bindings = map (annotBinding env) t.bindings in
       let env = {env with varEnv = foldl foldBindingAfter varEnv bindings} in
-      let inexpr = typeAnnotExpr env t.inexpr in
-      TmDecl {decl = DeclRecLets {{{t with bindings = bindings}
-                     with inexpr = inexpr}
-                     with ty = tyTm inexpr}}
+      let inexpr = typeAnnotExpr env x.inexpr in
+      TmDecl {x with decl = DeclRecLets {t with bindings = bindings}
+                     , inexpr = inexpr
+                     , ty = tyTm inexpr}
     else never
 end
 
@@ -432,21 +430,19 @@ end
 
 lang TypeTypeAnnot = TypeAnnot + TypeDeclAst
   sem typeAnnotExpr (env : TypeEnv) =
-  | TmDecl {decl = DeclType t} ->
+  | TmDecl (x & {decl = DeclType t}) ->
     let tyEnv = mapInsert t.ident t.tyIdent env.tyEnv in
-    let inexpr = typeAnnotExpr {env with tyEnv = tyEnv} t.inexpr in
-    TmDecl {decl = DeclType {{t with inexpr = inexpr}
-               with ty = tyTm inexpr}}
+    let inexpr = typeAnnotExpr {env with tyEnv = tyEnv} x.inexpr in
+    TmDecl {x with inexpr = inexpr, ty = tyTm inexpr}
 end
 
 lang DataTypeAnnot = TypeAnnot + DataAst + MExprEq
   sem typeAnnotExpr (env : TypeEnv) =
-  | TmDecl {decl = DeclConDef t} ->
+  | TmDecl (x & {decl = DeclConDef t}) ->
     match env with {conEnv = conEnv} then
       let env = {env with conEnv = mapInsert t.ident t.tyIdent conEnv} in
-      let inexpr = typeAnnotExpr env t.inexpr in
-      TmDecl {decl = DeclConDef {{t with inexpr = inexpr}
-                   with ty = tyTm inexpr}}
+      let inexpr = typeAnnotExpr env x.inexpr in
+      TmDecl {x with inexpr = inexpr, ty = tyTm inexpr}
     else never
   | TmConApp t ->
     let body = typeAnnotExpr env t.body in
@@ -503,10 +499,10 @@ end
 
 lang UtestTypeAnnot = TypeAnnot + UtestDeclAst + MExprEq
   sem typeAnnotExpr (env : TypeEnv) =
-  | TmDecl {decl = DeclUtest t} ->
+  | TmDecl (x & {decl = DeclUtest t}) ->
     let test = typeAnnotExpr env t.test in
     let expected = typeAnnotExpr env t.expected in
-    let next = typeAnnotExpr env t.next in
+    let inexpr = typeAnnotExpr env x.inexpr in
     let tusing = optionMap (typeAnnotExpr env) t.tusing in
     let tonfail = optionMap (typeAnnotExpr env) t.tonfail in
     let failMsgType = lam eqFun : Bool. lam ty.
@@ -615,7 +611,7 @@ lang UtestTypeAnnot = TypeAnnot + UtestDeclAst + MExprEq
         ] in
         errorSingle [t.info] msg
     in
-    TmDecl {decl = DeclUtest {t with next = next, ty = tyTm next}}
+    TmDecl {x with inexpr = inexpr, ty = tyTm inexpr, decl = DeclUtest t}
 end
 
 lang NeverTypeAnnot = TypeAnnot + NeverAst
@@ -770,7 +766,7 @@ lang MExprTypeAnnot =
   IntCompatibleType + FloatCompatibleType + CharCompatibleType +
   FunCompatibleType + SeqCompatibleType + TensorCompatibleType +
   RecordCompatibleType + VariantCompatibleType + AppCompatibleType +
-  PropagateArrowLambda + PropagateLetType + VarCompatibleType +
+  PropagateDeclType + PropagateArrowLambda + VarCompatibleType +
   AllCompatibleType + AliasCompatibleType +
 
   -- Terms
@@ -811,9 +807,8 @@ with  tyarrow_ tyint_ tyint_
 using eqType in
 
 let badApp = bindall_ [
-  nulet_ x (int_ 5),
-  app_ (nvar_ x) (float_ 3.14)
-] in
+  nulet_ x (int_ 5)]
+  (app_ (nvar_ x) (float_ 3.14)) in
 utest tyTm (typeAnnot badApp) with tyunknown_ using eqType in
 
 let lamConstantReturnType = nulam_ x (int_ 0) in
@@ -829,9 +824,9 @@ let recLets = typeAnnot (bindall_ [
     (x, tyarrow_ tyunit_ tyint_, nlam_ n tyunit_ (app_ (nvar_ y) uunit_)),
     (y, tyunknown_, nlam_ n tyunit_ (app_ (nvar_ x) uunit_)),
     (z, tyunknown_, nlam_ n tyunit_ (addi_ (app_ (nvar_ y) uunit_) (int_ 1)))
-  ],
+  ]]
   uunit_
-]) in
+) in
 utest tyTm recLets with tyunit_ using eqType in
 
 (match recLets with TmDecl {decl = DeclRecLets {bindings = bindings}} then
@@ -895,17 +890,16 @@ utest tyTm (typeAnnot typeDecl) with tyunit_ using eqType in
 
 let conApp = bindall_ [
   ntype_ n [] tyunknown_,
-  ncondef_ x (tyarrow_ tyint_ (ntycon_ n)),
-  nconapp_ x (int_ 4)
-] in
+  ncondef_ x (tyarrow_ tyint_ (ntycon_ n))]
+  (nconapp_ x (int_ 4)) in
 utest tyTm (typeAnnot conApp) with ntycon_ n using eqType in
 
 let matchInteger = typeAnnot (bindall_ [
-  nulet_ x (int_ 0),
-  match_ (nvar_ x) (pint_ 0) (nvar_ x) (addi_ (nvar_ x) (int_ 1))
-]) in
+  nulet_ x (int_ 0)]
+  (match_ (nvar_ x) (pint_ 0) (nvar_ x) (addi_ (nvar_ x) (int_ 1))
+)) in
 utest tyTm matchInteger with tyint_ using eqType in
-(match matchInteger with TmDecl {decl = DeclLet {inexpr = TmMatch t}} then
+(match matchInteger with TmDecl {inexpr = TmMatch t, decl = DeclLet _} then
   utest tyTm t.target with tyint_ using eqType in
   utest tyTm t.thn with tyint_ using eqType in
   utest tyTm t.els with tyint_ using eqType in
@@ -923,26 +917,26 @@ utest tyTm matchDistinct with tyunknown_ using eqType in
   ()
 else never);
 
-let utestAnnot = typeAnnot (
-  utest_ (int_ 0) (int_ 1) (char_ 'c')
-) in
+let utestAnnot = typeAnnot (bind_ (
+  utest_ (int_ 0) (int_ 1)
+) (char_ 'c')) in
 utest tyTm utestAnnot with tychar_ using eqType in
-(match utestAnnot with TmDecl {decl = DeclUtest t} then
+(match utestAnnot with TmDecl {decl = DeclUtest t, inexpr = inexpr} then
   utest tyTm t.test with tyint_ using eqType in
   utest tyTm t.expected with tyint_ using eqType in
-  utest tyTm t.next with tychar_ using eqType in
+  utest tyTm inexpr with tychar_ using eqType in
   ()
 else never);
 
 utest tyTm (typeAnnot never_) with tyunknown_ using eqType in
 
 -- Test that types are propagated through patterns in match expressions
-let matchSeq = bindall_ [
+let matchSeq =
   match_ (seq_ [str_ "a", str_ "b", str_ "c", str_ "d"])
     (pseqedge_ [pseqtot_ [pchar_ 'a']] "mid" [pseqtot_ [pchar_ 'd']])
     (var_ "mid")
     never_
-] in
+in
 utest tyTm (typeAnnot (symbolize matchSeq)) with tyseq_ tystr_ using eqType in
 
 let matchTree = bindall_ [
@@ -953,7 +947,7 @@ let matchTree = bindall_ [
     conapp_ "Leaf" (seq_ [int_ 1, int_ 2, int_ 3]),
     conapp_ "Branch" (utuple_ [
       conapp_ "Leaf" (seq_ [int_ 2]),
-      conapp_ "Leaf" (seq_ [])])])),
+      conapp_ "Leaf" (seq_ [])])]))]
   (match_ (var_ "t")
     (pcon_ "Branch" (ptuple_ [pvar_ "lhs", pvar_ "rhs"]))
     (match_ (var_ "lhs")
@@ -961,7 +955,7 @@ let matchTree = bindall_ [
       (var_ "n")
       never_)
     never_)
-] in
+in
 utest tyTm (typeAnnot (symbolize matchTree)) with tyseq_ tyint_ using eqType in
 
 ()

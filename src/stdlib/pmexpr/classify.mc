@@ -37,12 +37,10 @@ lang PMExprClassify = PMExprAst + PMExprExtractAccelerate + MExprCallGraph
     let emptyNameId = nameSym "" in
     (emptyNameId, classifyH (mapEmpty nameCmp) emptyNameId e)
 
-  sem classifyH : ClassificationEnv -> Name -> Expr -> ClassificationEnv
-  sem classifyH env id =
-  | TmDecl {decl = DeclLet t} ->
-    let env = classifyH env t.ident t.body in
-    classifyH env id t.inexpr
-  | TmDecl {decl = DeclRecLets t} ->
+  sem classifyDecl : ClassificationEnv -> Name -> Decl -> ClassificationEnv
+  sem classifyDecl env id =
+  | DeclLet t -> classifyH env t.ident t.body
+  | DeclRecLets t ->
     let bindMap : Map Name DeclLetRecord =
       mapFromSeq nameCmp
         (map (lam bind. (bind.ident, bind)) t.bindings) in
@@ -68,14 +66,16 @@ lang PMExprClassify = PMExprAst + PMExprExtractAccelerate + MExprCallGraph
       foldl
         (lam env. lam bind. classifyH env bind.ident bind.body)
         env t.bindings in
-    let g : Digraph Name Int = constructCallGraph (TmDecl {decl = DeclRecLets t}) in
+    let g : Digraph Name Int = constructCallGraph (bind_ (DeclRecLets t) unit_) in
     let sccs = digraphTarjan g in
-    let env = foldl f env (reverse sccs) in
-    classifyH env id t.inexpr
-  | TmDecl {decl = DeclType t} -> classifyH env id t.inexpr
-  | TmDecl {decl = DeclConDef t} -> classifyH env id t.inexpr
-  | TmDecl {decl = DeclUtest t} -> classifyH env id t.next
-  | TmDecl {decl = DeclExt t} -> classifyH env id t.inexpr
+    foldl f env (reverse sccs)
+  | DeclType _ | DeclConDef _ | DeclUtest _ | DeclExt _ -> env
+
+  sem classifyH : ClassificationEnv -> Name -> Expr -> ClassificationEnv
+  sem classifyH env id =
+  | TmDecl x ->
+    let env = classifyDecl env id x.decl in
+    classifyH env id x.inexpr
   | e ->
     let class = classifyBody env (Any ()) e in
     mapInsert id (infoTm e, class) env
@@ -148,7 +148,7 @@ let classifyExpr : Expr -> [(String, Class)] = lam expr.
     cmpResult
     (map
       (lam result. match result with (id, (_, class)) in (nameGetStr id, class))
-      (mapBindings classification))  
+      (mapBindings classification))
 in
 
 utest classifyExpr (addi_ (int_ 1) (int_ 2)) with [("", Any ())] in
@@ -163,7 +163,7 @@ let t = bindall_ [
     ("g", ulam_ "x" (app_ (var_ "h") (subi_ (var_ "x") (int_ 1)))),
     ("h", ulam_ "y" (app_ (var_ "f") (var_ "y")))
   ]
-] in
+] unit_ in
 utest classifyExpr t
 with [("", Any ()), ("f", Cuda ()), ("g", Cuda ()), ("h", Cuda ())] in
 

@@ -82,7 +82,7 @@ lang KeywordMakerBase = VarAst + AppAst + ConTypeAst + AppTypeAst
 end
 
 -- Support for keywords starting with capital letter. Uses ConApp and ConDef
-lang KeywordMakerData = KeywordMakerBase + DataAst
+lang KeywordMakerData = KeywordMakerBase + DataAst + DataDeclAst
   sem makeExprKeywords (args: [Expr]) =
   | TmConApp r ->
      let ident = nameGetStr r.ident in
@@ -93,22 +93,22 @@ lang KeywordMakerData = KeywordMakerBase + DataAst
          else makeKeywordError r.info noArgs (length args) ident
        else never
      else TmConApp r
-  | TmDecl {decl = DeclConDef r} ->
+  | TmDecl (x & {decl = DeclConDef r}) ->
      let ident = nameGetStr r.ident in
      match matchKeywordString r.info ident with Some _ then
        errorSingle [r.info] (join ["Keyword '", ident,
        "' cannot be used in a constructor definition."])
-     else TmDecl {decl = DeclConDef {r with inexpr = makeExprKeywords [] r.inexpr}}
+     else TmDecl {x with inexpr = makeExprKeywords [] x.inexpr}
 end
 
 lang KeywordMakerType = KeywordMakerBase + TypeDeclAst
   sem makeExprKeywords (args: [Expr]) =
-  | TmDecl {decl = DeclType r} ->
+  | TmDecl (x & {decl = DeclType r}) ->
      let ident = nameGetStr r.ident in
      match matchTypeKeywordString r.info ident with Some _ then
        errorSingle [r.info] (join ["Type keyword '", ident,
        "' cannot be used in a type definition."])
-     else TmDecl {decl = DeclType {r with inexpr = makeExprKeywords [] r.inexpr}}
+     else TmDecl {x with inexpr = makeExprKeywords [] x.inexpr}
 end
 
 -- Includes a check that a keyword cannot be used as a binding variable in a lambda
@@ -125,12 +125,15 @@ end
 -- Includes a check that a keyword cannot be used as a binding variable in a let expression
 lang KeywordMakerLet = KeywordMakerBase + LetDeclAst
   sem makeExprKeywords (args: [Expr]) =
-  | TmDecl {decl = DeclLet r} ->
+  | TmDecl (x & {decl = DeclLet r}) ->
      let ident = nameGetStr r.ident in
      match matchKeywordString r.info ident with Some _ then
        errorSingle [r.info] (join ["Keyword '", ident, "' cannot be used in a let expressions."])
      else
-       TmDecl {decl = DeclLet {{r with body = makeExprKeywords [] r.body} with inexpr = makeExprKeywords [] r.inexpr}}
+       TmDecl
+       {x with decl = DeclLet {r with body = makeExprKeywords [] r.body}
+       , inexpr = makeExprKeywords [] x.inexpr
+       }
 end
 
 
@@ -298,7 +301,7 @@ utest makeKeywords expr with expr using eqExpr in
 let expr = match_ true_  (pvar_ "ok") true_ false_ in
 utest makeKeywords expr with expr using eqExpr in
 
-let expr = ucondef_ "Ok" in
+let expr = bind_ (ucondef_ "Ok") unit_ in
 utest makeKeywords expr with expr using eqExpr in
 
 let expr = ulam_ "x" (var_ "noargs") in

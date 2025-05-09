@@ -71,7 +71,7 @@ lang UtestLoader = MCoreLoader + GenerateEqLoader + GeneratePprintLoader + Strip
   sem _postTypecheck loader decl = | UtestHook hook ->
     match decl with DeclUtest d then
       if hook.includeUtestIf {static = true, info = d.info} then
-        match replaceUtests hook true loader (declAsExpr unit_ decl) with (loader, expr) in
+        match replaceUtests hook true loader (bind_ decl unit_) with (loader, expr) in
         let decl = DeclLet
           { ident = nameNoSym ""
           , tyAnnot = tyunit_

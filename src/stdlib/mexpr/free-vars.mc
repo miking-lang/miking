@@ -71,14 +71,14 @@ end
 
 lang LetFreeVars = FreeVars + LetDeclAst
   sem freeVarsExpr acc =
-  | TmDecl {decl = DeclLet r} ->
-    setRemove r.ident (freeVarsExpr (freeVarsExpr acc r.body) r.inexpr)
+  | TmDecl {decl = DeclLet r, inexpr = inexpr} ->
+    setRemove r.ident (freeVarsExpr (freeVarsExpr acc r.body) inexpr)
 end
 
 lang LetFreeNames = FreeNames + LetDeclAst + AllTypeAst
   sem freeNamesExpr free =
-  | TmDecl {decl = DeclLet x} ->
-    let free = freeNamesExpr free x.inexpr in
+  | TmDecl {decl = DeclLet x, inexpr = inexpr} ->
+    let free = freeNamesExpr free inexpr in
     let free = setRemove x.ident free in
     let free = freeNamesExpr free x.body in
     match stripTyAll x.tyAnnot with (tyalls, tyAnnot) in
@@ -91,16 +91,16 @@ end
 
 lang RecLetsFreeVars = FreeVars + RecLetsDeclAst
   sem freeVarsExpr acc =
-  | TmDecl {decl = DeclRecLets r} ->
+  | TmDecl {decl = DeclRecLets r, inexpr = inexpr} ->
     let acc = foldl (lam acc. lam b.
-      freeVarsExpr acc b.body) (freeVarsExpr acc r.inexpr) r.bindings in
+      freeVarsExpr acc b.body) (freeVarsExpr acc inexpr) r.bindings in
     foldl (lam acc. lam b. setRemove b.ident acc) acc r.bindings
 end
 
 lang RecLetsFreeNames = FreeNames + RecLetsDeclAst + AllTypeAst
   sem freeNamesExpr free =
-  | TmDecl {decl = DeclRecLets x} ->
-    let free = freeNamesExpr free x.inexpr in
+  | TmDecl {decl = DeclRecLets x, inexpr = inexpr} ->
+    let free = freeNamesExpr free inexpr in
     let f = lam free. lam binding.
       let free = freeNamesExpr free binding.body in
       match stripTyAll binding.tyAnnot with (tyalls, tyAnnot) in
@@ -114,18 +114,18 @@ end
 
 lang TypeFreeNames = FreeNames + TypeDeclAst
   sem freeNamesExpr free =
-  | TmDecl {decl = DeclType x} ->
-    let free = freeNamesExpr free x.inexpr in
+  | TmDecl {decl = DeclType x, inexpr = inexpr} ->
+    let free = freeNamesExpr free inexpr in
     let free = freeNamesType free x.tyIdent in
     let free = foldr setRemove free x.params in
     let free = setRemove x.ident free in
     free
 end
 
-lang DataFreeNames = FreeNames + DataAst
+lang DataFreeNames = FreeNames + DataAst + DataDeclAst
   sem freeNamesExpr free =
-  | TmDecl {decl = DeclConDef x} ->
-    let free = freeNamesExpr free x.inexpr in
+  | TmDecl {decl = DeclConDef x, inexpr = inexpr} ->
+    let free = freeNamesExpr free inexpr in
     let free = setRemove x.ident free in
     let free = freeNamesType free x.tyIdent in
     free
@@ -137,8 +137,8 @@ end
 
 lang ExtFreeNames = FreeNames + ExtDeclAst
   sem freeNamesExpr free =
-  | TmDecl {decl = DeclExt x} ->
-    let free = freeNamesExpr free x.inexpr in
+  | TmDecl {decl = DeclExt x, inexpr = inexpr} ->
+    let free = freeNamesExpr free inexpr in
     let free = setRemove x.ident free in
     let free = freeNamesType free x.tyIdent in
     free

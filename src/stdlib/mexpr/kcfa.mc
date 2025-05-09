@@ -558,21 +558,18 @@ lang LamKCFA = KCFA + KBaseConstraint + LamAst
   | TmLam t -> acc
 end
 
-lang LetKCFA = KCFA + LetDeclAst
+lang DeclKCFA = KCFA + DeclAst
   sem exprName =
-  | TmDecl {decl = DeclLet t} -> exprName t.inexpr
+  | TmDecl x -> exprName x.inexpr
 end
 
 lang RecLetsKCFA = KCFA + LamKCFA + RecLetsDeclAst
-  sem exprName =
-  | TmDecl {decl = DeclRecLets t} -> exprName t.inexpr
-
   sem generateConstraints im ctx env =
-  | TmDecl {decl = DeclRecLets ({ bindings = bindings } & t)} ->
+  | tm & TmDecl {decl = DeclRecLets ({ bindings = bindings } & t)} ->
     -- Make each binding available in the environment
     let idents = map (lam b. name2int im b.info b.ident) bindings in
     let envBody = foldl (lam env. lam i.
-        ctxEnvAdd i ctx env) (ctxEnvFilterFree im (TmDecl {decl = DeclRecLets t}) env) idents in
+        ctxEnvAdd i ctx env) (ctxEnvFilterFree im tm env) idents in
     let cstrs = map (lam identBind: (IName, DeclLetRecord).
       match identBind with (ident, b) in
       match b.body with TmLam t then
@@ -849,11 +846,6 @@ lang SeqKCFA = KCFA + KBaseConstraint + SeqAst
     (env, join ["[{", names, "}]"])
 end
 
-lang TypeKCFA = KCFA + TypeDeclAst
-  sem exprName =
-  | TmDecl {decl = DeclType t} -> exprName t.inexpr
-end
-
 lang DataKCFA = KCFA + KBaseConstraint + DataAst
   syn AbsVal =
   -- Abstract representation of constructed data.
@@ -884,10 +876,6 @@ lang DataKCFA = KCFA + KBaseConstraint + DataAst
     match pprintConINameCtx im env ident with (env,ident) in
     match pprintVarINameCtx im env body with (env,body) in
     (env, join [ident, " ", body])
-
-  sem exprName =
-  | TmDecl {decl = DeclConDef t} -> exprName t.inexpr
-
 end
 
 lang MatchKCFA = KCFA + KBaseConstraint + MatchAst + MExprCmp
@@ -961,11 +949,6 @@ lang MatchKCFA = KCFA + KBaseConstraint + MatchAst + MExprCmp
   | p ->
     sfold_Pat_Pat patNames acc p
 
-end
-
-lang UtestKCFA = KCFA + UtestDeclAst
-  sem exprName =
-  | TmDecl {decl = DeclUtest t} -> exprName t.next
 end
 
 lang NeverKCFA = KCFA + NeverAst
@@ -1043,7 +1026,7 @@ lang ExtKCFA = KCFA + ExtDeclAst
   -- the ANF transform and define eta expanded versions of the externals (so
   -- that they can be curried).
   sem collectConstraints ctx cgfs acc =
-  | TmDecl {decl = DeclExt { inexpr = TmDecl {decl = DeclLet { ident = ident, inexpr = inexpr }} }} & t ->
+  | TmDecl {decl = DeclExt _, inexpr = TmDecl {decl = DeclLet {ident = ident}, inexpr = inexpr}} & t ->
     let acc = foldl (lam acc. lam f.
         match acc with (env, cstrs) in
         match f ctx env t with (env, fcstrs) in
@@ -1052,7 +1035,7 @@ lang ExtKCFA = KCFA + ExtDeclAst
     collectConstraints ctx cgfs acc inexpr
 
   sem generateConstraints im ctx env =
-  | TmDecl {decl = DeclExt { inexpr = TmDecl {decl = DeclLet { ident = ident, inexpr = inexpr }} }} ->
+  | TmDecl {decl = DeclExt _, inexpr = TmDecl {decl = DeclLet {ident = ident}, inexpr = inexpr}} ->
     -- NOTE(dlunde,2022-06-15): Currently, we do not generate any constraints
     -- for externals. Similarly to constants, we probably want to delegate to
     -- `generateConstraintsExts` here. As with `propagateConstraintExt`, it is
@@ -1062,7 +1045,7 @@ lang ExtKCFA = KCFA + ExtDeclAst
 
   sem exprName =
   -- Skip the eta expanded let added by ANF,
-  | TmDecl {decl = DeclExt { inexpr = TmDecl {decl = DeclLet { inexpr = inexpr }}}} -> exprName inexpr
+  | TmDecl {decl = DeclExt _, inexpr = TmDecl {decl = DeclLet _, inexpr = inexpr}} -> exprName inexpr
 
 end
 
@@ -1737,8 +1720,8 @@ lang MExprKCFA = KCFA +
 
   -- Terms
   VarKCFA + LamKCFA + AppKCFA +
-  LetKCFA + RecLetsKCFA + ConstKCFA + SeqKCFA + RecordKCFA + TypeKCFA + DataKCFA +
-  MatchKCFA + UtestKCFA + NeverKCFA + ExtKCFA +
+  DeclKCFA + RecLetsKCFA + ConstKCFA + SeqKCFA + RecordKCFA + DataKCFA +
+  MatchKCFA + NeverKCFA + ExtKCFA +
 
   -- Constants
   IntKCFA + ArithIntKCFA + ShiftIntKCFA + FloatKCFA + ArithFloatKCFA +

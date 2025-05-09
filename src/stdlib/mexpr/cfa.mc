@@ -518,15 +518,12 @@ lang LamCFA = CFA + BaseConstraint + LamAst
 
 end
 
-lang LetCFA = CFA + LetDeclAst
+lang DeclCFA = CFA + DeclAst
   sem exprName =
-  | TmDecl {decl = DeclLet t} -> exprName t.inexpr
+  | TmDecl x -> exprName x.inexpr
 end
 
 lang RecLetsCFA = CFA + LamCFA + RecLetsDeclAst
-  sem exprName =
-  | TmDecl {decl = DeclRecLets t} -> exprName t.inexpr
-
   sem generateConstraints graph =
   | TmDecl {decl = DeclRecLets { bindings = bindings }} ->
     let cstrs = map (lam b: DeclLetRecord.
@@ -868,11 +865,6 @@ lang SeqCFA = CFA + BaseConstraint + SetCFA + SeqAst
 
 end
 
-lang TypeCFA = CFA + TypeDeclAst
-  sem exprName =
-  | TmDecl {decl = DeclType t} -> exprName t.inexpr
-end
-
 lang DataCFA = CFA + BaseConstraint + DataAst
   syn AbsVal =
   -- Abstract representation of constructed data.
@@ -898,10 +890,6 @@ lang DataCFA = CFA + BaseConstraint + DataAst
     match pprintConIName im env ident with (env,ident) in
     match pprintVarIName im env body with (env,body) in
     (env, join [ident, " ", body])
-
-  sem exprName =
-  | TmDecl {decl = DeclConDef t} -> exprName t.inexpr
-
 end
 
 lang MatchCFA = CFA + BaseConstraint + MatchAst + MExprCmp
@@ -961,11 +949,6 @@ lang MatchCFA = CFA + BaseConstraint + MatchAst + MExprCmp
   | pat ->
     [CstrMatch { id = id, pat = pat, target = target }]
 
-end
-
-lang UtestCFA = CFA + UtestDeclAst
-  sem exprName =
-  | TmDecl {decl = DeclUtest t} -> exprName t.next
 end
 
 lang NeverCFA = CFA + NeverAst
@@ -1046,12 +1029,12 @@ lang ExtCFA = CFA + ExtDeclAst
   -- the ANF transform and define eta expanded versions of the externals (so
   -- that they can be curried).
   sem collectConstraints cgfs graph =
-  | TmDecl {decl = DeclExt { inexpr = TmDecl {decl = DeclLet { ident = ident, inexpr = inexpr }} }} & t ->
+  | TmDecl {decl = DeclExt _, inexpr = TmDecl {decl = DeclLet {ident = ident}, inexpr = inexpr}} & t ->
     let graph = foldl (lam acc. lam f. f graph t) graph cgfs in
     collectConstraints cgfs graph inexpr
 
   sem generateConstraints graph =
-  | TmDecl {decl = DeclExt { inexpr = TmDecl {decl = DeclLet { ident = ident, inexpr = inexpr }} }} ->
+  | TmDecl {decl = DeclExt _, inexpr = TmDecl {decl = DeclLet {ident = ident}, inexpr = inexpr}} ->
     -- NOTE(dlunde,2022-06-15): Currently, we do not generate any constraints
     -- for externals. Similarly to constants, we probably want to delegate to
     -- `generateConstraintsExts` here. As with `propagateConstraintExt`, it is
@@ -1061,7 +1044,7 @@ lang ExtCFA = CFA + ExtDeclAst
 
   sem exprName =
   -- Skip the eta expanded let added by ANF,
-  | TmDecl {decl = DeclExt { inexpr = TmDecl {decl = DeclLet { inexpr = inexpr }}}} -> exprName inexpr
+  | TmDecl {decl = DeclExt _, inexpr = TmDecl {decl = DeclLet _, inexpr = inexpr}} -> exprName inexpr
 
 end
 
@@ -1694,8 +1677,8 @@ lang MExprCFA = CFA +
 
   -- Terms
   VarCFA + LamCFA + AppCFA +
-  LetCFA + RecLetsCFA + ConstCFA + SeqCFA + RecordCFA + TypeCFA + DataCFA +
-  MatchCFA + UtestCFA + NeverCFA + ExtCFA +
+  DeclCFA + RecLetsCFA + ConstCFA + SeqCFA + RecordCFA + DataCFA +
+  MatchCFA + NeverCFA + ExtCFA +
 
   -- Constants
   IntCFA + ArithIntCFA + ShiftIntCFA + FloatCFA + ArithFloatCFA +

@@ -235,6 +235,10 @@ lang PrettyPrint = IdentifierPrettyPrint + MExprAst
   | expr ->
     match pprintCode 0 env expr with (_,str) in str
 
+  sem declToString (env: PprintEnv) =
+  | decl ->
+    match pprintDeclCode 0 env decl with (_,str) in str
+
   sem exprToStringKeywords (keywords: [String]) =
   | expr ->
     let addName = lam env. lam name.
@@ -255,6 +259,9 @@ lang PrettyPrint = IdentifierPrettyPrint + MExprAst
 
   sem expr2str =
   | expr -> exprToString pprintEnvEmpty expr
+
+  sem decl2str =
+  | decl -> declToString pprintEnvEmpty decl
 
   sem type2str =
   | ty -> typeToString pprintEnvEmpty ty
@@ -556,7 +563,7 @@ lang DataDeclPrettyPrint = PrettyPrint + DataDeclAst
       then None ()
       else Some x.tyIdent in
     match optionMapAccum (getTypeStringCode indent) env tyIdent with (env, ty) in
-    let ty = optionMapOr "" (concat " : ") ty in
+    let ty = optionMapOr "" (concat ": ") ty in
     (env, join ["con ", str, ty])
 end
 

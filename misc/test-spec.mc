@@ -866,7 +866,11 @@ testMain
     }
 
   , { testColl "microbenchmark"
-    with exclusions = lam api.
+    with checkCondition = lam.
+      if eqi 0 (command "ocamlfind query owl >/dev/null 2>&1")
+      then ConditionsMet ()
+      else ConditionsUnmet ()
+    , exclusions = lam api.
       -- NOTE(vipa, 2023-05-16): These are tested via new tests instead
       api.mark noTasks (api.glob ["test", "microbenchmark"] (IncludeSubs ()) (SuffixFile ".mc"));
       -- TODO(vipa, 2024-11-08): Actually run this one, not just

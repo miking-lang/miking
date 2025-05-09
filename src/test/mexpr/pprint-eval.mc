@@ -25,11 +25,11 @@ use PPrintEvalTestLang in
 let testAsts: [Expr] = [
   bindall_ [
     ulet_ "a" (int_ 5),
-    ulet_ "b" (int_ 3),
-    addi_ (var_ "a") (var_ "b")
-  ],
+    ulet_ "b" (int_ 3)]
+    (addi_ (var_ "a") (var_ "b")
+  ),
   bindall_ [
-    ulet_ "f" (ulam_ "x" (bindall_ [
+    ulet_ "f" (ulam_ "x" (
       if_ (gti_ (var_ "x") (int_ 10)) ( --if
         subi_ (var_ "x") (int_ 10)
       ) (if_ (lti_ (var_ "x") (int_ 3)) ( -- else if
@@ -37,11 +37,11 @@ let testAsts: [Expr] = [
       ) ( -- else
         muli_ (var_ "x") (var_ "x")
       ))
-    ])),
+    )),
     ulet_ "a" (appf1_ (var_ "f") (int_ 5)),
-    ulet_ "b" (appf1_ (var_ "f") (int_ 1)),
-    addi_ (var_ "a") (var_ "b")
-  ]
+    ulet_ "b" (appf1_ (var_ "f") (int_ 1))]
+    (addi_ (var_ "a") (var_ "b")
+  )
 ] in
 
 let symeval: Expr -> Expr = lam e: Expr.
@@ -62,4 +62,3 @@ foldl (lam. lam sourceAst: Expr.
       utest "unexpected failure" with "" in ()
   )
 ) () testAsts
-

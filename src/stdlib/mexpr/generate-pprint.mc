@@ -232,7 +232,7 @@ lang GeneratePprintLoader = MCoreLoader + GeneratePprint
   | _ -> None ()
   | PprintHook hook ->
     let pprintName = nameSym (concat "pprint" (nameGetStr tyConName)) in
-    let loader = _addDeclExn loader (decl_nulet_ pprintName f) in
+    let loader = _addDeclExn loader (nulet_ pprintName f) in
     Some (loader, modref hook.functions (mapInsert tyConName pprintName (deref hook.functions)))
 
   sem registerCustomPprintFunction : Name -> Expr -> Loader -> Loader
@@ -249,7 +249,7 @@ lang GeneratePprintLoader = MCoreLoader + GeneratePprint
     modref hook.functions env.conFunctions;
     let loader = if null env.newFunctions
       then loader
-      else _addDeclExn loader (decl_nureclets_ env.newFunctions) in
+      else _addDeclExn loader (nureclets_ env.newFunctions) in
     Some (loader, printFs)
 
   sem pprintFunctionsFor : [Type] -> Loader -> (Loader, [Expr])
@@ -283,10 +283,10 @@ lang DPrintViaPprintLoader = GeneratePprintLoader + IOAst
     in smapAccumL_Decl_Expr work loader decl
 end
 
-lang OldDPrintViaPprint = GeneratePprint + MExprAsDecl + AppTypeUtils
+lang OldDPrintViaPprint = GeneratePprint + AppTypeUtils
   sem findPprintDefinitions : GPprintEnv -> Expr -> GPprintEnv
   sem findPprintDefinitions env = | tm ->
-    match exprAsDecl tm with Some (decl, expr) then
+    match tm with TmDecl {decl = decl, inexpr = expr} then
       let env = switch decl
         case DeclLet (x & {info = Info {filename = filename}}) then
           _findPprintDefinitions env x.ident (nameGetStr x.ident, filename)

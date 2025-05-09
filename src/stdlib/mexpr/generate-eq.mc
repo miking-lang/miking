@@ -195,7 +195,7 @@ lang GenerateEqLoader = MCoreLoader + GenerateEq
     modref hook.functions env.conFunctions;
     let loader = if null env.newFunctions
       then loader
-      else _addDeclExn loader (decl_nureclets_ env.newFunctions) in
+      else _addDeclExn loader (nureclets_ env.newFunctions) in
     Some (loader, printFs)
 
   sem eqFunctionsFor : [Type] -> Loader -> (Loader, [Expr])

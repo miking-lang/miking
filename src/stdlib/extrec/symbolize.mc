@@ -9,20 +9,19 @@ include "name.mc"
 include "option.mc"
 
 lang ExtRecordSym = Sym + ExtRecordAst
-  sem symbolizeExpr env =
-  | TmRecType t ->
+  sem symbolizeDecl env =
+  | DeclRecType t ->
     match setSymbol env.currentEnv.tyConEnv t.ident with (tyConEnv, ident) in
-    let env = symbolizeUpdateTyConEnv env tyConEnv in
+    let params = (mapAccumL setSymbol env.currentEnv.tyVarEnv t.params).1 in
+    ( symbolizeUpdateTyConEnv env tyConEnv
+    , DeclRecType {t with ident = ident, params = params}
+    )
+  | DeclRecField t ->
+    ( env
+    , DeclRecField {t with tyIdent = symbolizeType env t.tyIdent}
+    )
 
-    let params = map (setSymbol env.currentEnv.tyVarEnv) t.params in
-    let params = map snd params in
-
-    TmRecType {t with ident = ident,
-                      params = params,
-                      inexpr = symbolizeExpr env t.inexpr}
-  | TmRecField t ->
-    TmRecField {t with inexpr = symbolizeExpr env t.inexpr,
-                       tyIdent = symbolizeType env t.tyIdent}
+  sem symbolizeExpr env =
   | TmExtRecord t ->
     let ident = getSymbol {kind = "type constructor",
                            info = [t.info],
@@ -278,15 +277,15 @@ lang ExtRecSym = ExtRecordSym + QualifiedNameSym + RecordCopatSym +
 end
 
 lang ExtRecTestLang = TestLangWithoutLang + ExtRecSym
+  sem isFullySymbolizedDecl =
+  | DeclRecType t ->
+    _and
+      (lam. nameHasSym t.ident)
+      (lam. forAll nameHasSym t.params)
+  | DeclRecField t ->
+    isFullySymbolizedType t.tyIdent
+
   sem isFullySymbolizedExpr =
-  | TmRecType t ->
-    foldl _and (lam. true) [
-      lam. nameHasSym t.ident,
-      lam. forAll nameHasSym t.params,
-      isFullySymbolizedExpr t.inexpr
-    ]
-  | TmRecField t ->
-    _and (isFullySymbolizedExpr t.inexpr) (isFullySymbolizedType t.tyIdent)
   | TmExtRecord t ->
     foldl _and (lam. true) [
       lam. nameHasSym t.ident,

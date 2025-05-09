@@ -1294,3 +1294,26 @@ let bootParserGetInfo_ = use MExprAst in
 
 -- Sequencing (;)
 let semi_ = lam expr1. lam expr2. bind_ (ulet_ "" expr1) expr2
+
+-- NOTE(vipa, 2025-05-27): This is here mostly to have a simple
+-- replacement for places that used `bind_` in a way that is
+-- incompatible with the new version (where the first argument must be
+-- a Decl). Note that this function is mildly unsafe in that it'll
+-- silently drop the innermost inexpr in the first argument,
+-- regardless of whether it has side-effects or not.
+recursive let oldBind_ : use Ast in Expr -> Expr -> Expr = use MExprAst in
+  lam l. lam r.
+  match l with TmDecl x
+  then TmDecl {x with inexpr = oldBind_ x.inexpr r}
+  else r
+end
+
+-- NOTE(vipa, 2025-05-28): This is also kept for a simple replacement,
+-- but is not unsafe; the left expression is kept and executed before
+-- the right.
+recursive let oldBindSemi_ : use Ast in Expr -> Expr -> Expr = use MExprAst in
+  lam l. lam r.
+  match l with TmDecl x
+  then TmDecl {x with inexpr = oldBindSemi_ x.inexpr r}
+  else semi_ l r
+end

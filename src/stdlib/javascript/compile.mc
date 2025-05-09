@@ -297,7 +297,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
   -- STATEMENTS --
   ----------------
 
-  | TmDecl {decl = DeclLet { ident = ident, body = body, inexpr = e, info = info }} ->
+  | TmDecl {decl = DeclLet { ident = ident, body = body, info = info }, inexpr = e} ->
     match nameGetStr ident with [] then
       match compileMExpr ctx body with (ctx1, body) in
       match compileMExpr ctx e with (ctx2, e) in
@@ -319,7 +319,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
           ret = e})} in
       (ctx, bindingExpr)
 
-  | TmDecl {decl = DeclRecLets { bindings = bindings, inexpr = e, ty = ty }} ->
+  | TmDecl {decl = DeclRecLets { bindings = bindings }, inexpr = e, ty = ty} ->
     match compileMExpr ctx e with (ctx, e) in
     match foldl (lam acc: (CompileJSContext, [JSExpr]). lam bind : DeclLetRecord.
       match acc with (ctx, es) in
@@ -339,8 +339,8 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
       ret = e
     }))
 
-  | TmDecl {decl = DeclType { inexpr = e }} -> compileMExpr ctx e -- Ignore
-  | TmDecl {decl = DeclConDef { ident = ident, inexpr = e }} ->
+  | TmDecl {decl = DeclType _, inexpr = e} -> compileMExpr ctx e -- Ignore
+  | TmDecl {decl = DeclConDef { ident = ident }, inexpr = e} ->
     let valueParam = nameSym "v" in
     match compileMExpr ctx e with (ctx, e) in
     match compileDeclarations ctx with (ctx, decs) in

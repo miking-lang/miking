@@ -58,13 +58,14 @@ lang LetRepTypesAnalysis = TypeCheck + LetDeclAst + SubstituteNewReprs + OpImplA
       let env = {env with reptypes = {env.reptypes with opNamesInScope = mapInsert t.ident (None ()) env.reptypes.opNamesInScope}} in
       let inexpr = typeCheckExpr env t.inexpr in
       let ty = tyTm inexpr in
-      TmOpDecl
-      { info = t.info
-      , ident = t.ident
-      , tyAnnot = tyBody
-      , ty = ty
-      , inexpr = TmOpImpl
+      TmDecl
+      { decl = DeclOp
         { ident = t.ident
+        , tyAnnot = tyBody
+        , info = t.info
+        }
+      , ty = ty
+      , inexpr = TmDecl {decl = DeclOpImpl { ident = t.ident
         , implId = negi 1
         , selfCost = 1.0
         , body = body
@@ -75,7 +76,7 @@ lang LetRepTypesAnalysis = TypeCheck + LetDeclAst + SubstituteNewReprs + OpImplA
         , reprScope = reprScope
         , metaLevel = env.currentLvl
         , info = t.info
-        }
+        }}
       }
     else
       -- Keep it as a Let in the current reprScope, use normal inference
@@ -351,7 +352,7 @@ end
 
 lang OpImplRepTypesAnalysis = TypeCheck + OpImplAst + ResolveType + SubstituteNewReprs + RepTypesHelpers + ApplyReprSubsts
   sem typeCheckExpr env =
-  | TmOpImpl x ->
+  | TmDecl {decl = DeclOpImpl x} ->
     let typeCheckBody = lam env.
       let env = {env with reptypes = {env.reptypes with inImpl = true}} in
       let newLvl = addi 1 env.currentLvl in
@@ -373,12 +374,11 @@ lang OpImplRepTypesAnalysis = TypeCheck + OpImplAst + ResolveType + SubstituteNe
     match withNewReprScope env (lam env. typeCheckBody env)
       with (x, reprScope, []) in
     let inexpr = typeCheckExpr env x.inexpr in
-    TmOpImpl
-    { x with reprScope = reprScope
+    TmDecl {decl = DeclOpImpl { x with reprScope = reprScope
     , metaLevel = env.currentLvl
     , inexpr = inexpr
     , ty = tyTm inexpr
-    }
+    }}
 end
 
 -- NOTE(vipa, 2023-06-26): The RepTypes analysis is essentially
@@ -841,7 +841,7 @@ lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + 
   | tm & TmOpVar x ->
     match addOpUse state.options.debugSolveProcess global state.branch state.topQuery x with (branch, topQuery) in
     ({state with branch = branch, topQuery = topQuery}, tm)
-  | TmOpImpl x ->
+  | TmDecl {decl = DeclOpImpl x} ->
     let implId = state.nextId in
     let state = {state with nextId = addi state.nextId 1} in
     recursive let addSubstsToUni = lam oUni. lam ty.
@@ -887,17 +887,16 @@ lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + 
     -- any new solutions attained along the new branch might use this
     -- new impl, which isn't in scope in whatever we're returning to
     ( {newState with branch = state.branch}
-    , TmOpImpl
-      { x with implId = implId
+    , TmDecl {decl = DeclOpImpl { x with implId = implId
       , inexpr = inexpr
-      }
+      }}
     )
 
   sem findOpUses : [TmOpVarRec] -> Expr -> [TmOpVarRec]
   sem findOpUses acc =
   | tm -> sfold_Expr_Expr findOpUses acc tm
   | TmOpVar x -> snoc acc x
-  | TmOpImpl x -> errorSingle [x.info]
+  | TmDecl {decl = DeclOpImpl x} -> errorSingle [x.info]
     "This impl is nested within another impl, which the current solver doesn't handle."
 
   -- Insert selected solutions --
@@ -933,7 +932,7 @@ lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + 
   sem concretizeAlt : ConcreteState -> Expr -> (ConcreteState, Expr)
   sem concretizeAlt state =
   | tm -> smapAccumL_Expr_Expr concretizeAlt state tm
-  | TmOpDecl {inexpr = inexpr} | TmReprDecl {inexpr = inexpr} ->
+  | TmDecl {decl = DeclOp _ | DeclRepr _, inexpr = inexpr} ->
     concretizeAlt state inexpr
   | TmOpVar x ->
     match state.remainingSolutions with [sol] ++ remainingSolutions in
@@ -941,7 +940,7 @@ lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + 
     ( {state with remainingSolutions = remainingSolutions}
     , TmVar {ident = name, ty = x.ty, info = x.info, frozen = x.frozen}
     )
-  | TmOpImpl x ->
+  | TmDecl {decl = DeclOpImpl x} ->
     match concretizeAlt state x.inexpr with (state, inexpr) in
     let reqs = mapLookupOr [] x.implId state.requests in
     let wrap = lam req. lam inexpr. TmDecl {decl = DeclLet { ident = req.solName
@@ -8250,7 +8249,7 @@ lang DumpRepTypesProblem = RepTypesFragments
   sem dumpRepTypesProblemWork : (String -> ()) -> [(Name, Type)] -> Expr -> [(Name, Type)]
   sem dumpRepTypesProblemWork output acc =
   | TmOpVar x -> snoc acc (x.ident, x.ty)
-  | TmOpImpl x ->
+  | TmDecl {decl = DeclOpImpl x} ->
     dumpRepTypesProblemRoot output x.reprScope x.body;
     dumpRepTypesProblemWork output acc x.inexpr
   | tm -> sfold_Expr_Expr (dumpRepTypesProblemWork output) acc tm
@@ -8280,8 +8279,8 @@ lang PrintMostFrequentRepr = RepTypesFragments + MExprAst
 
   sem printIfExprHasRepr : Symbol -> Expr -> ()
   sem printIfExprHasRepr reprSymbol =
-  | TmOpDecl x -> printIfExprHasRepr reprSymbol x.inexpr
-  | TmOpImpl x -> printIfExprHasRepr reprSymbol x.inexpr
+  | TmDecl {decl = DeclOp x} -> printIfExprHasRepr reprSymbol x.inexpr
+  | TmDecl {decl = DeclOpImpl x} -> printIfExprHasRepr reprSymbol x.inexpr
   | tm ->
     -- (if hasInExpr tm
     --  then ()
@@ -8316,6 +8315,6 @@ lang PrintMostFrequentRepr = RepTypesFragments + MExprAst
 
   sem hasInExpr : Expr -> Bool
   sem hasInExpr =
-  | TmDecl {decl = DeclLet _} | TmDecl {decl = DeclRecLets _} | TmDecl {decl = DeclExt _} | TmDecl {decl = DeclType _} | TmDecl {decl = DeclConDef _} | TmOpDecl _ | TmOpImpl _ -> true
+  | TmDecl {decl = DeclLet _} | TmDecl {decl = DeclRecLets _} | TmDecl {decl = DeclExt _} | TmDecl {decl = DeclType _} | TmDecl {decl = DeclConDef _} | TmDecl {decl = DeclOp _} | TmDecl {decl = DeclOpImpl _} -> true
   | _ -> false
 end

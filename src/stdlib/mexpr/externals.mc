@@ -16,10 +16,10 @@ lang Externals = ExtDeclAst + VarAst
   -- Removes the given set of external definitions from the program.
   sem removeExternalDefs : Set String -> Expr -> Expr
   sem removeExternalDefs env =
-  | TmDecl {decl = DeclExt t} ->
-    let inexpr = removeExternalDefs env t.inexpr in
+  | TmDecl (x & {decl = DeclExt t}) ->
+    let inexpr = removeExternalDefs env x.inexpr in
     if setMem (nameGetStr t.ident) env then inexpr
-    else TmDecl {decl = DeclExt { t with inexpr = inexpr }}
+    else TmDecl {x with inexpr = inexpr}
   | expr -> smap_Expr_Expr (removeExternalDefs env) expr
 
   sem getExternalIds : Expr -> Set String
@@ -27,7 +27,7 @@ lang Externals = ExtDeclAst + VarAst
   | expr -> getExternalIdsH (setEmpty cmpString) expr
   sem getExternalIdsH : Set String -> Expr -> Set String
   sem getExternalIdsH acc =
-  | TmDecl {decl = DeclExt t} -> getExternalIdsH (setInsert (nameGetStr t.ident) acc) t.inexpr
+  | TmDecl {decl = DeclExt t, inexpr = inexpr} -> getExternalIdsH (setInsert (nameGetStr t.ident) acc) inexpr
   | expr -> sfold_Expr_Expr getExternalIdsH acc expr
 
 end

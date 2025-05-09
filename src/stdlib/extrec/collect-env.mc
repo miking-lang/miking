@@ -24,15 +24,15 @@ lang ExtRecCollectEnv = MExprAst + ExtRecordAst + MExprPrettyPrint +
                         TypeAbsAst
   sem collectEnv : AccEnv -> Expr -> AccEnv
   sem collectEnv env =
-  | TmRecType t ->
+  | TmDecl (x & {decl = DeclRecType t}) ->
     match mapLookup t.ident env.defs with Some _ then
       errorMulti
         [(t.info, nameGetStr t.ident)]
         "An extensible record type with this Name already exists!"
     else
       let defs = mapInsert t.ident (mapEmpty cmpString) env.defs in
-      collectEnv {env with defs = defs} t.inexpr
-  | TmRecField t ->
+      collectEnv {env with defs = defs} x.inexpr
+  | TmDecl (x & {decl = DeclRecField t}) ->
     match t.tyIdent with TyAll tyAll then
 
       -- Collect other parameters to re-insert later.
@@ -72,7 +72,7 @@ lang ExtRecCollectEnv = MExprAst + ExtRecordAst + MExprPrettyPrint +
             let labelTypeMap = mapInsert t.label (nameNoSym "", ty) labelTypeMap in
 
             let env = {env with defs = mapInsert ident labelTypeMap env.defs} in
-            collectEnv env t.inexpr
+            collectEnv env x.inexpr
           else
             errorMulti
               [(t.info, "")]

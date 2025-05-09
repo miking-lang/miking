@@ -577,7 +577,7 @@ lang OCamlGenerateExternalNaive =
   OCamlDataConversionMExpr + OCamlChooseExternalImpl + ExtDeclAst
 
   sem chooseExternalImpls implsMap env =
-  | TmDecl {decl = DeclExt {ident = ident, tyIdent = tyIdent, inexpr = inexpr, info = info}} ->
+  | TmDecl {decl = DeclExt {ident = ident, tyIdent = tyIdent}, inexpr = inexpr, info = info} ->
     let identStr = nameGetStr ident in
     let impls = mapLookup identStr implsMap in
 

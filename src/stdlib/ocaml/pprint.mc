@@ -474,11 +474,11 @@ lang OCamlPrettyPrint =
     match collectParameters env t with (env, params, body) in
     match pprintCode (pprintIncr indent) env body with (env, body) in
     (env, join ["fun ", strJoin " " params, " ->", pprintNewline (pprintIncr indent), body])
-  | TmDecl {decl = DeclLet t} ->
+  | TmDecl (x & {decl = DeclLet t}) ->
     match pprintVarName env t.ident with (env,str) in
     match collectParameters env t.body with (env, parameters, body) in
     match pprintCode (pprintIncr indent) env body with (env, body) in
-    match pprintCode indent env t.inexpr with (env, inexpr) in
+    match pprintCode indent env x.inexpr with (env, inexpr) in
     ( env
     , join
       [ "let ", str, join (map (cons ' ') parameters), " =", pprintNewline (pprintIncr indent)
@@ -532,8 +532,8 @@ lang OCamlPrettyPrint =
     match pprintUpdates env updates with (env, updates) in
     (env, join ["{ ", rec, pprintNewline i,
                 "with", pprintNewline i, updates, " }"])
-  | TmDecl {decl = DeclRecLets {bindings = [], inexpr = inexpr}} -> pprintCode indent env inexpr
-  | TmDecl {decl = DeclRecLets {bindings = bindings, inexpr = inexpr}} ->
+  | TmDecl {decl = DeclRecLets {bindings = []}, inexpr = inexpr} -> pprintCode indent env inexpr
+  | TmDecl {decl = DeclRecLets {bindings = bindings}, inexpr = inexpr} ->
     let f = lam env. lam bind.
       match pprintVarName env bind.ident with (env, ident) in
       match collectParameters env bind.body with (env, parameters, body) in
@@ -740,7 +740,7 @@ let testCharLiteral = char_ 'c' in
 let testFun = ulam_ "x" (ulam_ "y" (addi_ (var_ "x") (var_ "y"))) in
 
 let testLet =
-  bindall_ [ulet_ "x" (int_ 1), addi_ (var_ "x") (int_ 2)]
+  bind_ (ulet_ "x" (int_ 1)) (addi_ (var_ "x") (int_ 2))
 in
 
 let testRec =
