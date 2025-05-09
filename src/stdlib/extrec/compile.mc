@@ -145,17 +145,17 @@ lang ExtrecSynDefCompiler = SynDeclAst + ExtRecordAst + MExprAst
         let lhs = TyCon {info = infoTy def.tyIdent,
                          ident = recIdent,
                          data = intyvar_ s.info (head s.params)} in
-        withExpr ctx (TmConDef {ident = def.ident,
+        withExpr ctx (TmDecl {decl = DeclConDef {ident = def.ident,
                                 tyIdent = forallWrapper (tyarrow_ (conappWrapper lhs) (conappWrapper tyconApp)),
                                 inexpr = uunit_,
                                 ty = tyunknown_,
-                                info = s.info})
+                                info = s.info}})
       else
-        withExpr ctx (TmConDef {ident = def.ident,
+        withExpr ctx (TmDecl {decl = DeclConDef {ident = def.ident,
                                 tyIdent = forallWrapper (tyarrow_ def.tyIdent tyconApp),
                                 inexpr = uunit_,
                                 ty = tyunknown_,
-                                info = s.info})
+                                info = s.info}})
     in
     let ctx = foldl compileDef ctx s.defs in
 
@@ -295,10 +295,10 @@ lang ExtRecLangDeclCompiler = DeclCompiler + LangDeclAst + MExprAst + SemDeclAst
       = lam ctx. lam sems. lam cosems.
         let semBindings = map (compileSem langStr ctx semNames) sems in
         let cosemBindings = map (compileCosem langStr ctx semNames) cosems in
-        withExpr ctx (TmRecLets {bindings = concat semBindings cosemBindings,
+        withExpr ctx (TmDecl {decl = DeclRecLets {bindings = concat semBindings cosemBindings,
                                  inexpr = uunit_,
                                  ty = tyunknown_,
-                                 info = l.info})
+                                 info = l.info}})
     in
     result.map (lam ctx. compileSemToResult ctx semDecls cosemDecls) res
   | DeclSyn s ->

@@ -80,11 +80,11 @@ lang OCamlTopGenerate = MExprAst + OCamlAst + OCamlGenerateExternalNaive
     else never
 
   sem generateTopsAndExpr (env : GenerateEnv) =
-  | TmLet t ->
+  | TmDecl {decl = DeclLet t} ->
     let here = OTopLet { ident = t.ident, tyBody = t.tyBody, body = generate env t.body } in
     let later: ([Top], Expr) = generateTopsAndExpr env t.inexpr in
     (cons here later.0, later.1)
-  | TmRecLets t ->
+  | TmDecl {decl = DeclRecLets t} ->
     let f = lam binding : DeclLetRecord.
       { ident = binding.ident
       , tyBody = binding.tyBody
@@ -93,7 +93,7 @@ lang OCamlTopGenerate = MExprAst + OCamlAst + OCamlGenerateExternalNaive
     let here = OTopRecLets { bindings = map f t.bindings } in
     let later: ([Top], Expr) = generateTopsAndExpr env t.inexpr in
     (cons here later.0, later.1)
-  | TmExt t ->
+  | TmDecl {decl = DeclExt t} ->
     match convertExternalBody env t.ident t.tyIdent t.info with body in
     let here = OTopLet { ident = t.ident, tyBody = t.tyIdent, body = body } in
     let later : ([Top], Expr) = generateTopsAndExpr env t.inexpr in
@@ -563,10 +563,10 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlTopGenerate + OCamlMatchGenerate
       info = NoInfo ()
     }
   -- TmExt Generation
-  | TmExt {ident = ident, tyIdent = tyIdent, inexpr = inexpr, info = info} ->
+  | TmDecl {decl = DeclExt {ident = ident, tyIdent = tyIdent, inexpr = inexpr, info = info}} ->
     match convertExternalBody env ident tyIdent info with body in
     let inexpr = generate env inexpr in
-    TmLet {
+    TmDecl {decl = DeclLet {
       ident = ident,
       tyAnnot = tyIdent,
       tyBody = tyIdent,
@@ -574,7 +574,7 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlTopGenerate + OCamlMatchGenerate
       inexpr = inexpr,
       ty = TyUnknown {info = info},
       info = info
-    }
+    }}
   | t -> smap_Expr_Expr (generate env) t
 end
 

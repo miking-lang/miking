@@ -54,12 +54,12 @@ lang PMExprDemoteMap2 = PMExprDemoteBase
     let tid = nameSym "t" in
     let iid = nameSym "i" in
     let xid = nameSym "x" in
-    let aExpr = TmLet {
+    let aExpr = TmDecl {decl = DeclLet {
       ident = aid, tyAnnot = tyTm t.as, tyBody = tyTm t.as, body = demoteParallel t.as,
-      inexpr = unit_, ty = tyresult, info = infoTm t.as} in
-    let bExpr = TmLet {
+      inexpr = unit_, ty = tyresult, info = infoTm t.as}} in
+    let bExpr = TmDecl {decl = DeclLet {
       ident = bid, tyAnnot = tyTm t.bs, tyBody = tyTm t.bs, body = demoteParallel t.bs,
-      inexpr = unit_, ty = tyresult, info = infoTm t.bs} in
+      inexpr = unit_, ty = tyresult, info = infoTm t.bs}} in
     let access = lam seqId. lam seqTy. lam elemTy.
       TmApp {
         lhs = TmApp {
@@ -69,7 +69,7 @@ lang PMExprDemoteMap2 = PMExprDemoteBase
         rhs = TmVar {ident = iid, ty = TyInt {info = t.info}, info = t.info,
                      frozen = false},
         ty = elemTy, info = t.info} in
-    let tExpr = TmLet {
+    let tExpr = TmDecl {decl = DeclLet {
       ident = tid, tyAnnot = tyseqtuple, tyBody = tyseqtuple,
       body = TmApp {
         lhs = TmApp {
@@ -90,7 +90,7 @@ lang PMExprDemoteMap2 = PMExprDemoteBase
             ty = tytuple, info = t.info},
           ty = tytuple, info = t.info},
         ty = tyseqtuple, info = t.info},
-      inexpr = unit_, ty = tyresult, info = t.info} in
+      inexpr = unit_, ty = tyresult, info = t.info}} in
     let projection = lam key. lam id. lam ty.
       let keySid = stringToSid key in
       let x = nameSym "x" in
@@ -188,7 +188,7 @@ lang PMExprDemoteLoop = PMExprDemoteBase + PMExprAst
       ty = tyint_, info = t.info} in
     let tIdent = nameSym "t" in
     let tVar = TmVar {ident = tIdent, ty = accTy, info = t.info, frozen = false} in
-    let thnExpr = TmLet {
+    let thnExpr = TmDecl {decl = DeclLet {
       ident = tIdent,
       tyAnnot = accTy,
       tyBody = accTy,
@@ -202,7 +202,7 @@ lang PMExprDemoteLoop = PMExprDemoteBase + PMExprAst
           rhs = tVar, ty = arrowType tyint_ accTy, info = t.info},
         rhs = incrementIterExpr,
         ty = accTy, info = t.info},
-      ty = accTy, info = t.info} in
+      ty = accTy, info = t.info}} in
     let loopBindingDef = {
       ident = loopId, tyAnnot = loopTy, tyBody = loopTy, info = t.info,
       body = TmLam {
@@ -218,7 +218,7 @@ lang PMExprDemoteLoop = PMExprDemoteBase + PMExprAst
             ty = accTy, info = t.info},
           ty = arrowType tyint_ accTy, info = t.info},
         ty = loopTy, info = t.info}} in
-    TmRecLets {
+    TmDecl {decl = DeclRecLets {
       bindings = [loopBindingDef],
       inexpr = TmApp {
         lhs = TmApp {
@@ -229,7 +229,7 @@ lang PMExprDemoteLoop = PMExprDemoteBase + PMExprAst
         rhs = TmConst {
           val = CInt {val = 0}, ty = TyInt {info = t.info}, info = t.info},
         ty = accTy, info = t.info},
-      ty = accTy, info = t.info}
+      ty = accTy, info = t.info}}
 end
 
 lang PMExprDemotePrintFloat = PMExprDemoteBase

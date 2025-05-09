@@ -81,12 +81,12 @@ lang PMExprTailRecursion = PMExprAst + PMExprFunctionProperties +
     let binding : DeclLetRecord = t in
     recursive let findExpressionsAtTailPosition : Expr -> [Expr] = lam expr.
       match expr with TmLam t then findExpressionsAtTailPosition t.body
-      else match expr with TmLet t then findExpressionsAtTailPosition t.inexpr
-      else match expr with TmRecLets t then findExpressionsAtTailPosition t.inexpr
-      else match expr with TmType t then findExpressionsAtTailPosition t.inexpr
-      else match expr with TmConDef t then findExpressionsAtTailPosition t.inexpr
-      else match expr with TmUtest t then findExpressionsAtTailPosition t.next
-      else match expr with TmExt t then findExpressionsAtTailPosition t.inexpr
+      else match expr with TmDecl {decl = DeclLet t} then findExpressionsAtTailPosition t.inexpr
+      else match expr with TmDecl {decl = DeclRecLets t} then findExpressionsAtTailPosition t.inexpr
+      else match expr with TmDecl {decl = DeclType t} then findExpressionsAtTailPosition t.inexpr
+      else match expr with TmDecl {decl = DeclConDef t} then findExpressionsAtTailPosition t.inexpr
+      else match expr with TmDecl {decl = DeclUtest t} then findExpressionsAtTailPosition t.next
+      else match expr with TmDecl {decl = DeclExt t} then findExpressionsAtTailPosition t.inexpr
       else match expr with TmMatch t then
         concat
           (findExpressionsAtTailPosition t.thn)
@@ -181,18 +181,18 @@ lang PMExprTailRecursion = PMExprAst + PMExprFunctionProperties +
     recursive let rewriteTailRecursive : Expr -> Expr = lam expr.
       match expr with TmLam t then
         TmLam {t with body = rewriteTailRecursive t.body}
-      else match expr with TmLet t then
-        TmLet {t with inexpr = rewriteTailRecursive t.inexpr}
-      else match expr with TmRecLets t then
-        TmRecLets {t with inexpr = rewriteTailRecursive t.inexpr}
-      else match expr with TmType t then
-        TmType {t with inexpr = rewriteTailRecursive t.inexpr}
-      else match expr with TmConDef t then
-        TmConDef {t with inexpr = rewriteTailRecursive t.inexpr}
-      else match expr with TmUtest t then
-        TmUtest {t with next = rewriteTailRecursive t.next}
-      else match expr with TmExt t then
-        TmExt {t with inexpr = rewriteTailRecursive t.inexpr}
+      else match expr with TmDecl {decl = DeclLet t} then
+        TmDecl {decl = DeclLet {t with inexpr = rewriteTailRecursive t.inexpr}}
+      else match expr with TmDecl {decl = DeclRecLets t} then
+        TmDecl {decl = DeclRecLets {t with inexpr = rewriteTailRecursive t.inexpr}}
+      else match expr with TmDecl {decl = DeclType t} then
+        TmDecl {decl = DeclType {t with inexpr = rewriteTailRecursive t.inexpr}}
+      else match expr with TmDecl {decl = DeclConDef t} then
+        TmDecl {decl = DeclConDef {t with inexpr = rewriteTailRecursive t.inexpr}}
+      else match expr with TmDecl {decl = DeclUtest t} then
+        TmDecl {decl = DeclUtest {t with next = rewriteTailRecursive t.next}}
+      else match expr with TmDecl {decl = DeclExt t} then
+        TmDecl {decl = DeclExt {t with inexpr = rewriteTailRecursive t.inexpr}}
       else match expr with TmMatch t then
         TmMatch {{t with thn = rewriteTailRecursive t.thn}
                     with els = rewriteTailRecursive t.els}
@@ -260,7 +260,7 @@ lang PMExprTailRecursion = PMExprAst + PMExprFunctionProperties +
     match mapLookup t.ident subMap with Some subFn then
       (subMap, subFn t.info)
     else (subMap, TmVar t)
-  | TmRecLets t ->
+  | TmDecl {decl = DeclRecLets t} ->
     let tailRecursiveBinding = lam subMap. lam binding : DeclLetRecord.
       optionGetOrElse
         (lam. (subMap, binding))
@@ -280,7 +280,7 @@ lang PMExprTailRecursion = PMExprAst + PMExprFunctionProperties +
 
       -- Translate calls to rewritten bindings in the inexpr term.
       match tailRecursiveH subMap t.inexpr with (subMap, inexpr) then
-        (subMap, TmRecLets {{t with bindings = bindings} with inexpr = inexpr})
+        (subMap, TmDecl {decl = DeclRecLets {{t with bindings = bindings} with inexpr = inexpr}})
       else never
     else never
   | t -> smapAccumL_Expr_Expr tailRecursiveH subMap t

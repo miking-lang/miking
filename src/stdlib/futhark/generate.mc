@@ -392,7 +392,7 @@ lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
   | TmLam t ->
     FELam {ident = t.ident, body = generateExpr env t.body,
            ty = generateType env t.ty, info = t.info}
-  | TmLet t ->
+  | TmDecl {decl = DeclLet t} ->
     let boundNames = mapInsert t.ident t.body env.boundNames in
     let inexprEnv = {env with boundNames = boundNames} in
     FELet {ident = t.ident, tyBody = generateType env t.tyBody,
@@ -426,7 +426,7 @@ lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
   | TmParallelSizeEquality t ->
     FESizeEquality {x1 = t.x1, d1 = t.d1, x2 = t.x2, d2 = t.d2,
                     ty = generateType env t.ty, info = t.info}
-  | TmRecLets t ->
+  | TmDecl {decl = DeclRecLets t} ->
     errorSingle [t.info] "Recursive functions are not supported by the Futhark backend"
   | t ->
     errorSingle [infoTm t] "Term is not supported by the Futhark backend"
@@ -474,9 +474,9 @@ lang FutharkToplevelGenerate = FutharkExprGenerate + FutharkConstGenerate +
 
   sem generateToplevel : FutharkGenerateEnv -> Expr -> [FutDecl]
   sem generateToplevel env =
-  | TmType t ->
+  | TmDecl {decl = DeclType t} ->
     generateToplevel env t.inexpr
-  | TmLet t ->
+  | TmDecl {decl = DeclLet t} ->
     recursive let findReturnType = lam params. lam ty.
       if null params then ty
       else
@@ -506,18 +506,18 @@ lang FutharkToplevelGenerate = FutharkExprGenerate + FutharkConstGenerate +
                   body = stripLambdas body, info = t.info}
     in
     cons decl (generateToplevel env t.inexpr)
-  | TmRecLets t ->
+  | TmDecl {decl = DeclRecLets t} ->
     errorSingle [t.info] "Recursive functions are not supported by the Futhark backend"
-  | TmExt t ->
+  | TmDecl {decl = DeclExt t} ->
     match mapLookup (nameGetStr t.ident) extMap with Some str then
       generateToplevel env t.inexpr
     else
       errorSingle [t.info] "External functions are not supported by the Futhark backend"
-  | TmUtest t ->
+  | TmDecl {decl = DeclUtest t} ->
     -- NOTE(larshum, 2021-11-25): This case should never be reached, as utests
     -- are removed/replaced in earlier stages of the compilation.
     errorSingle [t.info] "Utests are not supported by the Futhark backend"
-  | TmConDef t ->
+  | TmDecl {decl = DeclConDef t} ->
     errorSingle [t.info] "Constructor definitions are not supported by the Futhark backend"
   | _ -> []
 end

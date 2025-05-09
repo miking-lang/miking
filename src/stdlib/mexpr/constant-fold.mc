@@ -140,17 +140,17 @@ end
 
 lang LetConstantFold = ConstantFold + LetDeclAst
   sem constantFoldExpr ctx =
-  | TmLet r ->
+  | TmDecl {decl = DeclLet r} ->
     let body = constantFoldExpr ctx r.body in
     if doPropagate body then
       let ctx = { ctx with env = evalEnvInsert r.ident body ctx.env } in
       constantFoldExpr ctx r.inexpr
     else
-      TmLet {
+      TmDecl {decl = DeclLet {
         r with
         body = body,
         inexpr = constantFoldExpr ctx r.inexpr
-      }
+      }}
 end
 
 lang RecordConstantFold = ConstantFold + RecordAst

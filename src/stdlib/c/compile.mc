@@ -485,7 +485,7 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile + RecordTypeUtils
   -----------------------
 
   sem collectExternals (acc: Map Name ExtInfo) =
-  | TmExt t ->
+  | TmDecl {decl = DeclExt t} ->
     let str = nameGetStr t.ident in
     match mapLookup str externalsMap with Some e then
       let e: ExtInfo = e in -- TODO(dlunde,2021-10-25): Remove with more complete type system?
@@ -853,7 +853,7 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile + RecordTypeUtils
 
   sem compileTops (env: CompileCEnv) (accTop: [CTop]) (accInit: [CStmt]) =
 
-  | TmLet { ident = ident, tyBody = tyBody, body = body, inexpr = inexpr } ->
+  | TmDecl {decl = DeclLet { ident = ident, tyBody = tyBody, body = body, inexpr = inexpr }} ->
 
     -- Functions
     match body with TmLam _ then
@@ -885,7 +885,7 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile + RecordTypeUtils
         compileTops env accTop accInit inexpr
       else never
 
-  | TmRecLets { bindings = bindings, inexpr = inexpr } ->
+  | TmDecl {decl = DeclRecLets { bindings = bindings, inexpr = inexpr }} ->
     let f = lam env. lam binding: DeclLetRecord.
       match binding with { ident = ident, tyBody = tyBody, body = body } then
         compileFun env ident tyBody body
@@ -905,7 +905,7 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile + RecordTypeUtils
     else never
 
   -- Ignore externals (handled elsewhere)
-  | TmExt { inexpr = inexpr } -> compileTops env accTop accInit inexpr
+  | TmDecl {decl = DeclExt { inexpr = inexpr }} -> compileTops env accTop accInit inexpr
 
   -- Set up initialization code (for use, e.g., in a main function)
   | rest ->
@@ -1111,7 +1111,7 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile + RecordTypeUtils
 
   sem compileStmts (env: CompileCEnv) (res: Result) (acc: [CStmt]) =
 
-  | TmLet { ident = ident, tyBody = tyBody, body = body, inexpr = inexpr } ->
+  | TmDecl {decl = DeclLet { ident = ident, tyBody = tyBody, body = body, inexpr = inexpr }} ->
 
     -- Optimize direct allocations
     match body with TmConApp _ | TmRecord _ | TmSeq _ then
@@ -1145,7 +1145,7 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile + RecordTypeUtils
   | TmNever _ -> (env, snoc acc (CSNop {}))
 
   -- Ignore externals (handled elsewhere)
-  | TmExt { inexpr = inexpr } -> compileStmts env res acc inexpr
+  | TmDecl {decl = DeclExt { inexpr = inexpr }} -> compileStmts env res acc inexpr
 
 
   -----------------
@@ -1275,10 +1275,10 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile + RecordTypeUtils
     else errorSingle [infoTm t] "ERROR: Records cannot be handled in compileExpr."
 
   -- Should not occur after ANF and type lifting.
-  | (TmRecordUpdate _ | TmLet _
-    | TmRecLets _ | TmType _ | TmConDef _
-    | TmConApp _ | TmMatch _ | TmUtest _
-    | TmSeq _ | TmExt _) & t ->
+  | (TmRecordUpdate _ | TmDecl {decl = DeclLet _}
+    | TmDecl {decl = DeclRecLets _} | TmDecl {decl = DeclType _} | TmDecl {decl = DeclConDef _}
+    | TmConApp _ | TmMatch _ | TmDecl {decl = DeclUtest _}
+    | TmSeq _ | TmDecl {decl = DeclExt _}) & t ->
     errorSingle [infoTm t] "ERROR: Term cannot be handled in compileExpr."
 
   -- Literals

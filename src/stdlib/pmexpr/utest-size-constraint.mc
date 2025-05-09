@@ -23,7 +23,7 @@ lang PMExprUtestSizeConstraint = PMExprAst
     findDimension params (addi dim 1) s
 
   sem replaceUtestsWithSizeConstraintH (params : Map Name Type) =
-  | TmUtest t ->
+  | TmDecl {decl = DeclUtest t} ->
     let generateSizeEquality = lam s1 : Expr. lam s2 : Expr.
       match findDimension params 1 s1 with Some (x1, d1) then
         match findDimension params 1 s2 with Some (x2, d2) then
@@ -31,8 +31,8 @@ lang PMExprUtestSizeConstraint = PMExprAst
           let inexpr = replaceUtestsWithSizeConstraintH params t.next in
           let eq = TmParallelSizeEquality {x1 = x1, d1 = d1, x2 = x2, d2 = d2,
                                            ty = ty, info = t.info} in
-          Some (TmLet {ident = nameNoSym "", tyAnnot = ty, tyBody = ty, body = eq,
-                       inexpr = inexpr, ty = t.ty, info = t.info})
+          Some (TmDecl {decl = DeclLet {ident = nameNoSym "", tyAnnot = ty, tyBody = ty, body = eq,
+                       inexpr = inexpr, ty = t.ty, info = t.info}})
         else None ()
       else None () in
     let generateSizeCoercion = lam s : Expr. lam id : Name. lam sizeId : Name.
@@ -40,8 +40,8 @@ lang PMExprUtestSizeConstraint = PMExprAst
       let coercion =
         TmParallelSizeCoercion {e = s, size = sizeId,
                                 ty = tyTm s, info = infoTm s} in
-      TmLet {ident = id, tyAnnot = tyTm s, tyBody = tyTm s, body = coercion,
-             inexpr = inexpr, ty = t.ty, info = t.info} in
+      TmDecl {decl = DeclLet {ident = id, tyAnnot = tyTm s, tyBody = tyTm s, body = coercion,
+             inexpr = inexpr, ty = t.ty, info = t.info}} in
     let result =
       match t.tusing with None _ | Some (TmConst {val = CEqi _}) then
         let p = (t.test, t.expected) in
@@ -76,7 +76,7 @@ lang PMExprUtestSizeConstraint = PMExprAst
     match extractLambdas (mapEmpty nameCmp) (TmLam t) with (params, body) in
     let newBody = replaceUtestsWithSizeConstraintH params body in
     replaceFunctionBody newBody (TmLam t)
-  | TmUtest t -> replaceUtestsWithSizeConstraint t.next
+  | TmDecl {decl = DeclUtest t} -> replaceUtestsWithSizeConstraint t.next
   | t -> smap_Expr_Expr replaceUtestsWithSizeConstraint t
 end
 

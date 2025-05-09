@@ -312,7 +312,7 @@ recursive
                          -> PatternMatchState -> Option PatternMatchState =
     use PMExprAst in
     lam bindingIdent. lam params. lam expr. lam state.
-    match expr with TmLet {ident = ident, body = body, inexpr = inexpr} then
+    match expr with TmDecl {decl = DeclLet {ident = ident, body = body, inexpr = inexpr}} then
       let updatedState =
         optionGetOrElse
           (lam. updateVariableDependencies state ident body (None ()))
@@ -337,7 +337,7 @@ recursive
             (matchVariablePattern expr state pvar)
         else None ()
       else None ()
-    else match expr with TmRecLets t then
+    else match expr with TmDecl {decl = DeclRecLets t} then
       matchAtomicPatterns bindingIdent params t.inexpr state
     else None ()
 end
@@ -394,7 +394,7 @@ in
 
 let matchBindingsWithPattern : Expr -> Pattern -> [PatternMatchResult] =
   lam recLets. lam pattern.
-  match recLets with TmRecLets {bindings = bindings} then
+  match recLets with TmDecl {decl = DeclRecLets {bindings = bindings}} then
     map (lam binding. matchPattern binding pattern) bindings
   else never
 in

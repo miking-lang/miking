@@ -31,7 +31,7 @@ end
 
 lang LetRepTypesAnalysis = TypeCheck + LetDeclAst + SubstituteNewReprs + OpImplAst + OpDeclAst + NonExpansive + MetaVarDisableGeneralize
   sem typeCheckExpr env =
-  | TmLet t ->
+  | TmDecl {decl = DeclLet t} ->
     let newLvl = addi 1 env.currentLvl in
     let isValue = nonExpansive true t.body in
     let shouldBeOp = if env.reptypes.inImpl
@@ -103,15 +103,15 @@ lang LetRepTypesAnalysis = TypeCheck + LetDeclAst + SubstituteNewReprs + OpImplA
           (body, tyBody)
         with (body, tyBody) in
       let inexpr = typeCheckExpr (_insertVar t.ident tyBody env) t.inexpr in
-      TmLet {t with body = body,
+      TmDecl {decl = DeclLet {t with body = body,
                     tyBody = tyBody,
                     inexpr = inexpr,
-                    ty = tyTm inexpr}
+                    ty = tyTm inexpr}}
 end
 
 lang RecLetsRepTypesAnalysis = TypeCheck + RecLetsDeclAst + MetaVarDisableGeneralize + RecordAst + OpImplAst + OpDeclAst + RepTypesHelpers + NonExpansive + SubstituteNewReprs + PropagateTypeAnnot + SubstituteUnknown + ResolveType
   sem typeCheckExpr env =
-  | TmRecLets t ->
+  | TmDecl {decl = DeclRecLets t} ->
     let newLvl = addi 1 env.currentLvl in
     -- First: Generate a new environment containing the recursive bindings
     let recLetEnvIteratee = lam acc. lam b: DeclLetRecord.
@@ -164,7 +164,7 @@ lang RecLetsRepTypesAnalysis = TypeCheck + RecLetsDeclAst + MetaVarDisableGenera
     in
     match mapAccumL envIteratee (env, tyVars) bindings with ((env, _), bindings) in
     let inexpr = typeCheckExpr env t.inexpr in
-    TmRecLets {t with bindings = bindings, inexpr = inexpr, ty = tyTm inexpr}
+    TmDecl {decl = DeclRecLets {t with bindings = bindings, inexpr = inexpr, ty = tyTm inexpr}}
 -- NOTE(vipa, 2024-04-22): This currently just uses the normal
 -- type-checking for TmRecLets. In the end we want to infer when
 -- something should be replaced with a letop and letimpl pair, but the
@@ -944,15 +944,14 @@ lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + 
   | TmOpImpl x ->
     match concretizeAlt state x.inexpr with (state, inexpr) in
     let reqs = mapLookupOr [] x.implId state.requests in
-    let wrap = lam req. lam inexpr. TmLet
-      { ident = req.solName
+    let wrap = lam req. lam inexpr. TmDecl {decl = DeclLet { ident = req.solName
       , tyAnnot = tyunknown_
       , tyBody = tyTm req.body
       , body = req.body
       , inexpr = inexpr
       , ty = tyTm inexpr
       , info = x.info
-      } in
+      }} in
     let res = foldr wrap inexpr reqs in
     let state = {state with requests = mapRemove x.implId state.requests} in
     (state, res)
@@ -8317,6 +8316,6 @@ lang PrintMostFrequentRepr = RepTypesFragments + MExprAst
 
   sem hasInExpr : Expr -> Bool
   sem hasInExpr =
-  | TmLet _ | TmRecLets _ | TmExt _ | TmType _ | TmConDef _ | TmOpDecl _ | TmOpImpl _ -> true
+  | TmDecl {decl = DeclLet _} | TmDecl {decl = DeclRecLets _} | TmDecl {decl = DeclExt _} | TmDecl {decl = DeclType _} | TmDecl {decl = DeclConDef _} | TmOpDecl _ | TmOpImpl _ -> true
   | _ -> false
 end

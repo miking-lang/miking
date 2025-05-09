@@ -15,7 +15,7 @@ lang TailPositions = MExprAst
     -> b -> a -> Expr
     -> (a, Expr)
   sem tailPositionsReclet baseCase tailCall letexpr lacc acc =
-  | TmRecLets t ->
+  | TmDecl {decl = DeclRecLets t} ->
     let lets: [Name] = map (lam b: DeclLetRecord. b.ident) t.bindings in
     let lets = setOfSeq nameCmp lets in
     match mapAccumL (lam acc: a. lam b: DeclLetRecord.
@@ -24,7 +24,7 @@ lang TailPositions = MExprAst
         in (acc, {b with body = body})
       ) acc t.bindings
     with (acc, bindings) in
-    (acc, TmRecLets {t with bindings = bindings})
+    (acc, TmDecl {decl = DeclRecLets {t with bindings = bindings}})
 
   | t ->
     smapAccumL_Expr_Expr (tailPositionsReclet baseCase tailCall letexpr lacc) acc t
@@ -36,8 +36,8 @@ lang TailPositions = MExprAst
   | TmVar _ -> true
   | TmConApp _ -> true
   | TmSeq _ -> true
-  | TmType _ -> true
-  | TmConDef _ -> true
+  | TmDecl {decl = DeclType _} -> true
+  | TmDecl {decl = DeclConDef _} -> true
   | t -> false
 
   sem visitTailPositions : all a. all b.
@@ -53,16 +53,16 @@ lang TailPositions = MExprAst
     match acc with (_, tacc, lacc) in
     let helperLetExpr = bind_ (nulet_ v.ident t.body) t.body in
     (acc, TmLam { t with body = baseCase tacc lacc helperLetExpr })
-  | TmRecLets t ->
+  | TmDecl {decl = DeclRecLets t} ->
     match acc with (env, tacc, lacc) in
-    match tailPositionsReclet baseCase tailCall letexpr lacc tacc (TmRecLets t)
-    with (tacc, TmRecLets t) in
+    match tailPositionsReclet baseCase tailCall letexpr lacc tacc (TmDecl {decl = DeclRecLets t})
+    with (tacc, TmDecl {decl = DeclRecLets t}) in
     match visitTailPositions baseCase tailCall letexpr (env, tacc, lacc) t.inexpr
     with (acc, inexpr) in
-    (acc, TmRecLets {t with inexpr = inexpr})
-  | TmLet t ->
+    (acc, TmDecl {decl = DeclRecLets {t with inexpr = inexpr}})
+  | TmDecl {decl = DeclLet t} ->
     match acc with (env, tacc, lacc0) in
-    match letexpr lacc0 (TmLet t) with (lacc, prepend) in
+    match letexpr lacc0 (TmDecl {decl = DeclLet t}) with (lacc, prepend) in
     let acc = (env, tacc, lacc) in
     match
     switch t
@@ -76,8 +76,8 @@ lang TailPositions = MExprAst
         case { body = TmApp {lhs = TmVar vlhs} } then
           if setMem vlhs.ident env then
             match tailCall tacc lacc t.body with (tacc, body) in
-            ((env, tacc, lacc), TmLet { t with body = body })
-          else (acc, baseCase tacc lacc (TmLet t))
+            ((env, tacc, lacc), TmDecl {decl = DeclLet { t with body = body }})
+          else (acc, baseCase tacc lacc (TmDecl {decl = DeclLet t}))
         -- Match: one of the branches returns a variable?
         case { body = TmMatch m } then
           match
@@ -93,19 +93,19 @@ lang TailPositions = MExprAst
             else visitTailPositions baseCase tailCall letexpr acc m.els
           with (acc, els) in
           let body = TmMatch {{m with thn = thn} with els = els} in
-          (acc, TmLet {t with body = body})
+          (acc, TmDecl {decl = DeclLet {t with body = body}})
         -- All other cases
         case _ then
           if tailPositionBaseCase t.body then
-            (acc, baseCase tacc lacc (TmLet t))
+            (acc, baseCase tacc lacc (TmDecl {decl = DeclLet t}))
           else
             smapAccumL_Expr_Expr (
-              visitTailPositions baseCase tailCall letexpr) acc (TmLet t)
+              visitTailPositions baseCase tailCall letexpr) acc (TmDecl {decl = DeclLet t})
         end
       else
         -- No, only the variable being returned is in tail position.
         let helperLetExpr = bind_ (nulet_ vin.ident t.inexpr) t.inexpr in
-        (acc, TmLet {t with inexpr = baseCase tacc lacc helperLetExpr})
+        (acc, TmDecl {decl = DeclLet {t with inexpr = baseCase tacc lacc helperLetExpr}})
     -- Redefinition of recursive functions
     case ({body = (TmApp {lhs = TmVar v} | TmVar v)}) & (!{inexpr = TmVar _}) then
       let env =
@@ -115,9 +115,9 @@ lang TailPositions = MExprAst
       in
       match visitTailPositions baseCase tailCall letexpr (env, tacc, lacc0) t.inexpr
       with (acc, inexpr) in
-      (acc, TmLet { t with inexpr = inexpr })
+      (acc, TmDecl {decl = DeclLet { t with inexpr = inexpr }})
     case _ then
-      smapAccumL_Expr_Expr (visitTailPositions baseCase tailCall letexpr) (env, tacc, lacc0) (TmLet t)
+      smapAccumL_Expr_Expr (visitTailPositions baseCase tailCall letexpr) (env, tacc, lacc0) (TmDecl {decl = DeclLet t})
     end
     with (acc, expr) in
     (acc, prepend expr)
@@ -164,7 +164,7 @@ in
 
 let letexprNoop = lam lacc. lam e. (lacc, lam x. x) in
 let baseCaseInexpr = lam inexpr. lam. lam. lam x.
-  match x with TmLet t in TmLet {t with inexpr = inexpr}
+  match x with TmDecl {decl = DeclLet t} in TmDecl {decl = DeclLet {t with inexpr = inexpr}}
 in
 
 -- Base cases
@@ -294,7 +294,7 @@ in
 let strs = setOfSeq cmpString ["aExpr","eExpr"] in
 
 let letexpr = lam flag: Bool. lam e: Expr.
-  match e with TmLet t in
+  match e with TmDecl {decl = DeclLet t} in
   if flag then (true, lam x. x) else
     let newFlag = setMem (nameGetStr t.ident) strs in
     if newFlag then (true, lam e. semi_ (negi_ (int_ 1)) e)

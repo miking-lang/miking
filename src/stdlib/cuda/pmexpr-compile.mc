@@ -24,12 +24,12 @@ lang CudaPMExprKernelCalls = CudaPMExprAst + MExprCallGraph
   | t -> markNonKernelFunctionsH (setEmpty nameCmp) t
 
   sem markNonKernelFunctionsH (marked : Set Name) =
-  | TmLet t ->
+  | TmDecl {decl = DeclLet t} ->
     let marked = markNonKernelFunctionsH marked t.inexpr in
     if setMem t.ident marked then
       markInBody marked t.body
     else markInUnmarkedBody marked t.body
-  | TmRecLets t ->
+  | TmDecl {decl = DeclRecLets t} ->
     let bindMap : Map Name Expr =
       mapFromSeq nameCmp
         (map
@@ -49,13 +49,13 @@ lang CudaPMExprKernelCalls = CudaPMExprAst + MExprCallGraph
       else marked
     in
     let marked = markNonKernelFunctionsH marked t.inexpr in
-    let g : Digraph Name Int = constructCallGraph (TmRecLets t) in
+    let g : Digraph Name Int = constructCallGraph (TmDecl {decl = DeclRecLets t}) in
     let sccs = digraphTarjan g in
     foldl markFunctionsInComponent marked (reverse sccs)
-  | TmType t -> markNonKernelFunctionsH marked t.inexpr
-  | TmConDef t -> markNonKernelFunctionsH marked t.inexpr
-  | TmUtest t -> markNonKernelFunctionsH marked t.next
-  | TmExt t -> markNonKernelFunctionsH marked t.inexpr
+  | TmDecl {decl = DeclType t} -> markNonKernelFunctionsH marked t.inexpr
+  | TmDecl {decl = DeclConDef t} -> markNonKernelFunctionsH marked t.inexpr
+  | TmDecl {decl = DeclUtest t} -> markNonKernelFunctionsH marked t.next
+  | TmDecl {decl = DeclExt t} -> markNonKernelFunctionsH marked t.inexpr
   | t -> marked
 
   sem markInUnmarkedBody (marked : Set Name) =
@@ -69,24 +69,24 @@ lang CudaPMExprKernelCalls = CudaPMExprAst + MExprCallGraph
   -- Promotes parallel operations used in functions that have not been marked
   -- to kernel operations.
   sem promoteKernels (marked : Set Name) =
-  | TmLet t ->
+  | TmDecl {decl = DeclLet t} ->
     let inexpr = promoteKernels marked t.inexpr in
-    if setMem t.ident marked then TmLet {t with inexpr = inexpr}
+    if setMem t.ident marked then TmDecl {decl = DeclLet {t with inexpr = inexpr}}
     else
       let body = promoteKernelsBody t.body in
-      TmLet {{t with body = body} with inexpr = inexpr}
-  | TmRecLets t ->
+      TmDecl {decl = DeclLet {{t with body = body} with inexpr = inexpr}}
+  | TmDecl {decl = DeclRecLets t} ->
     let promoteKernelBinding = lam binding : DeclLetRecord.
       if setMem binding.ident marked then binding
       else {binding with body = promoteKernelsBody binding.body}
     in
     let inexpr = promoteKernels marked t.inexpr in
     let bindings = map promoteKernelBinding t.bindings in
-    TmRecLets {{t with inexpr = inexpr} with bindings = bindings}
-  | TmType t -> TmType {t with inexpr = promoteKernels marked t.inexpr}
-  | TmConDef t -> TmConDef {t with inexpr = promoteKernels marked t.inexpr}
-  | TmUtest t -> TmUtest {t with next = promoteKernels marked t.next}
-  | TmExt t -> TmExt {t with inexpr = promoteKernels marked t.inexpr}
+    TmDecl {decl = DeclRecLets {{t with inexpr = inexpr} with bindings = bindings}}
+  | TmDecl {decl = DeclType t} -> TmDecl {decl = DeclType {t with inexpr = promoteKernels marked t.inexpr}}
+  | TmDecl {decl = DeclConDef t} -> TmDecl {decl = DeclConDef {t with inexpr = promoteKernels marked t.inexpr}}
+  | TmDecl {decl = DeclUtest t} -> TmDecl {decl = DeclUtest {t with next = promoteKernels marked t.next}}
+  | TmDecl {decl = DeclExt t} -> TmDecl {decl = DeclExt {t with inexpr = promoteKernels marked t.inexpr}}
   | t -> t
 
   -- TODO(larshum, 2022-03-22): Add support for sequence map and reduce

@@ -19,7 +19,7 @@ lang PMExprInlineFunctions = PMExprAst + PMExprVariableSub
   sem collectBindingUseCount : PMExprInlineMap -> Expr -> PMExprInlineMap
   sem collectBindingUseCount useCount =
   | TmVar t -> _incrementUseCount useCount t.ident
-  | TmLet t ->
+  | TmDecl {decl = DeclLet t} ->
     let useCount = mapInsert t.ident (t.body, 0) useCount in
     let useCount = collectBindingUseCount useCount t.body in
     collectBindingUseCount useCount t.inexpr
@@ -68,9 +68,9 @@ lang PMExprInlineFunctions = PMExprAst + PMExprVariableSub
 
   sem removeInlinedFunctions : Set Name -> Expr -> Expr
   sem removeInlinedFunctions inlined =
-  | TmLet t ->
+  | TmDecl {decl = DeclLet t} ->
     if setMem t.ident inlined then removeInlinedFunctions inlined t.inexpr
-    else TmLet {t with inexpr = removeInlinedFunctions inlined t.inexpr}
+    else TmDecl {decl = DeclLet {t with inexpr = removeInlinedFunctions inlined t.inexpr}}
   | t -> smap_Expr_Expr (removeInlinedFunctions inlined) t
 
   sem inlineHigherOrderFunctions : Expr -> Expr

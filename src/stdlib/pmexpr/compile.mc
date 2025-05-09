@@ -116,14 +116,14 @@ lang PMExprCompileWellFormedBase =
   sem instrumentWellFormedChecks
     : Set Name -> WellFormedConfig -> Class -> Expr -> Expr
   sem instrumentWellFormedChecks accelerateIds config class =
-  | TmLet t ->
+  | TmDecl {decl = DeclLet t} ->
     let f = lam e.
       instrumentWellFormedChecks accelerateIds config class e in
     let body =
       if setMem t.ident accelerateIds then
         instrumentWellFormedChecksBody config t.body class
       else f t.body in
-    TmLet {t with body = body, inexpr = f t.inexpr}
+    TmDecl {decl = DeclLet {t with body = body, inexpr = f t.inexpr}}
   | t -> smap_Expr_Expr (instrumentWellFormedChecks accelerateIds config class) t
 
   -- Performs compilation up to the point where well-formedness checks can be

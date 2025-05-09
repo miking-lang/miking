@@ -165,11 +165,11 @@ let eliminateUnusedLetExpressions : use Ast in Expr -> Expr =
   recursive let work = lam acc. lam expr.
     match expr with TmVar {ident = ident} then
       (setInsert ident acc, expr)
-    else match expr with TmLet t then
+    else match expr with TmDecl {decl = DeclLet t} then
       match work acc t.inexpr with (acc, inexpr) in
       if setMem t.ident acc then
         let acc = collectVariables acc t.body in
-        (acc, TmLet {t with inexpr = inexpr})
+        (acc, TmDecl {decl = DeclLet {t with inexpr = inexpr}})
       else (acc, inexpr)
     else smapAccumL_Expr_Expr work acc expr
   in

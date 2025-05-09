@@ -23,7 +23,7 @@ lang MCoreLiteCompile =
   -- code size.
   sem stripUtests : Expr -> Expr
   sem stripUtests =
-  | TmUtest t -> stripUtests t.next
+  | TmDecl {decl = DeclUtest t} -> stripUtests t.next
   | t -> smap_Expr_Expr stripUtests t
 end
 

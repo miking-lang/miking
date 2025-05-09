@@ -145,14 +145,14 @@ lang PMExprReplaceAccelerate =
         else convertAccelerateParameters env acc t
       else (acc, t)
     else (acc, t)
-  | TmLet t ->
+  | TmDecl {decl = DeclLet t} ->
     if mapMem t.ident accelerated then
       replaceAccelerateH accelerated env acc t.inexpr
     else
       match replaceAccelerateH accelerated env acc t.body with (acc, body) in
       match replaceAccelerateH accelerated env acc t.inexpr with (acc, inexpr) in
-      (acc, TmLet {{t with body = body} with inexpr = inexpr})
-  | TmRecLets t ->
+      (acc, TmDecl {decl = DeclLet {{t with body = body} with inexpr = inexpr}})
+  | TmDecl {decl = DeclRecLets t} ->
     let removeAccelerateBindings : DeclLetRecord -> Option DeclLetRecord =
       lam bind.
       if mapMem bind.ident accelerated then None ()
@@ -165,7 +165,7 @@ lang PMExprReplaceAccelerate =
     match replaceAccelerateH accelerated env acc t.inexpr with (acc, inexpr) in
     let bindings = mapOption removeAccelerateBindings t.bindings in
     match mapAccumL replaceBindings acc bindings with (acc, bindings) in
-    (acc, TmRecLets {{t with bindings = bindings} with inexpr = inexpr})
+    (acc, TmDecl {decl = DeclRecLets {{t with bindings = bindings} with inexpr = inexpr}})
   | t ->
     smapAccumL_Expr_Expr (replaceAccelerateH accelerated env) acc t
 end

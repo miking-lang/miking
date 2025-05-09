@@ -197,14 +197,14 @@ let getProfilerReportCode = lam.
 
 lang MExprProfileInstrument = MExprAst + BootParser
   sem collectToplevelFunctions (env : ProfileEnv) =
-  | TmLet t ->
+  | TmDecl {decl = DeclLet t} ->
     let env =
       match t.body with TmLam _ then
         let idx = mapSize env in
         mapInsert t.ident (idx, t.info) env
       else env in
     collectToplevelFunctions env t.inexpr
-  | TmRecLets t ->
+  | TmDecl {decl = DeclRecLets t} ->
     let collectBinding : ProfileEnv -> DeclLetRecord -> ProfileEnv =
       lam env. lam binding.
       match binding.body with TmLam _ then
@@ -227,24 +227,24 @@ lang MExprProfileInstrument = MExprAst + BootParser
       var_ "tmp"]
 
   sem instrumentProfilingH (env : ProfileEnv) =
-  | TmLet t ->
+  | TmDecl {decl = DeclLet t} ->
     match mapLookup t.ident env with Some (idx, _) then
-      TmLet {{t with body = instrumentProfilingCalls idx t.body}
-                with inexpr = instrumentProfilingH env t.inexpr}
-    else TmLet {t with inexpr = instrumentProfilingH env t.inexpr}
-  | TmRecLets t ->
+      TmDecl {decl = DeclLet {{t with body = instrumentProfilingCalls idx t.body}
+                with inexpr = instrumentProfilingH env t.inexpr}}
+    else TmDecl {decl = DeclLet {t with inexpr = instrumentProfilingH env t.inexpr}}
+  | TmDecl {decl = DeclRecLets t} ->
     let instrumentBinding : DeclLetRecord -> DeclLetRecord =
       lam binding.
       match mapLookup binding.ident env with Some (idx, _) then
         {binding with body = instrumentProfilingCalls idx binding.body}
       else binding
     in
-    TmRecLets {{t with bindings = map instrumentBinding t.bindings}
-                  with inexpr = instrumentProfilingH env t.inexpr}
-  | TmType t -> TmType {t with inexpr = instrumentProfilingH env t.inexpr}
-  | TmConDef t -> TmConDef {t with inexpr = instrumentProfilingH env t.inexpr}
-  | TmUtest t -> TmUtest {t with next = instrumentProfilingH env t.next}
-  | TmExt t -> TmExt {t with inexpr = instrumentProfilingH env t.inexpr}
+    TmDecl {decl = DeclRecLets {{t with bindings = map instrumentBinding t.bindings}
+                  with inexpr = instrumentProfilingH env t.inexpr}}
+  | TmDecl {decl = DeclType t} -> TmDecl {decl = DeclType {t with inexpr = instrumentProfilingH env t.inexpr}}
+  | TmDecl {decl = DeclConDef t} -> TmDecl {decl = DeclConDef {t with inexpr = instrumentProfilingH env t.inexpr}}
+  | TmDecl {decl = DeclUtest t} -> TmDecl {decl = DeclUtest {t with next = instrumentProfilingH env t.next}}
+  | TmDecl {decl = DeclExt t} -> TmDecl {decl = DeclExt {t with inexpr = instrumentProfilingH env t.inexpr}}
   | t -> t
 
   sem instrumentProfiling =

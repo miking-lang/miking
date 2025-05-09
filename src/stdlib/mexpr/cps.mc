@@ -94,7 +94,7 @@ lang CPS = LamAst + VarAst + LetDeclAst
   | t -> smap_Type_Type (tyCps env) t
 
   sem tailCall =
-  | TmLet { ident = ident, inexpr = inexpr } ->
+  | TmDecl {decl = DeclLet { ident = ident, inexpr = inexpr }} ->
     match inexpr with TmVar { ident = varIdent } then nameEq ident varIdent
     else false
 
@@ -112,15 +112,15 @@ lang VarCPS = CPS + VarAst + AppAst
   sem exprCps env k =
   | TmVar _ & t ->
     match k with Some k then withInfo (infoTm t) (app_ k t) else t
-  | TmLet ({ body = TmVar _ } & b) ->
-    TmLet { b with inexpr = exprCps env k b.inexpr }
+  | TmDecl {decl = DeclLet ({ body = TmVar _ } & b)} ->
+    TmDecl {decl = DeclLet { b with inexpr = exprCps env k b.inexpr }}
 end
 
 lang AppCPS = CPS + AppAst
   sem exprCps env k =
-  | TmLet ({ ident = ident, body = TmApp app, inexpr = inexpr } & b) & t ->
+  | TmDecl {decl = DeclLet ({ ident = ident, body = TmApp app, inexpr = inexpr } & b)} & t ->
     if not (transform env ident) then
-      TmLet { b with inexpr = exprCps env k inexpr }
+      TmDecl {decl = DeclLet { b with inexpr = exprCps env k inexpr }}
     else
       let i = withInfo (infoTm t) in
       let opt =
@@ -143,12 +143,12 @@ end
 
 lang LamCPS = CPS + LamAst
   sem exprCps env k =
-  | TmLet ({ ident = ident, body = TmLam t, inexpr = inexpr } & r) ->
+  | TmDecl {decl = DeclLet ({ ident = ident, body = TmLam t, inexpr = inexpr } & r)} ->
     if not (or (transform env ident) (transform env t.ident)) then
-      TmLet { r with
+      TmDecl {decl = DeclLet { r with
         body = TmLam { t with body = exprCps env (None ()) t.body },
         inexpr = exprCps env k inexpr
-      }
+      }}
     else
       let kName = nameSym "k" in
       let i = withInfo t.info in
@@ -156,7 +156,7 @@ lang LamCPS = CPS + LamAst
         i (nulam_ kName
              (TmLam {t with body = exprCps env (Some (i (nvar_ kName))) t.body}))
       in
-      TmLet { r with body = body, inexpr = exprCps env k inexpr }
+      TmDecl {decl = DeclLet { r with body = body, inexpr = exprCps env k inexpr }}
 
   sem exprTyCps env =
   | TmLam _ & e -> smap_Expr_Type (tyCps env) e
@@ -164,12 +164,12 @@ end
 
 lang LetCPS = CPS + LetDeclAst
   sem exprTyCps env =
-  | TmLet _ & e -> smap_Expr_Type (tyCps env) e
+  | TmDecl {decl = DeclLet _} & e -> smap_Expr_Type (tyCps env) e
 end
 
 lang RecLetsCPS = CPS + RecLetsDeclAst + LamAst
   sem exprCps env k =
-  | TmRecLets t ->
+  | TmDecl {decl = DeclRecLets t} ->
     let bindings = map (lam b: DeclLetRecord. { b with body =
         match b.body with TmLam t then
           if not (or (transform env b.ident) (transform env t.ident)) then
@@ -182,10 +182,10 @@ lang RecLetsCPS = CPS + RecLetsDeclAst + LamAst
         else errorSingle [infoTm b.body]
           "Error: Not a TmLam in TmRecLet binding in CPS transformation"
       }) t.bindings
-    in TmRecLets { t with bindings = bindings, inexpr = exprCps env k t.inexpr }
+    in TmDecl {decl = DeclRecLets { t with bindings = bindings, inexpr = exprCps env k t.inexpr }}
 
   sem exprTyCps env =
-  | TmRecLets _ & e -> smap_Expr_Type (tyCps env) e
+  | TmDecl {decl = DeclRecLets _} & e -> smap_Expr_Type (tyCps env) e
 end
 
 -- Wraps a direct-style function with given arity as a CPS function
@@ -208,9 +208,9 @@ let wrapDirect = use MExprAst in
 
 lang ConstCPS = CPS + ConstAst + MExprArity + TyConst
   sem exprCps env k =
-  | TmLet ({ ident = ident, body = TmConst { val = c } & body} & t) ->
+  | TmDecl {decl = DeclLet ({ ident = ident, body = TmConst { val = c } & body} & t)} ->
     if not (transform env ident) then
-      TmLet { t with inexpr = exprCps env k t.inexpr }
+      TmDecl {decl = DeclLet { t with inexpr = exprCps env k t.inexpr }}
     else
       if isHigherOrderFunType (tyConst c) then
         -- TODO(dlunde,2022-09-19): Add support for higher-order constant
@@ -221,39 +221,39 @@ lang ConstCPS = CPS + ConstAst + MExprArity + TyConst
       else
         -- Constants are not in CPS, so we must wrap them in CPS lambdas
         let body = wrapDirect (constArity c) body in
-        TmLet { t with body = body, inexpr = exprCps env k t.inexpr }
+        TmDecl {decl = DeclLet { t with body = body, inexpr = exprCps env k t.inexpr }}
 end
 
 -- Thanks to ANF, we don't need to do anything at all when constructing data
 -- (TmRecord, TmSeq, TmConApp, etc.)
 lang SeqCPS = CPS + SeqAst
   sem exprCps env k =
-  | TmLet ({ body = TmSeq _ } & t) ->
-    TmLet { t with inexpr = exprCps env k t.inexpr }
+  | TmDecl {decl = DeclLet ({ body = TmSeq _ } & t)} ->
+    TmDecl {decl = DeclLet { t with inexpr = exprCps env k t.inexpr }}
 end
 
 lang RecordCPS = CPS + RecordAst
   sem exprCps env k =
-  | TmLet ({ body = TmRecord _ } & t) ->
-    TmLet { t with inexpr = exprCps env k t.inexpr }
-  | TmLet ({ body = TmRecordUpdate _ } & t) ->
-    TmLet { t with inexpr = exprCps env k t.inexpr }
+  | TmDecl {decl = DeclLet ({ body = TmRecord _ } & t)} ->
+    TmDecl {decl = DeclLet { t with inexpr = exprCps env k t.inexpr }}
+  | TmDecl {decl = DeclLet ({ body = TmRecordUpdate _ } & t)} ->
+    TmDecl {decl = DeclLet { t with inexpr = exprCps env k t.inexpr }}
 end
 
 lang TypeCPS = CPS + TypeDeclAst
   sem exprCps env k =
-  | TmType t -> TmType { t with inexpr = exprCps env k t.inexpr }
+  | TmDecl {decl = DeclType t} -> TmDecl {decl = DeclType { t with inexpr = exprCps env k t.inexpr }}
 
   sem exprTyCps env =
-  | TmType _ & e -> smap_Expr_Type (tyCps env) e
+  | TmDecl {decl = DeclType _} & e -> smap_Expr_Type (tyCps env) e
 end
 
 lang DataCPS = CPS + DataAst + AllTypeAst + FunTypeAst
   sem exprCps env k =
-  | TmLet ({ body = TmConApp _ } & t) ->
-    TmLet { t with inexpr = exprCps env k t.inexpr }
-  | TmConDef t ->
-    TmConDef { t with inexpr = exprCps env k t.inexpr }
+  | TmDecl {decl = DeclLet ({ body = TmConApp _ } & t)} ->
+    TmDecl {decl = DeclLet { t with inexpr = exprCps env k t.inexpr }}
+  | TmDecl {decl = DeclConDef t} ->
+    TmDecl {decl = DeclConDef { t with inexpr = exprCps env k t.inexpr }}
 
   -- We do not transform the top-level arrow type of the condef (due to
   -- the nested smap_Type_Type), as data values are constructed as usual even
@@ -264,7 +264,7 @@ lang DataCPS = CPS + DataAst + AllTypeAst + FunTypeAst
   -- of a condef is a type variable that was defined earlier with TmType. It is
   -- then CPS transformed.
   sem exprTyCps env =
-  | TmConDef t & e ->
+  | TmDecl {decl = DeclConDef t} & e ->
     recursive let rec = lam ty.
       match ty with TyAll b then TyAll { b with ty = rec b.ty }
       else match ty with TyArrow _ & t then smap_Type_Type (tyCps env) t
@@ -275,15 +275,15 @@ end
 
 lang MatchCPS = CPS + MatchAst
   sem exprCps env k =
-  | TmLet ({ ident = ident, body = TmMatch m, inexpr = inexpr } & b) & t ->
+  | TmDecl {decl = DeclLet ({ ident = ident, body = TmMatch m, inexpr = inexpr } & b)} & t ->
     if not (transform env ident) then
-      TmLet { b with
+      TmDecl {decl = DeclLet { b with
         body = TmMatch { m with
           thn = exprCps env (None ()) m.thn,
           els = exprCps env (None ()) m.els
         },
         inexpr = exprCps env k inexpr
-      }
+      }}
     else
       let opt = match k with Some k then tailCall t else false in
       if opt then
@@ -306,35 +306,35 @@ end
 -- Not much needs to be done here thanks to ANF
 lang UtestCPS = CPS + UtestDeclAst
   sem exprCps env k =
-  | TmUtest t -> TmUtest { t with next = exprCps env k t.next }
+  | TmDecl {decl = DeclUtest t} -> TmDecl {decl = DeclUtest { t with next = exprCps env k t.next }}
 
 end
 
 lang NeverCPS = CPS + NeverAst
   sem exprCps env k =
-  | TmLet ({ body = TmNever _ } & t) ->
-    TmLet { t with inexpr = exprCps env k t.inexpr }
+  | TmDecl {decl = DeclLet ({ body = TmNever _ } & t)} ->
+    TmDecl {decl = DeclLet { t with inexpr = exprCps env k t.inexpr }}
 end
 
 lang ExtCPS = CPS + ExtDeclAst + FunArity
   sem exprCps env k =
-  | TmExt t ->
+  | TmDecl {decl = DeclExt t} ->
     errorSingle [t.info]
       "Error in CPS: Should not happen due to ANF transformation"
-  | TmExt ({ inexpr = TmLet ({ ident = ident, body = TmLam _ | TmVar _, inexpr = inexpr } & tl) } & t) ->
+  | TmDecl {decl = DeclExt ({ inexpr = TmDecl {decl = DeclLet ({ ident = ident, body = TmLam _ | TmVar _, inexpr = inexpr } & tl)} } & t)} ->
     if not (transform env ident) then
-      TmExt { t with inexpr = TmLet { tl with inexpr = exprCps env k inexpr } }
+      TmDecl {decl = DeclExt { t with inexpr = TmDecl {decl = DeclLet { tl with inexpr = exprCps env k inexpr }} }}
     else
       -- We know that ANF adds a let that eta expands the external just after its
       -- definition. Here, we simply replace this eta expansion with its CPS
       -- equivalent
       let arity = arityFunType t.tyIdent in
       let i = withInfo t.info in
-      TmExt { t with
+      TmDecl {decl = DeclExt { t with
         inexpr = bindall_
           [ i (nulet_ t.ident (wrapDirect arity (i (nvar_ t.ident)))),
             exprCps env k inexpr ]
-      }
+      }}
 end
 
 -----------

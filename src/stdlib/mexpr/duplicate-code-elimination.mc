@@ -94,7 +94,7 @@ lang MExprEliminateDuplicateCode = MExprAst
     match eliminateDuplicateCodeExpr env replaced t.body with (replaced, body) in
     match eliminateDuplicateCodeType env replaced t.ty with (replaced, ty) in
     (replaced, TmConApp {t with ident = ident, body = body, ty = ty})
-  | TmLet t ->
+  | TmDecl {decl = DeclLet t} ->
     lookupDefinition
       env replaced t.ident t.info t.inexpr
       (lam env.
@@ -104,8 +104,8 @@ lang MExprEliminateDuplicateCode = MExprAst
         match eliminateDuplicateCodeExpr env replaced t.inexpr with (replaced, inexpr) in
         match eliminateDuplicateCodeType env replaced t.ty with (replaced, ty) in
         ( replaced
-        , TmLet {t with body = body, tyAnnot = tyAnnot, tyBody = tyBody, inexpr = inexpr, ty = ty} ))
-  | TmType t ->
+        , TmDecl {decl = DeclLet {t with body = body, tyAnnot = tyAnnot, tyBody = tyBody, inexpr = inexpr, ty = ty}} ))
+  | TmDecl {decl = DeclType t} ->
     lookupDefinition
       env replaced t.ident t.info t.inexpr
       (lam env.
@@ -113,8 +113,8 @@ lang MExprEliminateDuplicateCode = MExprAst
         match eliminateDuplicateCodeExpr env replaced t.inexpr with (replaced, inexpr) in
         match eliminateDuplicateCodeType env replaced t.ty with (replaced, ty) in
         ( replaced
-        , TmType {t with tyIdent = tyIdent, inexpr = inexpr, ty = ty} ))
-  | TmConDef t ->
+        , TmDecl {decl = DeclType {t with tyIdent = tyIdent, inexpr = inexpr, ty = ty}} ))
+  | TmDecl {decl = DeclConDef t} ->
     lookupDefinition
       env replaced t.ident t.info t.inexpr
       (lam env.
@@ -122,8 +122,8 @@ lang MExprEliminateDuplicateCode = MExprAst
         match eliminateDuplicateCodeExpr env replaced t.inexpr with (replaced, inexpr) in
         match eliminateDuplicateCodeType env replaced t.ty with (replaced, ty) in
         ( replaced
-        , TmConDef {t with tyIdent = tyIdent, inexpr = inexpr, ty = ty} ))
-  | TmExt t ->
+        , TmDecl {decl = DeclConDef {t with tyIdent = tyIdent, inexpr = inexpr, ty = ty}} ))
+  | TmDecl {decl = DeclExt t} ->
     lookupDefinition
       env replaced t.ident t.info t.inexpr
       (lam env.
@@ -131,8 +131,8 @@ lang MExprEliminateDuplicateCode = MExprAst
         match eliminateDuplicateCodeExpr env replaced t.inexpr with (replaced, inexpr) in
         match eliminateDuplicateCodeType env replaced t.ty with (replaced, ty) in
         ( replaced
-        , TmExt {t with tyIdent = tyIdent, inexpr = inexpr, ty = ty} ))
-  | TmRecLets t ->
+        , TmDecl {decl = DeclExt {t with tyIdent = tyIdent, inexpr = inexpr, ty = ty}} ))
+  | TmDecl {decl = DeclRecLets t} ->
     let eliminateDuplicateBinding = lam acc. lam binding.
       match acc with (replaced, env) in
       let defn = (binding.info, nameGetStr binding.ident) in
@@ -158,7 +158,7 @@ lang MExprEliminateDuplicateCode = MExprAst
     match eliminateDuplicateCodeExpr env replaced t.inexpr with (replaced, inexpr) in
     match eliminateDuplicateCodeType env replaced t.ty with (replaced, ty) in
     ( replaced
-    , TmRecLets {t with bindings = reverse bindings, inexpr = inexpr, ty = ty} )
+    , TmDecl {decl = DeclRecLets {t with bindings = reverse bindings, inexpr = inexpr, ty = ty}} )
   | t ->
     match smapAccumL_Expr_Expr (eliminateDuplicateCodeExpr env) replaced t with (replaced, t) in
     match smapAccumL_Expr_Type (eliminateDuplicateCodeType env) replaced t with (replaced, t) in
@@ -199,7 +199,7 @@ lang MExprEliminateDuplicateCode = MExprAst
   sem eliminateDuplicateExternalsExpr
     : Map String Name -> Map Name Name -> Expr -> (Map Name Name, Expr)
   sem eliminateDuplicateExternalsExpr externals replaced =
-  | TmExt r ->
+  | TmDecl {decl = DeclExt r} ->
     let identStr = nameGetStr r.ident in
     optionMapOrElse
       (lam.
@@ -207,7 +207,7 @@ lang MExprEliminateDuplicateCode = MExprAst
         match eliminateDuplicateExternalsExpr externals replaced r.inexpr
           with (replaced, inexpr)
         in
-        (replaced, TmExt { r with inexpr = inexpr }))
+        (replaced, TmDecl {decl = DeclExt { r with inexpr = inexpr }}))
       (lam ident.
         eliminateDuplicateExternalsExpr
           externals
@@ -294,8 +294,8 @@ utest expr2str (eliminateDuplicateCode t) with expr2str expected using eqString 
 let ireclets = lam bindings.
   let bindFn = lam idx. lam entry : (String, Expr).
     {ident = nameNoSym entry.0, tyAnnot = tyunknown_, tyBody = tyunknown_, body = entry.1, info = i idx} in
-  TmRecLets { bindings = mapi bindFn bindings, inexpr = uunit_,
-              ty = tyunknown_, info = NoInfo () } in
+  TmDecl {decl = DeclRecLets { bindings = mapi bindFn bindings, inexpr = uunit_,
+              ty = tyunknown_, info = NoInfo () }} in
 let baseBindings = [
   ("a", ulam_ "x" (addi_ (var_ "x") (int_ 1))),
   ("b", ulam_ "x" (muli_ (var_ "x") (int_ 2)))

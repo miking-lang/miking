@@ -28,16 +28,16 @@ lang PMExprNestedAccelerate = PMExprAst
 
   sem containsNestedAccelerate : Set Name -> Expr -> ()
   sem containsNestedAccelerate env =
-  | TmLet t ->
+  | TmDecl {decl = DeclLet t} ->
     checkIdentifiers env t.body;
     containsNestedAccelerate env t.inexpr
-  | TmRecLets t ->
+  | TmDecl {decl = DeclRecLets t} ->
     iter (lam bind. checkIdentifiers env bind.body) t.bindings;
     containsNestedAccelerate env t.inexpr
-  | TmType t -> containsNestedAccelerate env t.inexpr
-  | TmConDef t -> containsNestedAccelerate env t.inexpr
-  | TmUtest t -> containsNestedAccelerate env t.next
-  | TmExt t -> containsNestedAccelerate env t.inexpr
+  | TmDecl {decl = DeclType t} -> containsNestedAccelerate env t.inexpr
+  | TmDecl {decl = DeclConDef t} -> containsNestedAccelerate env t.inexpr
+  | TmDecl {decl = DeclUtest t} -> containsNestedAccelerate env t.next
+  | TmDecl {decl = DeclExt t} -> containsNestedAccelerate env t.inexpr
   | _ -> ()
 
   sem checkNestedAccelerate : Set Name -> Expr -> ()

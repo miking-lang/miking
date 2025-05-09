@@ -142,13 +142,13 @@ lang MExprSideEffect =
   | t -> constructSideEffectEnvH (sideEffectEnvEmpty ()) t
 
   sem constructSideEffectEnvH (env : SideEffectEnv) =
-  | TmLet t ->
+  | TmDecl {decl = DeclLet t} ->
     let bodySideEffect = exprHasSideEffectH env false false t.body in
     let lambdaCount = countArityExpr 0 t.body in
     let env = updateSideEffectEnv env t.ident lambdaCount bodySideEffect in
     let env = constructSideEffectEnvH env t.body in
     constructSideEffectEnvH env t.inexpr
-  | TmRecLets t ->
+  | TmDecl {decl = DeclRecLets t} ->
     -- NOTE(larshum, 2022-02-01): The call graph implementation stores bindings
     -- by name, not index, so we need to use a map for binding lookup.
     let bindMap : Map Name DeclLetRecord =
@@ -176,7 +176,7 @@ lang MExprSideEffect =
           let lambdaCount = countArityExpr 0 bind.body in
           updateSideEffectEnv env bind.ident lambdaCount sccHasSideEffect)
       env sccBindings in
-    let g : Digraph Name Int = constructCallGraph (TmRecLets t) in
+    let g : Digraph Name Int = constructCallGraph (TmDecl {decl = DeclRecLets t}) in
     let sccs = digraphTarjan g in
     let env = foldl sideEffectsScc env (reverse sccs) in
     let env =
@@ -185,7 +185,7 @@ lang MExprSideEffect =
           constructSideEffectEnvH env bind.body)
         env t.bindings in
     constructSideEffectEnvH env t.inexpr
-  | TmExt t ->
+  | TmDecl {decl = DeclExt t} ->
     let lambdaCount = countArityType 0 t.tyIdent in
     let env = updateSideEffectEnv env t.ident lambdaCount t.effect in
     constructSideEffectEnvH env t.inexpr

@@ -26,7 +26,7 @@ lang PMExprParallelPattern = PMExprAst + PMExprPromote + PMExprVariableSub
 
   sem parallelPatternRewriteH (patterns : [Pattern])
                               (replacements : Map Name ([(Name, Type, Info)], Expr)) =
-  | TmRecLets t ->
+  | TmDecl {decl = DeclRecLets t} ->
     -- Collect the parameters
     let replacements =
       foldl
@@ -63,8 +63,8 @@ lang PMExprParallelPattern = PMExprAst + PMExprPromote + PMExprVariableSub
       -- remaining part of the tree).
       match parallelPatternRewriteH patterns replacements t.inexpr
       with (replacements, inexpr) in
-      (replacements, TmRecLets {{t with bindings = bindings}
-                                   with inexpr = inexpr})
+      (replacements, TmDecl {decl = DeclRecLets {{t with bindings = bindings}
+                                   with inexpr = inexpr}})
   | (TmApp {info = info}) & t ->
     let performSubstitution : Expr -> [(Name, Type, Info)] -> [Expr] -> Expr =
       lam e. lam params. lam args.
@@ -151,7 +151,7 @@ let preprocess : Expr -> Expr = lam e.
 in
 
 let recletBindingCount : Expr -> Int = lam e.
-  match e with TmRecLets t then
+  match e with TmDecl {decl = DeclRecLets t} then
     length t.bindings
   else 0
 in

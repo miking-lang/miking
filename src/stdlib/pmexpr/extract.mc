@@ -116,7 +116,7 @@ lang PMExprExtractAccelerate = PMExprAst + MExprExtract
     let env = {env with functions = mapInsert accelerateIdent functionData env.functions} in
     let funcType = TyArrow {from = paramTy, to = retType, info = info} in
     let accelerateLet =
-      TmLet {
+      TmDecl {decl = DeclLet {
         ident = accelerateIdent,
         tyAnnot = funcType,
         tyBody = funcType,
@@ -129,7 +129,7 @@ lang PMExprExtractAccelerate = PMExprAst + MExprExtract
           rhs = TmConst {val = CInt {val = 0}, ty = paramTy, info = info},
           ty = retType,
           info = info},
-        ty = retType, info = info}
+        ty = retType, info = info}}
     in
     (env, accelerateLet)
 
@@ -169,18 +169,18 @@ lang PMExprExtractAccelerate = PMExprAst + MExprExtract
 
   sem eliminateDummyParameterH (solutions : Map Name (Map Name Type))
                                (accelerated : Map Name AccelerateData) =
-  | TmLet t ->
+  | TmDecl {decl = DeclLet t} ->
     let inexpr = eliminateDummyParameterH solutions accelerated t.inexpr in
     if mapMem t.ident accelerated then
       match mapLookup t.ident solutions with Some idSols then
         if gti (mapSize idSols) 0 then
-          TmLet {{{t with tyBody = eliminateInnermostParameterType t.tyBody}
+          TmDecl {decl = DeclLet {{{t with tyBody = eliminateInnermostParameterType t.tyBody}
                      with body = eliminateInnermostLambda t.body}
-                     with inexpr = inexpr}
-        else TmLet {t with inexpr = inexpr}
-      else TmLet {t with inexpr = inexpr}
-    else TmLet {t with inexpr = inexpr}
-  | TmRecLets t ->
+                     with inexpr = inexpr}}
+        else TmDecl {decl = DeclLet {t with inexpr = inexpr}}
+      else TmDecl {decl = DeclLet {t with inexpr = inexpr}}
+    else TmDecl {decl = DeclLet {t with inexpr = inexpr}}
+  | TmDecl {decl = DeclRecLets t} ->
     let isAccelerateBinding = lam bind : DeclLetRecord.
       if mapMem bind.ident accelerated then
         match mapLookup bind.ident solutions with Some idSols then
@@ -198,21 +198,21 @@ lang PMExprExtractAccelerate = PMExprAst + MExprExtract
               (tyBody, body)
             else (bind.tyBody, bind.body)
           with (tyBody, body) in
-          TmLet {
+          TmDecl {decl = DeclLet {
             ident = bind.ident,
             tyAnnot = tyBody,
             tyBody = tyBody,
             body = body,
             inexpr = acc,
             ty = tyTm acc,
-            info = bind.info}
+            info = bind.info}}
         else acc
       else acc
     in
     let inexpr = eliminateDummyParameterH solutions accelerated t.inexpr in
     match partition isAccelerateBinding t.bindings with (accelerated, bindings) in
-    TmRecLets {{t with bindings = bindings}
-                  with inexpr = foldl eliminateBinding inexpr accelerated}
+    TmDecl {decl = DeclRecLets {{t with bindings = bindings}
+                  with inexpr = foldl eliminateBinding inexpr accelerated}}
   | t -> smap_Expr_Expr (eliminateDummyParameterH solutions accelerated) t
 
   sem eliminateInnermostParameterType =

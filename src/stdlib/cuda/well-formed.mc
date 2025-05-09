@@ -84,13 +84,13 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst
       cons (CudaAppResultTypeError app) acc
     else _cudaCheckApp acc app
   | TmLam t -> cudaWellFormedExpr acc t.body
-  | TmLet t ->
+  | TmDecl {decl = DeclLet t} ->
     let acc =
       if cudaWellFormedLambdas (t.body, t.tyBody) then acc
       else cons (CudaFunctionDefError t.body) acc in
     let acc = cudaWellFormedExpr acc t.body in
     cudaWellFormedExpr acc t.inexpr
-  | TmRecLets t ->
+  | TmDecl {decl = DeclRecLets t} ->
     let checkBinding = lam acc. lam bind.
       let acc =
         if cudaWellFormedLambdas (bind.body, bind.tyBody) then acc
@@ -115,12 +115,12 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst
       (lam acc. lam. lam expr. cudaWellFormedExpr acc expr) acc bindings
   | TmSeq {tms = tms} ->
     foldl (lam acc. lam expr. cudaWellFormedExpr acc expr) acc tms
-  | TmExt t -> cudaWellFormedExpr acc t.inexpr
-  | TmType t ->
+  | TmDecl {decl = DeclExt t} -> cudaWellFormedExpr acc t.inexpr
+  | TmDecl {decl = DeclType t} ->
     let acc = cudaWellFormedType acc t.tyIdent in
     cudaWellFormedExpr acc t.inexpr
-  | TmConDef t ->
-    let acc = cons (CudaExprError (TmConDef t)) acc in
+  | TmDecl {decl = DeclConDef t} ->
+    let acc = cons (CudaExprError (TmDecl {decl = DeclConDef t})) acc in
     cudaWellFormedExpr acc t.inexpr
   | TmLoop t | TmParallelLoop t ->
     let acc = cudaWellFormedExpr acc t.n in

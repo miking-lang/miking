@@ -14,17 +14,17 @@ lang OCamlTryWithWrap = MExprAst + OCamlAst
   | (OTopVariantTypeDecl _ | OTopCExternalDecl _) & t ->
     (acc.0, snoc acc.1 t)
   | OTopLet t ->
-    let letExpr = TmLet {
+    let letExpr = TmDecl {decl = DeclLet {
       ident = t.ident, tyAnnot = t.tyBody, tyBody = t.tyBody, body = t.body,
-      inexpr = unit_, ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()} in
+      inexpr = unit_, ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}} in
     (bind_ acc.0 letExpr, acc.1)
   | OTopRecLets t ->
     let toDeclLetRecord = lam bind : OCamlTopBinding.
       { ident = bind.ident, tyAnnot = bind.tyBody, tyBody = bind.tyBody
       ,  body = bind.body, info = NoInfo ()} in
-    let recLetExpr = TmRecLets {
+    let recLetExpr = TmDecl {decl = DeclRecLets {
       bindings = map toDeclLetRecord t.bindings, inexpr = unit_,
-      ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()} in
+      ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()}} in
     (bind_ acc.0 recLetExpr, acc.1)
   | OTopExpr t -> (bind_ acc.0 t.expr, acc.1)
   | OTopTryWith t -> error "Nested try-with expressions currently not supported"

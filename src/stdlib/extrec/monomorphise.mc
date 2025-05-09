@@ -38,13 +38,13 @@ lang ExtRecMonomorphise = MLangAst + MExprAst + ExtRecAst
       labelToType
     in
 
-    TmType {ident = t.ident,
+    TmDecl {decl = DeclType {ident = t.ident,
              -- params = cons mapParamIdent t.params,
             params = t.params,
             tyIdent = TyRecord {info = NoInfo (), fields = fields},
             inexpr = monomorphiseExpr env t.inexpr,
             ty = t.ty,
-            info = t.info}
+            info = t.info}}
   | TmRecField t -> monomorphiseExpr env t.inexpr
   | TmExtRecord t ->
     match mapLookup t.ident env.defs with Some labelToType in
@@ -88,18 +88,18 @@ lang ExtRecMonomorphise = MLangAst + MExprAst + ExtRecAst
 
 
   sem removeExtRecTypes_Expr env =
-  | TmType t ->
+  | TmDecl {decl = DeclType t} ->
     -- We need to remove the first parameter from TmTypes representing
     -- open sum types or payloads. Type aliases should remain unaffected.
     if or (setMem t.ident env.sumTypeNames) (setMem t.ident env.payloadNames) then
-      TmType {t with params = tail t.params,
+      TmDecl {decl = DeclType {t with params = tail t.params,
                     tyIdent = removeExtRecTypes_Type env t.tyIdent,
                     ty = removeExtRecTypes_Type env t.ty,
-                    inexpr = removeExtRecTypes_Expr env t.inexpr}
+                    inexpr = removeExtRecTypes_Expr env t.inexpr}}
     else
-      TmType {t with tyIdent = removeExtRecTypes_Type env t.tyIdent,
+      TmDecl {decl = DeclType {t with tyIdent = removeExtRecTypes_Type env t.tyIdent,
                      ty = removeExtRecTypes_Type env t.ty,
-                     inexpr = removeExtRecTypes_Expr env t.inexpr}
+                     inexpr = removeExtRecTypes_Expr env t.inexpr}}
   | expr ->
     let expr = smap_Expr_Type (removeExtRecTypes_Type env) expr in
     let expr = smap_Expr_TypeLabel (removeExtRecTypes_Type env) expr in

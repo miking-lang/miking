@@ -69,7 +69,7 @@ lang DependencyAnalysis = MExprHoleCFA
   sem buildDependencies (cur : NameInfo) (env : CallCtxEnv)
                         (data : Map Name (Set AbsVal))
                         (acc : (DependencyGraph, Int)) =
-  | TmLet ({ident = ident} & t) ->
+  | TmDecl {decl = DeclLet ({ident = ident} & t)} ->
     match acc with (graph, measCount) in
     let graph : DependencyGraph = graph in
 
@@ -157,10 +157,10 @@ lang DependencyAnalysis = MExprHoleCFA
 
     match buildDependencies curBody env data acc t.body with (acc, body) in
     match buildDependencies cur env data acc t.inexpr with (acc, inexpr) in
-    (acc, TmLet {{t with body = body} with inexpr = inexpr})
+    (acc, TmDecl {decl = DeclLet {{t with body = body} with inexpr = inexpr}})
 
   -- Possibly update cur inside bodies of bindings
-  | TmRecLets ({ bindings = bindings, inexpr = inexpr } & t) ->
+  | TmDecl {decl = DeclRecLets ({ bindings = bindings, inexpr = inexpr } & t)} ->
     match
       mapAccumL (lam acc : (DependencyGraph, Int). lam bind : DeclLetRecord.
         let curBody =
@@ -177,8 +177,8 @@ lang DependencyAnalysis = MExprHoleCFA
     with (acc, newBinds) in
     match buildDependencies cur env data acc inexpr with (acc, inexpr) in
     ( acc,
-      TmRecLets {{t with bindings = newBinds}
-                    with inexpr = inexpr})
+      TmDecl {decl = DeclRecLets {{t with bindings = newBinds}
+                    with inexpr = inexpr}})
 
   | t ->
     smapAccumL_Expr_Expr (buildDependencies cur env data) acc t

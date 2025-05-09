@@ -190,7 +190,7 @@ end
 lang TypeTypeLift = TypeLift + TypeDeclAst + VariantTypeAst + UnknownTypeAst +
                     VariantNameTypeAst + RecordTypeAst
   sem typeLiftExpr (env : TypeLiftEnv) =
-  | TmType t ->
+  | TmDecl {decl = DeclType t} ->
     let tyIdent =
       match t.tyIdent with TyUnknown t2 then tyWithInfo t2.info (tyvariant_ [])
       else t.tyIdent
@@ -217,7 +217,7 @@ end
 
 lang DataTypeLift = TypeLift + DataAst + FunTypeAst + ConTypeAst + AppTypeAst
   sem typeLiftExpr (env : TypeLiftEnv) =
-  | TmConDef t ->
+  | TmDecl {decl = DeclConDef t} ->
     recursive let unwrapTypeVarIdent = lam ty : Type.
       match ty with TyCon t then Some t.ident
       else match ty with TyApp t then unwrapTypeVarIdent t.lhs
@@ -498,7 +498,7 @@ let recordUpdate = typeCheck (symbolize (bindall_ [
 ])) in
 let recordType = tyrecord_ [("a", tyint_), ("b", tyint_)] in
 match typeLift recordUpdate with (env, t) in
-match t with TmLet {tyBody = TyCon {ident = ident}} in
+match t with TmDecl {decl = DeclLet {tyBody = TyCon {ident = ident}}} in
 match assocSeqLookup {eq=nameEq} ident env with Some ty in
 utest ty with recordType using eqType in
 

@@ -192,11 +192,11 @@ recursive let _bind = lam f. lam bind. lam expr.
   use MExprAst in
   let ty = tyTm expr in
   switch bind
-  case TmLet t then TmLet {t with inexpr = _bind f t.inexpr expr, ty = ty}
-  case TmRecLets t then TmRecLets {t with inexpr = _bind f t.inexpr expr, ty = ty}
-  case TmType t then TmType {t with inexpr = _bind f t.inexpr expr, ty = ty}
-  case TmConDef t then TmConDef {t with inexpr = _bind f t.inexpr expr, ty = ty}
-  case TmExt t then TmExt {t with inexpr = _bind f t.inexpr expr, ty = ty}
+  case TmDecl {decl = DeclLet t} then TmDecl {decl = DeclLet {t with inexpr = _bind f t.inexpr expr, ty = ty}}
+  case TmDecl {decl = DeclRecLets t} then TmDecl {decl = DeclRecLets {t with inexpr = _bind f t.inexpr expr, ty = ty}}
+  case TmDecl {decl = DeclType t} then TmDecl {decl = DeclType {t with inexpr = _bind f t.inexpr expr, ty = ty}}
+  case TmDecl {decl = DeclConDef t} then TmDecl {decl = DeclConDef {t with inexpr = _bind f t.inexpr expr, ty = ty}}
+  case TmDecl {decl = DeclExt t} then TmDecl {decl = DeclExt {t with inexpr = _bind f t.inexpr expr, ty = ty}}
   case _ then f bind expr
   end
 end
@@ -851,8 +851,8 @@ lang MExprUtestGenerate =
     let types = map unwrapAlias types in
     match mapAccumL (generatePrettyPrintBindingsH info) env types with (env, binds) in
     ( env
-    , TmRecLets {bindings = join binds, inexpr = _unit, ty = _unitTy,
-                 info = _utestInfo} )
+    , TmDecl {decl = DeclRecLets {bindings = join binds, inexpr = _unit, ty = _unitTy,
+                 info = _utestInfo}} )
 
   sem generatePrettyPrintBindingsH : Info -> UtestEnv -> Type
                                   -> (UtestEnv, [DeclLetRecord])
@@ -899,7 +899,7 @@ lang MExprUtestGenerate =
     let ty = unwrapAlias ty in
     match generateEqualityBindingsH info env ty with (env, binds) in
     ( env
-    , TmRecLets {bindings = binds, inexpr = _unit, ty = _unitTy, info = _utestInfo} )
+    , TmDecl {decl = DeclRecLets {bindings = binds, inexpr = _unit, ty = _unitTy, info = _utestInfo}} )
 
   sem generateEqualityBindingsH : Info -> UtestEnv -> Type
                                -> (UtestEnv, [DeclLetRecord])
@@ -936,7 +936,7 @@ lang MExprUtestGenerate =
   -- for nested utests.
   sem replaceUtests : UtestEnv -> Expr -> (UtestEnv, Expr)
   sem replaceUtests env =
-  | TmUtest t ->
+  | TmDecl {decl = DeclUtest t} ->
     let info = _stringLit (info2str t.info) in
     let usingStr =
       _stringLit
@@ -992,20 +992,20 @@ lang MExprUtestGenerate =
     let testExpr =
       _apps utestRunner [info, usingStr, ppfn, eqfn, test, expected]
     in
-    let utestBinds = TmLet {
+    let utestBinds = TmDecl {decl = DeclLet {
       ident = nameNoSym "", tyAnnot = _unitTy, tyBody = _unitTy,
       body = testExpr, inexpr = next, ty = tyTm next, info = t.info
-    } in
+    }} in
     (env, _binds [eqBinds, ppBinds, utestBinds])
-  | TmType t ->
+  | TmDecl {decl = DeclType t} ->
     let env =
       match t.tyIdent with TyVariant _ then
         {env with variants = mapInsert t.ident (mapEmpty nameCmp) env.variants}
       else env
     in
     match replaceUtests env t.inexpr with (env, inexpr) in
-    (env, TmType {t with inexpr = inexpr})
-  | TmConDef t ->
+    (env, TmDecl {decl = DeclType {t with inexpr = inexpr}})
+  | TmDecl {decl = DeclConDef t} ->
     recursive let extractVariantType = lam ty.
       match ty with TyAll {ty = innerTy} then extractVariantType innerTy
       else match ty with TyArrow {to = to} then extractVariantType to
@@ -1018,19 +1018,19 @@ lang MExprUtestGenerate =
     let constrs = mapInsert t.ident t.tyIdent constrs in
     let env = {env with variants = mapInsert ident constrs env.variants} in
     match replaceUtests env t.inexpr with (env, inexpr) in
-    (env, TmConDef {t with inexpr = inexpr})
-  | TmLet t ->
+    (env, TmDecl {decl = DeclConDef {t with inexpr = inexpr}})
+  | TmDecl {decl = DeclLet t} ->
     match replaceUtests env t.body with (_, body) in
     match replaceUtests env t.inexpr with (env, inexpr) in
-    (env, TmLet {t with body = body, inexpr = inexpr})
-  | TmRecLets t ->
+    (env, TmDecl {decl = DeclLet {t with body = body, inexpr = inexpr}})
+  | TmDecl {decl = DeclRecLets t} ->
     let replaceBinding = lam env. lam bind.
       match replaceUtests env bind.body with (env, body) in
       (env, {bind with body = body})
     in
     match mapAccumL replaceBinding env t.bindings with (_, bindings) in
     match replaceUtests env t.inexpr with (env, inexpr) in
-    (env, TmRecLets {t with bindings = bindings, inexpr = inexpr})
+    (env, TmDecl {decl = DeclRecLets {t with bindings = bindings, inexpr = inexpr}})
   | t -> smapAccumL_Expr_Expr replaceUtests env t
 
   -- Inserts utest runtime code at the tail of the program. In case any test
@@ -1039,24 +1039,24 @@ lang MExprUtestGenerate =
   -- evaluated, regardless of whether tests failed or not.
   sem insertUtestTail : Expr -> Expr
   sem insertUtestTail =
-  | TmLet t ->
+  | TmDecl {decl = DeclLet t} ->
     let inexpr = insertUtestTail t.inexpr in
-    TmLet {t with inexpr = inexpr, ty = tyTm inexpr}
-  | TmRecLets t ->
+    TmDecl {decl = DeclLet {t with inexpr = inexpr, ty = tyTm inexpr}}
+  | TmDecl {decl = DeclRecLets t} ->
     let inexpr = insertUtestTail t.inexpr in
-    TmRecLets {t with inexpr = inexpr, ty = tyTm inexpr}
-  | TmType t ->
+    TmDecl {decl = DeclRecLets {t with inexpr = inexpr, ty = tyTm inexpr}}
+  | TmDecl {decl = DeclType t} ->
     let inexpr = insertUtestTail t.inexpr in
-    TmType {t with inexpr = inexpr, ty = tyTm inexpr}
-  | TmConDef t ->
+    TmDecl {decl = DeclType {t with inexpr = inexpr, ty = tyTm inexpr}}
+  | TmDecl {decl = DeclConDef t} ->
     let inexpr = insertUtestTail t.inexpr in
-    TmConDef {t with inexpr = inexpr, ty = tyTm inexpr}
-  | TmUtest t ->
+    TmDecl {decl = DeclConDef {t with inexpr = inexpr, ty = tyTm inexpr}}
+  | TmDecl {decl = DeclUtest t} ->
     let next = insertUtestTail t.next in
-    TmUtest {t with next = next, ty = tyTm next}
-  | TmExt t ->
+    TmDecl {decl = DeclUtest {t with next = next, ty = tyTm next}}
+  | TmDecl {decl = DeclExt t} ->
     let inexpr = insertUtestTail t.inexpr in
-    TmExt {t with inexpr = inexpr, ty = tyTm inexpr}
+    TmDecl {decl = DeclExt {t with inexpr = inexpr, ty = tyTm inexpr}}
   | t ->
     let exitOnFailure =
       _var (utestExitOnFailureName ()) (_tyarrows [tyTm t, tyTm t]) in
@@ -1065,7 +1065,7 @@ lang MExprUtestGenerate =
 
   sem stripUtests : Expr -> Expr
   sem stripUtests =
-  | TmUtest t -> stripUtests t.next
+  | TmDecl {decl = DeclUtest t} -> stripUtests t.next
   | t -> smap_Expr_Expr stripUtests t
 
   sem generateUtest : Bool -> Expr -> Expr

@@ -67,13 +67,13 @@ lang HoleCallGraph = LetDeclAst + AppAst + LamAst + RecLetsDeclAst
     digraphAddEdges edges g
 
   sem _findVertices (vertices: [NameInfo]) =
-  | TmLet t ->
+  | TmDecl {decl = DeclLet t} ->
     concat
       (_handleLetVertex _findVertices
         {ident = t.ident, body = t.body, info = t.info})
       (_findVertices vertices t.inexpr)
 
-  | TmRecLets t ->
+  | TmDecl {decl = DeclRecLets t} ->
     let res =
       foldl (lam acc. lam b : DeclLetRecord.
                concat acc
@@ -88,15 +88,15 @@ lang HoleCallGraph = LetDeclAst + AppAst + LamAst + RecLetsDeclAst
 
   sem _findEdges (cg : CallGraph) (prev : NameInfo) (name2info : Map Name Info)
                  (edges : [(NameInfo, NameInfo, NameInfo)]) =
-  | TmLet ({body = TmApp a} & t) ->
+  | TmDecl {decl = DeclLet ({body = TmApp a} & t)} ->
     let resBody = _handleApps (t.ident, t.info) _findEdges prev cg name2info t.body in
     concat resBody (_findEdges cg prev name2info edges t.inexpr)
 
-  | TmLet ({body = TmLam lm} & t) ->
+  | TmDecl {decl = DeclLet ({body = TmLam lm} & t)} ->
     let resBody = _findEdges cg (t.ident, t.info) name2info edges lm.body in
     concat resBody (_findEdges cg prev name2info [] t.inexpr)
 
-  | TmRecLets t ->
+  | TmDecl {decl = DeclRecLets t} ->
     let res =
       let handleBinding = lam g. lam b : DeclLetRecord.
         match b with { body = TmLam { body = lambody }, ident = ident, info = info } then

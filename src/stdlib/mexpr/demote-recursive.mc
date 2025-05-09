@@ -15,7 +15,7 @@ lang MExprDemoteRecursive = MExprAst + MExprFreeVars
   sem demoteRecursive : Expr -> Expr
   sem demoteRecursive =
   | tm -> smap_Expr_Expr demoteRecursive tm
-  | TmRecLets t ->
+  | TmDecl {decl = DeclRecLets t} ->
     let f = lam acc. lam binding.
       ( mapInsert binding.ident (binding, freeVars binding.body) acc
       , {binding with body = demoteRecursive binding.body}
@@ -36,11 +36,11 @@ lang MExprDemoteRecursive = MExprAst + MExprFreeVars
       case [name] then
         match mapFindExn name usedMap with (binding, free) in
         if setMem name free
-        then TmRecLets {t with inexpr = inexpr, bindings = [binding]}
-        else TmLet {ident = binding.ident, tyAnnot = binding.tyAnnot, tyBody = binding.tyBody, body = binding.body, inexpr = inexpr, ty = t.ty, info = binding.info}
+        then TmDecl {decl = DeclRecLets {t with inexpr = inexpr, bindings = [binding]}}
+        else TmDecl {decl = DeclLet {ident = binding.ident, tyAnnot = binding.tyAnnot, tyBody = binding.tyBody, body = binding.body, inexpr = inexpr, ty = t.ty, info = binding.info}}
       case names then
         let bindings = mapReverse (lam name. (mapFindExn name usedMap).0) names in
-        TmRecLets {t with inexpr = inexpr, bindings = bindings}
+        TmDecl {decl = DeclRecLets {t with inexpr = inexpr, bindings = bindings}}
       end in
     let inexpr = demoteRecursive t.inexpr in
     foldr attachGroup inexpr (digraphTarjan g)

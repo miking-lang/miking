@@ -142,8 +142,8 @@ lang OCamlPrettyPrint =
   sem isAtomic =
   | TmPlaceholder _ -> true
   | TmLam _ -> false
-  | TmLet _ -> false
-  | TmRecLets _ -> false
+  | TmDecl {decl = DeclLet _} -> false
+  | TmDecl {decl = DeclRecLets _} -> false
   | TmRecord _ -> true
   | TmRecordUpdate _ -> true
   | OTmArray _ -> true
@@ -474,7 +474,7 @@ lang OCamlPrettyPrint =
     match collectParameters env t with (env, params, body) in
     match pprintCode (pprintIncr indent) env body with (env, body) in
     (env, join ["fun ", strJoin " " params, " ->", pprintNewline (pprintIncr indent), body])
-  | TmLet t ->
+  | TmDecl {decl = DeclLet t} ->
     match pprintVarName env t.ident with (env,str) in
     match collectParameters env t.body with (env, parameters, body) in
     match pprintCode (pprintIncr indent) env body with (env, body) in
@@ -532,8 +532,8 @@ lang OCamlPrettyPrint =
     match pprintUpdates env updates with (env, updates) in
     (env, join ["{ ", rec, pprintNewline i,
                 "with", pprintNewline i, updates, " }"])
-  | TmRecLets {bindings = [], inexpr = inexpr} -> pprintCode indent env inexpr
-  | TmRecLets {bindings = bindings, inexpr = inexpr} ->
+  | TmDecl {decl = DeclRecLets {bindings = [], inexpr = inexpr}} -> pprintCode indent env inexpr
+  | TmDecl {decl = DeclRecLets {bindings = bindings, inexpr = inexpr}} ->
     let f = lam env. lam bind.
       match pprintVarName env bind.ident with (env, ident) in
       match collectParameters env bind.body with (env, parameters, body) in

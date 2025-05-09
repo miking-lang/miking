@@ -28,7 +28,7 @@ let astBuilder = lam info.
       ty = tyunknown_,
       frozen = false
     },
-    nulet = lam id. lam body. TmLet {
+    nulet = lam id. lam body. TmDecl {decl = DeclLet {
       ident = id,
       tyAnnot = tyunknown_,
       tyBody = tyunknown_,
@@ -36,7 +36,7 @@ let astBuilder = lam info.
       inexpr = uunit_,
       ty = tyunknown_,
       info = info
-    },
+    },}
     int = lam n. uconst (CInt { val = n }),
     muli = app2 (uconst (CMuli ())),
     negi = app (uconst (CNegi ())),
@@ -210,10 +210,10 @@ end
 
 lang LetPEval = PEval + ClosPAst + LetDeclAst
   sem pevalBindThis =
-  | TmLet _ -> true
+  | TmDecl {decl = DeclLet _} -> true
 
   sem pevalBindTop ctx k =
-  | TmLet r ->
+  | TmDecl {decl = DeclLet r} ->
     pevalBind ctx
       (lam body.
         match body with TmClosP clspr then
@@ -222,45 +222,45 @@ lang LetPEval = PEval + ClosPAst + LetDeclAst
               evalEnvInsert
                 r.ident (TmClosP { clspr with ident = Some r.ident }) ctx.env
           } in
-          TmLet { r with body = body, inexpr = pevalBindTop ctx k r.inexpr }
+          TmDecl {decl = DeclLet { r with body = body, inexpr = pevalBindTop ctx k r.inexpr }}
         else
           if pevalBindThis body then
-            TmLet { r with body = body, inexpr = pevalBindTop ctx k r.inexpr }
+            TmDecl {decl = DeclLet { r with body = body, inexpr = pevalBindTop ctx k r.inexpr }}
           else
             pevalBindTop
               { ctx with env = evalEnvInsert r.ident body ctx.env } k r.inexpr)
       r.body
 
   sem pevalEval ctx k =
-  | TmLet r ->
+  | TmDecl {decl = DeclLet r} ->
     pevalBind ctx
       (lam body.
         if pevalBindThis body then
-          TmLet { r with body = body, inexpr = pevalBind ctx k r.inexpr }
+          TmDecl {decl = DeclLet { r with body = body, inexpr = pevalBind ctx k r.inexpr }}
         else
           pevalBind
             { ctx with env = evalEnvInsert r.ident body ctx.env } k r.inexpr)
       r.body
 
   sem pevalReadbackH ctx =
-  | TmLet r ->
+  | TmDecl {decl = DeclLet r} ->
     match pevalReadbackH ctx r.inexpr with (inexprCtx, inexpr) in
     match pevalReadbackH inexprCtx r.body with (ctx, body) in
     if setMem r.ident inexprCtx.freeVar then
-      (ctx, TmLet { r with body = body, inexpr = inexpr })
+      (ctx, TmDecl {decl = DeclLet { r with body = body, inexpr = inexpr }})
     else
       if exprHasSideEffect ctx.effectEnv body then
-        (ctx, TmLet { r with body = body, inexpr = inexpr })
+        (ctx, TmDecl {decl = DeclLet { r with body = body, inexpr = inexpr }})
       else
         (inexprCtx, inexpr)
 end
 
 lang RecLetsPEval = PEval + RecLetsDeclAst + ClosPAst + LamAst
   sem pevalBindThis =
-  | TmRecLets _ -> true
+  | TmDecl {decl = DeclRecLets _} -> true
 
   sem pevalBindTop ctx k =
-  | TmRecLets r ->
+  | TmDecl {decl = DeclRecLets r} ->
     recursive let envPrime : Int -> Lazy EvalEnv = lam n. lam.
       let wraplambda = lam bind.
         if geqi n ctx.maxRecDepth then TmVar {
@@ -294,19 +294,19 @@ lang RecLetsPEval = PEval + RecLetsDeclAst + ClosPAst + LamAst
         (lam bind. { bind with body = pevalBind ctx (lam x. x) bind.body })
         r.bindings
     in
-    TmRecLets {
+    TmDecl {decl = DeclRecLets {
       r with
       bindings = bindings,
       inexpr = pevalBindTop { ctx with env = envPrime 0 () } k r.inexpr
-    }
+    }}
 
   sem pevalEval ctx k =
-  | TmRecLets _ ->
+  | TmDecl {decl = DeclRecLets _} ->
     error
       "Partial evaluation of non-top-level recursive let bindings is not safe"
 
   sem pevalReadbackH ctx =
-  | TmRecLets r ->
+  | TmDecl {decl = DeclRecLets r} ->
     let fv = setOfSeq nameCmp (map (lam bind. bind.ident) r.bindings) in
     match pevalReadbackH ctx r.inexpr with (inexprCtx, inexpr) in
     if
@@ -324,7 +324,7 @@ lang RecLetsPEval = PEval + RecLetsDeclAst + ClosPAst + LamAst
         r.bindings
       with (ctx, bindings)
     in
-    (ctx, TmRecLets { r with bindings = bindings, inexpr = inexpr })
+    (ctx, TmDecl {decl = DeclRecLets { r with bindings = bindings, inexpr = inexpr }})
 end
 
 lang RecordPEval = PEval + RecordAst + VarAst
@@ -360,25 +360,25 @@ end
 
 lang TypePEval = PEval + TypeDeclAst
   sem pevalBindThis =
-  | TmType _ -> true
+  | TmDecl {decl = DeclType _} -> true
 
   sem pevalBindTop ctx k =
-  | TmType t -> TmType {t with inexpr = pevalBindTop ctx k t.inexpr}
+  | TmDecl {decl = DeclType t} -> TmDecl {decl = DeclType {t with inexpr = pevalBindTop ctx k t.inexpr}}
 
   sem pevalEval ctx k =
-  | TmType t -> TmType {t with inexpr = pevalBind ctx k t.inexpr}
+  | TmDecl {decl = DeclType t} -> TmDecl {decl = DeclType {t with inexpr = pevalBind ctx k t.inexpr}}
 end
 
 lang DataPEval = PEval + DataAst
   sem pevalBindThis =
-  | TmConDef _ -> true
+  | TmDecl {decl = DeclConDef _} -> true
   | TmConApp _ -> false
 
   sem pevalBindTop ctx k =
-  | TmConDef t -> TmConDef {t with inexpr = pevalBindTop ctx k t.inexpr}
+  | TmDecl {decl = DeclConDef t} -> TmDecl {decl = DeclConDef {t with inexpr = pevalBindTop ctx k t.inexpr}}
 
   sem pevalEval ctx k =
-  | TmConDef t -> TmConDef {t with inexpr = pevalBind ctx k t.inexpr}
+  | TmDecl {decl = DeclConDef t} -> TmDecl {decl = DeclConDef {t with inexpr = pevalBind ctx k t.inexpr}}
   | TmConApp t -> pevalBind ctx (lam body. k (TmConApp {t with body = body})) t.body
 end
 
@@ -474,23 +474,23 @@ end
 
 lang UtestPEval = PEval + UtestDeclAst
   sem pevalBindThis =
-  | TmUtest _ -> true
+  | TmDecl {decl = DeclUtest _} -> true
 
   sem pevalEval ctx k =
-  | TmUtest t ->
+  | TmDecl {decl = DeclUtest t} ->
     pevalBind ctx
       (lam test.
          pevalBind ctx
            (lam expected.
              let inner = lam x.
                match x with (tusing, tonfail) in
-                TmUtest { t with
+                TmDecl {decl = DeclUtest { t with
                           test = test,
                           expected = expected,
                           next = pevalBind ctx k t.next,
                           tusing = tusing,
                           tonfail = tonfail
-                }
+                }}
                in
                switch (t.tusing, t.tonfail)
                case (Some tusing, Some tonfail) then
@@ -523,10 +523,10 @@ end
 
 lang ExtPEval = PEval + ExtDeclAst
   sem pevalBindThis =
-  | TmExt _ -> true
+  | TmDecl {decl = DeclExt _} -> true
 
   sem pevalEval ctx k =
-  | TmExt t -> TmExt {t with inexpr = pevalBind ctx k t.inexpr}
+  | TmDecl {decl = DeclExt t} -> TmDecl {decl = DeclExt {t with inexpr = pevalBind ctx k t.inexpr}}
 end
 
 lang ArithIntPEval = ArithIntEval + VarAst
@@ -695,7 +695,7 @@ lang PEvalLetInline = LetDeclAst + SideEffect
         switch t
         case TmVar r then
           mapFindOrElse (lam. t) r.ident env
-        case TmLet r then
+        case TmDecl {decl = DeclLet r} then
           switch mapLookup r.ident marked
           case None _ then
             smap_Expr_Expr (subs marked env) t
@@ -717,7 +717,7 @@ lang PEvalLetInline = LetDeclAst + SideEffect
           match acc with (count, subsEnv) in
           switch t
           case TmVar r then (mapInsertWith addi r.ident 1 count, subsEnv)
-          case TmLet r then
+          case TmDecl {decl = DeclLet r} then
             if exprHasSideEffect effectEnv r.body then
               sfold_Expr_Expr mark acc t
             else

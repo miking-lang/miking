@@ -212,15 +212,14 @@ type GenInput =
   , fieldAccessors : [FieldAccessorRequest]
   }
 
-let _nulet_ = lam n. lam body. lam inexpr. use LetDeclAst in TmLet
-  { ident = n
+let _nulet_ = lam n. lam body. lam inexpr. use LetDeclAst in TmDecl {decl = DeclLet { ident = n
   , body = body
   , tyAnnot = tyunknown_
   , tyBody = tyunknown_
   , inexpr = inexpr
   , info = NoInfo ()
   , ty = tyunknown_
-  }
+  }}
 
 lang CarriedTypeHelpers = CarriedTypeBase + SemDeclAst + PrettyPrint
   sem _mkSmapAccumL : SFuncRequest -> Constructor -> Option Decl

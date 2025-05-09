@@ -98,7 +98,7 @@ lang ContextExpand = HoleAst
 
   sem _contextExpandWithLookup (env : CallCtxEnv) (lookup : Int -> Expr) =
   -- Hole: lookup the value depending on call history.
-  | TmLet ({ body = TmHole { depth = depth }, ident = ident} & t) ->
+  | TmDecl {decl = DeclLet ({ body = TmHole { depth = depth }, ident = ident} & t)} ->
     let lookupGlobal = lam info.
       lookup (callCtxHole2Idx (ident, info) [] env)
     in
@@ -116,8 +116,8 @@ lang ContextExpand = HoleAst
         else
           -- Context-sensitive hole without any incoming calls
           lookupGlobal t.info
-    in TmLet {{t with body = body}
-                 with inexpr = _contextExpandWithLookup env lookup t.inexpr}
+    in TmDecl {decl = DeclLet {{t with body = body}
+                 with inexpr = _contextExpandWithLookup env lookup t.inexpr}}
 
   | tm ->
     smap_Expr_Expr (_contextExpandWithLookup env lookup) tm

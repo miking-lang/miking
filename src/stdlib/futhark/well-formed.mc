@@ -63,11 +63,11 @@ lang FutharkWellFormed = WellFormed + PMExprAst
       else wellFormedApp fun args
     else wellFormedApp fun args
   | TmLam t -> futharkWellFormedExpr acc t.body
-  | TmLet t ->
+  | TmDecl {decl = DeclLet t} ->
     let acc = futharkWellFormedExpr acc t.body in
     futharkWellFormedExpr acc t.inexpr
-  | TmRecLets t ->
-    let acc = cons (FutharkRecLet (TmRecLets t)) acc in
+  | TmDecl {decl = DeclRecLets t} ->
+    let acc = cons (FutharkRecLet (TmDecl {decl = DeclRecLets t})) acc in
     futharkWellFormedExpr acc t.inexpr
   | TmConst t ->
     if isFutharkSupportedConstant t.val then acc
@@ -88,8 +88,8 @@ lang FutharkWellFormed = WellFormed + PMExprAst
     let acc = futharkWellFormedExpr acc t.rec in
     futharkWellFormedExpr acc t.value
   | TmSeq {tms = tms} -> foldl futharkWellFormedExpr acc tms
-  | TmExt t -> futharkWellFormedExpr acc t.inexpr
-  | TmType t ->
+  | TmDecl {decl = DeclExt t} -> futharkWellFormedExpr acc t.inexpr
+  | TmDecl {decl = DeclType t} ->
     let acc = futharkWellFormedType acc t.tyIdent in
     futharkWellFormedExpr acc t.inexpr
   | TmFlatten t -> futharkWellFormedExpr acc t.e

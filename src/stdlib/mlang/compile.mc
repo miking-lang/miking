@@ -139,67 +139,67 @@ end
 lang LetDeclCompiler = DeclCompiler + LetDeclAst + LetDeclAst
   sem compileDecl ctx = 
   | DeclLet d -> result.ok (
-    withExpr ctx (TmLet {ident = d.ident,
+    withExpr ctx (TmDecl {decl = DeclLet {ident = d.ident,
                          tyAnnot = d.tyAnnot,
                          tyBody = d.tyBody,
                          body = d.body,
                          info = d.info,
                          ty = tyunknown_,
-                         inexpr = uunit_}))
+                         inexpr = uunit_}}))
 end
 
 lang RecletsDeclCompiler = DeclCompiler + RecLetsDeclAst + RecLetsDeclAst
   sem compileDecl ctx = 
   | DeclRecLets d -> result.ok (
-    withExpr ctx (TmRecLets {bindings = d.bindings,
+    withExpr ctx (TmDecl {decl = DeclRecLets {bindings = d.bindings,
                              inexpr = uunit_,
                              ty = tyunknown_,
-                             info = d.info}))
+                             info = d.info}}))
 end
 
 lang UtestDeclCompiler = DeclCompiler + UtestDeclAst + UtestDeclAst
   sem compileDecl ctx = 
   | DeclUtest d -> result.ok (
-    withExpr ctx (TmUtest {test = d.test,
+    withExpr ctx (TmDecl {decl = DeclUtest {test = d.test,
                            expected = d.expected,
                            next = uunit_,
                            tusing = d.tusing,
                            tonfail = None (),
                            ty = tyunknown_,
-                           info = d.info}))
+                           info = d.info}}))
 end
 
 lang TypeDeclCompiler = DeclCompiler + TypeDeclAst + TypeDeclAst
   sem compileDecl ctx = 
   | DeclType d -> 
-    result.ok (withExpr ctx (TmType {ident = d.ident,
+    result.ok (withExpr ctx (TmDecl {decl = DeclType {ident = d.ident,
                                      params = d.params,
                                      tyIdent = d.tyIdent,
                                      info = d.info,
                                      ty = tyunknown_,
-                                     inexpr = uunit_}))
+                                     inexpr = uunit_}}))
 end
 
 lang ConDefDeclCompiler = DeclCompiler + DataDeclAst + DataAst
   sem compileDecl ctx = 
   | DeclConDef d -> result.ok (
-    withExpr ctx (TmConDef {ident = d.ident,
+    withExpr ctx (TmDecl {decl = DeclConDef {ident = d.ident,
                             tyIdent = d.tyIdent,
                             info = d.info,
                             ty = tyunknown_,
-                            inexpr = uunit_}))
+                            inexpr = uunit_}}))
 end
 
 lang ExtDeclCompiler = DeclCompiler + ExtDeclAst + ExtDeclAst
   sem compileDecl ctx = 
   -- TODO(voorberg, 2024-04-23): Add test case for the compilation of externals.
   | DeclExt d -> result.ok (
-    withExpr ctx (TmExt {ident = d.ident,
+    withExpr ctx (TmDecl {decl = DeclExt {ident = d.ident,
                          tyIdent = d.tyIdent,
                          effect = d.effect,
                          info = d.info,
                          ty = tyunknown_,
-                         inexpr = uunit_}))
+                         inexpr = uunit_}}))
 end
 
 lang SynTypeDeclCompiler = SynDeclAst + TypeDeclAst
@@ -210,12 +210,12 @@ lang SynTypeDeclCompiler = SynDeclAst + TypeDeclAst
     -- a syntax type. To check that something is a base syn definition,
     -- we check that it does not include any other definitions.
     if null s.includes then 
-      withToplevelExpr ctx (TmType {ident = s.ident,
+      withToplevelExpr ctx (TmDecl {decl = DeclType {ident = s.ident,
                                     params = s.params,
                                     tyIdent = tyvariant_ [],
                                     inexpr = uunit_,
                                     ty = tyunknown_,
-                                    info = s.info})
+                                    info = s.info}})
     else 
       ctx
 end
@@ -342,11 +342,11 @@ lang MLangSynDefCompiler = SynDeclAst + MExprAst
     let rhs = foldl (lam ty. lam n. tyapp_ ty (ntyvar_ n)) (ntycon_ baseIdent) s.params in
 
     let compileDef = lam ctx. lam def.
-      withExpr ctx (TmConDef {ident = def.ident,
+      withExpr ctx (TmDecl {decl = DeclConDef {ident = def.ident,
                               tyIdent = forallWrapper (tyarrow_ def.tyIdent rhs),
                               info = s.info,
                               ty = tyunknown_,
-                              inexpr = uunit_}) in 
+                              inexpr = uunit_}}) in 
 
     foldl compileDef ctx s.defs    
 end
@@ -374,10 +374,10 @@ lang MLangLangDeclCompiler = DeclCompiler + LangDeclAst + MExprAst + SemDeclAst 
     let compileSemToResult : CompilationContext -> [Decl] -> CompilationContext
       = lam ctx. lam sems.
         let semBindings = map (compileSem langStr ctx semNames) sems in 
-        withExpr ctx (TmRecLets {bindings = semBindings,
+        withExpr ctx (TmDecl {decl = DeclRecLets {bindings = semBindings,
                                  inexpr = uunit_, 
                                  ty = tyunknown_,
-                                 info = l.info})
+                                 info = l.info}})
     in
     result.map (lam ctx. compileSemToResult ctx semDecls) res
   | DeclSyn s -> 

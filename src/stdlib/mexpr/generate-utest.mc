@@ -9,7 +9,7 @@ lang StripUtestLoader = MCoreLoader + UtestDeclAst
 
   sem stripUtests : Expr -> Expr
   sem stripUtests =
-  | TmUtest t -> stripUtests t.next
+  | TmDecl {decl = DeclUtest t} -> stripUtests t.next
   | t -> smap_Expr_Expr stripUtests t
 
   sem _postTypecheck loader decl = | StripUtestHook _ ->
@@ -95,7 +95,7 @@ lang UtestLoader = MCoreLoader + GenerateEqLoader + GeneratePprintLoader + Strip
   sem replaceUtests hook static loader =
   | tm & TmLam _ -> smapAccumL_Expr_Expr (replaceUtests hook false) loader tm
   | tm -> smapAccumL_Expr_Expr (replaceUtests hook static) loader tm
-  | TmUtest x ->
+  | TmDecl {decl = DeclUtest x} ->
     if hook.includeUtestIf {static = static, info = x.info} then
       let infoStr = str_ (info2str x.info) in
 
@@ -120,15 +120,14 @@ lang UtestLoader = MCoreLoader + GenerateEqLoader + GeneratePprintLoader + Strip
       match replaceUtests hook static loader x.next with (loader, next) in
 
       let test = appSeq_ (nvar_ hook.runner) [infoStr, usingStr, onFailFn, eqFn, test, expected] in
-      let tm = TmLet
-        { ident = nameNoSym ""
+      let tm = TmDecl {decl = DeclLet { ident = nameNoSym ""
         , tyAnnot = tyunknown_
         , tyBody = tyunit_
         , body = test
         , inexpr = next
         , ty = tyTm next
         , info = x.info
-        } in
+        }} in
       (loader, tm)
     else
       replaceUtests hook static loader x.next

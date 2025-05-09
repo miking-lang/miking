@@ -78,7 +78,7 @@ end
 
 lang DeclsToJson = AstToJson + MExprAsDecl
   sem exprToJson =
-  | tm & (TmLet _ | TmRecLets _ | TmType _ | TmConDef _ | TmUtest _ | TmExt _) ->
+  | tm & (TmDecl {decl = DeclLet _} | TmDecl {decl = DeclRecLets _} | TmDecl {decl = DeclType _} | TmDecl {decl = DeclConDef _} | TmDecl {decl = DeclUtest _} | TmDecl {decl = DeclExt _}) ->
     recursive let work = lam acc. lam expr.
       match exprAsDecl expr with Some (decl, inexpr) then
         work (snoc acc decl) inexpr

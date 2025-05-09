@@ -349,7 +349,7 @@ lang MonomorphizeCollect =
 
   sem recordPolymorphicDefinitions : MonoEnv -> Expr -> MonoEnv
   sem recordPolymorphicDefinitions env =
-  | TmLet t ->
+  | TmDecl {decl = DeclLet t} ->
     let env =
       match t.tyBody with TyAll _ then
         {env with funEnv = mapInsert t.ident (defaultInstEntry t.tyBody) env.funEnv}
@@ -357,7 +357,7 @@ lang MonomorphizeCollect =
     in
     let env = recordPolymorphicDefinitions env t.body in
     recordPolymorphicDefinitions env t.inexpr
-  | TmRecLets t ->
+  | TmDecl {decl = DeclRecLets t} ->
     let recordBind = lam env. lam bind.
       let env =
         match bind.tyBody with TyAll _ then
@@ -368,7 +368,7 @@ lang MonomorphizeCollect =
     in
     let env = foldl recordBind env t.bindings in
     recordPolymorphicDefinitions env t.inexpr
-  | TmType t ->
+  | TmDecl {decl = DeclType t} ->
     let env =
       if not (null t.params) then
         -- NOTE(larshum, 2023-08-03): We construct a polymorphic type
@@ -386,7 +386,7 @@ lang MonomorphizeCollect =
       else env
     in
     recordPolymorphicDefinitions env t.inexpr
-  | TmConDef t ->
+  | TmDecl {decl = DeclConDef t} ->
     let env =
       match t.tyIdent with TyAll _ then
         {env with conEnv = mapInsert t.ident (defaultInstEntry t.tyIdent) env.conEnv}
@@ -421,7 +421,7 @@ lang MonomorphizeCollect =
       {env with funEnv = mapInsert t.ident instEntry env.funEnv}
     else
       env
-  | TmLet t ->
+  | TmDecl {decl = DeclLet t} ->
     let env = collectInstantiationsExpr instantiations env t.inexpr in
     let env = collectInstantiationsType instantiations env t.tyAnnot in
     let env = collectInstantiationsType instantiations env t.tyBody in
@@ -446,7 +446,7 @@ lang MonomorphizeCollect =
         instantiations
     in
     collectInstantiationsExpr instantiations env t.body
-  | TmRecLets t ->
+  | TmDecl {decl = DeclRecLets t} ->
     let bindMap : Map Name DeclLetRecord =
       mapFromSeq nameCmp (map (lam bind. (bind.ident, bind)) t.bindings)
     in
@@ -490,10 +490,10 @@ lang MonomorphizeCollect =
         env
     in
     let env = collectInstantiationsExpr instantiations env t.inexpr in
-    let g = constructCallGraph (TmRecLets t) in
+    let g = constructCallGraph (TmDecl {decl = DeclRecLets t}) in
     let sccs = digraphTarjan g in
     collectInstantiationsPerScc instantiations env g (reverse sccs)
-  | TmConDef t ->
+  | TmDecl {decl = DeclConDef t} ->
     let env = collectInstantiationsExpr instantiations env t.inexpr in
     let env = collectInstantiationsType instantiations env t.ty in
     match mapLookup t.ident env.conEnv with Some conInstEntry then
@@ -639,7 +639,7 @@ lang MonomorphizeApply = MonomorphizeInstantiate + MonomorphizeResymbolize + App
     in
     TmVar {t with ident = ident,
                   ty = applyMonomorphizationTypeLabel env t.ty}
-  | TmLet t ->
+  | TmDecl {decl = DeclLet t} ->
     let inexpr = applyMonomorphizationExpr env t.inexpr in
     match mapLookup t.ident env.funEnv with Some instEntry then
       -- NOTE(larshum, 2023-08-03): The let-binding is a polymorphic function.
@@ -650,19 +650,19 @@ lang MonomorphizeApply = MonomorphizeInstantiate + MonomorphizeResymbolize + App
           let tyAnnot = monomorphizeType env inst t.tyAnnot in
           let tyBody = monomorphizeTypeLabel env inst t.tyBody in
           let ty = monomorphizeTypeLabel env inst t.ty in
-          TmLet {
+          TmDecl {decl = DeclLet {
             ident = newId, tyAnnot = tyAnnot, tyBody = tyBody,
-            body = body, inexpr = acc, ty = tyTm acc, info = t.info})
+            body = body, inexpr = acc, ty = tyTm acc, info = t.info}})
         inexpr instEntry.map
     else
       -- NOTE(larshum, 2023-08-03): The let-binding is already monomorphic, so
       -- we recurse directly into its body.
-      TmLet {t with tyAnnot = applyMonomorphizationType env t.tyAnnot,
+      TmDecl {decl = DeclLet {t with tyAnnot = applyMonomorphizationType env t.tyAnnot,
                     tyBody = applyMonomorphizationType env t.tyBody,
                     body = applyMonomorphization env t.body,
                     inexpr = inexpr,
-                    ty = applyMonomorphizationType env t.ty}
-  | TmRecLets t ->
+                    ty = applyMonomorphizationType env t.ty}}
+  | TmDecl {decl = DeclRecLets t} ->
     let applyMonomorphizationBinding = lam env. lam acc. lam bind.
       match mapLookup bind.ident env.funEnv with Some instEntry then
         mapFoldWithKey
@@ -683,37 +683,37 @@ lang MonomorphizeApply = MonomorphizeInstantiate + MonomorphizeResymbolize + App
     in
     let inexpr = applyMonomorphizationExpr env t.inexpr in
     let bindings = foldl (applyMonomorphizationBinding env) [] t.bindings in
-    TmRecLets {t with bindings = bindings, inexpr = inexpr}
-  | TmType t ->
+    TmDecl {decl = DeclRecLets {t with bindings = bindings, inexpr = inexpr}}
+  | TmDecl {decl = DeclType t} ->
     let inexpr = applyMonomorphizationExpr env t.inexpr in
     match mapLookup t.ident env.typeEnv with Some instEntry then
       mapFoldWithKey
         (lam acc. lam inst. lam newId.
           let tyIdent = monomorphizeType env inst t.tyIdent in
           let ty = monomorphizeType env inst t.ty in
-          TmType {
+          TmDecl {decl = DeclType {
             ident = newId, params = [], tyIdent = tyIdent,
-            inexpr = acc, ty = ty, info = t.info })
+            inexpr = acc, ty = ty, info = t.info }})
         inexpr instEntry.map
     else
-        TmType {t with tyIdent = applyMonomorphizationType env t.tyIdent,
+        TmDecl {decl = DeclType {t with tyIdent = applyMonomorphizationType env t.tyIdent,
                        inexpr = inexpr,
-                       ty = applyMonomorphizationTypeLabel env t.ty}
-  | TmConDef t ->
+                       ty = applyMonomorphizationTypeLabel env t.ty}}
+  | TmDecl {decl = DeclConDef t} ->
     let inexpr = applyMonomorphizationExpr env t.inexpr in
     match mapLookup t.ident env.conEnv with Some instEntry then
       mapFoldWithKey
         (lam acc. lam inst. lam newId.
           let tyIdent = monomorphizeType env inst t.tyIdent in
           let ty = monomorphizeType env inst t.ty in
-          TmConDef {
+          TmDecl {decl = DeclConDef {
             ident = newId, tyIdent = tyIdent, inexpr = acc,
-            ty = ty, info = t.info })
+            ty = ty, info = t.info }})
         inexpr instEntry.map
     else
-      TmConDef {t with tyIdent = applyMonomorphizationType env t.tyIdent,
+      TmDecl {decl = DeclConDef {t with tyIdent = applyMonomorphizationType env t.tyIdent,
                        inexpr = inexpr,
-                       ty = applyMonomorphizationTypeLabel env t.ty}
+                       ty = applyMonomorphizationTypeLabel env t.ty}}
   | TmConApp t ->
     let ident =
       match mapLookup t.ident env.conEnv with Some instEntry then

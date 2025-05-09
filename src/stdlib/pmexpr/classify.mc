@@ -39,10 +39,10 @@ lang PMExprClassify = PMExprAst + PMExprExtractAccelerate + MExprCallGraph
 
   sem classifyH : ClassificationEnv -> Name -> Expr -> ClassificationEnv
   sem classifyH env id =
-  | TmLet t ->
+  | TmDecl {decl = DeclLet t} ->
     let env = classifyH env t.ident t.body in
     classifyH env id t.inexpr
-  | TmRecLets t ->
+  | TmDecl {decl = DeclRecLets t} ->
     let bindMap : Map Name DeclLetRecord =
       mapFromSeq nameCmp
         (map (lam bind. (bind.ident, bind)) t.bindings) in
@@ -68,14 +68,14 @@ lang PMExprClassify = PMExprAst + PMExprExtractAccelerate + MExprCallGraph
       foldl
         (lam env. lam bind. classifyH env bind.ident bind.body)
         env t.bindings in
-    let g : Digraph Name Int = constructCallGraph (TmRecLets t) in
+    let g : Digraph Name Int = constructCallGraph (TmDecl {decl = DeclRecLets t}) in
     let sccs = digraphTarjan g in
     let env = foldl f env (reverse sccs) in
     classifyH env id t.inexpr
-  | TmType t -> classifyH env id t.inexpr
-  | TmConDef t -> classifyH env id t.inexpr
-  | TmUtest t -> classifyH env id t.next
-  | TmExt t -> classifyH env id t.inexpr
+  | TmDecl {decl = DeclType t} -> classifyH env id t.inexpr
+  | TmDecl {decl = DeclConDef t} -> classifyH env id t.inexpr
+  | TmDecl {decl = DeclUtest t} -> classifyH env id t.next
+  | TmDecl {decl = DeclExt t} -> classifyH env id t.inexpr
   | e ->
     let class = classifyBody env (Any ()) e in
     mapInsert id (infoTm e, class) env

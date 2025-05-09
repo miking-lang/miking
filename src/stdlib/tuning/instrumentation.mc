@@ -72,7 +72,7 @@ lang Instrumentation = MExprAst + HoleAst + TailPositions
 
   -- Recursive helper for instrument
   sem instrumentH (env : CallCtxEnv) (graph : DependencyGraph) (str2name : String -> Name) =
-  | TmRecLets r ->
+  | TmDecl {decl = DeclRecLets r} ->
     let lets : [Name] = map (lam b: DeclLetRecord. b.ident) r.bindings in
     match lets with [] then instrumentH env graph str2name r.inexpr
     else
@@ -93,14 +93,14 @@ lang Instrumentation = MExprAst + HoleAst + TailPositions
         let ids =
           if not (null ids) then ids
           else
-            match expr with TmLet t in
+            match expr with TmDecl {decl = DeclLet t} in
             match mapLookup t.ident graph.measuringPoints with Some tree then
               prefixTreeGetIds tree []
             else []
         in
         (ids, lam x. x)
       in
-      match tailPositionsReclet baseCase tailCall letexpr ids acc (TmRecLets r) with
+      match tailPositionsReclet baseCase tailCall letexpr ids acc (TmDecl {decl = DeclRecLets r}) with
       (tailCalls, _) in
       let tailCallsSet = setOfSeq subi tailCalls in
       let tailCalls = setToSeq tailCallsSet in
@@ -120,7 +120,7 @@ lang Instrumentation = MExprAst + HoleAst + TailPositions
       let letexpr = lam ids. lam expr.
         -- Check if a let expression is a measuring point
         if not (null ids) then (ids, lam x. x) else
-        match expr with TmLet t in
+        match expr with TmDecl {decl = DeclLet t} in
         match mapLookup t.ident graph.measuringPoints with Some tree then
           -- Found measuring point
           let ids = prefixTreeGetIds tree [] in
@@ -132,8 +132,8 @@ lang Instrumentation = MExprAst + HoleAst + TailPositions
           else
             -- No, acquire and release lock directly after.
             let f = lam e.
-              match e with TmLet t in
-              let expr = TmLet {t with inexpr = uunit_} in
+              match e with TmDecl {decl = DeclLet t} in
+              let expr = TmDecl {decl = DeclLet {t with inexpr = uunit_}} in
               let i = nameSym "iid" in
               let semi = nameSym "" in
               bindall_
@@ -146,25 +146,25 @@ lang Instrumentation = MExprAst + HoleAst + TailPositions
             in (ids, f)
         else ([], lam x. x)
       in
-      match tailPositionsReclet baseCase tailCall letexpr ids acc (TmRecLets r)
-      with (_, TmRecLets r) in
-      TmRecLets {r with inexpr = instrumentH env graph str2name r.inexpr}
+      match tailPositionsReclet baseCase tailCall letexpr ids acc (TmDecl {decl = DeclRecLets r})
+      with (_, TmDecl {decl = DeclRecLets r}) in
+      TmDecl {decl = DeclRecLets {r with inexpr = instrumentH env graph str2name r.inexpr}}
 
-  | TmLet t ->
+  | TmDecl {decl = DeclLet t} ->
     match mapLookup t.ident graph.measuringPoints with Some tree then
       let ids = prefixTreeGetIds tree [] in
-      let expr = TmLet {t with inexpr = uunit_} in
-      let id = idExpr (infoTm (TmLet t)) t.ident graph env tree ids in
+      let expr = TmDecl {decl = DeclLet {t with inexpr = uunit_}} in
+      let id = idExpr (infoTm (TmDecl {decl = DeclLet t})) t.ident graph env tree ids in
       instrumentPoint env graph str2name expr t.inexpr id
-    else smap_Expr_Expr (instrumentH env graph str2name) (TmLet t)
+    else smap_Expr_Expr (instrumentH env graph str2name) (TmDecl {decl = DeclLet t})
   | t -> smap_Expr_Expr (instrumentH env graph str2name) t
 
 
   sem instrumentBaseCase (ids: [Int]) (str2name: String -> Name) =
-  | TmLet t ->
+  | TmDecl {decl = DeclLet t} ->
     -- Instrument a base case: Release locks of _all_ measuring points that
     -- have tail-recursive calls.
-    let expr = TmLet {t with inexpr = uunit_} in
+    let expr = TmDecl {decl = DeclLet {t with inexpr = uunit_}} in
     let releaseExpr =
       if null ids then uunit_ else
       let releaseLock = str2name "releaseLock" in

@@ -22,18 +22,18 @@ lang PMExprTensorCopyAnalysis = PMExprAst + PMExprExtractAccelerate
   -- uninitialized constants.
   sem findUninitializedTensors : Set Name -> Expr -> Set Name
   sem findUninitializedTensors tensors =
-  | TmLet t ->
+  | TmDecl {decl = DeclLet t} ->
     let tensors =
       match t.body with TmApp {lhs = TmConst {val = CTensorCreateUninitInt _ |
                                                     CTensorCreateUninitFloat _}} then
         setInsert t.ident tensors
       else tensors in
     findUninitializedTensors tensors t.inexpr
-  | TmRecLets t -> findUninitializedTensors tensors t.inexpr
-  | TmType t -> findUninitializedTensors tensors t.inexpr
-  | TmConDef t -> findUninitializedTensors tensors t.inexpr
-  | TmUtest t -> findUninitializedTensors tensors t.next
-  | TmExt t -> findUninitializedTensors tensors t.inexpr
+  | TmDecl {decl = DeclRecLets t} -> findUninitializedTensors tensors t.inexpr
+  | TmDecl {decl = DeclType t} -> findUninitializedTensors tensors t.inexpr
+  | TmDecl {decl = DeclConDef t} -> findUninitializedTensors tensors t.inexpr
+  | TmDecl {decl = DeclUtest t} -> findUninitializedTensors tensors t.next
+  | TmDecl {decl = DeclExt t} -> findUninitializedTensors tensors t.inexpr
   | _ -> tensors
 
   sem eliminateTensorCopying
@@ -53,7 +53,7 @@ lang PMExprTensorCopyAnalysis = PMExprAst + PMExprExtractAccelerate
 
   sem omitCopyUninitializedH : CopyAnalysisEnv -> Set Name -> Expr -> CopyAnalysisEnv
   sem omitCopyUninitializedH env used =
-  | TmLet t ->
+  | TmDecl {decl = DeclLet t} ->
     let f = lam x : (CopyStatus, Expr).
       match x with (status, arg) in
       match arg with TmVar {ident = ident} then
@@ -79,15 +79,15 @@ lang PMExprTensorCopyAnalysis = PMExprAst + PMExprExtractAccelerate
       if mapMem t.ident env.accelerateData then used
       else setUnion (collectVariables t.body) used in
     omitCopyUninitializedH env used t.inexpr
-  | TmRecLets t ->
+  | TmDecl {decl = DeclRecLets t} ->
     let collectBindingVariables = lam used. lam binding.
       setUnion (collectVariables binding.body) used in
     let used = foldl collectBindingVariables used t.bindings in
     omitCopyUninitializedH env used t.inexpr
-  | TmType t -> omitCopyUninitializedH env used t.inexpr
-  | TmConDef t -> omitCopyUninitializedH env used t.inexpr
-  | TmUtest t -> omitCopyUninitializedH env used t.next
-  | TmExt t -> omitCopyUninitializedH env used t.inexpr
+  | TmDecl {decl = DeclType t} -> omitCopyUninitializedH env used t.inexpr
+  | TmDecl {decl = DeclConDef t} -> omitCopyUninitializedH env used t.inexpr
+  | TmDecl {decl = DeclUtest t} -> omitCopyUninitializedH env used t.next
+  | TmDecl {decl = DeclExt t} -> omitCopyUninitializedH env used t.inexpr
   | _ -> env
 
   sem collectVariables : Expr -> Set Name
@@ -117,7 +117,7 @@ lang PMExprTensorCopyAnalysis = PMExprAst + PMExprExtractAccelerate
   sem findAccelerateExclusiveTensorsH : CopyAnalysisEnv -> Set Name -> Expr
                                      -> CopyAnalysisEnv
   sem findAccelerateExclusiveTensorsH env used =
-  | TmLet t ->
+  | TmDecl {decl = DeclLet t} ->
     let f = lam x : (CopyStatus, Expr).
       match x with (status, arg) in
       match arg with TmVar {ident = ident} then
@@ -138,11 +138,11 @@ lang PMExprTensorCopyAnalysis = PMExprAst + PMExprExtractAccelerate
         else env
       else env in
     findAccelerateExclusiveTensorsH env used t.inexpr
-  | TmRecLets t -> findAccelerateExclusiveTensorsH env used t.inexpr
-  | TmType t -> findAccelerateExclusiveTensorsH env used t.inexpr
-  | TmConDef t -> findAccelerateExclusiveTensorsH env used t.inexpr
-  | TmUtest t -> findAccelerateExclusiveTensorsH env used t.next
-  | TmExt t -> findAccelerateExclusiveTensorsH env used t.inexpr
+  | TmDecl {decl = DeclRecLets t} -> findAccelerateExclusiveTensorsH env used t.inexpr
+  | TmDecl {decl = DeclType t} -> findAccelerateExclusiveTensorsH env used t.inexpr
+  | TmDecl {decl = DeclConDef t} -> findAccelerateExclusiveTensorsH env used t.inexpr
+  | TmDecl {decl = DeclUtest t} -> findAccelerateExclusiveTensorsH env used t.next
+  | TmDecl {decl = DeclExt t} -> findAccelerateExclusiveTensorsH env used t.inexpr
   | _ -> env
 
   -- Collects a set of all variables that are used outside of accelerate
@@ -157,20 +157,20 @@ lang PMExprTensorCopyAnalysis = PMExprAst + PMExprExtractAccelerate
       if mapMem ident env.accelerateData then used
       else collectVariables app
     else collectVariables app
-  | TmLet t ->
+  | TmDecl {decl = DeclLet t} ->
     let used =
       if mapMem t.ident env.accelerateData then used
       else setUnion (collectVariables t.body) used in
     collectVariablesUsedOutsideAccelerate env used t.inexpr
-  | TmRecLets t ->
+  | TmDecl {decl = DeclRecLets t} ->
     let collectBindingVariables = lam used. lam binding.
       if mapMem binding.ident env.accelerateData then used
       else setUnion (collectVariables binding.body) used in
     let used = foldl collectBindingVariables used t.bindings in
     collectVariablesUsedOutsideAccelerate env used t.inexpr
-  | TmType t -> collectVariablesUsedOutsideAccelerate env used t.inexpr
-  | TmConDef t -> collectVariablesUsedOutsideAccelerate env used t.inexpr
-  | TmUtest t -> collectVariablesUsedOutsideAccelerate env used t.next
-  | TmExt t -> collectVariablesUsedOutsideAccelerate env used t.inexpr
+  | TmDecl {decl = DeclType t} -> collectVariablesUsedOutsideAccelerate env used t.inexpr
+  | TmDecl {decl = DeclConDef t} -> collectVariablesUsedOutsideAccelerate env used t.inexpr
+  | TmDecl {decl = DeclUtest t} -> collectVariablesUsedOutsideAccelerate env used t.next
+  | TmDecl {decl = DeclExt t} -> collectVariablesUsedOutsideAccelerate env used t.inexpr
   | _ -> used
 end

@@ -142,9 +142,9 @@ lang GenerateJsonSerializers =
 
   sem _addType: GJSEnv -> Expr -> GJSEnv
   sem _addType env =
-  | TmType r & t ->
+  | TmDecl {decl = DeclType r} & t ->
     { env with namedTypes = mapInsert r.ident {params = r.params, tyIdent = r.tyIdent} env.namedTypes }
-  | TmConDef r & t ->
+  | TmDecl {decl = DeclConDef r} & t ->
     match getConDefType r.tyIdent with TyCon c then
       { env with constructors = mapInsertWith concat c.ident [{ident = r.ident, tyIdent = r.tyIdent}] env.constructors }
     else error "Not a TyCon at RHS of TmConDef type"

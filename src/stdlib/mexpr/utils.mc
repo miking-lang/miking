@@ -24,44 +24,44 @@ lang MExprSubstitute = MExprAst
     TmConApp {t with ident = subIdent replacements t.ident,
                      body = substituteIdentifiersExpr replacements t.body,
                      ty = substituteIdentifiersType replacements t.ty}
-  | TmLet t ->
-    TmLet {t with ident = subIdent replacements t.ident,
+  | TmDecl {decl = DeclLet t} ->
+    TmDecl {decl = DeclLet {t with ident = subIdent replacements t.ident,
                   tyAnnot = substituteIdentifiersType replacements t.tyAnnot,
                   tyBody = substituteIdentifiersType replacements t.tyBody,
                   body = substituteIdentifiersExpr replacements t.body,
                   inexpr = substituteIdentifiersExpr replacements t.inexpr,
-                  ty = substituteIdentifiersType replacements t.ty}
+                  ty = substituteIdentifiersType replacements t.ty}}
   | TmLam t ->
     TmLam {t with ident = subIdent replacements t.ident,
                   tyAnnot = substituteIdentifiersType replacements t.tyAnnot,
                   tyParam = substituteIdentifiersType replacements t.tyParam,
                   body = substituteIdentifiersExpr replacements t.body,
                   ty = substituteIdentifiersType replacements t.ty}
-  | TmType t ->
-    TmType {t with ident = subIdent replacements t.ident,
+  | TmDecl {decl = DeclType t} ->
+    TmDecl {decl = DeclType {t with ident = subIdent replacements t.ident,
                    tyIdent = substituteIdentifiersType replacements t.tyIdent,
                    inexpr = substituteIdentifiersExpr replacements t.inexpr,
-                   ty = substituteIdentifiersType replacements t.ty}
-  | TmConDef t ->
-    TmConDef {t with ident = subIdent replacements t.ident,
+                   ty = substituteIdentifiersType replacements t.ty}}
+  | TmDecl {decl = DeclConDef t} ->
+    TmDecl {decl = DeclConDef {t with ident = subIdent replacements t.ident,
                      tyIdent = substituteIdentifiersType replacements t.tyIdent,
                      inexpr = substituteIdentifiersExpr replacements t.inexpr,
-                     ty = substituteIdentifiersType replacements t.ty}
-  | TmExt t ->
-    TmExt {t with ident = subIdent replacements t.ident,
+                     ty = substituteIdentifiersType replacements t.ty}}
+  | TmDecl {decl = DeclExt t} ->
+    TmDecl {decl = DeclExt {t with ident = subIdent replacements t.ident,
                   tyIdent = substituteIdentifiersType replacements t.tyIdent,
                   inexpr = substituteIdentifiersExpr replacements t.inexpr,
-                  ty = substituteIdentifiersType replacements t.ty}
-  | TmRecLets t ->
+                  ty = substituteIdentifiersType replacements t.ty}}
+  | TmDecl {decl = DeclRecLets t} ->
     let subBinding = lam bind.
       {bind with ident = subIdent replacements bind.ident,
                  body = substituteIdentifiersExpr replacements bind.body,
                  tyAnnot = substituteIdentifiersType replacements bind.tyAnnot,
                  tyBody = substituteIdentifiersType replacements bind.tyBody}
     in
-    TmRecLets {t with bindings = map subBinding t.bindings,
+    TmDecl {decl = DeclRecLets {t with bindings = map subBinding t.bindings,
                       inexpr = substituteIdentifiersExpr replacements t.inexpr,
-                      ty = substituteIdentifiersType replacements t.ty}
+                      ty = substituteIdentifiersType replacements t.ty}}
   | ast ->
     let ast = smap_Expr_Expr (substituteIdentifiersExpr replacements) ast in
     let ast = smap_Expr_Type (substituteIdentifiersType replacements) ast in
@@ -118,11 +118,11 @@ lang MExprFindSym = MExprAst
 
   sem findNamesOfStringsExpr : Map String Int -> Map Int Name -> Expr -> Map Int Name
   sem findNamesOfStringsExpr strs acc =
-  | TmLet t ->
+  | TmDecl {decl = DeclLet t} ->
     let acc = checkIdentifier strs acc t.ident in
     let acc = findNamesOfStringsExpr strs acc t.body in
     findNamesOfStringsExpr strs acc t.inexpr
-  | TmRecLets t ->
+  | TmDecl {decl = DeclRecLets t} ->
     let findNamesBinding = lam acc. lam binding.
       checkIdentifier strs acc binding.ident
     in
@@ -132,9 +132,9 @@ lang MExprFindSym = MExprAst
     let acc = foldl findNamesBinding acc t.bindings in
     let acc = foldl findNamesBindingBody acc t.bindings in
     findNamesOfStringsExpr strs acc t.inexpr
-  | TmType {ident = ident, tyIdent = tyIdent, inexpr = inexpr}
-  | TmConDef {ident = ident, tyIdent = tyIdent, inexpr = inexpr}
-  | TmExt {ident = ident, tyIdent = tyIdent, inexpr = inexpr} ->
+  | TmDecl {decl = DeclType {ident = ident, tyIdent = tyIdent, inexpr = inexpr}}
+  | TmDecl {decl = DeclConDef {ident = ident, tyIdent = tyIdent, inexpr = inexpr}}
+  | TmDecl {decl = DeclExt {ident = ident, tyIdent = tyIdent, inexpr = inexpr}} ->
     let acc = checkIdentifier strs acc ident in
     let acc = findNamesOfStringsType strs acc tyIdent in
     findNamesOfStringsExpr strs acc inexpr

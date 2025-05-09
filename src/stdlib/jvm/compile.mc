@@ -101,7 +101,7 @@ lang MExprJVMCompile = MExprAst + JVMAst
                     [checkcast_ object_T],
                     [invokeinterface_ (concat pkg_ "Function") "apply" "(Ljava/lang/Object;)Ljava/lang/Object;"]], 
                     classes = concat fun.classes arg.classes }
-    | TmLet { ident = ident, body = body, inexpr = inexpr, tyBody = tyBody } -> 
+    | TmDecl {decl = DeclLet { ident = ident, body = body, inexpr = inexpr, tyBody = tyBody }} -> 
         let b = toJSONExpr { env with fieldVars = mapEmpty nameCmp } body in
         toJSONExpr { b with 
                         bytecode = snoc b.bytecode (astore_ env.localVars), 
