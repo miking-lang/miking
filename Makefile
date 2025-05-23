@@ -78,21 +78,34 @@ bootstrap: $(if $(wildcard build/$(BOOT_NAME)),,boot)
 cheat:
 	$(SET_STDLIB) $(SET_OCAMLPATH) mi compile src/main/mi.mc --output build/$(MI_CHEAT_NAME)
 
+# Umbrella install/uninstall targets, for installing and uninstalling everything
+
+.PHONY: install
+install: $(if $(wildcard build/$(MI_NAME)),,bootstrap) install-boot install-stdlib install-mi
+
+.PHONY: uninstall
+uninstall: uninstall-boot uninstall-stdlib uninstall-mi
 
 # Installing and uninstalling `mi` and the standard library
 
-.PHONY: install
-install: $(if $(wildcard build/$(MI_NAME)),,bootstrap) install-boot
-	mkdir -p $(bindir) $(mcoredir)
+.PHONY: install-mi
+install-mi:
+	mkdir -p $(bindir)
 	cp -f build/$(MI_NAME) $(bindir)
+
+.PHONY: install-stdlib
+install-stdlib:
+	mkdir -p $(mcoredir)
 	rm -rf $(mcoredir)/stdlib || true
 	cp -rf src/stdlib $(mcoredir)
 
-.PHONY: uninstall
-uninstall:
-	rm -f $(bindir)/$(MI_NAME)
+.PHONY: uninstall-stdlib
+uninstall-stdlib:
 	rm -rf $(mcoredir)/stdlib
 
+.PHONY: uninstall-mi
+uninstall-mi:
+	rm -f $(bindir)/$(MI_NAME)
 
 # Basic testing (for more granular control, use `misc/test` directly,
 # or `misc/watch` to autorun tests when files change)
