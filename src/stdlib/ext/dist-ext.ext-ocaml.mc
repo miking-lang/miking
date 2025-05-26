@@ -7,6 +7,34 @@ let distExtMap =
   use OCamlTypeAst in
   mapFromSeq cmpString
   [
+    ("externalChi2LogPdf", [
+      { expr = "Owl_stats.chi2_logpdf",
+        ty = tyarrows_ [tyfloat_, otylabel_ "df" tyfloat_, tyfloat_],
+        libraries = ["owl"],
+        cLibraries = []
+      }
+    ]),
+    ("externalChi2Sample", [
+      { expr = "Owl_stats.chi2_rvs",
+        ty = tyarrows_ [otylabel_ "df" tyfloat_, tyfloat_],
+        libraries = ["owl"],
+        cLibraries = []
+      }
+    ]),
+    ("externalChi2Cdf", [
+      { expr = "Owl_stats.chi2_cdf",
+       ty = tyarrows_ [tyfloat_, otylabel_ "df" tyfloat_, tyfloat_],
+       libraries = ["owl"],
+       cLibraries = []
+       }
+    ]),
+    ("externalChi2Ppf", [
+      { expr = "Owl_stats.chi2_ppf",
+      ty = tyarrows_ [tyfloat_, otylabel_ "df" tyfloat_, tyfloat_],
+      libraries =["owl"],
+      cLibraries = []
+      }
+    ]),
     ("externalExponentialSample", [
       { expr = "Owl_stats.exponential_rvs",
         ty = tyarrows_ [otylabel_ "lambda" tyfloat_, tyfloat_],

@@ -245,6 +245,32 @@ lang GeneratePprintLoader = MCoreLoader + GeneratePprint
     withHookState (_pprintFunctionsFor tys) loader
 end
 
+lang DPrintViaPprintLoader = GeneratePprintLoader + IOAst
+  syn Hook =
+  | DPrintViaPprintHook ()
+
+  sem enableDPrintViaPprint : Loader -> Loader
+  sem enableDPrintViaPprint = | loader ->
+    if hasHook (lam x. match x with DPrintViaPprintHook _ then true else false) loader then loader else
+
+    let loader = enablePprintGeneration loader in
+    let loader = addHook loader (DPrintViaPprintHook ()) in
+    loader
+
+  sem _postTypecheck loader decl = | DPrintViaPprintHook _ ->
+    recursive let work = lam loader. lam tm.
+      match tm with TmConst {val = CDPrint _, ty = ty} then
+        match unwrapType ty with TyArrow {from = from} in
+        match pprintFunctionsFor [from] loader with (loader, [pprint]) in
+        let x = nameSym "x" in
+        let pprint = nulam_ x (semi_
+          (printError_ (app_ pprint (nvar_ x)))
+          (flushStderr_ unit_)) in
+        (loader, pprint)
+      else smapAccumL_Expr_Expr work loader tm
+    in smapAccumL_Decl_Expr work loader decl
+end
+
 lang OldDPrintViaPprint = GeneratePprint + MExprAsDecl + AppTypeUtils
   sem findPprintDefinitions : GPprintEnv -> Expr -> GPprintEnv
   sem findPprintDefinitions env = | tm ->
