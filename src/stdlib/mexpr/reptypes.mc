@@ -30,8 +30,9 @@ lang LamRepTypesAnalysis = TypeCheck + LamAst + SubstituteNewReprs
 end
 
 lang LetRepTypesAnalysis = TypeCheck + LetDeclAst + SubstituteNewReprs + OpImplAst + OpDeclAst + NonExpansive + MetaVarDisableGeneralize
+
   sem typeCheckExpr env =
-  | TmDecl {decl = DeclLet t} ->
+  | TmDecl (x & {decl = DeclLet t}) ->
     let newLvl = addi 1 env.currentLvl in
     let isValue = nonExpansive true t.body in
     let shouldBeOp = if env.reptypes.inImpl
@@ -56,7 +57,7 @@ lang LetRepTypesAnalysis = TypeCheck + LetDeclAst + SubstituteNewReprs + OpImplA
       match gen env.currentLvl (mapEmpty nameCmp) tyBody with (tyBody, _) in
       let env = _insertVar t.ident tyBody env in
       let env = {env with reptypes = {env.reptypes with opNamesInScope = mapInsert t.ident (None ()) env.reptypes.opNamesInScope}} in
-      let inexpr = typeCheckExpr env t.inexpr in
+      let inexpr = typeCheckExpr env x.inexpr in
       let ty = tyTm inexpr in
       TmDecl
       { decl = DeclOp
@@ -64,19 +65,24 @@ lang LetRepTypesAnalysis = TypeCheck + LetDeclAst + SubstituteNewReprs + OpImplA
         , tyAnnot = tyBody
         , info = t.info
         }
+      , info = x.info
       , ty = ty
-      , inexpr = TmDecl {decl = DeclOpImpl { ident = t.ident
-        , implId = negi 1
-        , selfCost = 1.0
-        , body = body
-        , specType = tyBody
-        , delayedReprUnifications = delayedReprUnifications
+      , inexpr = TmDecl
+        { decl = DeclOpImpl
+          { ident = t.ident
+          , implId = negi 1
+          , selfCost = 1.0
+          , body = body
+          , specType = tyBody
+          , delayedReprUnifications = delayedReprUnifications
+          , reprScope = reprScope
+          , metaLevel = env.currentLvl
+          , info = t.info
+          }
         , inexpr = inexpr
-        , ty = ty
-        , reprScope = reprScope
-        , metaLevel = env.currentLvl
         , info = t.info
-        }}
+        , ty = ty
+        }
       }
     else
       -- Keep it as a Let in the current reprScope, use normal inference
@@ -103,16 +109,15 @@ lang LetRepTypesAnalysis = TypeCheck + LetDeclAst + SubstituteNewReprs + OpImplA
           weakenMetaVars env.currentLvl tyBody;
           (body, tyBody)
         with (body, tyBody) in
-      let inexpr = typeCheckExpr (_insertVar t.ident tyBody env) t.inexpr in
-      TmDecl {decl = DeclLet {t with body = body,
-                    tyBody = tyBody,
-                    inexpr = inexpr,
-                    ty = tyTm inexpr}}
+      let inexpr = typeCheckExpr (_insertVar t.ident tyBody env) x.inexpr in
+      TmDecl { x with decl = DeclLet {t with body = body, tyBody = tyBody}
+             , inexpr = inexpr, ty = tyTm inexpr
+             }
 end
 
 lang RecLetsRepTypesAnalysis = TypeCheck + RecLetsDeclAst + MetaVarDisableGeneralize + RecordAst + OpImplAst + OpDeclAst + RepTypesHelpers + NonExpansive + SubstituteNewReprs + PropagateTypeAnnot + SubstituteUnknown + ResolveType
   sem typeCheckExpr env =
-  | TmDecl {decl = DeclRecLets t} ->
+  | TmDecl (x & {decl = DeclRecLets t}) ->
     let newLvl = addi 1 env.currentLvl in
     -- First: Generate a new environment containing the recursive bindings
     let recLetEnvIteratee = lam acc. lam b: DeclLetRecord.
@@ -164,8 +169,8 @@ lang RecLetsRepTypesAnalysis = TypeCheck + RecLetsDeclAst + MetaVarDisableGenera
       ((newEnv, newTyVars), {b with tyBody = tyBody})
     in
     match mapAccumL envIteratee (env, tyVars) bindings with ((env, _), bindings) in
-    let inexpr = typeCheckExpr env t.inexpr in
-    TmDecl {decl = DeclRecLets {t with bindings = bindings, inexpr = inexpr, ty = tyTm inexpr}}
+    let inexpr = typeCheckExpr env x.inexpr in
+    TmDecl {x with decl = DeclRecLets {t with bindings = bindings}, inexpr = inexpr, ty = tyTm inexpr}
 -- NOTE(vipa, 2024-04-22): This currently just uses the normal
 -- type-checking for TmRecLets. In the end we want to infer when
 -- something should be replaced with a letop and letimpl pair, but the
@@ -352,7 +357,7 @@ end
 
 lang OpImplRepTypesAnalysis = TypeCheck + OpImplAst + ResolveType + SubstituteNewReprs + RepTypesHelpers + ApplyReprSubsts
   sem typeCheckExpr env =
-  | TmDecl {decl = DeclOpImpl x} ->
+  | TmDecl (t & {decl = DeclOpImpl x}) ->
     let typeCheckBody = lam env.
       let env = {env with reptypes = {env.reptypes with inImpl = true}} in
       let newLvl = addi 1 env.currentLvl in
@@ -373,12 +378,15 @@ lang OpImplRepTypesAnalysis = TypeCheck + OpImplAst + ResolveType + SubstituteNe
     in
     match withNewReprScope env (lam env. typeCheckBody env)
       with (x, reprScope, []) in
-    let inexpr = typeCheckExpr env x.inexpr in
-    TmDecl {decl = DeclOpImpl { x with reprScope = reprScope
-    , metaLevel = env.currentLvl
+    let inexpr = typeCheckExpr env t.inexpr in
+    TmDecl
+    { t with decl = DeclOpImpl
+      { x with reprScope = reprScope
+      , metaLevel = env.currentLvl
+      }
     , inexpr = inexpr
     , ty = tyTm inexpr
-    }}
+    }
 end
 
 -- NOTE(vipa, 2023-06-26): The RepTypes analysis is essentially
@@ -841,7 +849,7 @@ lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + 
   | tm & TmOpVar x ->
     match addOpUse state.options.debugSolveProcess global state.branch state.topQuery x with (branch, topQuery) in
     ({state with branch = branch, topQuery = topQuery}, tm)
-  | TmDecl {decl = DeclOpImpl x} ->
+  | TmDecl (t & {decl = DeclOpImpl x}) ->
     let implId = state.nextId in
     let state = {state with nextId = addi state.nextId 1} in
     recursive let addSubstsToUni = lam oUni. lam ty.
@@ -881,15 +889,13 @@ lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + 
       printLn (json2string (opImplDebugJson opImpl))
      else ());
     let newBranch = addImpl global state.branch opImpl in
-    match collectForReprSolve global {state with branch = newBranch} x.inexpr
+    match collectForReprSolve global {state with branch = newBranch} t.inexpr
       with (newState, inexpr) in
     -- NOTE(vipa, 2023-10-25): Here we restore the old branch, since
     -- any new solutions attained along the new branch might use this
     -- new impl, which isn't in scope in whatever we're returning to
     ( {newState with branch = state.branch}
-    , TmDecl {decl = DeclOpImpl { x with implId = implId
-      , inexpr = inexpr
-      }}
+    , TmDecl {t with decl = DeclOpImpl {x with implId = implId}, inexpr = inexpr}
     )
 
   sem findOpUses : [TmOpVarRec] -> Expr -> [TmOpVarRec]
@@ -940,17 +946,21 @@ lang RepTypesSolveAndReconstruct = RepTypesShallowSolverInterface + OpImplAst + 
     ( {state with remainingSolutions = remainingSolutions}
     , TmVar {ident = name, ty = x.ty, info = x.info, frozen = x.frozen}
     )
-  | TmDecl {decl = DeclOpImpl x} ->
-    match concretizeAlt state x.inexpr with (state, inexpr) in
+  | TmDecl (t & {decl = DeclOpImpl x}) ->
+    match concretizeAlt state t.inexpr with (state, inexpr) in
     let reqs = mapLookupOr [] x.implId state.requests in
-    let wrap = lam req. lam inexpr. TmDecl {decl = DeclLet { ident = req.solName
-      , tyAnnot = tyunknown_
-      , tyBody = tyTm req.body
-      , body = req.body
+    let wrap = lam req. lam inexpr. TmDecl
+      { decl = DeclLet
+        { ident = req.solName
+        , tyAnnot = tyunknown_
+        , tyBody = tyTm req.body
+        , body = req.body
+        , info = x.info
+        }
       , inexpr = inexpr
       , ty = tyTm inexpr
       , info = x.info
-      }} in
+      } in
     let res = foldr wrap inexpr reqs in
     let state = {state with requests = mapRemove x.implId state.requests} in
     (state, res)
@@ -8249,9 +8259,9 @@ lang DumpRepTypesProblem = RepTypesFragments
   sem dumpRepTypesProblemWork : (String -> ()) -> [(Name, Type)] -> Expr -> [(Name, Type)]
   sem dumpRepTypesProblemWork output acc =
   | TmOpVar x -> snoc acc (x.ident, x.ty)
-  | TmDecl {decl = DeclOpImpl x} ->
+  | TmDecl (t & {decl = DeclOpImpl x}) ->
     dumpRepTypesProblemRoot output x.reprScope x.body;
-    dumpRepTypesProblemWork output acc x.inexpr
+    dumpRepTypesProblemWork output acc t.inexpr
   | tm -> sfold_Expr_Expr (dumpRepTypesProblemWork output) acc tm
 
   sem clearAndCollectReprs : [ReprVar] -> Type -> ([ReprVar], Type)

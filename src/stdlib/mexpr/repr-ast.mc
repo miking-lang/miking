@@ -135,7 +135,7 @@ lang OpVarAst = Ast
 end
 
 lang ReprDeclAst = Ast
-  syn Expr =
+  syn Decl =
   | DeclRepr
     { ident : Name
     , vars : [Name]
@@ -150,7 +150,7 @@ lang ReprDeclAst = Ast
   sem declWithInfo info =
   | DeclRepr x -> DeclRepr {x with info = info}
 
-  sem smapAccumL_Expr_Type f acc =
+  sem smapAccumL_Decl_Type f acc =
   | DeclRepr x ->
     match f acc x.pat with (acc, pat) in
     match f acc x.repr with (acc, repr) in

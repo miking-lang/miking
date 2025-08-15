@@ -449,13 +449,12 @@ lang OpDeclSym = OpDeclAst + Sym + OpImplAst + ReprDeclAst + OpImplSym
     , DeclOp
       { x with ident = ident
       , tyAnnot = symbolizeType env x.tyAnnot
-      , ty = symbolizeType env x.ty
       }
     )
 end
 
 lang ReprTypeSym = Sym + ReprDeclAst
-  sem symbolizeExpr env =
+  sem symbolizeDecl env =
   | DeclRepr x ->
     match setSymbol env.currentEnv.reprEnv x.ident with (reprEnv, ident) in
     match mapAccumL setSymbol env.currentEnv.tyVarEnv x.vars with (tyVarEnv, vars) in

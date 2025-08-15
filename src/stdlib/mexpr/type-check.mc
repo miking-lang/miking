@@ -1107,7 +1107,8 @@ lang OpDeclTypeCheck = OpDeclAst + TypeCheck + ResolveType + SubstituteNewReprs
     let lvl = env.currentLvl in
     let tyAnnot = resolveType x.info env false x.tyAnnot in
     let tyAnnot = substituteNewReprs env tyAnnot in
-    ( { env with reptypes =
+    ( _insertVar x.ident tyAnnot
+      { env with reptypes =
         { env.reptypes with opNamesInScope = mapInsert x.ident (None ()) env.reptypes.opNamesInScope
         }
       }

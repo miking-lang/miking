@@ -482,7 +482,7 @@ lang MExprLambdaLiftAllowSpineCapture =
 
   sem findFreeVariablesSpine : ({ty : Type, body : Expr} -> AllowCapture) -> LambdaLiftState -> Expr -> LambdaLiftState
   sem findFreeVariablesSpine shouldAllowCapture state =
-  | TmDecl {decl = DeclLet t} ->
+  | TmDecl (x & {decl = DeclLet t}) ->
     let state =
       match t.body with TmLam _ then
         -- NOTE(vipa, 2023-10-09): A let-bound lambda, find a solution
@@ -506,8 +506,8 @@ lang MExprLambdaLiftAllowSpineCapture =
       let tyvars = concat (stripTyAll t.tyAnnot).0 (stripTyAll t.tyBody).0 in
       foldl (lam acc. lam pair. {acc with tyVars = mapInsert pair.0 pair.1 acc.tyVars}) state tyvars in
     let state = findFreeVariables state t.body in
-    findFreeVariablesSpine shouldAllowCapture state t.inexpr
-  | tm & TmDecl {decl = DeclRecLets t} -> recursive
+    findFreeVariablesSpine shouldAllowCapture state x.inexpr
+  | tm & TmDecl (x & {decl = DeclRecLets t}) -> recursive
     let insertInitialSolution = lam state. lam binding.
       let sol = findFreeVariablesInBody state _solEmpty binding.body in
       {state with sols = mapInsert binding.ident sol state.sols} in
@@ -542,10 +542,10 @@ lang MExprLambdaLiftAllowSpineCapture =
     let sccs = digraphTarjan g in
     let state = propagateFunNames state (reverse sccs) in
     let state = foldl findFreeVariablesBinding state t.bindings in
-    findFreeVariablesSpine shouldAllowCapture state t.inexpr
-  | TmDecl {decl = DeclExt t} ->
+    findFreeVariablesSpine shouldAllowCapture state x.inexpr
+  | TmDecl (x & {decl = DeclExt t}) ->
     let state = {state with sols = mapInsert t.ident _solEmpty state.sols} in
-    findFreeVariablesSpine shouldAllowCapture state t.inexpr
+    findFreeVariablesSpine shouldAllowCapture state x.inexpr
   | TmDecl x ->
     let state = sfold_Decl_Expr findFreeVariables state x.decl in
     findFreeVariablesSpine shouldAllowCapture state x.inexpr

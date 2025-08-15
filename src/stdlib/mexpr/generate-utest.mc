@@ -9,7 +9,7 @@ lang StripUtestLoader = MCoreLoader + UtestDeclAst
 
   sem stripUtests : Expr -> Expr
   sem stripUtests =
-  | TmDecl {decl = DeclUtest t} -> stripUtests t.next
+  | TmDecl (t & {decl = DeclUtest _}) -> stripUtests t.inexpr
   | t -> smap_Expr_Expr stripUtests t
 
   sem _postTypecheck loader decl = | StripUtestHook _ ->
@@ -95,19 +95,19 @@ lang UtestLoader = MCoreLoader + GenerateEqLoader + GeneratePprintLoader + Strip
   sem replaceUtests hook static loader =
   | tm & TmLam _ -> smapAccumL_Expr_Expr (replaceUtests hook false) loader tm
   | tm -> smapAccumL_Expr_Expr (replaceUtests hook static) loader tm
-  | TmDecl {decl = DeclUtest x} ->
-    if hook.includeUtestIf {static = static, info = x.info} then
-      let infoStr = str_ (info2str x.info) in
+  | TmDecl (x & {decl = DeclUtest t}) ->
+    if hook.includeUtestIf {static = static, info = t.info} then
+      let infoStr = str_ (info2str t.info) in
 
       match
-        match x.tusing with Some eqfn
+        match t.tusing with Some eqfn
         then (loader, str_ (concat "    Using: " (expr2str eqfn)), eqfn)
-        else match eqFunctionsFor [tyTm x.expected] loader with (loader, [eqfn]) in (loader, str_ "", eqfn)
+        else match eqFunctionsFor [tyTm t.expected] loader with (loader, [eqfn]) in (loader, str_ "", eqfn)
       with (loader, usingStr, eqFn) in
 
       match
-        match x.tonfail with Some ppfn then (loader, ppfn) else
-        match pprintFunctionsFor [tyTm x.test, tyTm x.expected] loader with (loader, [testF, expectedF]) in
+        match t.tonfail with Some ppfn then (loader, ppfn) else
+        match pprintFunctionsFor [tyTm t.test, tyTm t.expected] loader with (loader, [testF, expectedF]) in
         (loader, appf2_ (nvar_ hook.defaultOnFail) testF expectedF)
       with (loader, onFailFn) in
 
@@ -115,20 +115,24 @@ lang UtestLoader = MCoreLoader + GenerateEqLoader + GeneratePprintLoader + Strip
       -- in `using` or `else`, which is consistent with the old
       -- implementation, but maybe not ideal? It should be *very* rare
       -- that it matters though.
-      match replaceUtests hook static loader x.test with (loader, test) in
-      match replaceUtests hook static loader x.expected with (loader, expected) in
-      match replaceUtests hook static loader x.next with (loader, next) in
+      match replaceUtests hook static loader t.test with (loader, test) in
+      match replaceUtests hook static loader t.expected with (loader, expected) in
+      match replaceUtests hook static loader x.inexpr with (loader, inexpr) in
 
       let test = appSeq_ (nvar_ hook.runner) [infoStr, usingStr, onFailFn, eqFn, test, expected] in
-      let tm = TmDecl {decl = DeclLet { ident = nameNoSym ""
-        , tyAnnot = tyunknown_
-        , tyBody = tyunit_
-        , body = test
-        , inexpr = next
-        , ty = tyTm next
+      let tm = TmDecl
+        { decl = DeclLet
+          { ident = nameNoSym ""
+          , tyAnnot = tyunknown_
+          , tyBody = tyunit_
+          , body = test
+          , info = t.info
+          }
+        , inexpr = inexpr
+        , ty = tyTm inexpr
         , info = x.info
-        }} in
+        } in
       (loader, tm)
     else
-      replaceUtests hook static loader x.next
+      replaceUtests hook static loader x.inexpr
 end
