@@ -203,7 +203,7 @@ let betabinLogPmf:Int -> Float -> Float -> Int -> Float = lam n. lam a. lam b. l
 let betabinPmf = lam n:Int. lam a: Float. lam b: Float. lam x:Int.
   exp (betabinLogPmf n a b x)
 
--- Reciprocal (or log uniform) distribution)
+-- Reciprocal (or log uniform) distribution
 let reciprocalSample : Float -> Float -> Float = lam a. lam b.
   let logSample = uniformContinuousSample (log a) (log b) in
   exp logSample
@@ -341,10 +341,10 @@ utest betabinSample 20 1. 1. with 0 using intRange 0 20 in
 
 -- Testing Reciprocal
 utest reciprocalLogPdf 1. 2. 1.5 with -0.038952187526 using _eqf in
-utest reciprocalLogPdf 1. 2. 2.5 with negf inf using _eqf in
+utest reciprocalLogPdf 1. 2. 2.5 with negf inf using leqf in
 utest exp (reciprocalLogPdf 4. 6. 5.) with 0.493260692475 using _eqf in
 utest reciprocalPdf 4. 6. 5. with 0.493260692475 using _eqf in
-utest reciprocalSample 0.5 0.7 with 0. using floatRange 0.5 0.7 in
+utest reciprocalSample 0.5 0.7 with 0.5 using floatRange 0.5 0.7 in
 
 -- Testing seed
 utest setSeed 0; uniformSample (); uniformSample ()
