@@ -212,16 +212,6 @@ type GenInput =
   , fieldAccessors : [FieldAccessorRequest]
   }
 
-let _nulet_ = lam n. lam body. lam inexpr. use LetAst in TmLet
-  { ident = n
-  , body = body
-  , tyAnnot = tyunknown_
-  , tyBody = tyunknown_
-  , inexpr = inexpr
-  , info = NoInfo ()
-  , ty = tyunknown_
-  }
-
 lang CarriedTypeHelpers = CarriedTypeBase + SemDeclAst + PrettyPrint
   sem _mkSmapAccumL : SFuncRequest -> Constructor -> Option Decl
   sem _mkSmapAccumL request =
@@ -543,9 +533,8 @@ lang CarriedRecord = CarriedTypeBase
              let fieldName = nameSym field in
              let constr = lam innerMost.
                match_
-                 (_nulet_
-                   fieldName
-                   (recordproj_ field (nvar_ valName))
+                 (bind_
+                   (nulet_ fieldName (recordproj_ field (nvar_ valName)))
                    (mkNew accName fieldName))
                  (ptuple_ [npvar_ accName, npvar_ fieldName])
                  (constr innerMost)

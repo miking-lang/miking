@@ -105,11 +105,11 @@ lang BigPipeline = BigIncludeHandler +
   -- I can not figure out why.
   sem dumpTypes : [String] -> Expr -> [String]
   sem dumpTypes acc =
-  | TmLet t ->
+  | TmDecl {decl = DeclLet t} ->
     let acc = snoc acc (join [nameGetStr t.ident, " : ", type2str t.tyBody]) in
     let acc = sfold_Expr_Expr dumpTypes acc t.body in
     sfold_Expr_Expr dumpTypes acc t.inexpr
-  | TmRecLets t ->
+  | TmDecl {decl = DeclRecLets t} ->
     let acc = foldl
 
       (lam acc. lam b. snoc acc (join [nameGetStr b.ident, " : ", type2str b.tyBody]))

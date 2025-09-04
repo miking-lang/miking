@@ -32,7 +32,7 @@ type IName = Int
 -- BASE FRAGMENT --
 -------------------
 
-lang CFABase = Ast + LetAst + MExprIndex + MExprFreeVars + MExprPrettyPrint
+lang CFABase = Ast + LetDeclAst + MExprIndex + MExprFreeVars + MExprPrettyPrint
 
   syn Constraint =
   -- Intentionally left blank
@@ -477,7 +477,7 @@ end
 lang VarCFA = CFA + BaseConstraint + VarAst
 
   sem generateConstraints graph =
-  | TmLet { ident = ident, body = TmVar t, info = info } ->
+  | TmDecl {decl = DeclLet { ident = ident, body = TmVar t, info = info }} ->
     let cstr = CstrDirect {
       lhs = name2intAcc graph.ia t.info t.ident,
       rhs = name2intAcc graph.ia info ident
@@ -502,7 +502,7 @@ lang LamCFA = CFA + BaseConstraint + LamAst
      if eqi diff 0 then subi lbody rbody else diff
 
   sem generateConstraints graph =
-  | TmLet { ident = ident, body = TmLam t, info = info } ->
+  | TmDecl {decl = DeclLet { ident = ident, body = TmLam t, info = info }} ->
     let av: AbsVal = AVLam {
       ident = name2intAcc graph.ia t.info t.ident,
       body = name2intAcc graph.ia (infoTm t.body) (exprName t.body)
@@ -518,18 +518,15 @@ lang LamCFA = CFA + BaseConstraint + LamAst
 
 end
 
-lang LetCFA = CFA + LetAst
+lang DeclCFA = CFA + DeclAst
   sem exprName =
-  | TmLet t -> exprName t.inexpr
+  | TmDecl x -> exprName x.inexpr
 end
 
-lang RecLetsCFA = CFA + LamCFA + RecLetsAst
-  sem exprName =
-  | TmRecLets t -> exprName t.inexpr
-
+lang RecLetsCFA = CFA + LamCFA + RecLetsDeclAst
   sem generateConstraints graph =
-  | TmRecLets { bindings = bindings } ->
-    let cstrs = map (lam b: RecLetBinding.
+  | TmDecl {decl = DeclRecLets { bindings = bindings }} ->
+    let cstrs = map (lam b: DeclLetRecord.
         match b.body with TmLam t then
           let av: AbsVal = AVLam {
             ident = name2intAcc graph.ia t.info t.ident,
@@ -583,7 +580,7 @@ lang ConstCFA = CFA + ConstAst + BaseConstraint + Cmp
     else cmp
 
   sem generateConstraints graph =
-  | TmLet { ident = ident, body = TmConst t, info = info } ->
+  | TmDecl {decl = DeclLet { ident = ident, body = TmConst t, info = info }} ->
     generateConstraintsConst graph t.info (name2intAcc graph.ia info ident) t.val
 
   sem generateConstraintsConst:
@@ -690,7 +687,7 @@ lang AppCFA = CFA + ConstCFA + BaseConstraint + LamCFA + AppAst + MExprArity
     ]
 
   sem generateConstraints graph =
-  | TmLet { ident = ident, body = TmApp app, info = info} ->
+  | TmDecl {decl = DeclLet { ident = ident, body = TmApp app, info = info}} ->
     match app.lhs with TmVar l then
       match app.rhs with TmVar r then
         let lhs = name2intAcc graph.ia l.info l.ident in
@@ -734,7 +731,7 @@ lang RecordCFA = CFA + BaseConstraint + RecordAst
   | CstrRecordUpdate r & cstr -> initConstraintName r.lhs graph cstr
 
   sem generateConstraints graph =
-  | TmLet { ident = ident, body = TmRecord t, info = info } ->
+  | TmDecl {decl = DeclLet { ident = ident, body = TmRecord t, info = info }} ->
     let bindings = mapMap (lam v: Expr.
         match v with TmVar t then name2intAcc graph.ia t.info t.ident
         else errorSingle [infoTm v] "Not a TmVar in record"
@@ -744,7 +741,7 @@ lang RecordCFA = CFA + BaseConstraint + RecordAst
     let cstr = CstrInit { lhs = av, rhs = name2intAcc graph.ia info ident }  in
     { graph with cstrs = cons cstr graph.cstrs }
 
-  | TmLet { ident = ident, body = TmRecordUpdate t, info = info } ->
+  | TmDecl {decl = DeclLet { ident = ident, body = TmRecordUpdate t, info = info }} ->
     match t.rec with TmVar vrec then
       match t.value with TmVar vval then
         let lhs = name2intAcc graph.ia vrec.info vrec.ident in
@@ -856,7 +853,7 @@ end
 lang SeqCFA = CFA + BaseConstraint + SetCFA + SeqAst
 
   sem generateConstraints graph =
-  | TmLet { ident = ident, body = TmSeq t, info = info } ->
+  | TmDecl {decl = DeclLet { ident = ident, body = TmSeq t, info = info }} ->
     let names = foldl (lam acc: [IName]. lam t: Expr.
       match t with TmVar t then
         cons (name2intAcc graph.ia t.info t.ident) acc
@@ -866,11 +863,6 @@ lang SeqCFA = CFA + BaseConstraint + SetCFA + SeqAst
     let cstr = CstrInit { lhs = av, rhs = name2intAcc graph.ia info ident } in
     { graph with cstrs = cons cstr graph.cstrs }
 
-end
-
-lang TypeCFA = CFA + TypeAst
-  sem exprName =
-  | TmType t -> exprName t.inexpr
 end
 
 lang DataCFA = CFA + BaseConstraint + DataAst
@@ -885,7 +877,7 @@ lang DataCFA = CFA + BaseConstraint + DataAst
     if eqi idiff 0 then subi blhs brhs else idiff
 
   sem generateConstraints graph =
-  | TmLet { ident = ident, body = TmConApp t, info = info } ->
+  | TmDecl {decl = DeclLet { ident = ident, body = TmConApp t, info = info }} ->
     let body =
       match t.body with TmVar v then name2intAcc graph.ia v.info v.ident
       else errorSingle [infoTm t.body] "Not a TmVar in con app" in
@@ -898,10 +890,6 @@ lang DataCFA = CFA + BaseConstraint + DataAst
     match pprintConIName im env ident with (env,ident) in
     match pprintVarIName im env body with (env,body) in
     (env, join [ident, " ", body])
-
-  sem exprName =
-  | TmConDef t -> exprName t.inexpr
-
 end
 
 lang MatchCFA = CFA + BaseConstraint + MatchAst + MExprCmp
@@ -940,7 +928,7 @@ lang MatchCFA = CFA + BaseConstraint + MatchAst + MExprCmp
   sem generateConstraintsMatch: GenFun
   sem generateConstraintsMatch graph =
   | _ -> graph
-  | TmLet { ident = ident, body = TmMatch t, info = info } ->
+  | TmDecl {decl = DeclLet { ident = ident, body = TmMatch t, info = info }} ->
     let thn = name2intAcc graph.ia (infoTm t.thn) (exprName t.thn) in
     let els = name2intAcc graph.ia (infoTm t.els) (exprName t.els) in
     let ident = name2intAcc graph.ia info ident in
@@ -963,16 +951,11 @@ lang MatchCFA = CFA + BaseConstraint + MatchAst + MExprCmp
 
 end
 
-lang UtestCFA = CFA + UtestAst
-  sem exprName =
-  | TmUtest t -> exprName t.next
-end
-
 lang NeverCFA = CFA + NeverAst
   -- Nothing to be done here
 end
 
-lang ExtCFA = CFA + ExtAst
+lang ExtCFA = CFA + ExtDeclAst
 
   syn AbsVal =
   -- Abstract representation of externals. Handled in a similar way as
@@ -1046,12 +1029,12 @@ lang ExtCFA = CFA + ExtAst
   -- the ANF transform and define eta expanded versions of the externals (so
   -- that they can be curried).
   sem collectConstraints cgfs graph =
-  | TmExt { inexpr = TmLet { ident = ident, inexpr = inexpr } } & t ->
+  | TmDecl {decl = DeclExt _, inexpr = TmDecl {decl = DeclLet {ident = ident}, inexpr = inexpr}} & t ->
     let graph = foldl (lam acc. lam f. f graph t) graph cgfs in
     collectConstraints cgfs graph inexpr
 
   sem generateConstraints graph =
-  | TmExt { inexpr = TmLet { ident = ident, inexpr = inexpr } } ->
+  | TmDecl {decl = DeclExt _, inexpr = TmDecl {decl = DeclLet {ident = ident}, inexpr = inexpr}} ->
     -- NOTE(dlunde,2022-06-15): Currently, we do not generate any constraints
     -- for externals. Similarly to constants, we probably want to delegate to
     -- `generateConstraintsExts` here. As with `propagateConstraintExt`, it is
@@ -1061,7 +1044,7 @@ lang ExtCFA = CFA + ExtAst
 
   sem exprName =
   -- Skip the eta expanded let added by ANF,
-  | TmExt { inexpr = TmLet { inexpr = inexpr }} -> exprName inexpr
+  | TmDecl {decl = DeclExt _, inexpr = TmDecl {decl = DeclLet _, inexpr = inexpr}} -> exprName inexpr
 
 end
 
@@ -1694,8 +1677,8 @@ lang MExprCFA = CFA +
 
   -- Terms
   VarCFA + LamCFA + AppCFA +
-  LetCFA + RecLetsCFA + ConstCFA + SeqCFA + RecordCFA + TypeCFA + DataCFA +
-  MatchCFA + UtestCFA + NeverCFA + ExtCFA +
+  DeclCFA + RecLetsCFA + ConstCFA + SeqCFA + RecordCFA + DataCFA +
+  MatchCFA + NeverCFA + ExtCFA +
 
   -- Constants
   IntCFA + ArithIntCFA + ShiftIntCFA + FloatCFA + ArithFloatCFA +

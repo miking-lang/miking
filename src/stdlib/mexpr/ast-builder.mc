@@ -355,30 +355,13 @@ let pnot_ = use MExprAst in
 -- Terms --
 -- Methods of binding an expression into a chain of lets/reclets/condefs --
 
-recursive let bindF_ = 
-  use MExprAst in
-  lam f : Expr -> Expr -> Expr. lam letexpr. lam expr.
-  match letexpr with TmLet t then
-    TmLet {t with inexpr = bindF_ f t.inexpr expr}
-  else match letexpr with TmRecLets t then
-    TmRecLets {t with inexpr = bindF_ f t.inexpr expr}
-  else match letexpr with TmConDef t then
-    TmConDef {t with inexpr = bindF_ f t.inexpr expr}
-  else match letexpr with TmType t then
-    TmType {t with inexpr = bindF_ f t.inexpr expr}
-  else match letexpr with TmExt t then
-    TmExt {t with inexpr = bindF_ f t.inexpr expr}
-  else match letexpr with TmUtest t then
-    TmUtest {t with next = bindF_ f t.next expr}
-  else
-    f letexpr expr -- Insert at the end of the chain
-end
+let bind_ : use Ast in Decl -> Expr -> Expr
+  = lam decl. lam expr. use DeclAst in
+    TmDecl { decl = decl, inexpr = expr, info = NoInfo (), ty = tyunknown_ }
 
-let bind_ = bindF_ (lam. lam expr. expr)
-
-let bindall_ = use MExprAst in
-  lam exprs.
-  foldr1 bind_ exprs
+let bindall_ : use Ast in [Decl] -> Expr -> Expr = use MExprAst in
+  lam decls. lam expr.
+  foldr bind_ expr decls
 
 let uunit_ = use MExprAst in
   TmRecord {bindings = mapEmpty cmpSID, ty = tyunknown_, info = NoInfo ()}
@@ -388,8 +371,7 @@ let unit_ = use MExprAst in
 
 let nlet_ = use MExprAst in
   lam n. lam ty. lam body.
-  TmLet {ident = n, tyAnnot = ty, tyBody = ty, body = body,
-  inexpr = uunit_, ty = tyunknown_, info = NoInfo ()}
+  DeclLet {ident = n, tyAnnot = ty, tyBody = ty, body = body, info = NoInfo ()}
 
 let let_ = use MExprAst in
   lam s. lam ty. lam body.
@@ -405,8 +387,7 @@ let ulet_ = use MExprAst in
 
 let next_ = use MExprAst in
   lam n. lam e. lam ty.
-  TmExt {ident = n, tyIdent = ty, effect = e, ty = tyunknown_,
-         inexpr = uunit_, info = NoInfo ()}
+  DeclExt {ident = n, tyIdent = ty, effect = e, info = NoInfo ()}
 
 let ext_ = use MExprAst in
   lam s. lam e. lam ty.
@@ -414,7 +395,7 @@ let ext_ = use MExprAst in
 
 let ntype_ = use MExprAst in
   lam n. lam params. lam ty.
-  TmType {ident = n, tyIdent = ty, params = params, ty = tyunknown_, inexpr = uunit_, info = NoInfo ()}
+  DeclType {ident = n, tyIdent = ty, params = params, info = NoInfo ()}
 
 let type_ = use MExprAst in
   lam s. lam params. lam ty.
@@ -430,8 +411,7 @@ let nreclets_ = use MExprAst in
     , info = NoInfo ()
     }
   in
-  TmRecLets {bindings = map bindingMapFunc bs,
-             inexpr = uunit_, ty = tyunknown_, info = NoInfo ()}
+  DeclRecLets {bindings = map bindingMapFunc bs, info = NoInfo ()}
 
 let reclets_ = use MExprAst in
   lam bs.
@@ -467,11 +447,11 @@ let reclets_empty = use MExprAst in
 
 let nreclets_add = use MExprAst in
   lam n. lam ty. lam body. lam reclets.
-  match reclets with TmRecLets t then
+  match reclets with DeclRecLets t then
     let newbind = {ident = n, tyAnnot = ty, tyBody = ty, body = body, info = NoInfo ()} in
-    TmRecLets {t with bindings = cons newbind t.bindings}
+    DeclRecLets {t with bindings = cons newbind t.bindings}
   else
-    errorSingle [infoTm reclets] "reclets is not a TmRecLets construct"
+    errorSingle [infoDecl reclets] "reclets is not a TmRecLets construct"
 
 let reclets_add = use MExprAst in
   lam s. lam ty. lam body. lam reclets.
@@ -487,8 +467,7 @@ let ureclets_add = use MExprAst in
 
 let ncondef_ = use MExprAst in
   lam n. lam ty.
-  TmConDef {ident = n, tyIdent = ty, ty = tyunknown_,
-            inexpr = uunit_, info = NoInfo ()}
+  DeclConDef {ident = n, tyIdent = ty, info = NoInfo ()}
 
 let condef_ = use MExprAst in
   lam s. lam ty.
@@ -663,7 +642,7 @@ let record2tuple
 let never_ = use MExprAst in
   TmNever {ty = tyunknown_, info = NoInfo ()}
 
-let inever_ = use MExprAst in 
+let inever_ = use MExprAst in
   lam i : Info. TmNever {ty = tyunknown_, info = i}
 
 -- Exhaustive match
@@ -751,50 +730,42 @@ let appf8_ = use MExprAst in
   app_ (appf7_ f a1 a2 a3 a4 a5 a6 a7) a8
 
 let utestu_ = use MExprAst in
-  lam t. lam e. lam n. lam u.
-    TmUtest {
+  lam t. lam e. lam u.
+    DeclUtest {
       test = t,
       expected = e,
-      next = n,
       tusing = Some u,
       tonfail = None (),
-      ty = tyunknown_,
       info = NoInfo ()
     }
 
 let utesto_ = use MExprAst in
-  lam t. lam e. lam n. lam o.
-    TmUtest {
+  lam t. lam e. lam o.
+    DeclUtest {
       test = t,
       expected = e,
-      next = n,
       tusing = None (),
       tonfail = Some o,
-      ty = tyunknown_,
       info = NoInfo ()
     }
 
 let utestuo_ = use MExprAst in
-  lam t. lam e. lam n. lam u. lam o.
-    TmUtest {
+  lam t. lam e. lam u. lam o.
+    DeclUtest {
       test = t,
       expected = e,
-      next = n,
       tusing = Some u,
       tonfail = Some o,
-      ty = tyunknown_,
       info = NoInfo ()
     }
 
 let utest_ = use MExprAst in
-  lam t. lam e. lam n.
-    TmUtest {
+  lam t. lam e.
+    DeclUtest {
       test = t,
       expected = e,
-      next = n,
       tusing = None (),
       tonfail = None (),
-      ty = tyunknown_,
       info = NoInfo ()
     }
 
@@ -1324,4 +1295,25 @@ let bootParserGetInfo_ = use MExprAst in
 -- Sequencing (;)
 let semi_ = lam expr1. lam expr2. bind_ (ulet_ "" expr1) expr2
 
-let bindSemi_ = bindF_ semi_
+-- NOTE(vipa, 2025-05-27): This is here mostly to have a simple
+-- replacement for places that used `bind_` in a way that is
+-- incompatible with the new version (where the first argument must be
+-- a Decl). Note that this function is mildly unsafe in that it'll
+-- silently drop the innermost inexpr in the first argument,
+-- regardless of whether it has side-effects or not.
+recursive let oldBind_ : use Ast in Expr -> Expr -> Expr = use MExprAst in
+  lam l. lam r.
+  match l with TmDecl x
+  then TmDecl {x with inexpr = oldBind_ x.inexpr r}
+  else r
+end
+
+-- NOTE(vipa, 2025-05-28): This is also kept for a simple replacement,
+-- but is not unsafe; the left expression is kept and executed before
+-- the right.
+recursive let oldBindSemi_ : use Ast in Expr -> Expr -> Expr = use MExprAst in
+  lam l. lam r.
+  match l with TmDecl x
+  then TmDecl {x with inexpr = oldBindSemi_ x.inexpr r}
+  else semi_ l r
+end

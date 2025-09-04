@@ -10,10 +10,10 @@ lang PMExprPromote = PMExprAst + PMExprFunctionProperties
   sem getInnerFunction =
   | TmLam t -> getInnerFunction t.body
   | TmApp t -> getInnerFunction t.lhs
-  | TmLet (t & {inexpr = TmVar {ident = id}}) ->
+  | tm & TmDecl {decl = DeclLet t, inexpr = TmVar {ident = id}} ->
     if nameEq t.ident id then
       getInnerFunction t.body
-    else TmLet t
+    else tm
   | t -> t
 
   sem argumentsHaveSameType =

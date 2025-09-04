@@ -70,36 +70,25 @@ lang ReprSubstAst = Ast
    (acc, TySubst { x with arg = arg })
 end
 
-lang OpDeclAst = Ast + LetAst + NeverAst + UnknownTypeAst
-  syn Expr =
-  | TmOpDecl { info : Info, ident : Name, tyAnnot : Type, ty : Type, inexpr : Expr }
+lang OpDeclAst = Ast
+  syn Decl =
+  | DeclOp { info : Info, ident : Name, tyAnnot : Type }
 
-  sem tyTm =
-  | TmOpDecl x -> x.ty
+  sem declWithInfo info =
+  | DeclOp x -> DeclOp {x with info = info}
 
-  sem withType ty =
-  | TmOpDecl x -> TmOpDecl {x with ty = ty}
+  sem infoDecl =
+  | DeclOp x -> x.info
 
-  sem withInfo info =
-  | TmOpDecl x -> TmOpDecl {x with info = info}
-
-  sem infoTm =
-  | TmOpDecl x -> x.info
-
-  sem smapAccumL_Expr_Expr f acc =
-  | TmOpDecl x ->
-    match f acc x.inexpr with (env, inexpr) in
-    (env, TmOpDecl {x with inexpr = inexpr})
-
-  sem smapAccumL_Expr_Type f acc =
-  | TmOpDecl x ->
+  sem smapAccumL_Decl_Type f acc =
+  | DeclOp x ->
     match f acc x.tyAnnot with (env, tyAnnot) in
-    (env, TmOpDecl {x with tyAnnot = tyAnnot})
+    (env, DeclOp {x with tyAnnot = tyAnnot})
 end
 
 type ImplId = Int
 lang OpImplAst = Ast
-  type TmOpImplRec = use Ast in
+  type DeclOpImplRec = use Ast in
     { ident : Name
     , implId : ImplId
     , reprScope : Int
@@ -108,32 +97,23 @@ lang OpImplAst = Ast
     , body : Expr
     , specType : Type
     , delayedReprUnifications : [(ReprVar, ReprVar)]
-    , inexpr : Expr
-    , ty : Type
     , info : Info
     }
-  syn Expr =
-  | TmOpImpl TmOpImplRec
+  syn Decl =
+  | DeclOpImpl DeclOpImplRec
 
-  sem tyTm =
-  | TmOpImpl x -> x.ty
+  sem infoDecl =
+  | DeclOpImpl x -> x.info
 
-  sem withType ty =
-  | TmOpImpl x -> TmOpImpl {x with ty = ty}
-
-  sem infoTm =
-  | TmOpImpl x -> x.info
-
-  sem smapAccumL_Expr_Expr f acc =
-  | TmOpImpl x ->
+  sem smapAccumL_Decl_Expr f acc =
+  | DeclOpImpl x ->
     match f acc x.body with (acc, body) in
-    match f acc x.inexpr with (acc, inexpr) in
-    (acc, TmOpImpl {x with body = body, inexpr = inexpr})
+    (acc, DeclOpImpl {x with body = body})
 
-  sem smapAccumL_Expr_Type f acc =
-  | TmOpImpl x ->
+  sem smapAccumL_Decl_Type f acc =
+  | DeclOpImpl x ->
     match f acc x.specType with (acc, specType) in
-    (acc, TmOpImpl {x with specType = specType})
+    (acc, DeclOpImpl {x with specType = specType})
 end
 
 lang OpVarAst = Ast
@@ -155,39 +135,26 @@ lang OpVarAst = Ast
 end
 
 lang ReprDeclAst = Ast
-  syn Expr =
-  | TmReprDecl
+  syn Decl =
+  | DeclRepr
     { ident : Name
     , vars : [Name]
     , pat : Type
     , repr : Type
-    , ty : Type
-    , inexpr : Expr
     , info : Info
     }
 
-  sem tyTm =
-  | TmReprDecl x -> x.ty
+  sem infoDecl =
+  | DeclRepr x -> x.info
 
-  sem withType ty =
-  | TmReprDecl x -> TmReprDecl {x with ty = ty}
+  sem declWithInfo info =
+  | DeclRepr x -> DeclRepr {x with info = info}
 
-  sem infoTm =
-  | TmReprDecl x -> x.info
-
-  sem withInfo info =
-  | TmReprDecl x -> TmReprDecl {x with info = info}
-
-  sem smapAccumL_Expr_Expr f acc =
-  | TmReprDecl x ->
-    match f acc x.inexpr with (acc, inexpr) in
-    (acc, TmReprDecl {x with inexpr = inexpr})
-
-  sem smapAccumL_Expr_Type f acc =
-  | TmReprDecl x ->
+  sem smapAccumL_Decl_Type f acc =
+  | DeclRepr x ->
     match f acc x.pat with (acc, pat) in
     match f acc x.repr with (acc, repr) in
-    (acc, TmReprDecl {x with pat = pat, repr = repr})
+    (acc, DeclRepr {x with pat = pat, repr = repr})
 end
 
 lang RepTypesAst = ReprTypeAst + ReprSubstAst + OpDeclAst + OpImplAst + OpVarAst + ReprDeclAst + TyWildAst

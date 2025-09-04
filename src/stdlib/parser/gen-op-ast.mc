@@ -141,7 +141,18 @@ let _mergeInfos_ : use Ast in [Expr] -> Expr = lam exprs. switch exprs
 let _nletin_ : use Ast in Name -> Type -> Expr -> Expr -> Expr
   = lam name. lam ty. lam val. lam body.
     use MExprAst in
-    TmLet {ident = name, tyAnnot = ty, tyBody = tyunknown_, body = val, inexpr = body, ty = tyunknown_, info = NoInfo ()}
+    TmDecl
+    { decl = DeclLet
+      { ident = name
+      , tyAnnot = ty
+      , tyBody = tyunknown_
+      , body = val
+      , info = NoInfo ()
+      }
+    , inexpr = body
+    , ty = tyunknown_
+    , info = NoInfo ()
+    }
 
 let _nuletin_ : use Ast in Name -> Expr -> Expr -> Expr
   = lam name. lam val. lam body.
@@ -511,7 +522,7 @@ type WrapperInfo = use Ast in
   , addPrefix_ : Expr -> Expr -> Expr -> Expr
   , addPostfix_ : Expr -> Expr -> Expr -> Expr
   , finalize_ : Expr -> Expr -> Expr
-  , definitions : [Expr]
+  , definitions : [Decl]
   }
 
 let _mkBrWrappersFor
@@ -654,7 +665,7 @@ let _mkBrWrappers
         (lam acc. lam. lam wrapper: WrapperInfo. concat acc wrapper.definitions)
         []
         wrappers in
-      bindall_ (snoc definitions expr)
+      bindall_ definitions expr
     }
 
 

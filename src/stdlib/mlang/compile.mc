@@ -1,6 +1,6 @@
--- The MLangCompiler compiles a `MLangProgram` into a single `Expr`. 
--- 
--- Before the MLangCompiler can be used to lower MLang to MExpr, the following 
+-- The MLangCompiler compiles a `MLangProgram` into a single `Expr`.
+--
+-- Before the MLangCompiler can be used to lower MLang to MExpr, the following
 -- transformations must have been performed (in order) as prerequisites:
 -- (0) All `DeclInclude`s must have been handled by `include-handler.mc`.
 -- (1) All constants that have been parsed as TmVars should be transformed
@@ -18,7 +18,7 @@
 -- (2) For each langauge fragment, a syntax declaration is turned into
 --     a TmType if syntax definition is the base of this syntax and constructor
 --     defintions are converted to TmConDefs.
--- (3) All of the semantic functions in a Reclets are turned into a TmReclet. 
+-- (3) All of the semantic functions in a Reclets are turned into a TmReclet.
 --     The cases of a semantic functions are converted into a chain of TmMatch
 --     expressions based on the orderning that computed in `composition-check.mc`
 --     We also perform subtitution on the name of semantic functions, arguments,
@@ -43,23 +43,23 @@ include "error.mc"
 include "set.mc"
 include "result.mc"
 
-let data_ = lam ident : Name. 
-  use DataKindAst in 
-  let types = mapEmpty nameCmp in 
-  let types = mapInsert ident {lower = setEmpty nameCmp, upper = None ()} types in 
+let data_ = lam ident : Name.
+  use DataKindAst in
+  let types = mapEmpty nameCmp in
+  let types = mapInsert ident {lower = setEmpty nameCmp, upper = None ()} types in
   Data {types = types}
 
 type CompilationContext = use MLangAst in {
   -- Accumulator of compilation result
-  exprs: [Expr],
+  decls: [Decl],
 
   -- Accumulator of expressions that must be at the top level
   -- I.e. declarations of open sum types and open product types.
-  toplevelExprs : [Expr],
+  toplevelDecls : [Decl],
 
   compositionCheckEnv : CompositionCheckEnv,
 
-  -- A map from identifier strings of semantic functions to the 
+  -- A map from identifier strings of semantic functions to the
   -- symbolized names that the function has in different fragments.
   semSymbols : Map String [Name],
 
@@ -74,15 +74,15 @@ type CompilationContext = use MLangAst in {
   globalFields : Map Name Type
 }
 
-let mergeRecordTypes = lam l. lam r. 
-  use RecordTypeAst in 
-  match (l, r) with (TyRecord left, TyRecord right) in 
+let mergeRecordTypes = lam l. lam r.
+  use RecordTypeAst in
+  match (l, r) with (TyRecord left, TyRecord right) in
   TyRecord {left with fields = mapUnion left.fields right.fields}
 
-let _emptyCompilationContext : CompositionCheckEnv -> CompilationContext = 
+let _emptyCompilationContext : CompositionCheckEnv -> CompilationContext =
   lam env : CompositionCheckEnv. {
-    exprs = [],
-    toplevelExprs = [],
+    decls = [],
+    toplevelDecls = [],
     compositionCheckEnv = env,
     semSymbols = mapEmpty cmpString,
     conToExtType = mapEmpty nameCmp,
@@ -92,29 +92,29 @@ let _emptyCompilationContext : CompositionCheckEnv -> CompilationContext =
     globalFields = mapEmpty nameCmp
 }
 
-let withExpr = lam ctx. lam expr. 
-  {ctx with exprs = snoc ctx.exprs expr}
+let withDecl = lam ctx. lam decl.
+  {ctx with decls = snoc ctx.decls decl}
 
-let withToplevelExpr = lam ctx. lam expr. 
-  {ctx with toplevelExprs = snoc ctx.toplevelExprs expr}
+let withTopLevelDecl = lam ctx. lam decl.
+  {ctx with toplevelDecls = snoc ctx.toplevelDecls decl}
 
 let withSemSymbol = lam ctx : CompilationContext. lam n : Name.
-  let s = nameGetStr n in 
-  let newValue = match mapLookup s ctx.semSymbols with Some names 
-                 then cons n names 
+  let s = nameGetStr n in
+  let newValue = match mapLookup s ctx.semSymbols with Some names
+                 then cons n names
                  else [n]
   in
   {ctx with semSymbols = mapInsert s newValue ctx.semSymbols}
 
-let createPairsForSubst = lam env. lam origLang. lam targetLang.  
-  match mapLookup origLang env.compositionCheckEnv.langToSems with Some origNames in 
-  match mapLookup targetLang env.compositionCheckEnv.langToSems with Some targetNames in 
+let createPairsForSubst = lam env. lam origLang. lam targetLang.
+  match mapLookup origLang env.compositionCheckEnv.langToSems with Some origNames in
+  match mapLookup targetLang env.compositionCheckEnv.langToSems with Some targetNames in
 
-  let origSet = setOfSeq nameCmp origNames in 
-  let targetPairs = map (lam n. (nameGetStr n, n)) targetNames in 
-  let targetMap = mapFromSeq cmpString targetPairs in 
+  let origSet = setOfSeq nameCmp origNames in
+  let targetPairs = map (lam n. (nameGetStr n, n)) targetNames in
+  let targetMap = mapFromSeq cmpString targetPairs in
 
-  let origs = setToSeq origSet in 
+  let origs = setToSeq origSet in
 
   map (lam n. (n, match mapLookup (nameGetStr n) targetMap with Some x in x)) origs
 
@@ -123,121 +123,107 @@ con FoundIncludeError : {info : Info, path: String} -> CompilationError
 
 type CompilationWarning
 
-type CompilationResult = Result CompilationWarning CompilationError CompilationContext 
+type CompilationResult = Result CompilationWarning CompilationError CompilationContext
 
-let isTypeDecl = use MLangAst in 
+let isTypeDecl = use MLangAst in
   lam d. match d with DeclType _ then true else false
-let isSynDecl = use MLangAst in 
+let isSynDecl = use MLangAst in
   lam d. match d with DeclSyn _ then true else false
-let isSemDecl = use MLangAst in 
+let isSemDecl = use MLangAst in
   lam d. match d with DeclSem _ then true else false
 
 lang DeclCompiler = DeclAst + Ast + MExprSubstitute
   sem compileDecl : CompilationContext -> Decl -> CompilationResult
 end
 
-lang LetDeclCompiler = DeclCompiler + LetDeclAst + LetAst
-  sem compileDecl ctx = 
+lang LetDeclCompiler = DeclCompiler + LetDeclAst + LetDeclAst
+  sem compileDecl ctx =
   | DeclLet d -> result.ok (
-    withExpr ctx (TmLet {ident = d.ident,
+    withDecl ctx (DeclLet {ident = d.ident,
                          tyAnnot = d.tyAnnot,
                          tyBody = d.tyBody,
                          body = d.body,
-                         info = d.info,
-                         ty = tyunknown_,
-                         inexpr = uunit_}))
+                         info = d.info}))
 end
 
-lang RecletsDeclCompiler = DeclCompiler + RecLetsDeclAst + RecLetsAst
-  sem compileDecl ctx = 
+lang RecletsDeclCompiler = DeclCompiler + RecLetsDeclAst + RecLetsDeclAst
+  sem compileDecl ctx =
   | DeclRecLets d -> result.ok (
-    withExpr ctx (TmRecLets {bindings = d.bindings,
-                             inexpr = uunit_,
-                             ty = tyunknown_,
+    withDecl ctx (DeclRecLets {bindings = d.bindings,
                              info = d.info}))
 end
 
-lang UtestDeclCompiler = DeclCompiler + UtestDeclAst + UtestAst
-  sem compileDecl ctx = 
+lang UtestDeclCompiler = DeclCompiler + UtestDeclAst + UtestDeclAst
+  sem compileDecl ctx =
   | DeclUtest d -> result.ok (
-    withExpr ctx (TmUtest {test = d.test,
+    withDecl ctx (DeclUtest {test = d.test,
                            expected = d.expected,
-                           next = uunit_,
                            tusing = d.tusing,
                            tonfail = None (),
-                           ty = tyunknown_,
                            info = d.info}))
 end
 
-lang TypeDeclCompiler = DeclCompiler + TypeDeclAst + TypeAst
-  sem compileDecl ctx = 
-  | DeclType d -> 
-    result.ok (withExpr ctx (TmType {ident = d.ident,
+lang TypeDeclCompiler = DeclCompiler + TypeDeclAst + TypeDeclAst
+  sem compileDecl ctx =
+  | DeclType d ->
+    result.ok (withDecl ctx (DeclType {ident = d.ident,
                                      params = d.params,
                                      tyIdent = d.tyIdent,
-                                     info = d.info,
-                                     ty = tyunknown_,
-                                     inexpr = uunit_}))
+                                     info = d.info}))
 end
 
 lang ConDefDeclCompiler = DeclCompiler + DataDeclAst + DataAst
-  sem compileDecl ctx = 
+  sem compileDecl ctx =
   | DeclConDef d -> result.ok (
-    withExpr ctx (TmConDef {ident = d.ident,
+    withDecl ctx (DeclConDef {ident = d.ident,
                             tyIdent = d.tyIdent,
-                            info = d.info,
-                            ty = tyunknown_,
-                            inexpr = uunit_}))
+                            info = d.info}))
 end
 
-lang ExtDeclCompiler = DeclCompiler + ExtDeclAst + ExtAst
-  sem compileDecl ctx = 
+lang ExtDeclCompiler = DeclCompiler + ExtDeclAst + ExtDeclAst
+  sem compileDecl ctx =
   -- TODO(voorberg, 2024-04-23): Add test case for the compilation of externals.
   | DeclExt d -> result.ok (
-    withExpr ctx (TmExt {ident = d.ident,
+    withDecl ctx (DeclExt {ident = d.ident,
                          tyIdent = d.tyIdent,
                          effect = d.effect,
-                         info = d.info,
-                         ty = tyunknown_,
-                         inexpr = uunit_}))
+                         info = d.info}))
 end
 
-lang SynTypeDeclCompiler = SynDeclAst + TypeAst
+lang SynTypeDeclCompiler = SynDeclAst + TypeDeclAst
   sem compileSynType : CompilationContext -> Decl -> CompilationContext
   sem compileSynType ctx =
   | DeclSyn s ->
     -- We only include a type definition if this is the base declaration of
     -- a syntax type. To check that something is a base syn definition,
     -- we check that it does not include any other definitions.
-    if null s.includes then 
-      withToplevelExpr ctx (TmType {ident = s.ident,
+    if null s.includes then
+      withTopLevelDecl ctx (DeclType {ident = s.ident,
                                     params = s.params,
                                     tyIdent = tyvariant_ [],
-                                    inexpr = uunit_,
-                                    ty = tyunknown_,
                                     info = s.info})
-    else 
+    else
       ctx
 end
 
 lang SemDeclCompiler = SemDeclAst + MExprAst + DeclCompiler
-  sem compileSem langStr ctx semNames = 
-  | DeclSem d -> 
-    -- If this semantic function does not have a type annotation, copy the 
+  sem compileSem langStr ctx semNames =
+  | DeclSem d ->
+    -- If this semantic function does not have a type annotation, copy the
     -- type annotation from the base semantic function.
     let baseIdent = (match mapLookup (langStr, nameGetStr d.ident) ctx.compositionCheckEnv.baseMap with Some ident in ident) in
-    let baseTyAnnot = match mapLookup baseIdent ctx.compositionCheckEnv.semBaseToTyAnnot with Some ty in ty in 
-    let tyAnnot = match d.tyAnnot with TyUnknown _ then baseTyAnnot else d.tyAnnot in 
+    let baseTyAnnot = match mapLookup baseIdent ctx.compositionCheckEnv.semBaseToTyAnnot with Some ty in ty in
+    let tyAnnot = match d.tyAnnot with TyUnknown _ then baseTyAnnot else d.tyAnnot in
 
     -- Create substitution function for param aliasing
-    let args = match d.args with Some args then args else [] in 
-    let argsIdents : [Name] = map (lam a. a.ident) args in 
+    let args = match d.args with Some args then args else [] in
+    let argsIdents : [Name] = map (lam a. a.ident) args in
 
-    let targetName = nameSym "target" in 
-    let target = nvar_ targetName in 
+    let targetName = nameSym "target" in
+    let target = nvar_ targetName in
 
-    recursive 
-      let compileBody = lam cases : [{pat : Pat, thn : Expr}]. 
+    recursive
+      let compileBody = lam cases : [{pat : Pat, thn : Expr}].
         match cases with [h] ++ t then
           TmMatch {target = target,
                    pat = h.pat,
@@ -246,59 +232,59 @@ lang SemDeclCompiler = SemDeclAst + MExprAst + DeclCompiler
                    ty = tyunknown_,
                    info = d.info}
         -- else (error_ (str_ "Inexhaustive match!"))
-        else 
-          let s = join ["Inexhaustive match in ", langStr, ".", nameGetStr d.ident, "!\n"] in 
+        else
+          let s = join ["Inexhaustive match in ", langStr, ".", nameGetStr d.ident, "!\n"] in
           semi_ (print_ (str_ s)) (inever_ d.info)
-    in 
-    let compileBodyHelper = lam cases : [{pat : Pat, thn : Expr}]. 
-      if null cases then 
+    in
+    let compileBodyHelper = lam cases : [{pat : Pat, thn : Expr}].
+      if null cases then
         error_ (str_ (join ["Semantic function without cases: ", langStr, ".", nameGetStr d.ident, "!\n"]))
       else
-        compileBody cases 
+        compileBody cases
     in
-    let cases = match mapLookup (langStr, nameGetStr d.ident) ctx.compositionCheckEnv.semPatMap 
+    let cases = match mapLookup (langStr, nameGetStr d.ident) ctx.compositionCheckEnv.semPatMap
                 with Some x then x
                 else error "CompositionCheckEnv must contain the ordered cases for all semantic functions!"
     in
 
-    let curTyVarSymbols = match mapLookup (langStr, nameGetStr d.ident) ctx.compositionCheckEnv.semTyVarMap with Some ns in ns in  
+    let curTyVarSymbols = match mapLookup (langStr, nameGetStr d.ident) ctx.compositionCheckEnv.semTyVarMap with Some ns in ns in
 
     -- Substitute parameters, sem symbols and type variables.
-    -- 
+    --
     -- We substitute the parameters because semantic functions are allowed
-    -- to have different parameter names than the sems they include as long 
-    -- as the amount of parameters is the same (this is checked by 
+    -- to have different parameter names than the sems they include as long
+    -- as the amount of parameters is the same (this is checked by
     -- composition-check.mc). To handle the case in which the parameter names
     -- are different, we must perform a substitution.
-    -- 
+    --
     -- For any included cases, we look at the origin language of this case. Any
     -- sem names belonging to the origin language are substituted to the name
     -- of the language fragment we are compiling. We do not just substitute the
     -- name of the current sem, but of all sems in the langauge fragment in order
-    -- to properly handle mutual recursion. 
+    -- to properly handle mutual recursion.
     --
     -- Since semantic funtions can have different type annotations introducing
     -- different symbols, and these symbols may be used in the case bodies,
     -- we also substitute these symbols.
     let work = lam c.
-      let origArgs : Option [Name] = match mapLookup c.orig ctx.compositionCheckEnv.semArgsMap with Some args in args in 
+      let origArgs : Option [Name] = match mapLookup c.orig ctx.compositionCheckEnv.semArgsMap with Some args in args in
       let origArgs : [Name] = match origArgs with Some args then args else [] in
 
-      let origTyVarSymbols = match mapLookup c.orig ctx.compositionCheckEnv.semTyVarMap with Some ns in ns in 
+      let origTyVarSymbols = match mapLookup c.orig ctx.compositionCheckEnv.semTyVarMap with Some ns in ns in
 
       let pairs = join [
         zip origArgs argsIdents,
         createPairsForSubst ctx c.orig.0 langStr,
         zip origTyVarSymbols curTyVarSymbols
-      ] in 
+      ] in
 
-      let subst = mapFromSeq nameCmp pairs in 
-      {c with thn = substituteIdentifiersExpr subst c.thn} in 
+      let subst = mapFromSeq nameCmp pairs in
+      {c with thn = substituteIdentifiersExpr subst c.thn} in
     let cases = map work cases in
 
     let cases = map (lam c. {thn = c.thn, pat = c.pat}) cases in
-    let body = compileBodyHelper cases in 
-    recursive let compileArgs = lam args. 
+    let body = compileBodyHelper cases in
+    recursive let compileArgs = lam args.
           match args with [h] ++ t then
             TmLam {ident = h.ident,
                    tyAnnot = h.tyAnnot,
@@ -313,15 +299,15 @@ lang SemDeclCompiler = SemDeclAst + MExprAst + DeclCompiler
                    body = body,
                    ty = tyunknown_,
                    info = d.info}
-    in 
-    let result = compileArgs (optionGetOrElse (lam. []) d.args) in 
-    match d.args with Some _ then 
+    in
+    let result = compileArgs (optionGetOrElse (lam. []) d.args) in
+    match d.args with Some _ then
       {ident = d.ident,
       tyAnnot = tyAnnot,
       tyBody = tyunknown_,
       body = result,
       info = d.info}
-    else 
+    else
       {ident = d.ident,
       tyAnnot = tyAnnot,
       tyBody = tyunknown_,
@@ -329,216 +315,212 @@ lang SemDeclCompiler = SemDeclAst + MExprAst + DeclCompiler
       info = d.info}
 end
 
-lang MLangSynDefCompiler = SynDeclAst + MExprAst 
-  sem compileMLangSynDefs langStr ctx = 
-  | DeclSyn s -> 
-    match mapLookup (langStr, nameGetStr s.ident) ctx.compositionCheckEnv.baseMap 
-    with Some baseIdent in 
+lang MLangSynDefCompiler = SynDeclAst + MExprAst
+  sem compileMLangSynDefs langStr ctx =
+  | DeclSyn s ->
+    match mapLookup (langStr, nameGetStr s.ident) ctx.compositionCheckEnv.baseMap
+    with Some baseIdent in
 
     -- Wrap a type in a tyall for each parameter
-    let forallWrapper = lam ty. foldr ntyall_ ty s.params in 
+    let forallWrapper = lam ty. foldr ntyall_ ty s.params in
 
     -- Apply the type variables to the type constructor on the rhs of tyIdent
     let rhs = foldl (lam ty. lam n. tyapp_ ty (ntyvar_ n)) (ntycon_ baseIdent) s.params in
 
     let compileDef = lam ctx. lam def.
-      withExpr ctx (TmConDef {ident = def.ident,
+      withDecl ctx (DeclConDef {ident = def.ident,
                               tyIdent = forallWrapper (tyarrow_ def.tyIdent rhs),
-                              info = s.info,
-                              ty = tyunknown_,
-                              inexpr = uunit_}) in 
+                              info = s.info}) in
 
-    foldl compileDef ctx s.defs    
+    foldl compileDef ctx s.defs
 end
 
-lang MLangLangDeclCompiler = DeclCompiler + LangDeclAst + MExprAst + SemDeclAst + 
+lang MLangLangDeclCompiler = DeclCompiler + LangDeclAst + MExprAst + SemDeclAst +
                              SynDeclAst + TypeDeclAst + SynTypeDeclCompiler +
                              SemDeclCompiler + MLangSynDefCompiler
-  sem compileDecl ctx = 
-  | DeclLang l -> 
+  sem compileDecl ctx =
+  | DeclLang l ->
     let langStr = nameGetStr l.ident in
 
-    let typeDecls = filter isTypeDecl l.decls in 
-    let synDecls = filter isSynDecl l.decls in 
-    let semDecls = filter isSemDecl l.decls in 
+    let typeDecls = filter isTypeDecl l.decls in
+    let synDecls = filter isSynDecl l.decls in
+    let semDecls = filter isSemDecl l.decls in
 
-    let nameSeq =  (map (lam s. match s with DeclSem s in (nameGetStr s.ident, s.ident)) semDecls) in 
-    let semNames = mapFromSeq cmpString nameSeq in 
+    let nameSeq =  (map (lam s. match s with DeclSem s in (nameGetStr s.ident, s.ident)) semDecls) in
+    let semNames = mapFromSeq cmpString nameSeq in
 
-    let ctx = foldl withSemSymbol ctx (map (lam s. match s with DeclSem s in s.ident) semDecls) in 
+    let ctx = foldl withSemSymbol ctx (map (lam s. match s with DeclSem s in s.ident) semDecls) in
 
-    let ctx = foldl compileSynType ctx synDecls in 
+    let ctx = foldl compileSynType ctx synDecls in
     let res = result.foldlM compileDecl ctx typeDecls in
-    let res = result.map (lam ctx. foldl (compileMLangSynDefs langStr) ctx synDecls) res in 
+    let res = result.map (lam ctx. foldl (compileMLangSynDefs langStr) ctx synDecls) res in
 
     let compileSemToResult : CompilationContext -> [Decl] -> CompilationContext
       = lam ctx. lam sems.
-        let semBindings = map (compileSem langStr ctx semNames) sems in 
-        withExpr ctx (TmRecLets {bindings = semBindings,
-                                 inexpr = uunit_, 
-                                 ty = tyunknown_,
+        let semBindings = map (compileSem langStr ctx semNames) sems in
+        withDecl ctx (DeclRecLets {bindings = semBindings,
                                  info = l.info})
     in
     result.map (lam ctx. compileSemToResult ctx semDecls) res
-  | DeclSyn s -> 
+  | DeclSyn s ->
     error "Unexpected DeclSyn"
-  | DeclSem s -> 
+  | DeclSem s ->
     error "Unexpected DeclSem!"
-end 
+end
 
 lang MLangTopLevelCompiler = MLangTopLevel + DeclCompiler + LangDeclAst + SynDeclAst
   sem _gatherBaseSemNames : Set Name -> Decl -> Set Name
   sem _gatherBaseSemNames acc =
-  | DeclLang d -> 
-    foldl _gatherBaseSemNames acc d.decls 
-  | DeclSyn {includes = [], ident = ident} -> 
+  | DeclLang d ->
+    foldl _gatherBaseSemNames acc d.decls
+  | DeclSyn {includes = [], ident = ident} ->
     setInsert ident acc
   | _ -> acc
-  
 
-  sem compileProg : CompilationContext -> MLangProgram -> CompilationResult
-  sem compileProg ctx = 
-  | prog -> 
-    let ctx = {ctx with allBaseSyns = foldl _gatherBaseSemNames (setEmpty nameCmp) prog.decls} in 
+
+  sem compileProg : CompilationContext -> MLangProgram -> Result CompilationWarning CompilationError (CompilationContext, Expr)
+  sem compileProg ctx =
+  | prog ->
+    let ctx = {ctx with allBaseSyns = foldl _gatherBaseSemNames (setEmpty nameCmp) prog.decls} in
 
     let res = result.foldlM compileDecl ctx prog.decls in
-    result.map (lam ctx. withExpr ctx prog.expr) res
+    result.map (lam ctx. (ctx, prog.expr)) res
 end
 
-lang MLangCompilerWihtoutLang = MLangAst + MExprAst + MLangTopLevelCompiler + 
-                                ExtDeclCompiler + ConDefDeclCompiler + 
+lang MLangCompilerWihtoutLang = MLangAst + MExprAst + MLangTopLevelCompiler +
+                                ExtDeclCompiler + ConDefDeclCompiler +
                                 TypeDeclCompiler + UtestDeclCompiler +
                                 RecletsDeclCompiler + LetDeclCompiler
   sem compile : CompilationContext -> MLangProgram -> Result CompilationWarning CompilationError Expr
-  sem compile ctx =| prog -> 
+  sem compile ctx =| prog ->
     match result.consume (compileProg ctx prog) with (_, res) in
     switch res
-      case Left err then 
+      case Left err then
         result.err (head err)
-      case Right ctx then 
-        result.ok (bindall_ (concat ctx.toplevelExprs ctx.exprs))
+      case Right (ctx, expr) then
+        result.ok (bindall_ (concat ctx.toplevelDecls ctx.decls) expr)
     end
 end
 
 lang MLangCompiler = MLangCompilerWihtoutLang + MLangLangDeclCompiler
 end
 
-lang TestLang = MLangCompiler + MLangSym + MLangCompositionCheck + 
+lang TestLang = MLangCompiler + MLangSym + MLangCompositionCheck +
                 MExprPrettyPrint + MExprEval + MExprEq end
 
 mexpr
-use TestLang in 
-use LanguageComposer in 
+use TestLang in
+use LanguageComposer in
 
-let simpleEval = lam e. eval (evalCtxEmpty ()) e in 
+let simpleEval = lam e. eval (evalCtxEmpty ()) e in
 
-let testCompile = lam p. 
-  let p = composeProgram p in 
-  match symbolizeMLang symEnvDefault p with (_, p) in 
-  match result.consume (checkComposition p) with (_, res) in 
+let testCompile = lam p.
+  let p = composeProgram p in
+  match symbolizeMLang symEnvDefault p with (_, p) in
+  match result.consume (checkComposition p) with (_, res) in
 
   match res with Left errs then (use MLangCompositionCheck in iter raiseError errs; never )
   else match res with Right env in
-  let ctx = _emptyCompilationContext env in 
-  let res = result.consume (compile ctx p) in 
-  match res with (_, rhs) in 
+  let ctx = _emptyCompilationContext env in
+  let res = result.consume (compile ctx p) in
+  match res with (_, rhs) in
   match rhs with Right expr in expr
 in
 
-let testError = lam p. 
-  match symbolizeMLang symEnvDefault p with (_, p) in 
-  match result.consume (checkComposition p) with (_, res) in 
+let testError = lam p.
+  match symbolizeMLang symEnvDefault p with (_, p) in
+  match result.consume (checkComposition p) with (_, res) in
   match res with Right env in
-  let ctx = _emptyCompilationContext env in 
-  let res = result.consume (compile ctx p) in 
-  match res with (_, rhs) in 
+  let ctx = _emptyCompilationContext env in
+  let res = result.consume (compile ctx p) in
+  match res with (_, rhs) in
   match rhs with Left errs in errs
 in
 
 let testEval = lam p.
   simpleEval (testCompile p)
-in 
+in
 
 -- Test simple let binding
 let p : MLangProgram = {
     decls = [
-        decl_ulet_ "x" (int_ 1)
+        ulet_ "x" (int_ 1)
     ],
     expr = var_ "x"
-} in 
-utest testEval p with int_ 1 using eqExpr in 
+} in
+utest testEval p with int_ 1 using eqExpr in
 
 -- Test recursive let bindings through mutually recursive odd/even
-let odd = (ulam_ "x" 
-  (if_ 
+let odd = (ulam_ "x"
+  (if_
     (eqi_ (var_ "x") (int_ 0))
     (false_)
     (appf1_ (var_ "even") (subi_ (var_ "x") (int_ 1)))))
-in 
-let even = (ulam_ "x" 
-  (if_ 
+in
+let even = (ulam_ "x"
+  (if_
     (eqi_ (var_ "x") (int_ 0))
     (true_)
     (appf1_ (var_ "odd") (subi_ (var_ "x") (int_ 1)))))
-in 
+in
 let p : MLangProgram = {
     decls = [
-        decl_ureclets_ [("odd", odd), ("even", even)]
+        ureclets_ [("odd", odd), ("even", even)]
     ],
     expr = appf1_ (var_ "odd") (int_ 9)
-} in 
-utest testEval p with true_ using eqExpr in 
+} in
+utest testEval p with true_ using eqExpr in
 let p : MLangProgram = {
     decls = [
-        decl_ureclets_ [("odd", odd), ("even", even)]
+        ureclets_ [("odd", odd), ("even", even)]
     ],
     expr = appf1_ (var_ "odd") (int_ 10)
-} in 
-utest testEval p with false_ using eqExpr in 
+} in
+utest testEval p with false_ using eqExpr in
 
 -- Test Utest
 let p : MLangProgram = {
     decls = [
-        decl_utest_ (int_ 3) (addi_ (int_ 1) (int_ 2))
+        utest_ (int_ 3) (addi_ (int_ 1) (int_ 2))
     ],
     expr = uunit_
-} in 
-let expected : Expr = utest_ (int_ 3) (addi_ (int_ 1) (int_ 2)) uunit_ in 
-utest testCompile p with expected using eqExpr in 
+} in
+let expected : Expr = bind_ (utest_ (int_ 3) (addi_ (int_ 1) (int_ 2))) uunit_ in
+utest testCompile p with expected using eqExpr in
 
 -- Test Declype and DeclConDef
 let p : MLangProgram = {
     decls = [
-      decl_type_ "Foo" [] (tyvariant_ []),
-      decl_condef_ "Bar"
+      type_ "Foo" [] (tyvariant_ []),
+      condef_ "Bar"
         (tyarrow_ tyint_ (tycon_ "Foo"))
       ],
-    expr = matchex_ 
+    expr = matchex_
       (conapp_ "Bar" (int_ 1))
       (pcon_ "Bar" (pvar_ "x"))
       (addi_ (var_ "x") (int_ 1))
-} in 
-let res = testCompile p in 
-utest testEval p with int_ 2 using eqExpr in 
+} in
+let res = testCompile p in
+utest testEval p with int_ 2 using eqExpr in
 
 -- Test basic semantic function
 let p : MLangProgram = {
     decls = [
         decl_lang_ "L1" [
-            decl_sem_ 
+            decl_sem_
                 "f"
                 [("x", tyint_)]
                 [(pvar_ "y", addi_ (var_ "x") (var_ "y"))]
         ]
     ],
     expr = bind_ (use_ "L1") (appf2_ (var_ "f") (int_ 10) (int_ 20))
-} in 
-utest testEval p with int_ 30 using eqExpr in 
+} in
+utest testEval p with int_ 30 using eqExpr in
 
 -- Test semantic function with pattern that must be ordered
 -- Since the 2nd pattern is a strict subset of the first,
 -- the first pattern is checked first and only if this is not a match
--- do we fall through to the first pattern. 
+-- do we fall through to the first pattern.
 let fsem = decl_sem_ "f" [] [(por_ (pint_ 1) (pint_ 2), int_ -1),
                              (pint_ 2, int_ 1)]
 in
@@ -547,53 +529,53 @@ let p : MLangProgram = {
         decl_lang_ "L1" [fsem]
     ],
     expr = bind_ (use_ "L1") (appf1_ (var_ "f") (int_ 2))
-} in 
-utest testEval p with int_ 1 using eqExpr in 
+} in
+utest testEval p with int_ 1 using eqExpr in
 
 let p : MLangProgram = {
     decls = [
         decl_lang_ "L1" [fsem]
     ],
     expr = bind_ (use_ "L1") (appf1_ (var_ "f") (int_ 1))
-} in 
+} in
 utest testEval p with int_ -1 using eqExpr in
 
 -- Test DeclSyn and DeclSem using a small arithmetic language
-let exprSyn = decl_syn_ "Expr" [("IntExpr", tyint_), 
-                                ("AddExpr", tytuple_ [tycon_ "Expr", tycon_ "Expr"])] in 
+let exprSyn = decl_syn_ "Expr" [("IntExpr", tyint_),
+                                ("AddExpr", tytuple_ [tycon_ "Expr", tycon_ "Expr"])] in
 let evalSem = decl_sem_ "eval" [] [(pcon_ "IntExpr" (pvar_ "i"), var_ "i"),
-                                   (pcon_ "AddExpr" (ptuple_ [pvar_ "lhs", pvar_ "rhs"]), 
-                                    addi_ (appf1_ (var_ "eval") (var_ "lhs")) (appf1_ (var_ "eval") (var_ "rhs")))] in 
+                                   (pcon_ "AddExpr" (ptuple_ [pvar_ "lhs", pvar_ "rhs"]),
+                                    addi_ (appf1_ (var_ "eval") (var_ "lhs")) (appf1_ (var_ "eval") (var_ "rhs")))] in
 
 let p : MLangProgram = {
     decls = [
         decl_lang_ "MyIntArith" [exprSyn, evalSem]
     ],
-    expr = bind_ (use_ "MyIntArith") 
-                 (appf1_ (var_ "eval") 
+    expr = bind_ (use_ "MyIntArith")
+                 (appf1_ (var_ "eval")
                          (conapp_ "AddExpr" (utuple_ [(conapp_ "IntExpr" (int_ 40)),
                                                       (conapp_ "IntExpr" (int_ 2))])))
-} in 
+} in
 utest testEval p with int_ 42 using eqExpr in
 
 -- Test Sum Extension
-let baseSyn = decl_syn_ "Expr" [("IntExpr", tyint_), 
-                                ("AddExpr", tytuple_ [tycon_ "Expr", tycon_ "Expr"])] in 
+let baseSyn = decl_syn_ "Expr" [("IntExpr", tyint_),
+                                ("AddExpr", tytuple_ [tycon_ "Expr", tycon_ "Expr"])] in
 let baseSem = decl_sem_ "eval" [] [(pcon_ "IntExpr" (pvar_ "i"), var_ "i"),
-                                   (pcon_ "AddExpr" (ptuple_ [pvar_ "lhs", pvar_ "rhs"]), 
-                                    addi_ (appf1_ (var_ "eval") (var_ "lhs")) (appf1_ (var_ "eval") (var_ "rhs")))] in 
-let sugarSyn = decl_syn_ext_ "Expr" [("IncrExpr", tycon_ "Expr")] in 
-let sugarEval = decl_sem_ext_ "eval" [] [(pcon_ "IncrExpr" (pvar_ "e"), addi_ (int_ 1) (appf1_ (var_ "eval") (var_ "e")))] in 
+                                   (pcon_ "AddExpr" (ptuple_ [pvar_ "lhs", pvar_ "rhs"]),
+                                    addi_ (appf1_ (var_ "eval") (var_ "lhs")) (appf1_ (var_ "eval") (var_ "rhs")))] in
+let sugarSyn = decl_syn_ext_ "Expr" [("IncrExpr", tycon_ "Expr")] in
+let sugarEval = decl_sem_ext_ "eval" [] [(pcon_ "IncrExpr" (pvar_ "e"), addi_ (int_ 1) (appf1_ (var_ "eval") (var_ "e")))] in
 let p : MLangProgram = {
     decls = [
         decl_lang_ "MyIntArith" [baseSyn, baseSem],
         decl_langi_ "SugaredIntArith" ["MyIntArith"] [sugarSyn, sugarEval]
     ],
-    expr = bind_ (use_ "SugaredIntArith") 
-                 (appf1_ (var_ "eval") 
+    expr = bind_ (use_ "SugaredIntArith")
+                 (appf1_ (var_ "eval")
                          (conapp_ "IncrExpr" (conapp_ "AddExpr" (utuple_ [(conapp_ "IntExpr" (int_ 20)),
                                                       (conapp_ "IntExpr" (int_ 2))]))))
-} in 
+} in
 utest testEval p with int_ 23 using eqExpr in
 
 let p : MLangProgram = {
@@ -602,10 +584,10 @@ let p : MLangProgram = {
         decl_langi_ "SugaredIntArith" ["MyIntArith"] [sugarSyn, sugarEval]
     ],
     expr = bind_ (use_ "SugaredIntArith")
-                 (appf1_ (var_ "eval") 
+                 (appf1_ (var_ "eval")
                          (conapp_ "AddExpr" (utuple_ [(conapp_ "IncrExpr" (conapp_ "IntExpr" (int_ 21))),
                                                       (conapp_ "IntExpr" (int_ 1))])))
-} in 
+} in
 utest testEval p with int_ 23 using eqExpr in
 
 -- Test semantic function with different paremeter names
@@ -621,29 +603,29 @@ let p : MLangProgram = {
     expr = bind_ (use_ "L1")
                  (addi_ ((appf2_ (var_ "f") (int_ 10) (int_ 0)))
                         ((appf2_ (var_ "f") (int_ 10) (int_ 1))))
-} in 
+} in
 utest testEval p with int_ 0 using eqExpr in
 
 -- Test language composition under quantified type variables
 let p : MLangProgram = {
     decls = [
         decl_lang_ "L0" [
-          decl_semty_cases_ 
-            "f" 
+          decl_semty_cases_
+            "f"
             (tyall_ "a" (tyarrow_ (tyvar_ "a") (tyvar_ "a")))
             [(pvar_ "x", bind_ (let_ "y" (tyvar_ "a") (var_ "x")) (var_ "y"))]
         ],
         decl_langi_ "L1" ["L0"] []
     ],
     expr = bind_ (use_ "L1") (appf1_ (var_ "f") (int_ 0))
-} in 
+} in
 utest testEval p with int_ 0 using eqExpr in
 
 -- Test language composition is correctly renaming bound recursive functions.
 let decls = [
   decl_lang_ "L0" [
     decl_sem_
-      "isodd" 
+      "isodd"
       []
       [(pvar_ "x", if_ (eqi_ (int_ 0) (var_ "x")) false_ (appf1_ (var_ "iseven") (subi_ (var_ "x") (int_ 1))))],
     decl_sem_
@@ -653,19 +635,19 @@ let decls = [
   ],
   decl_langi_ "L1" ["L0"] [
     decl_sem_ext_
-      "iseven" 
+      "iseven"
       []
       [(pvar_ "x", if_ (eqi_ (int_ 0) (var_ "x")) true_ (appf1_ (var_ "isodd") (subi_ (var_ "x") (int_ 1))))]
   ]
-] in 
+] in
 let p : MLangProgram = {
     decls = decls,
     expr = bind_ (use_ "L1") (appf1_ (var_ "iseven") (int_ 12))
-} in 
+} in
 utest testEval p with true_ using eqExpr in
 let p : MLangProgram = {
     decls = decls,
     expr = bind_ (use_ "L1") (appf1_ (var_ "iseven") (int_ 11))
-} in 
+} in
 utest testEval p with false_ using eqExpr in
 ()

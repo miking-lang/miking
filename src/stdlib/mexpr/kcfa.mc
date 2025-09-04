@@ -504,7 +504,7 @@ end
 lang VarKCFA = KCFA + KBaseConstraint + VarAst
 
   sem generateConstraints im ctx env =
-  | TmLet { ident = ident, body = TmVar t, info = info } ->
+  | TmDecl {decl = DeclLet { ident = ident, body = TmVar t, info = info }} ->
     let ident = name2int im info ident in
     let lhs = name2int im t.info t.ident in
     let cstrs =
@@ -535,7 +535,7 @@ lang LamKCFA = KCFA + KBaseConstraint + LamAst
      else diff
 
   sem generateConstraints im ctx env =
-  | TmLet { ident = ident, body = TmLam t, info = info } ->
+  | TmDecl {decl = DeclLet { ident = ident, body = TmLam t, info = info }} ->
     let ident = name2int im info ident in
     let av: AbsVal = AVLam {
       ident = name2int im t.info t.ident,
@@ -558,22 +558,19 @@ lang LamKCFA = KCFA + KBaseConstraint + LamAst
   | TmLam t -> acc
 end
 
-lang LetKCFA = KCFA + LetAst
+lang DeclKCFA = KCFA + DeclAst
   sem exprName =
-  | TmLet t -> exprName t.inexpr
+  | TmDecl x -> exprName x.inexpr
 end
 
-lang RecLetsKCFA = KCFA + LamKCFA + RecLetsAst
-  sem exprName =
-  | TmRecLets t -> exprName t.inexpr
-
+lang RecLetsKCFA = KCFA + LamKCFA + RecLetsDeclAst
   sem generateConstraints im ctx env =
-  | TmRecLets ({ bindings = bindings } & t) ->
+  | tm & TmDecl {decl = DeclRecLets ({ bindings = bindings } & t)} ->
     -- Make each binding available in the environment
     let idents = map (lam b. name2int im b.info b.ident) bindings in
     let envBody = foldl (lam env. lam i.
-        ctxEnvAdd i ctx env) (ctxEnvFilterFree im (TmRecLets t) env) idents in
-    let cstrs = map (lam identBind: (IName, RecLetBinding).
+        ctxEnvAdd i ctx env) (ctxEnvFilterFree im tm env) idents in
+    let cstrs = map (lam identBind: (IName, DeclLetRecord).
       match identBind with (ident, b) in
       match b.body with TmLam t then
         let av: AbsVal = AVLam {
@@ -616,7 +613,7 @@ lang ConstKCFA = KCFA + ConstAst + KBaseConstraint + Cmp
     else cmp
 
   sem generateConstraints im ctx env =
-  | TmLet { ident = ident, body = TmConst t, info = info } ->
+  | TmDecl {decl = DeclLet { ident = ident, body = TmConst t, info = info }} ->
     let ident = name2int im info ident in
     let cstrs = generateConstraintsConst t.info (ident,ctx) t.val in
     (ctxEnvAdd ident ctx env, cstrs)
@@ -702,7 +699,7 @@ lang AppKCFA = KCFA + ConstKCFA + KBaseConstraint + LamKCFA + AppAst + MExprArit
       ])
 
   sem generateConstraints im ctx env =
-  | TmLet { ident = ident, body = TmApp app, info = info} ->
+  | TmDecl {decl = DeclLet { ident = ident, body = TmApp app, info = info}} ->
     let ident = name2int im info ident in
     match app.lhs with TmVar l then
       match app.rhs with TmVar r then
@@ -761,7 +758,7 @@ lang RecordKCFA = KCFA + KBaseConstraint + RecordAst
   | CstrRecordUpdate r & cstr -> initConstraintName r.lhs graph cstr
 
   sem generateConstraints im ctx env =
-  | TmLet { ident = ident, body = TmRecord t, info = info } ->
+  | TmDecl {decl = DeclLet { ident = ident, body = TmRecord t, info = info }} ->
     let bindings = mapMap (lam v: Expr.
         match v with TmVar t then
           let vident = name2int im t.info t.ident in
@@ -774,7 +771,7 @@ lang RecordKCFA = KCFA + KBaseConstraint + RecordAst
     let ident = name2int im info ident in
     let cstrs = [ CstrInit { lhs = av, rhs = (ident, ctx) } ] in
     (ctxEnvAdd ident ctx env, cstrs)
-  | TmLet { ident = ident, body = TmRecordUpdate t, info = info } ->
+  | TmDecl {decl = DeclLet { ident = ident, body = TmRecordUpdate t, info = info }} ->
     match t.rec with TmVar vrec then
       match t.value with TmVar vval then
         let lhs = name2int im vrec.info vrec.ident in
@@ -829,7 +826,7 @@ lang SeqKCFA = KCFA + KBaseConstraint + SeqAst
   | (AVSeq { names = lhs }, AVSeq { names = rhs }) -> setCmp lhs rhs
 
   sem generateConstraints im ctx env =
-  | TmLet { ident = ident, body = TmSeq t, info = info } ->
+  | TmDecl {decl = DeclLet { ident = ident, body = TmSeq t, info = info }} ->
     let names = foldl (lam acc: [(IName,Ctx)]. lam t: Expr.
       match t with TmVar t then
         let tident = name2int im t.info t.ident in
@@ -849,11 +846,6 @@ lang SeqKCFA = KCFA + KBaseConstraint + SeqAst
     (env, join ["[{", names, "}]"])
 end
 
-lang TypeKCFA = KCFA + TypeAst
-  sem exprName =
-  | TmType t -> exprName t.inexpr
-end
-
 lang DataKCFA = KCFA + KBaseConstraint + DataAst
   syn AbsVal =
   -- Abstract representation of constructed data.
@@ -866,7 +858,7 @@ lang DataKCFA = KCFA + KBaseConstraint + DataAst
     if eqi idiff 0 then cmpINameCtx blhs brhs else idiff
 
   sem generateConstraints im ctx env =
-  | TmLet { ident = ident, body = TmConApp t, info = info } ->
+  | TmDecl {decl = DeclLet { ident = ident, body = TmConApp t, info = info }} ->
     let body =
       match t.body with TmVar v then name2int im v.info v.ident
       else errorSingle [infoTm t.body] "Not a TmVar in con app" in
@@ -884,10 +876,6 @@ lang DataKCFA = KCFA + KBaseConstraint + DataAst
     match pprintConINameCtx im env ident with (env,ident) in
     match pprintVarINameCtx im env body with (env,body) in
     (env, join [ident, " ", body])
-
-  sem exprName =
-  | TmConDef t -> exprName t.inexpr
-
 end
 
 lang MatchKCFA = KCFA + KBaseConstraint + MatchAst + MExprCmp
@@ -928,7 +916,7 @@ lang MatchKCFA = KCFA + KBaseConstraint + MatchAst + MExprCmp
   : IndexMap -> [MatchGenFun] -> Ctx -> CtxEnv -> Expr -> GenFunAcc
   sem generateConstraintsMatch im mcgfs ctx env =
   | _ -> (env,[])
-  | TmLet { ident = ident, body = TmMatch t, info = info } ->
+  | TmDecl {decl = DeclLet { ident = ident, body = TmMatch t, info = info }} ->
     let thn = name2int im (infoTm t.thn) (exprName t.thn) in
     let els = name2int im (infoTm t.els) (exprName t.els) in
     let ident = name2int im info ident in
@@ -963,16 +951,11 @@ lang MatchKCFA = KCFA + KBaseConstraint + MatchAst + MExprCmp
 
 end
 
-lang UtestKCFA = KCFA + UtestAst
-  sem exprName =
-  | TmUtest t -> exprName t.next
-end
-
 lang NeverKCFA = KCFA + NeverAst
   -- Nothing to be done here
 end
 
-lang ExtKCFA = KCFA + ExtAst
+lang ExtKCFA = KCFA + ExtDeclAst
 
   syn AbsVal =
   -- Abstract representation of externals. Handled in a similar way as
@@ -1043,7 +1026,7 @@ lang ExtKCFA = KCFA + ExtAst
   -- the ANF transform and define eta expanded versions of the externals (so
   -- that they can be curried).
   sem collectConstraints ctx cgfs acc =
-  | TmExt { inexpr = TmLet { ident = ident, inexpr = inexpr } } & t ->
+  | TmDecl {decl = DeclExt _, inexpr = TmDecl {decl = DeclLet {ident = ident}, inexpr = inexpr}} & t ->
     let acc = foldl (lam acc. lam f.
         match acc with (env, cstrs) in
         match f ctx env t with (env, fcstrs) in
@@ -1052,7 +1035,7 @@ lang ExtKCFA = KCFA + ExtAst
     collectConstraints ctx cgfs acc inexpr
 
   sem generateConstraints im ctx env =
-  | TmExt { inexpr = TmLet { ident = ident, inexpr = inexpr } } ->
+  | TmDecl {decl = DeclExt _, inexpr = TmDecl {decl = DeclLet {ident = ident}, inexpr = inexpr}} ->
     -- NOTE(dlunde,2022-06-15): Currently, we do not generate any constraints
     -- for externals. Similarly to constants, we probably want to delegate to
     -- `generateConstraintsExts` here. As with `propagateConstraintExt`, it is
@@ -1062,7 +1045,7 @@ lang ExtKCFA = KCFA + ExtAst
 
   sem exprName =
   -- Skip the eta expanded let added by ANF,
-  | TmExt { inexpr = TmLet { inexpr = inexpr }} -> exprName inexpr
+  | TmDecl {decl = DeclExt _, inexpr = TmDecl {decl = DeclLet _, inexpr = inexpr}} -> exprName inexpr
 
 end
 
@@ -1737,8 +1720,8 @@ lang MExprKCFA = KCFA +
 
   -- Terms
   VarKCFA + LamKCFA + AppKCFA +
-  LetKCFA + RecLetsKCFA + ConstKCFA + SeqKCFA + RecordKCFA + TypeKCFA + DataKCFA +
-  MatchKCFA + UtestKCFA + NeverKCFA + ExtKCFA +
+  DeclKCFA + RecLetsKCFA + ConstKCFA + SeqKCFA + RecordKCFA + DataKCFA +
+  MatchKCFA + NeverKCFA + ExtKCFA +
 
   -- Constants
   IntKCFA + ArithIntKCFA + ShiftIntKCFA + FloatKCFA + ArithFloatKCFA +

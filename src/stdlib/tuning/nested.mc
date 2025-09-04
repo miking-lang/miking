@@ -147,7 +147,7 @@ lang NestedMeasuringPoints = MExprHoleCFA
       in concat res acc
     else errorSingle [infoTm t.lhs] "Not a TmVar in application"
 
-  | TmExt t -> acc
+  | TmDecl {decl = DeclExt t} -> acc
 
   | t ->
     sfold_Expr_Expr (_callGraphEdges im data avLams cur) acc t
@@ -162,14 +162,14 @@ lang NestedMeasuringPoints = MExprHoleCFA
       -- Lambda expression not reachable, we are done.
       acc
 
-  | TmLet ({ ident = ident, body = TmApp app } & t) ->
-    let resInexpr = _measEnclosingLam data avLams cur acc t.inexpr in
+  | TmDecl (x & {decl = DeclLet { ident = ident, body = TmApp app }}) ->
+    let resInexpr = _measEnclosingLam data avLams cur acc x.inexpr in
     match mapLookup ident data with Some eholes then
       concat [(ident, eholes, cur)] resInexpr
     else resInexpr
 
-  | TmLet ({ ident = ident, body = TmMatch m } & t) ->
-    let resInexpr = _measEnclosingLam data avLams cur acc t.inexpr in
+  | TmDecl (x & {decl = DeclLet { ident = ident, body = TmMatch m }}) ->
+    let resInexpr = _measEnclosingLam data avLams cur acc x.inexpr in
     let resMatch = sfold_Expr_Expr (_measEnclosingLam data avLams cur) [] (TmMatch m) in
     match mapLookup ident data with Some eholes then
       join [[(ident, eholes, cur)], resInexpr, resMatch]
@@ -191,10 +191,10 @@ lang NestedMeasuringPoints = MExprHoleCFA
   -- A match is the only type of measuring point that can have a nested
   -- measuring point, since it is the only one that consists of several
   -- subexpressions.
-  | TmLet ({ ident = ident, body = TmMatch m } & t) ->
+  | TmDecl (x & {decl = DeclLet ({ ident = ident, body = TmMatch m } & t)}) ->
     let resInexpr =
       augmentDependencies
-        im env enclosingLam measInLam measSet data dataEholes callGraph acc t.inexpr
+        im env enclosingLam measInLam measSet data dataEholes callGraph acc x.inexpr
     in
     let resMatch = sfold_Expr_Expr (
         augmentDependencies im env enclosingLam measInLam measSet data dataEholes callGraph)
@@ -251,7 +251,7 @@ lang NestedMeasuringPoints = MExprHoleCFA
                            (dataEholes : Map Name [AbsVal])
                            (callGraph : Digraph Name Symbol)
                            (acc : [AbsVal]) =
-  | TmLet ({body = TmApp app} & t) ->
+  | TmDecl (x & {decl = DeclLet ({body = TmApp app} & t)}) ->
     let resBody =
       match app.lhs with TmVar v then
         match mapLookup v.ident data with Some avs then
@@ -287,14 +287,14 @@ lang NestedMeasuringPoints = MExprHoleCFA
     let resLet = optionGetOr [] (mapLookup t.ident dataEholes) in
     let resInexpr = sfold_Expr_Expr
       (augmentDependenciesH ident im env enclosingLam measInLam measSet data dataEholes callGraph)
-      acc t.inexpr
+      acc x.inexpr
     in join [resBody, resLet, resInexpr]
 
-  | TmLet t ->
+  | tm & TmDecl {decl = DeclLet t} ->
     let resLet = optionGetOr [] (mapLookup t.ident dataEholes) in
     let resRest = sfold_Expr_Expr
         (augmentDependenciesH ident im env enclosingLam measInLam measSet data dataEholes callGraph)
-        acc (TmLet t)
+        acc tm
     in concat resLet resRest
 
   | t ->
@@ -309,9 +309,9 @@ lang NestedMeasuringPoints = MExprHoleCFA
   sem collectSyntacticallyScoped (eholes : Map Name [AbsVal]) (acc : [Name]) =
   -- Need only consider match expressions, by same logic as for
   -- 'augmentDependencies'
-  | TmLet ({ ident = ident, body = TmMatch m } & t) ->
+  | TmDecl (x & {decl = DeclLet ({ ident = ident, body = TmMatch m } & t)}) ->
     -- Recurse inexpr and body
-    let resInexpr = collectSyntacticallyScoped eholes acc t.inexpr in
+    let resInexpr = collectSyntacticallyScoped eholes acc x.inexpr in
     let resMatch = sfold_Expr_Expr (collectSyntacticallyScoped eholes)
         [] (TmMatch m)
     in
@@ -328,10 +328,10 @@ lang NestedMeasuringPoints = MExprHoleCFA
 
   -- Return the measuring points syntactically scoped in an expression
   sem collectSyntacticallyScopedH (eholes : Map Name [AbsVal]) (acc: [Name]) =
-  | TmLet t ->
+  | tm & TmDecl {decl = DeclLet t} ->
     let resLet = if mapMem t.ident eholes then [t.ident] else [] in
     let resRest = sfold_Expr_Expr (collectSyntacticallyScopedH eholes)
-        acc (TmLet t)
+        acc tm
     in concat resLet resRest
 
   | t ->

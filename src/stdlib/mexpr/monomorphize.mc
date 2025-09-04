@@ -215,6 +215,48 @@ lang MonomorphizeResymbolize = Monomorphize
   sem resymbolizeBindings =
   | ast -> resymbolizeBindingsExpr (mapEmpty nameCmp) ast
 
+  sem resymbolizeBindingsDecl : Map Name Name -> Decl -> (Map Name Name, Decl)
+  sem resymbolizeBindingsDecl nameMap =
+  | d -> (nameMap, smap_Decl_Expr (resymbolizeBindingsExpr nameMap) d)
+  | DeclLet t ->
+    let body = resymbolizeBindingsExpr nameMap t.body in
+    let newId = nameSetNewSym t.ident in
+    let nameMap = mapInsert t.ident newId nameMap in
+    ( nameMap
+    , DeclLet
+      { t with ident = newId
+      , tyAnnot = resymbolizeBindingsType nameMap t.tyAnnot
+      , tyBody = resymbolizeBindingsType nameMap t.tyBody
+      , body = body
+      }
+    )
+  | DeclRecLets t ->
+    let addNewIdBinding = lam nameMap. lam bind.
+      let newId = nameSetNewSym bind.ident in
+      (mapInsert bind.ident newId nameMap, {bind with ident = newId})
+    in
+    match mapAccumL addNewIdBinding nameMap t.bindings with (nameMap, bindings) in
+    let resymbolizeBind = lam bind.
+      {bind with tyAnnot = resymbolizeBindingsType nameMap bind.tyAnnot,
+                 tyBody = resymbolizeBindingsType nameMap bind.tyBody,
+                 body = resymbolizeBindingsExpr nameMap bind.body}
+    in
+    let bindings = map resymbolizeBind bindings in
+    (nameMap, DeclRecLets {t with bindings = bindings})
+  | DeclType t ->
+    let newId = nameSetNewSym t.ident in
+    let nameMap = mapInsert t.ident newId nameMap in
+    ( nameMap
+    , DeclType
+      { t with ident = newId
+      , tyIdent = resymbolizeBindingsType nameMap t.tyIdent
+      }
+    )
+  | DeclConDef t ->
+    let newId = nameSetNewSym t.ident in
+    let nameMap = mapInsert t.ident newId nameMap in
+    (nameMap, DeclConDef {t with ident = newId, tyIdent = resymbolizeBindingsType nameMap t.tyIdent})
+
   sem resymbolizeBindingsExpr : Map Name Name -> Expr -> Expr
   sem resymbolizeBindingsExpr nameMap =
   | TmVar t ->
@@ -231,44 +273,10 @@ lang MonomorphizeResymbolize = Monomorphize
                   tyParam = resymbolizeBindingsType nameMap t.tyParam,
                   body = resymbolizeBindingsExpr nameMap t.body,
                   ty = resymbolizeBindingsType nameMap t.ty}
-  | TmLet t ->
-    let body = resymbolizeBindingsExpr nameMap t.body in
-    let newId = nameSetNewSym t.ident in
-    let nameMap = mapInsert t.ident newId nameMap in
-    TmLet {t with ident = newId,
-                  tyAnnot = resymbolizeBindingsType nameMap t.tyAnnot,
-                  tyBody = resymbolizeBindingsType nameMap t.tyBody,
-                  body = body,
-                  inexpr = resymbolizeBindingsExpr nameMap t.inexpr,
-                  ty = resymbolizeBindingsType nameMap t.ty}
-  | TmRecLets t ->
-    let addNewIdBinding = lam nameMap. lam bind.
-      let newId = nameSetNewSym bind.ident in
-      (mapInsert bind.ident newId nameMap, {bind with ident = newId})
-    in
-    match mapAccumL addNewIdBinding nameMap t.bindings with (nameMap, bindings) in
-    let resymbolizeBind = lam bind.
-      {bind with tyAnnot = resymbolizeBindingsType nameMap bind.tyAnnot,
-                 tyBody = resymbolizeBindingsType nameMap bind.tyBody,
-                 body = resymbolizeBindingsExpr nameMap bind.body}
-    in
-    let bindings = map resymbolizeBind bindings in
-    TmRecLets {t with bindings = bindings,
-                      inexpr = resymbolizeBindingsExpr nameMap t.inexpr,
-                      ty = resymbolizeBindingsType nameMap t.ty}
-  | TmType t ->
-    let newId = nameSetNewSym t.ident in
-    let nameMap = mapInsert t.ident newId nameMap in
-    TmType {t with ident = newId,
-                   tyIdent = resymbolizeBindingsType nameMap t.tyIdent,
-                   inexpr = resymbolizeBindingsExpr nameMap t.inexpr,
-                   ty = resymbolizeBindingsType nameMap t.ty}
-  | TmConDef t ->
-    let newId = nameSetNewSym t.ident in
-    let nameMap = mapInsert t.ident newId nameMap in
-    TmConDef {t with ident = newId,
-                     inexpr = resymbolizeBindingsExpr nameMap t.inexpr,
-                     ty = resymbolizeBindingsType nameMap t.ty}
+  | TmDecl t ->
+    match resymbolizeBindingsDecl nameMap t.decl with (nameMap, decl) in
+    let inexpr = resymbolizeBindingsExpr nameMap t.inexpr in
+    TmDecl {t with decl = decl, inexpr = inexpr}
   | TmConApp t ->
     let newId =
       match mapLookup t.ident nameMap with Some newId then newId
@@ -341,15 +349,15 @@ lang MonomorphizeCollect =
 
   sem recordPolymorphicDefinitions : MonoEnv -> Expr -> MonoEnv
   sem recordPolymorphicDefinitions env =
-  | TmLet t ->
+  | TmDecl (x & {decl = DeclLet t}) ->
     let env =
       match t.tyBody with TyAll _ then
         {env with funEnv = mapInsert t.ident (defaultInstEntry t.tyBody) env.funEnv}
       else env
     in
     let env = recordPolymorphicDefinitions env t.body in
-    recordPolymorphicDefinitions env t.inexpr
-  | TmRecLets t ->
+    recordPolymorphicDefinitions env x.inexpr
+  | TmDecl (x & {decl = DeclRecLets t}) ->
     let recordBind = lam env. lam bind.
       let env =
         match bind.tyBody with TyAll _ then
@@ -359,8 +367,8 @@ lang MonomorphizeCollect =
       recordPolymorphicDefinitions env bind.body
     in
     let env = foldl recordBind env t.bindings in
-    recordPolymorphicDefinitions env t.inexpr
-  | TmType t ->
+    recordPolymorphicDefinitions env x.inexpr
+  | TmDecl (x & {decl = DeclType t}) ->
     let env =
       if not (null t.params) then
         -- NOTE(larshum, 2023-08-03): We construct a polymorphic type
@@ -377,14 +385,14 @@ lang MonomorphizeCollect =
         {env with typeEnv = mapInsert t.ident (defaultInstEntry polyType) env.typeEnv}
       else env
     in
-    recordPolymorphicDefinitions env t.inexpr
-  | TmConDef t ->
+    recordPolymorphicDefinitions env x.inexpr
+  | TmDecl (x & {decl = DeclConDef t}) ->
     let env =
       match t.tyIdent with TyAll _ then
         {env with conEnv = mapInsert t.ident (defaultInstEntry t.tyIdent) env.conEnv}
       else env
     in
-    recordPolymorphicDefinitions env t.inexpr
+    recordPolymorphicDefinitions env x.inexpr
   | ast -> sfold_Expr_Expr recordPolymorphicDefinitions env ast
 
   sem collectInstantiationsExpr : Set Instantiation -> MonoEnv -> Expr -> MonoEnv
@@ -413,11 +421,11 @@ lang MonomorphizeCollect =
       {env with funEnv = mapInsert t.ident instEntry env.funEnv}
     else
       env
-  | TmLet t ->
-    let env = collectInstantiationsExpr instantiations env t.inexpr in
+  | TmDecl (x & {decl = DeclLet t}) ->
+    let env = collectInstantiationsExpr instantiations env x.inexpr in
     let env = collectInstantiationsType instantiations env t.tyAnnot in
     let env = collectInstantiationsType instantiations env t.tyBody in
-    let env = collectInstantiationsType instantiations env t.ty in
+    let env = collectInstantiationsType instantiations env x.ty in
     let instantiations =
       match mapLookup t.ident env.funEnv with Some instEntry then
         -- NOTE(larshum, 2023-08-03): For the body of the let-expression, we
@@ -438,8 +446,8 @@ lang MonomorphizeCollect =
         instantiations
     in
     collectInstantiationsExpr instantiations env t.body
-  | TmRecLets t ->
-    let bindMap : Map Name RecLetBinding =
+  | tm & TmDecl (x & {decl = DeclRecLets t}) ->
+    let bindMap : Map Name DeclLetRecord =
       mapFromSeq nameCmp (map (lam bind. (bind.ident, bind)) t.bindings)
     in
     recursive let collectInstantiationsPerScc = lam inst. lam env. lam g. lam sccs.
@@ -481,13 +489,13 @@ lang MonomorphizeCollect =
       else
         env
     in
-    let env = collectInstantiationsExpr instantiations env t.inexpr in
-    let g = constructCallGraph (TmRecLets t) in
+    let env = collectInstantiationsExpr instantiations env x.inexpr in
+    let g = constructCallGraph tm in
     let sccs = digraphTarjan g in
     collectInstantiationsPerScc instantiations env g (reverse sccs)
-  | TmConDef t ->
-    let env = collectInstantiationsExpr instantiations env t.inexpr in
-    let env = collectInstantiationsType instantiations env t.ty in
+  | TmDecl (x & {decl = DeclConDef t}) ->
+    let env = collectInstantiationsExpr instantiations env x.inexpr in
+    let env = collectInstantiationsType instantiations env x.ty in
     match mapLookup t.ident env.conEnv with Some conInstEntry then
       -- NOTE(larshum, 2023-08-03): We propagate the monomorphic instantiations
       -- of the constructor to its variant type.
@@ -631,8 +639,8 @@ lang MonomorphizeApply = MonomorphizeInstantiate + MonomorphizeResymbolize + App
     in
     TmVar {t with ident = ident,
                   ty = applyMonomorphizationTypeLabel env t.ty}
-  | TmLet t ->
-    let inexpr = applyMonomorphizationExpr env t.inexpr in
+  | TmDecl (x & {decl = DeclLet t}) ->
+    let inexpr = applyMonomorphizationExpr env x.inexpr in
     match mapLookup t.ident env.funEnv with Some instEntry then
       -- NOTE(larshum, 2023-08-03): The let-binding is a polymorphic function.
       -- We create once instance for each instantiation stored the entry.
@@ -641,20 +649,31 @@ lang MonomorphizeApply = MonomorphizeInstantiate + MonomorphizeResymbolize + App
           let body = monomorphizeBody env inst t.body in
           let tyAnnot = monomorphizeType env inst t.tyAnnot in
           let tyBody = monomorphizeTypeLabel env inst t.tyBody in
-          let ty = monomorphizeTypeLabel env inst t.ty in
-          TmLet {
-            ident = newId, tyAnnot = tyAnnot, tyBody = tyBody,
-            body = body, inexpr = acc, ty = tyTm acc, info = t.info})
+          let ty = monomorphizeTypeLabel env inst x.ty in
+          TmDecl
+          {x with decl = DeclLet
+            {t with ident = newId
+            , tyAnnot = tyAnnot
+            , tyBody = tyBody
+            , body = body
+            }
+          , inexpr = acc
+          , ty = tyTm acc
+          })
         inexpr instEntry.map
     else
       -- NOTE(larshum, 2023-08-03): The let-binding is already monomorphic, so
       -- we recurse directly into its body.
-      TmLet {t with tyAnnot = applyMonomorphizationType env t.tyAnnot,
-                    tyBody = applyMonomorphizationType env t.tyBody,
-                    body = applyMonomorphization env t.body,
-                    inexpr = inexpr,
-                    ty = applyMonomorphizationType env t.ty}
-  | TmRecLets t ->
+      TmDecl
+      {x with decl = DeclLet
+        {t with tyAnnot = applyMonomorphizationType env t.tyAnnot
+        , tyBody = applyMonomorphizationType env t.tyBody
+        , body = applyMonomorphization env t.body
+        }
+      , inexpr = inexpr
+      , ty = applyMonomorphizationType env x.ty
+      }
+  | TmDecl (x & {decl = DeclRecLets t}) ->
     let applyMonomorphizationBinding = lam env. lam acc. lam bind.
       match mapLookup bind.ident env.funEnv with Some instEntry then
         mapFoldWithKey
@@ -673,39 +692,54 @@ lang MonomorphizeApply = MonomorphizeInstantiate + MonomorphizeResymbolize + App
       else
         snoc acc bind
     in
-    let inexpr = applyMonomorphizationExpr env t.inexpr in
+    let inexpr = applyMonomorphizationExpr env x.inexpr in
     let bindings = foldl (applyMonomorphizationBinding env) [] t.bindings in
-    TmRecLets {t with bindings = bindings, inexpr = inexpr}
-  | TmType t ->
-    let inexpr = applyMonomorphizationExpr env t.inexpr in
+    TmDecl {x with decl = DeclRecLets {t with bindings = bindings}, inexpr = inexpr}
+  | TmDecl (x & {decl = DeclType t}) ->
+    let inexpr = applyMonomorphizationExpr env x.inexpr in
     match mapLookup t.ident env.typeEnv with Some instEntry then
       mapFoldWithKey
         (lam acc. lam inst. lam newId.
           let tyIdent = monomorphizeType env inst t.tyIdent in
-          let ty = monomorphizeType env inst t.ty in
-          TmType {
-            ident = newId, params = [], tyIdent = tyIdent,
-            inexpr = acc, ty = ty, info = t.info })
+          let ty = monomorphizeType env inst x.ty in
+          TmDecl
+          {x with decl = DeclType
+            {t with ident = newId
+            , params = []
+            , tyIdent = tyIdent
+            }
+          , inexpr = acc
+          , ty = ty
+          })
         inexpr instEntry.map
     else
-        TmType {t with tyIdent = applyMonomorphizationType env t.tyIdent,
-                       inexpr = inexpr,
-                       ty = applyMonomorphizationTypeLabel env t.ty}
-  | TmConDef t ->
-    let inexpr = applyMonomorphizationExpr env t.inexpr in
+      TmDecl
+      {x with decl = DeclType {t with tyIdent = applyMonomorphizationType env t.tyIdent}
+      , inexpr = inexpr
+      , ty = applyMonomorphizationTypeLabel env x.ty
+      }
+  | TmDecl (x & {decl = DeclConDef t}) ->
+    let inexpr = applyMonomorphizationExpr env x.inexpr in
     match mapLookup t.ident env.conEnv with Some instEntry then
       mapFoldWithKey
         (lam acc. lam inst. lam newId.
           let tyIdent = monomorphizeType env inst t.tyIdent in
-          let ty = monomorphizeType env inst t.ty in
-          TmConDef {
-            ident = newId, tyIdent = tyIdent, inexpr = acc,
-            ty = ty, info = t.info })
+          let ty = monomorphizeType env inst x.ty in
+          TmDecl
+          {x with decl = DeclConDef
+            {t with ident = newId
+            , tyIdent = tyIdent
+            }
+          , inexpr = acc
+          , ty = ty
+          })
         inexpr instEntry.map
     else
-      TmConDef {t with tyIdent = applyMonomorphizationType env t.tyIdent,
-                       inexpr = inexpr,
-                       ty = applyMonomorphizationTypeLabel env t.ty}
+      TmDecl
+      {x with decl = DeclConDef {t with tyIdent = applyMonomorphizationType env t.tyIdent}
+      , inexpr = inexpr
+      , ty = applyMonomorphizationTypeLabel env x.ty
+      }
   | TmConApp t ->
     let ident =
       match mapLookup t.ident env.conEnv with Some instEntry then
@@ -812,34 +846,39 @@ lang MExprMonomorphizeTest =
   -- all duplicated definitions.
   sem distinctSymbols : Expr -> Bool
   sem distinctSymbols =
-  | ast -> distinctSymbolsExpr (setEmpty nameCmp) true ast
+  | ast -> distinctSymbolsExpr (setEmpty nameCmp) ast
 
-  sem distinctSymbolsExpr : Set Name -> Bool -> Expr -> Bool
-  sem distinctSymbolsExpr syms acc =
+  sem distinctSymbolsDecl : Set Name -> Decl -> Option (Set Name)
+  sem distinctSymbolsDecl syms =
+  | DeclLet t ->
+    if setMem t.ident syms then None () else
+    if distinctSymbolsExpr syms t.body
+    then Some (setInsert t.ident syms)
+    else None ()
+  | DeclRecLets t ->
+    if any (lam bind. setMem bind.ident syms) t.bindings then None () else
+    let syms = foldl (lam syms. lam bind. setInsert bind.ident syms) syms t.bindings in
+    if forAll (lam bind. distinctSymbolsExpr syms bind.body) t.bindings
+    then Some syms
+    else None ()
+  | DeclType t -> if setMem t.ident syms then None () else Some (setInsert t.ident syms)
+  | DeclConDef t -> if setMem t.ident syms then None () else Some (setInsert t.ident syms)
+  | DeclExt t -> if setMem t.ident syms then None () else Some (setInsert t.ident syms)
+  | d ->
+    if sfold_Decl_Expr (lam acc. lam tm. if acc then distinctSymbolsExpr syms tm else false) true d
+    then Some syms
+    else None ()
+
+  sem distinctSymbolsExpr : Set Name -> Expr -> Bool
+  sem distinctSymbolsExpr syms =
   | TmLam t ->
     if setMem t.ident syms then false
-    else distinctSymbolsExpr (setInsert t.ident syms) acc t.body
-  | TmLet t ->
-    if setMem t.ident syms then false
-    else
-      let acc = distinctSymbolsExpr syms acc t.body in
-      distinctSymbolsExpr (setInsert t.ident syms) acc t.inexpr
-  | TmRecLets t ->
-    if any (lam bind. setMem bind.ident syms) t.bindings then false
-    else
-      let syms = foldl (lam syms. lam bind. setInsert bind.ident syms) syms t.bindings in
-      let acc = foldl (lam acc. lam bind. distinctSymbolsExpr syms acc bind.body) acc t.bindings in
-      distinctSymbolsExpr syms acc t.inexpr
-  | TmType t ->
-    if setMem t.ident syms then false
-    else distinctSymbolsExpr (setInsert t.ident syms) acc t.inexpr
-  | TmConDef t ->
-    if setMem t.ident syms then false
-    else distinctSymbolsExpr (setInsert t.ident syms) acc t.inexpr
-  | TmExt t ->
-    if setMem t.ident syms then false
-    else distinctSymbolsExpr (setInsert t.ident syms) acc t.inexpr
-  | t -> sfold_Expr_Expr (distinctSymbolsExpr syms) acc t
+    else distinctSymbolsExpr (setInsert t.ident syms) t.body
+  | TmDecl x ->
+    match distinctSymbolsDecl syms x.decl with Some syms
+    then distinctSymbolsExpr syms x.inexpr
+    else false
+  | t -> sfold_Expr_Expr (lam acc. lam tm. if acc then distinctSymbolsExpr syms tm else acc) true t
 end
 
 mexpr
@@ -852,9 +891,9 @@ in
 
 -- Monomorphic function example
 let monoFun = preprocess (bindall_ [
-  ulet_ "addOne" (ulam_ "x" (addi_ (var_ "x") (int_ 1))),
-  utuple_ [app_ (var_ "addOne") (int_ 1), app_ (var_ "addOne") (int_ 2)]
-]) in
+  ulet_ "addOne" (ulam_ "x" (addi_ (var_ "x") (int_ 1)))]
+  (utuple_ [app_ (var_ "addOne") (int_ 1), app_ (var_ "addOne") (int_ 2)]
+)) in
 utest isMonomorphic monoFun with true in
 let result = monomorphize monoFun in
 utest isMonomorphic result with true in
@@ -863,9 +902,9 @@ utest monoFun with result using eqExpr in
 -- Polymorphic identity function
 let id = nameSym "id" in
 let polyIdentity = preprocess (bindall_ [
-  nulet_ id (ulam_ "x" (var_ "x")),
-  utuple_ [app_ (nvar_ id) (int_ 2), app_ (nvar_ id) (float_ 2.5)]
-]) in
+  nulet_ id (ulam_ "x" (var_ "x"))]
+  (utuple_ [app_ (nvar_ id) (int_ 2), app_ (nvar_ id) (float_ 2.5)]
+)) in
 let env = collectInstantiations polyIdentity in
 utest mapSize env.funEnv with 1 in
 utest mapMem id env.funEnv with true in
@@ -874,16 +913,16 @@ utest isMonomorphic result with true in
 utest distinctSymbols result with true in
 let expected = preprocess (bindall_ [
   ulet_ "id_float" (ulam_ "x" (var_ "x")),
-  ulet_ "id_int" (ulam_ "x" (var_ "x")),
-  utuple_ [app_ (var_ "id_int") (int_ 2), app_ (var_ "id_float") (float_ 2.5)]
-]) in
+  ulet_ "id_int" (ulam_ "x" (var_ "x"))]
+  (utuple_ [app_ (var_ "id_int") (int_ 2), app_ (var_ "id_float") (float_ 2.5)]
+)) in
 utest result with expected using eqExpr in
 
 -- Unused function variable
 let unused = preprocess (bindall_ [
-  ulet_ "f" (ulam_ "x" (int_ 0)),
-  create_ (int_ 2) (var_ "f")
-]) in
+  ulet_ "f" (ulam_ "x" (int_ 0))]
+  (create_ (int_ 2) (var_ "f")
+)) in
 let env = collectInstantiations unused in
 utest mapSize env.funEnv with 1 in
 let result = applyMonomorphization env unused in
@@ -896,9 +935,9 @@ let f = nameSym "f" in
 let g = nameSym "g" in
 let seqPoly = preprocess (bindall_ [
   nulet_ f (ulam_ "x" (var_ "x")),
-  nulet_ g (ulam_ "x" (app_ (nvar_ f) (var_ "x"))),
-  utuple_ [app_ (nvar_ g) (int_ 2), app_ (nvar_ f) (float_ 2.5)]
-]) in
+  nulet_ g (ulam_ "x" (app_ (nvar_ f) (var_ "x")))]
+  (utuple_ [app_ (nvar_ g) (int_ 2), app_ (nvar_ f) (float_ 2.5)]
+)) in
 let env = collectInstantiations seqPoly in
 utest mapSize env.funEnv with 2 in
 utest mapMem f env.funEnv with true in
@@ -909,9 +948,9 @@ utest distinctSymbols result with true in
 let expected = preprocess (bindall_ [
   ulet_ "f_float" (ulam_ "x" (var_ "x")),
   ulet_ "f_int" (ulam_ "x" (var_ "x")),
-  ulet_ "g_int" (ulam_ "x" (app_ (var_ "f_int") (var_ "x"))),
-  utuple_ [app_ (var_ "g_int") (int_ 2), app_ (var_ "f_float") (float_ 2.5)]
-]) in
+  ulet_ "g_int" (ulam_ "x" (app_ (var_ "f_int") (var_ "x")))]
+  (utuple_ [app_ (var_ "g_int") (int_ 2), app_ (var_ "f_float") (float_ 2.5)]
+)) in
 utest result with expected using eqExpr in
 
 -- Nested polymorphism where the inner function is polymorphic with the same
@@ -919,16 +958,16 @@ utest result with expected using eqExpr in
 let h = nameSym "h" in
 let nestedOuterPoly = preprocess (bindall_ [
   nulet_ f (ulam_ "g" (ulam_ "s" (bindall_ [
-    nulet_ h (ulam_ "x" (app_ (var_ "g") (var_ "x"))),
-    map_ (nvar_ h) (var_ "s")
-  ]))),
+    nulet_ h (ulam_ "x" (app_ (var_ "g") (var_ "x")))]
+    (map_ (nvar_ h) (var_ "s")
+  )))),
   ulet_ "addOne" (ulam_ "x" (addi_ (var_ "x") (int_ 1))),
-  ulet_ "addHalf" (ulam_ "x" (addf_ (var_ "x") (float_ 0.5))),
-  utuple_ [
+  ulet_ "addHalf" (ulam_ "x" (addf_ (var_ "x") (float_ 0.5)))]
+  (utuple_ [
     appf2_ (nvar_ f) (var_ "addOne") (seq_ [int_ 2]),
     appf2_ (nvar_ f) (var_ "addHalf") (seq_ [float_ 2.5])
   ]
-]) in
+)) in
 let env = collectInstantiations nestedOuterPoly in
 utest mapSize env.funEnv with 1 in
 utest mapMem f env.funEnv with true in
@@ -939,33 +978,33 @@ let expected = preprocess (bindall_ [
   let_ "f_float"
     (tyarrows_ [tyarrow_ tyfloat_ tyfloat_, tyseq_ tyfloat_, tyseq_ tyfloat_])
     (ulam_ "g" (ulam_ "s" (bindall_ [
-      ulet_ "h" (ulam_ "x" (app_ (var_ "g") (var_ "x"))),
-      map_ (var_ "h") (var_ "s")
-  ]))),
+      ulet_ "h" (ulam_ "x" (app_ (var_ "g") (var_ "x")))]
+      (map_ (var_ "h") (var_ "s")
+  )))),
   let_ "f_int"
     (tyarrows_ [tyarrow_ tyint_ tyint_, tyseq_ tyint_, tyseq_ tyint_])
     (ulam_ "g" (ulam_ "s" (bindall_ [
-      ulet_ "h" (ulam_ "x" (app_ (var_ "g") (var_ "x"))),
-      map_ (var_ "h") (var_ "s")
-  ]))),
+      ulet_ "h" (ulam_ "x" (app_ (var_ "g") (var_ "x")))]
+      (map_ (var_ "h") (var_ "s")
+  )))),
   ulet_ "addOne" (ulam_ "x" (addi_ (var_ "x") (int_ 1))),
-  ulet_ "addHalf" (ulam_ "x" (addf_ (var_ "x") (float_ 0.5))),
-  utuple_ [
+  ulet_ "addHalf" (ulam_ "x" (addf_ (var_ "x") (float_ 0.5)))]
+  (utuple_ [
     appf2_ (var_ "f_int") (var_ "addOne") (seq_ [int_ 2]),
     appf2_ (var_ "f_float") (var_ "addHalf") (seq_ [float_ 2.5])
   ]
-]) in
+)) in
 utest result with expected using eqExpr in
 
 -- Polymorphism in both functions, but it is only used in the inner one (i.e.,
 -- only the inner one should be specialized).
 let innerPoly = preprocess (bindall_ [
   ulet_ "f" (ulam_ "x" (ulam_ "y" (bindall_ [
-    nulet_ g (ulam_ "z" (var_ "z")),
-    utuple_ [app_ (nvar_ g) (var_ "x"), app_ (nvar_ g) (var_ "y")]
-  ]))),
-  appf2_ (var_ "f") (int_ 2) (float_ 2.5)
-]) in
+    nulet_ g (ulam_ "z" (var_ "z"))]
+    (utuple_ [app_ (nvar_ g) (var_ "x"), app_ (nvar_ g) (var_ "y")]
+  ))))]
+  (appf2_ (var_ "f") (int_ 2) (float_ 2.5)
+)) in
 let env = collectInstantiations innerPoly in
 utest mapSize env.funEnv with 2 in
 utest mapMem g env.funEnv with true in
@@ -975,11 +1014,11 @@ utest distinctSymbols result with true in
 let expected = preprocess (bindall_ [
   ulet_ "f" (ulam_ "x" (ulam_ "y" (bindall_ [
     ulet_ "g_float" (ulam_ "z" (var_ "z")),
-    ulet_ "g_int" (ulam_ "z" (var_ "z")),
-    utuple_ [app_ (var_ "g_int") (var_ "x"), app_ (var_ "g_float") (var_ "y")]
-  ]))),
-  appf2_ (var_ "f") (int_ 2) (float_ 2.5)
-]) in
+    ulet_ "g_int" (ulam_ "z" (var_ "z"))]
+    (utuple_ [app_ (var_ "g_int") (var_ "x"), app_ (var_ "g_float") (var_ "y")]
+  ))))]
+  (appf2_ (var_ "f") (int_ 2) (float_ 2.5)
+)) in
 utest result with expected using eqExpr in
 
 -- Nested polymorphism where the inner and outer functions are polymorphic over
@@ -988,14 +1027,14 @@ utest result with expected using eqExpr in
 -- function.
 let nestedPoly = preprocess (bindall_ [
   nulet_ f (ulam_ "x" (ulam_ "y" (bindall_ [
-    nulet_ g (ulam_ "z" (var_ "z")),
-    utuple_ [app_ (nvar_ g) (var_ "x"), app_ (nvar_ g) (var_ "y")]
-  ]))),
-  utuple_ [
+    nulet_ g (ulam_ "z" (var_ "z"))]
+    (utuple_ [app_ (nvar_ g) (var_ "x"), app_ (nvar_ g) (var_ "y")]
+  ))))]
+  (utuple_ [
     appf2_ (nvar_ f) (int_ 2) (float_ 2.5),
     appf2_ (nvar_ f) (float_ 2.5) (int_ 2)
   ]
-]) in
+)) in
 let env = collectInstantiations nestedPoly in
 utest mapSize env.funEnv with 2 in
 utest mapMem f env.funEnv with true in
@@ -1015,12 +1054,12 @@ let recursion = preprocess (bindall_ [
         (seq_ [])
         (cons_
           (app_ (var_ "g") (head_ (var_ "s")))
-          (appf2_ (var_ "f") (var_ "g") (tail_ (var_ "s"))))))) ],
-  utuple_ [
+          (appf2_ (var_ "f") (var_ "g") (tail_ (var_ "s"))))))) ]]
+  (utuple_ [
     appf2_ (var_ "f") (ulam_ "x" (addi_ (var_ "x") (int_ 1))) (seq_ [int_ 1, int_ 2]),
     appf2_ (var_ "f") (ulam_ "x" (negf_ (var_ "x"))) (seq_ [float_ 1.0, float_ 2.0])
   ]
-]) in
+)) in
 let env = collectInstantiations recursion in
 utest mapSize env.funEnv with 1 in
 let result = applyMonomorphization env recursion in
@@ -1045,11 +1084,11 @@ let mutrec = preprocess (bindall_ [
           (appf2_ (var_ "maphd") (var_ "f") (var_ "t"))
           (app_ (var_ "f") (var_ "h")))
         (seq_ []))))
-  ],
-  appf2_ (var_ "maphd")
+  ]]
+  (appf2_ (var_ "maphd")
     (ulam_ "x" (addi_ (var_ "x") (int_ 1)))
     (seq_ [int_ 1, int_ 2, int_ 3])
-]) in
+)) in
 let env = collectInstantiations mutrec in
 utest mapSize env.funEnv with 2 in
 let result = applyMonomorphization env mutrec in
@@ -1082,8 +1121,8 @@ let mutrec3 = preprocess (bindall_ [
           (appf2_ (var_ "f2") (var_ "f") (var_ "t"))
           (app_ (var_ "f") (var_ "h")))
         (seq_ []))))
-  ],
-  utuple_ [
+  ]]
+  (utuple_ [
     appf2_ (var_ "f2")
       (ulam_ "x" (addi_ (var_ "x") (int_ 1)))
       (seq_ [int_ 1, int_ 2, int_ 3, int_ 4]),
@@ -1091,7 +1130,7 @@ let mutrec3 = preprocess (bindall_ [
       (ulam_ "x" (addf_ (var_ "x") (float_ 1.5)))
       (seq_ [float_ 2., float_ 3., float_ 4., float_ 5.])
   ]
-]) in
+)) in
 let env = collectInstantiations mutrec3 in
 utest mapSize env.funEnv with 3 in
 let result = applyMonomorphization env mutrec3 in
@@ -1108,13 +1147,13 @@ let polyOption = preprocess (bindall_ [
   condef_ "None" (tyall_ "a" (tyarrow_ tyunit_ (tyapp_ (tycon_ "Option") (tyvar_ "a")))),
   ulet_ "isSome" (ulam_ "o" (
     match_ (var_ "o") (pcon_ "Some" pvarw_) true_ false_
-  )),
-  seq_ [
+  ))]
+  (seq_ [
     app_ (var_ "isSome") (conapp_ "Some" (int_ 2)),
     app_ (var_ "isSome") (conapp_ "Some" (float_ 2.5)),
     app_ (var_ "isSome") (conapp_ "None" uunit_)
   ]
-]) in
+)) in
 let env = collectInstantiations polyOption in
 utest mapSize env.funEnv with 1 in
 utest mapSize env.conEnv with 2 in
@@ -1137,9 +1176,9 @@ let polyAlias = preprocess (bindall_ [
       (tyarrow_ (tyapps_ (tycon_ "Pair") [tyvar_ "a", tyvar_ "b"]) (tyvar_ "b"))))
     (ulam_ "p" (tupleproj_ 1 (var_ "p"))),
   ulet_ "x" (utuple_ [int_ 2, float_ 2.5]),
-  ulet_ "y" (utuple_ [float_ 2.5, int_ 2]),
-  seq_ [app_ (var_ "fst") (var_ "x"), app_ (var_ "snd") (var_ "y")]
-]) in
+  ulet_ "y" (utuple_ [float_ 2.5, int_ 2])]
+  (seq_ [app_ (var_ "fst") (var_ "x"), app_ (var_ "snd") (var_ "y")]
+)) in
 let env = collectInstantiations polyAlias in
 utest mapSize env.typeEnv with 1 in
 let result = applyMonomorphization env polyAlias in
@@ -1149,9 +1188,7 @@ utest eval {env = evalEnvEmpty ()} (typeCheck result)
 with seq_ [int_ 2, int_ 2] using eqExpr in
 
 -- Polymorphic anonymous function
-let polyAnon = preprocess (bindall_ [
-  ulam_ "x" (var_ "x")
-]) in
+let polyAnon = preprocess (ulam_ "x" (var_ "x")) in
 let result = monomorphize polyAnon in
 utest isMonomorphic result with true in
 utest distinctSymbols result with true in

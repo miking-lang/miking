@@ -392,13 +392,13 @@ lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
   | TmLam t ->
     FELam {ident = t.ident, body = generateExpr env t.body,
            ty = generateType env t.ty, info = t.info}
-  | TmLet t ->
+  | TmDecl (x & {decl = DeclLet t}) ->
     let boundNames = mapInsert t.ident t.body env.boundNames in
     let inexprEnv = {env with boundNames = boundNames} in
     FELet {ident = t.ident, tyBody = generateType env t.tyBody,
            body = generateExpr env t.body,
-           inexpr = generateExpr inexprEnv t.inexpr,
-           ty = generateType env t.ty, info = t.info}
+           inexpr = generateExpr inexprEnv x.inexpr,
+           ty = generateType env x.ty, info = t.info}
   | TmFlatten t ->
     withTypeFutTm
       (generateType env t.ty)
@@ -426,7 +426,7 @@ lang FutharkExprGenerate = FutharkConstGenerate + FutharkTypeGenerate +
   | TmParallelSizeEquality t ->
     FESizeEquality {x1 = t.x1, d1 = t.d1, x2 = t.x2, d2 = t.d2,
                     ty = generateType env t.ty, info = t.info}
-  | TmRecLets t ->
+  | TmDecl {decl = DeclRecLets t} ->
     errorSingle [t.info] "Recursive functions are not supported by the Futhark backend"
   | t ->
     errorSingle [infoTm t] "Term is not supported by the Futhark backend"
@@ -474,9 +474,9 @@ lang FutharkToplevelGenerate = FutharkExprGenerate + FutharkConstGenerate +
 
   sem generateToplevel : FutharkGenerateEnv -> Expr -> [FutDecl]
   sem generateToplevel env =
-  | TmType t ->
-    generateToplevel env t.inexpr
-  | TmLet t ->
+  | TmDecl {decl = DeclType _, inexpr = inexpr} ->
+    generateToplevel env inexpr
+  | TmDecl (x & {decl = DeclLet t}) ->
     recursive let findReturnType = lam params. lam ty.
       if null params then ty
       else
@@ -505,19 +505,19 @@ lang FutharkToplevelGenerate = FutharkExprGenerate + FutharkConstGenerate +
                   params = params, ret = retTy,
                   body = stripLambdas body, info = t.info}
     in
-    cons decl (generateToplevel env t.inexpr)
-  | TmRecLets t ->
+    cons decl (generateToplevel env x.inexpr)
+  | TmDecl {decl = DeclRecLets t} ->
     errorSingle [t.info] "Recursive functions are not supported by the Futhark backend"
-  | TmExt t ->
+  | TmDecl (x & {decl = DeclExt t}) ->
     match mapLookup (nameGetStr t.ident) extMap with Some str then
-      generateToplevel env t.inexpr
+      generateToplevel env x.inexpr
     else
       errorSingle [t.info] "External functions are not supported by the Futhark backend"
-  | TmUtest t ->
+  | TmDecl {decl = DeclUtest t} ->
     -- NOTE(larshum, 2021-11-25): This case should never be reached, as utests
     -- are removed/replaced in earlier stages of the compilation.
     errorSingle [t.info] "Utests are not supported by the Futhark backend"
-  | TmConDef t ->
+  | TmDecl {decl = DeclConDef t} ->
     errorSingle [t.info] "Constructor definitions are not supported by the Futhark backend"
   | _ -> []
 end
@@ -539,7 +539,7 @@ end
 mexpr
 
 use TestLang in
-use FutharkPrettyPrint in 
+use FutharkPrettyPrint in
 
 let f = nameSym "f" in
 let c = nameSym "c" in
@@ -547,8 +547,8 @@ let chars = typeCheck (bindall_ [
   nlet_ f (tyarrows_ [tychar_, tybool_]) (nlam_ c tychar_ (
     match_ (nvar_ c) (pchar_ 'a')
       true_
-      false_)),
-  app_ (nvar_ f) (char_ 'x')]) in
+      false_))]
+  (app_ (nvar_ f) (char_ 'x'))) in
 
 let charsExpected = FProg {decls = [
   FDeclFun {
@@ -603,8 +603,8 @@ let t = typeCheck (bindall_ [
                if_ (geqi_ (nvar_ a3) (nvar_ b3)) (nvar_ b3) (nvar_ a3)))),
   nlet_ map (tyarrows_ [tyarrow_ tyint_ tyint_, ntycon_ intseq, ntycon_ intseq])
              (nlam_ f3 (tyarrow_ tyint_ tyint_) (nlam_ s (ntycon_ intseq)
-               (map_ (nvar_ f3) (nvar_ s)))),
-  unit_]) in
+               (map_ (nvar_ f3) (nvar_ s))))]
+  unit_) in
 
 let intSeqType = lam n. FTyArray {
   elem = FTyInt {info = NoInfo (), sz = I64 ()}, dim = Some (NamedDim n), info = NoInfo ()
@@ -659,12 +659,12 @@ let x = nameSym "x" in
 let y = nameSym "y" in
 let n = nameSym "n" in
 let foldlToFor = typeCheck
-  (nlet_ f (tyarrows_ [tyseq_ tyint_, tyint_]) (
+  (bind_ (nlet_ f (tyarrows_ [tyseq_ tyint_, tyint_]) (
     nlam_ s (tyseq_ tyint_) (
       foldl_
         (nlam_ acc tyint_ (nlam_ y tyint_ (
           addi_ (nvar_ acc) (nvar_ y))))
-        (int_ 0) (nvar_ s)))) in
+        (int_ 0) (nvar_ s)))) unit_) in
 let expected = FProg {decls = [
   FDeclFun {
     ident = f, entry = true, typeParams = [FPSize {val = n}],
@@ -679,9 +679,9 @@ utest printFutProg (generateProgram entryPoints foldlToFor)
 with printFutProg expected using eqSeq eqc in
 
 let negation = typeCheck
-  (nlet_ f (tyarrows_ [tyint_, tyfloat_, tyrecord_ [("a", tyint_), ("b", tyfloat_)]])
+  (bind_ (nlet_ f (tyarrows_ [tyint_, tyfloat_, tyrecord_ [("a", tyint_), ("b", tyfloat_)]])
     (nlam_ a tyint_ (nlam_ b tyfloat_ (
-      urecord_ [("a", negi_ (nvar_ a)), ("b", negf_ (nvar_ b))])))) in
+      urecord_ [("a", negi_ (nvar_ a)), ("b", negf_ (nvar_ b))])))) unit_) in
 let expected = FProg {decls = [
   FDeclFun {
     ident = f, entry = false, typeParams = [],
@@ -698,11 +698,11 @@ with printFutProg expected using eqSeq eqc in
 let recordTy = tyrecord_ [("a", tyint_), ("b", tyfloat_)] in
 let recordPat = prec_ [("a", npvar_ a), ("b", npvar_ b)] in
 let recordMatchNotProj = typeCheck
-  (nlet_ f (tyarrows_ [recordTy, tyint_])
+  (bind_ (nlet_ f (tyarrows_ [recordTy, tyint_])
     (nlam_ x recordTy
       (match_ (nvar_ x) recordPat
         (nvar_ a)
-        never_))) in
+        never_))) unit_) in
 let expected = FProg {decls = [
   FDeclFun {
     ident = f, entry = false, typeParams = [],
@@ -721,7 +721,7 @@ let sinId = nameSym "sin" in
 let x = nameSym "x" in
 let extDefn = typeCheck (bindall_ [
   next_ extSinId false (tyarrow_ tyfloat_ tyfloat_),
-  nulet_ sinId (nlam_ x tyfloat_ (app_ (nvar_ extSinId) (nvar_ x)))]) in
+  nulet_ sinId (nlam_ x tyfloat_ (app_ (nvar_ extSinId) (nvar_ x)))] unit_) in
 let expected = FProg {decls = [
   FDeclFun {
     ident = sinId, entry = false, typeParams = [],

@@ -54,12 +54,20 @@ lang PMExprDemoteMap2 = PMExprDemoteBase
     let tid = nameSym "t" in
     let iid = nameSym "i" in
     let xid = nameSym "x" in
-    let aExpr = TmLet {
-      ident = aid, tyAnnot = tyTm t.as, tyBody = tyTm t.as, body = demoteParallel t.as,
-      inexpr = unit_, ty = tyresult, info = infoTm t.as} in
-    let bExpr = TmLet {
-      ident = bid, tyAnnot = tyTm t.bs, tyBody = tyTm t.bs, body = demoteParallel t.bs,
-      inexpr = unit_, ty = tyresult, info = infoTm t.bs} in
+    let aExpr = DeclLet
+      { ident = aid
+      , tyAnnot = tyTm t.as
+      , tyBody = tyTm t.as
+      , body = demoteParallel t.as
+      , info = infoTm t.as
+      } in
+    let bExpr = DeclLet
+      { ident = bid
+      , tyAnnot = tyTm t.bs
+      , tyBody = tyTm t.bs
+      , body = demoteParallel t.bs
+      , info = infoTm t.bs
+      } in
     let access = lam seqId. lam seqTy. lam elemTy.
       TmApp {
         lhs = TmApp {
@@ -69,28 +77,42 @@ lang PMExprDemoteMap2 = PMExprDemoteBase
         rhs = TmVar {ident = iid, ty = TyInt {info = t.info}, info = t.info,
                      frozen = false},
         ty = elemTy, info = t.info} in
-    let tExpr = TmLet {
-      ident = tid, tyAnnot = tyseqtuple, tyBody = tyseqtuple,
-      body = TmApp {
-        lhs = TmApp {
-          lhs = TmConst {val = CCreate (), ty = tyuk, info = t.info},
-          rhs = TmApp {
-            lhs = TmConst {val = CLength (), ty = tyuk, info = t.info},
-            rhs = TmVar {ident = aid, ty = tyTm t.as, info = t.info,
-                         frozen = false},
-            ty = TyInt {info = t.info}, info = t.info},
-          ty = tyuk, info = t.info},
-        rhs = TmLam {
-          ident = iid,
-          tyAnnot = TyInt {info = t.info}, tyParam = TyInt {info = t.info},
-          body = TmRecord {
-            bindings = mapFromSeq cmpSID [
-              (stringToSid "0", access aid (tyTm t.as) lty),
-              (stringToSid "1", access bid (tyTm t.bs) rty)],
-            ty = tytuple, info = t.info},
-          ty = tytuple, info = t.info},
-        ty = tyseqtuple, info = t.info},
-      inexpr = unit_, ty = tyresult, info = t.info} in
+    let tExpr = DeclLet
+      { ident = tid
+      , tyAnnot = tyseqtuple
+      , tyBody = tyseqtuple
+      , body = TmApp
+        { lhs = TmApp
+          { lhs = TmConst {val = CCreate (), ty = tyuk, info = t.info}
+          , rhs = TmApp
+            { lhs = TmConst {val = CLength (), ty = tyuk, info = t.info}
+            , rhs = TmVar {ident = aid, ty = tyTm t.as, info = t.info, frozen = false}
+            , ty = TyInt {info = t.info}
+            , info = t.info
+            }
+          , ty = tyuk
+          , info = t.info
+          }
+        , rhs = TmLam
+          { ident = iid
+          , tyAnnot = TyInt {info = t.info}
+          , tyParam = TyInt {info = t.info}
+          , body = TmRecord
+            { bindings = mapFromSeq cmpSID
+              [ (stringToSid "0", access aid (tyTm t.as) lty)
+              , (stringToSid "1", access bid (tyTm t.bs) rty)
+              ]
+            , ty = tytuple
+            , info = t.info
+            }
+          , ty = tytuple
+          , info = t.info
+          }
+        , ty = tyseqtuple
+        , info = t.info
+        }
+      , info = t.info
+      } in
     let projection = lam key. lam id. lam ty.
       let keySid = stringToSid key in
       let x = nameSym "x" in
@@ -121,7 +143,7 @@ lang PMExprDemoteMap2 = PMExprDemoteBase
         ty = tyuk, info = t.info},
       rhs = TmVar {ident = tid, ty = tyseqtuple, info = t.info, frozen = false},
       ty = TySeq {ty = tyuk, info = t.info}, info = t.info} in
-    bindall_ [aExpr, bExpr, tExpr, mapExpr]
+    bindall_ [aExpr, bExpr, tExpr] mapExpr
 end
 
 lang PMExprDemoteReduce = PMExprDemoteBase + PMExprAst
@@ -188,21 +210,33 @@ lang PMExprDemoteLoop = PMExprDemoteBase + PMExprAst
       ty = tyint_, info = t.info} in
     let tIdent = nameSym "t" in
     let tVar = TmVar {ident = tIdent, ty = accTy, info = t.info, frozen = false} in
-    let thnExpr = TmLet {
-      ident = tIdent,
-      tyAnnot = accTy,
-      tyBody = accTy,
-      body = TmApp {
-        lhs = TmApp {
-          lhs = f, rhs = acc, ty = arrowType tyint_ accTy, info = t.info},
-        rhs = i, ty = accTy, info = t.info},
-      inexpr = TmApp {
-        lhs = TmApp {
-          lhs = TmVar {ident = loopId, ty = loopTy, info = t.info, frozen = false},
-          rhs = tVar, ty = arrowType tyint_ accTy, info = t.info},
-        rhs = incrementIterExpr,
-        ty = accTy, info = t.info},
-      ty = accTy, info = t.info} in
+    let thnExpr = TmDecl
+      { decl = DeclLet
+        { ident = tIdent
+        , tyAnnot = accTy
+        , tyBody = accTy
+        , body = TmApp
+          { lhs = TmApp {lhs = f, rhs = acc, ty = arrowType tyint_ accTy, info = t.info}
+          , rhs = i
+          , ty = accTy
+          , info = t.info
+          }
+        , info = t.info
+        }
+      , inexpr = TmApp
+        { lhs = TmApp
+          { lhs = TmVar {ident = loopId, ty = loopTy, info = t.info, frozen = false}
+          , rhs = tVar
+          , ty = arrowType tyint_ accTy
+          , info = t.info
+          }
+        , rhs = incrementIterExpr
+        , ty = accTy
+        , info = t.info
+        }
+      , ty = accTy
+      , info = t.info
+      } in
     let loopBindingDef = {
       ident = loopId, tyAnnot = loopTy, tyBody = loopTy, info = t.info,
       body = TmLam {
@@ -218,18 +252,34 @@ lang PMExprDemoteLoop = PMExprDemoteBase + PMExprAst
             ty = accTy, info = t.info},
           ty = arrowType tyint_ accTy, info = t.info},
         ty = loopTy, info = t.info}} in
-    TmRecLets {
-      bindings = [loopBindingDef],
-      inexpr = TmApp {
-        lhs = TmApp {
-          lhs = TmVar {
-            ident = loopId, ty = loopTy, info = t.info, frozen = false},
-          rhs = t.ne,
-          ty = arrowType tyint_ accTy, info = t.info},
-        rhs = TmConst {
-          val = CInt {val = 0}, ty = TyInt {info = t.info}, info = t.info},
-        ty = accTy, info = t.info},
-      ty = accTy, info = t.info}
+    TmDecl
+    { decl = DeclRecLets
+      { bindings = [loopBindingDef]
+      , info = t.info
+      }
+    , inexpr = TmApp
+      { lhs = TmApp
+        { lhs = TmVar
+          { ident = loopId
+          , ty = loopTy
+          , info = t.info
+          , frozen = false
+          }
+        , rhs = t.ne
+        , ty = arrowType tyint_ accTy
+        , info = t.info
+        }
+      , rhs = TmConst
+        { val = CInt {val = 0}
+        , ty = TyInt {info = t.info}
+        , info = t.info
+        }
+      , ty = accTy
+      , info = t.info
+      }
+    , ty = accTy
+    , info = t.info
+    }
 end
 
 lang PMExprDemotePrintFloat = PMExprDemoteBase
@@ -272,10 +322,10 @@ with bindall_ [
   ulet_ "t"
     (create_ (length_ (var_ "a"))
       (ulam_ "i" (utuple_ [get_ (var_ "a") (var_ "i"),
-                           get_ (var_ "b") (var_ "i")]))),
-  map_
+                           get_ (var_ "b") (var_ "i")])))]
+  (map_
     (ulam_ "x" (addi_ (tupleproj_ 0 (var_ "x")) (tupleproj_ 1 (var_ "x"))))
-    (var_ "t")]
+    (var_ "t"))
 using eqExpr in
 
 utest demoteParallel (parallelReduce_ (uconst_ (CAddi ())) (int_ 0) (flatten_ s))
@@ -297,13 +347,13 @@ let loopRecLet = lam fn.
       (var_ "acc")))) in
 
 let accLoopDef = bindall_ [
-  loopRecLet foldlFn,
-  appf2_ (var_ "loop") acc (int_ 0)] in
+  loopRecLet foldlFn]
+  (appf2_ (var_ "loop") acc (int_ 0)) in
 utest demoteParallel (loopAcc_ acc n foldlFn) with accLoopDef using eqExpr in
 
 let loopDef = bindall_ [
-  loopRecLet (ulam_ "" f),
-  appf2_ (var_ "loop") unit_ (int_ 0)] in
+  loopRecLet (ulam_ "" f)]
+  (appf2_ (var_ "loop") unit_ (int_ 0)) in
 utest demoteParallel (loop_ n f) with loopDef using eqExpr in
 utest demoteParallel (parallelLoop_ n f) with loopDef using eqExpr in
 

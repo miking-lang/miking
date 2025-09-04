@@ -308,7 +308,7 @@ lang ShallowBase = Ast + NamedPat
         branches
         fallthrough
         (lam name. lam spat. lam t. lam e. mkMatch name t e spat) in
-    bindall_ (snoc lets lowered)
+    bindall_ lets lowered
 end
 
 lang ShallowAnd = ShallowBase + AndPat
@@ -669,7 +669,7 @@ lang ShallowSeq = ShallowBase + SeqTotPat + SeqEdgePat
         in nulet_ name expr) in
     match_ (nvar_ scrutinee)
       (withInfoPat x.info (withTypePat x.ty (pseqtot_ (map npvar_ x.elements))))
-      (bindall_ (snoc slices t))
+      (bindall_ slices t)
       e
   | SPatSeqGE x ->
     let letFrom_ = lam n. lam i. nulet_ n (get_ (nvar_ scrutinee) i) in
@@ -704,7 +704,7 @@ lang ShallowSeq = ShallowBase + SeqTotPat + SeqEdgePat
         in nulet_ name expr) in
     let len = if deref needLen then [nulet_ lenName (length_ (nvar_ scrutinee))] else [] in
     match_ (nvar_ scrutinee) (withInfoPat x.info (withTypePat x.ty (pseqedgew_ (make x.minLength pvarw_) [])))
-      (bindall_ (join [pres, len, slices, posts, [t]]))
+      (bindall_ (join [pres, len, slices, posts]) t)
       e
 
   sem shallowIsInfallible =
@@ -778,8 +778,8 @@ lang LowerNestedPatterns = CollectBranches + ShallowBase
         let elseId = nameSym "_elsBranch" in
         bindall_ [
           nulet_ elseId (ulam_ "" (lowerAll fallthrough)),
-          nulet_ targetId (lowerAll expr),
-          lowerToExpr targetId (map f branches) (app_ (nvar_ elseId) uunit_)]
+          nulet_ targetId (lowerAll expr)]
+        (lowerToExpr targetId (map f branches) (app_ (nvar_ elseId) uunit_))
       else match target with Right name then
         lowerToExpr name (map f branches) (lowerAll fallthrough)
       else never

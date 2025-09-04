@@ -41,8 +41,8 @@ let _futharkCheckRegularImpl =
   nlet_ _futharkCheckRegularId
     (ntyall_ a (tyarrow_ (tyseq_ (tyseq_ (ntyvar_ a))) tyunit_))
     (nlam_ s (tyseq_ (tyseq_ (ntyvar_ a))) (bindall_ [
-      nlet_ k tyint_ (length_ (head_ (nvar_ s))),
-      if_
+      nlet_ k tyint_ (length_ (head_ (nvar_ s)))]
+      (if_
         (foldl_
           (nlam_ x tybool_ (nlam_ y (tyseq_ (ntyvar_ a))
             (if_ (eqi_ (nvar_ k) (length_ (nvar_ y)))
@@ -51,25 +51,25 @@ let _futharkCheckRegularImpl =
             true_
             (tail_ (nvar_ s)))
         unit_
-        (error_ (str_ "Irregular sequence found"))]))
+        (error_ (str_ "Irregular sequence found")))))
 
 lang PMExprCompileWellFormedInstrumentation = VarAst
-  sem instrumentationMap : () -> Map Name Expr
+  sem instrumentationMap : () -> Map Name Decl
   sem instrumentationMap =
   | () ->
     mapFromSeq nameCmp [
       (_cudaCheckRankId, _cudaCheckRankImpl),
       (_futharkCheckRegularId, _futharkCheckRegularImpl)]
 
-  sem findUsedImplementations : Expr -> Map Name (Bool, Expr)
+  sem findUsedImplementations : Expr -> Map Name (Bool, Decl)
   sem findUsedImplementations =
   | ast ->
     findUsedImplementationsH
       (mapMapWithKey (lam. lam e. (false, e)) (instrumentationMap ()))
       ast
 
-  sem findUsedImplementationsH : Map Name (Bool, Expr) -> Expr
-                              -> Map Name (Bool, Expr)
+  sem findUsedImplementationsH : Map Name (Bool, Decl) -> Expr
+                              -> Map Name (Bool, Decl)
   sem findUsedImplementationsH acc =
   | TmVar t ->
     match mapLookup t.ident acc with Some entry then
@@ -116,14 +116,14 @@ lang PMExprCompileWellFormedBase =
   sem instrumentWellFormedChecks
     : Set Name -> WellFormedConfig -> Class -> Expr -> Expr
   sem instrumentWellFormedChecks accelerateIds config class =
-  | TmLet t ->
+  | TmDecl (x & {decl = DeclLet t}) ->
     let f = lam e.
       instrumentWellFormedChecks accelerateIds config class e in
     let body =
       if setMem t.ident accelerateIds then
         instrumentWellFormedChecksBody config t.body class
       else f t.body in
-    TmLet {t with body = body, inexpr = f t.inexpr}
+    TmDecl {x with decl = DeclLet {t with body = body}, inexpr = f x.inexpr}
   | t -> smap_Expr_Expr (instrumentWellFormedChecks accelerateIds config class) t
 
   -- Performs compilation up to the point where well-formedness checks can be
@@ -240,8 +240,8 @@ lang PMExprFutharkWellFormed =
     else
       bindall_
         [ ulet_ "" (app_ (nvar_ _futharkCheckRegularId) (nvar_ id))
-        , ulet_ "" (iter_ (nulam_ innerId innerCheck) (nvar_ id))
-        , acc ]
+        , ulet_ "" (iter_ (nulam_ innerId innerCheck) (nvar_ id))]
+        acc
   | TySeq t -> acc
   | TyRecord t ->
     mapFoldWithKey
@@ -315,9 +315,10 @@ use TestLang in
 
 let fnid = nameSym "f" in
 let x = nameSym "x" in
-let t =
-  nlet_ fnid (tyarrow_ (tyseq_ (tyseq_ tyint_)) (tyseq_ (tyseq_ tyint_)))
-    (nlam_ x (tyseq_ (tyseq_ tyint_)) (nvar_ x))
+let t = bind_
+  (nlet_ fnid (tyarrow_ (tyseq_ (tyseq_ tyint_)) (tyseq_ (tyseq_ tyint_)))
+    (nlam_ x (tyseq_ (tyseq_ tyint_)) (nvar_ x)))
+  unit_
 in
 let ids = setOfSeq nameCmp [fnid] in
 let config = {dynamicChecks = true, tensorMaxRank = 3} in

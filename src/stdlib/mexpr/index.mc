@@ -82,31 +82,31 @@ lang LamIndex = Index + LamAst
   | TmLam { ident = ident } -> addKey ident acc
 end
 
-lang LetIndex = Index + LetAst
+lang LetIndex = Index + LetDeclAst
   sem indexAdd (acc: IndexAcc) =
-  | TmLet { ident = ident } -> addKey ident acc
+  | TmDecl {decl = DeclLet { ident = ident }} -> addKey ident acc
 end
 
-lang RecLetsIndex = Index + RecLetsAst
+lang RecLetsIndex = Index + RecLetsDeclAst
   sem indexAdd (acc: IndexAcc) =
-  | TmRecLets { bindings = bindings } ->
-    foldl (lam acc: IndexAcc. lam b: RecLetBinding. addKey b.ident acc)
+  | TmDecl {decl = DeclRecLets { bindings = bindings }} ->
+    foldl (lam acc: IndexAcc. lam b: DeclLetRecord. addKey b.ident acc)
       acc bindings
 end
 
-lang ExtIndex = Index + ExtAst
+lang ExtIndex = Index + ExtDeclAst
   sem indexAdd (acc: IndexAcc) =
-  | TmExt { ident = ident } -> addKey ident acc
+  | TmDecl {decl = DeclExt { ident = ident }} -> addKey ident acc
 end
 
-lang TypeIndex = Index + TypeAst
+lang TypeIndex = Index + TypeDeclAst
   sem indexAdd (acc: IndexAcc) =
-  | TmType { ident = ident } -> addKey ident acc
+  | TmDecl {decl = DeclType { ident = ident }} -> addKey ident acc
 end
 
-lang DataIndex = Index + DataAst
+lang DataIndex = Index + DataAst + DataDeclAst
   sem indexAdd (acc: IndexAcc) =
-  | TmConDef { ident = ident } -> addKey ident acc
+  | TmDecl {decl = DeclConDef { ident = ident }} -> addKey ident acc
   | TmConApp { ident = ident } -> addKey ident acc
 end
 

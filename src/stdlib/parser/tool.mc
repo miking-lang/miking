@@ -1053,8 +1053,8 @@ let runParserGenerator : {synFile : String, outFile : String} -> () = lam args.
               (nulam_ seqName
                 (match_ (nvar_ seqName) pats
                   (bindall_
-                    (snoc toRebind
-                      (asDyn_ (wrap (urecord_ fields)))))
+                    toRebind
+                    (asDyn_ (wrap (urecord_ fields))))
                   never_))
           in
           let exprProduction = urecord_
@@ -1602,14 +1602,14 @@ let runParserGenerator : {synFile : String, outFile : String} -> () = lam args.
                   (nulam_ seqName
                     (match_ (nvar_ seqName) pats
                       (bindall_
-                        (snoc toRebind
-                          (asDyn_
-                            (nconapp_ conName
-                              (urecord_
-                                [ (infoFieldLabel, mergeInfos_ [lPartSym.info, ntSym.info, rPartSym.info])
-                                , (termsFieldLabel, seq_ [lPartSym.info, rPartSym.info])
-                                , ("inner", match_ ntVal (pseqtot_ [pvar_ "x"]) (var_ "x") never_)
-                                ])))))
+                        toRebind
+                        (asDyn_
+                          (nconapp_ conName
+                            (urecord_
+                              [ (infoFieldLabel, mergeInfos_ [lPartSym.info, ntSym.info, rPartSym.info])
+                              , (termsFieldLabel, seq_ [lPartSym.info, rPartSym.info])
+                              , ("inner", match_ ntVal (pseqtot_ [pvar_ "x"]) (var_ "x") never_)
+                              ]))))
                       never_))
               in
               let prod =
@@ -1841,22 +1841,25 @@ let runParserGenerator : {synFile : String, outFile : String} -> () = lam args.
           [ ("start", nvar_ start)
           , ("productions", genOpResult.wrapProductions (seq_ prods))
           ] in
-        let grammar = bindall_ (snoc nts grammar) in
+        let grammar = bindall_ nts grammar in
         let table = _uletin_ "target" (app_ (var_ "genParsingTable") grammar)
           (match_ (var_ "target") (pcon_ "Right" (pvar_ "table"))
             (var_ "table")
             never_) in
         use LetDeclAst in
-        use UseAst in
+        use UseDeclAst in
         DeclLet
           { ident = nameNoSym "_table"
           , tyAnnot = tyunknown_
           , tyBody = tyunknown_
-          , body = TmUse
-            { ident = composedParseFragmentName
-            , info = NoInfo ()
+          , body = TmDecl
+            { decl = DeclUse
+              { ident = composedParseFragmentName
+              , info = NoInfo ()
+              }
             , ty = tyunknown_
             , inexpr =  table
+            , info = NoInfo ()
             }
           , info = NoInfo ()
           }
@@ -1866,7 +1869,7 @@ let runParserGenerator : {synFile : String, outFile : String} -> () = lam args.
   let parseFunctions : Res [MDecl] =
     let f = lam start.
       use LetDeclAst in
-      use UseAst in
+      use UseDeclAst in
       use BootParser in
       let parse = parseMExprStringExn {_defaultBootParserParseMExprStringArg () with allowFree = true} in
       let body = parse
@@ -1891,8 +1894,11 @@ let runParserGenerator : {synFile : String, outFile : String} -> () = lam args.
         , tyBody = tyunknown_
         , body = ulam_ "filename"
           (ulam_ "content"
-            (TmUse
-              { ident = composedParseFragmentName
+            (TmDecl
+              { decl = DeclUse
+                { ident = composedParseFragmentName
+                , info = NoInfo ()
+                }
               , inexpr = body
               , ty = tyunknown_
               , info = NoInfo ()

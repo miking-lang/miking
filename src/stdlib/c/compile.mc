@@ -485,12 +485,12 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile + RecordTypeUtils
   -----------------------
 
   sem collectExternals (acc: Map Name ExtInfo) =
-  | TmExt t ->
+  | TmDecl (x & {decl = DeclExt t}) ->
     let str = nameGetStr t.ident in
     match mapLookup str externalsMap with Some e then
       let e: ExtInfo = e in -- TODO(dlunde,2021-10-25): Remove with more complete type system?
       let acc = mapInsert t.ident e acc in
-      sfold_Expr_Expr collectExternals acc t.inexpr
+      sfold_Expr_Expr collectExternals acc x.inexpr
     else errorSingle [t.info] "Unsupported external"
   | expr -> sfold_Expr_Expr collectExternals acc expr
 
@@ -853,7 +853,7 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile + RecordTypeUtils
 
   sem compileTops (env: CompileCEnv) (accTop: [CTop]) (accInit: [CStmt]) =
 
-  | TmLet { ident = ident, tyBody = tyBody, body = body, inexpr = inexpr } ->
+    | TmDecl {decl = DeclLet { ident = ident, tyBody = tyBody, body = body }, inexpr = inexpr } ->
 
     -- Functions
     match body with TmLam _ then
@@ -885,8 +885,8 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile + RecordTypeUtils
         compileTops env accTop accInit inexpr
       else never
 
-  | TmRecLets { bindings = bindings, inexpr = inexpr } ->
-    let f = lam env. lam binding: RecLetBinding.
+  | TmDecl {decl = DeclRecLets { bindings = bindings}, inexpr = inexpr } ->
+    let f = lam env. lam binding: DeclLetRecord.
       match binding with { ident = ident, tyBody = tyBody, body = body } then
         compileFun env ident tyBody body
       else never
@@ -905,7 +905,7 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile + RecordTypeUtils
     else never
 
   -- Ignore externals (handled elsewhere)
-  | TmExt { inexpr = inexpr } -> compileTops env accTop accInit inexpr
+  | TmDecl {decl = DeclExt _, inexpr = inexpr} -> compileTops env accTop accInit inexpr
 
   -- Set up initialization code (for use, e.g., in a main function)
   | rest ->
@@ -1111,7 +1111,7 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile + RecordTypeUtils
 
   sem compileStmts (env: CompileCEnv) (res: Result) (acc: [CStmt]) =
 
-  | TmLet { ident = ident, tyBody = tyBody, body = body, inexpr = inexpr } ->
+  | TmDecl {decl = DeclLet { ident = ident, tyBody = tyBody, body = body}, inexpr = inexpr } ->
 
     -- Optimize direct allocations
     match body with TmConApp _ | TmRecord _ | TmSeq _ then
@@ -1145,7 +1145,7 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile + RecordTypeUtils
   | TmNever _ -> (env, snoc acc (CSNop {}))
 
   -- Ignore externals (handled elsewhere)
-  | TmExt { inexpr = inexpr } -> compileStmts env res acc inexpr
+  | TmDecl {decl = DeclExt _, inexpr = inexpr} -> compileStmts env res acc inexpr
 
 
   -----------------
@@ -1275,10 +1275,10 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile + RecordTypeUtils
     else errorSingle [infoTm t] "ERROR: Records cannot be handled in compileExpr."
 
   -- Should not occur after ANF and type lifting.
-  | (TmRecordUpdate _ | TmLet _
-    | TmRecLets _ | TmType _ | TmConDef _
-    | TmConApp _ | TmMatch _ | TmUtest _
-    | TmSeq _ | TmExt _) & t ->
+  | (TmRecordUpdate _ | TmDecl {decl = DeclLet _}
+    | TmDecl {decl = DeclRecLets _} | TmDecl {decl = DeclType _} | TmDecl {decl = DeclConDef _}
+    | TmConApp _ | TmMatch _ | TmDecl {decl = DeclUtest _}
+    | TmSeq _ | TmDecl {decl = DeclExt _}) & t ->
     errorSingle [infoTm t] "ERROR: Term cannot be handled in compileExpr."
 
   -- Literals
@@ -1430,9 +1430,8 @@ let testCompile32Bit : Expr -> String = lam expr.
   printCompiledCProg (compile opts expr) in
 
 let simpleLet = bindall_ [
-  ulet_ "x" (int_ 1),
-  int_ 0
-] in
+  ulet_ "x" (int_ 1)]
+  (int_ 0) in
 utest testCompile simpleLet with strJoin "\n" [
   "#include <stdint.h>",
   "#include <stdio.h>",
@@ -1447,9 +1446,8 @@ utest testCompile simpleLet with strJoin "\n" [
 let simpleFun = bindall_ [
   let_ "foo" (tyarrows_ [tyint_, tyint_, tyint_])
     (ulam_ "a" (ulam_ "b" (addi_ (var_ "a") (var_ "b")))),
-  ulet_ "x" (appf2_ (var_ "foo") (int_ 1) (int_ 2)),
-  int_ 0
-] in
+  ulet_ "x" (appf2_ (var_ "foo") (int_ 1) (int_ 2))]
+  (int_ 0) in
 utest testCompile simpleFun with strJoin "\n" [
   "#include <stdint.h>",
   "#include <stdio.h>",
@@ -1476,11 +1474,10 @@ let constants = bindall_ [
       ulet_ "t" (eqf_ (float_ 1.) (float_ 2.)),
       ulet_ "t" (lti_ (int_ 1) (int_ 2)),
       ulet_ "t" (ltf_ (float_ 1.) (float_ 2.)),
-      ulet_ "t" (negf_ (float_ 1.)),
+      ulet_ "t" (negf_ (float_ 1.))]
       (print_ (str_ "Hello, world!"))
-    ])),
-  int_ 0
-] in
+    ))]
+  (int_ 0) in
 utest testCompile constants with strJoin "\n" [
   "#include <stdint.h>",
   "#include <stdio.h>",
@@ -1554,9 +1551,8 @@ let factorial = bindall_ [
         (int_ 1)
         (muli_ (var_ "n")
           (app_ (var_ "factorial")
-            (subi_ (var_ "n") (int_ 1)))))),
-   int_ 0
-] in
+            (subi_ (var_ "n") (int_ 1))))))]
+  (int_ 0) in
 utest testCompile factorial with strJoin "\n" [
   "#include <stdint.h>",
   "#include <stdio.h>",
@@ -1599,9 +1595,8 @@ let oddEven = bindall_ [
             false_
             (app_ (var_ "odd")
               (subi_ (var_ "x") (int_ 1))))))
-  ],
-  int_ 0
-] in
+  ]]
+  (int_ 0) in
 utest testCompile oddEven with strJoin "\n" [
   "#include <stdint.h>",
   "#include <stdio.h>",
@@ -1659,10 +1654,9 @@ let typedefs = bindall_ [
     (tyarrow_ (tyrecord_ [("v", (tycon_ "Integer2"))]) (tycon_ "Tree")),
   condef_ "Node" (tyarrow_
     (tyrecord_ [("v", tyint_), ("l", (tycon_ "Tree")), ("r", (tycon_ "Tree"))])
-    (tycon_ "Tree")),
+    (tycon_ "Tree"))]
 
-  int_ 0
-] in
+  (int_ 0) in
 utest testCompile typedefs with strJoin "\n" [
   "#include <stdint.h>",
   "#include <stdio.h>",
@@ -1686,9 +1680,8 @@ utest testCompile typedefs with strJoin "\n" [
 -- Potentially tricky case with type aliases
 let alias = bindall_ [
   type_ "MyRec" [] (tyrecord_ [("k", tyint_)]),
-  let_ "myRec" (tycon_ "MyRec") (urecord_ [("k", int_ 0)]),
-  int_ 0
-] in
+  let_ "myRec" (tycon_ "MyRec") (urecord_ [("k", int_ 0)])]
+  (int_ 0) in
 utest testCompile alias with strJoin "\n" [
   "#include <stdint.h>",
   "#include <stdio.h>",
@@ -1705,9 +1698,8 @@ utest testCompile alias with strJoin "\n" [
 -- Externals test
 let ext = bindall_ [
   ext_ "externalLog" false (tyarrow_ tyfloat_ tyfloat_),
-  let_ "x" (tyfloat_) (app_ (var_ "externalLog") (float_ 2.)),
-  int_ 0
-] in
+  let_ "x" (tyfloat_) (app_ (var_ "externalLog") (float_ 2.))]
+  (int_ 0) in
 utest testCompile ext with strJoin "\n" [
   "#include <stdint.h>",
   "#include <stdio.h>",
@@ -1756,10 +1748,9 @@ let trees = bindall_ [
             (var_ "v") never_))
       ),
 
-  ulet_ "sum" (app_ (var_ "treeRec") (var_ "tree")),
+  ulet_ "sum" (app_ (var_ "treeRec") (var_ "tree"))]
 
-  int_ 0
-] in
+  (int_ 0) in
 
 utest testCompile trees with strJoin "\n" [
   "#include <stdint.h>",
@@ -1842,11 +1833,9 @@ utest testCompile trees with strJoin "\n" [
 -- let leaf = match tree with node then leftnode else
 let manyAllocs = bindall_ [
 
-  ulet_ "rec" (match_ (bool_ true) (pbool_ true) (urecord_ [("a",int_ 1)]) (urecord_ [("a",int_ 2)])),
+  ulet_ "rec" (match_ (bool_ true) (pbool_ true) (urecord_ [("a",int_ 1)]) (urecord_ [("a",int_ 2)]))]
 
-  int_ 0
-
-] in
+  (int_ 0) in
 
 utest testCompile manyAllocs with strJoin "\n" [
   "#include <stdint.h>",
@@ -1871,13 +1860,13 @@ utest testCompile manyAllocs with strJoin "\n" [
 -- NOTE(larshum, 2022-03-02): We use type-ascriptions so that the intrinsic
 -- functions are treated as monomorphic, even though they are not.
 let seq = bindall_ [
-  let_ "s" (tyseq_ tyint_) (seq_ [int_ 1, int_ 2, int_ 3]),
-  app_
+  let_ "s" (tyseq_ tyint_) (seq_ [int_ 1, int_ 2, int_ 3])]
+  (app_
     (bind_
       (let_ "len" (tyarrow_ (tyseq_ tyint_) tyint_) (uconst_ (CLength ())))
       (var_ "len"))
     (var_ "s")
-] in
+) in
 
 utest testCompile seq with strJoin "\n" [
   "#include <stdint.h>",
@@ -1924,9 +1913,8 @@ let tensor = bindall_ [
         (bind_
           (let_ "s" (tytensorshape_ tyint_) (uconst_ (CTensorShape ())))
           (var_ "s"))
-        (var_ "t"))),
-  int_ 0
-] in
+        (var_ "t")))]
+  (int_ 0) in
 
 utest testCompile tensor with strJoin "\n" [
   "#include <stdint.h>",
@@ -2011,12 +1999,10 @@ utest testCompile tensor with strJoin "\n" [
 let seqs = bindall_ [
 
   -- Define nested sequence, and see how it is handled
-  ulet_ "seq" (seq_ [seq_ [int_ 1], seq_ [int_ 2]]),
-
+  ulet_ "seq" (seq_ [seq_ [int_ 1], seq_ [int_ 2]])]
   -- Use "length" and "get" functions
 
-  int_ 0
-
-] in
+  (int_ 0)
+in
 
 ()

@@ -20,7 +20,7 @@ lang SpecializeCompile = SpecializeAst + MExprPEval + MExprAst
   sem createSpecExpr : Expr -> Expr -> Expr
   sem createSpecExpr deps =
   | TmLam {body = b} -> createSpecExpr deps b
-  | t -> bind_ deps t
+  | t -> oldBind_ deps t
 
   sem updateBody : Expr -> Expr -> Expr
   sem updateBody e =
@@ -29,16 +29,16 @@ lang SpecializeCompile = SpecializeAst + MExprPEval + MExprAst
 
   sem rmCopy : Name -> Expr -> Expr
   sem rmCopy rm =
-  | TmLet t ->
+  | tm & TmDecl {decl = DeclLet t, inexpr = inexpr} ->
     if nameEq t.ident rm then
-      t.inexpr
-    else smap_Expr_Expr (rmCopy rm) (TmLet t)
+      inexpr
+    else smap_Expr_Expr (rmCopy rm) tm
   | t -> smap_Expr_Expr (rmCopy rm) t
 
   sem specializePass : SpecializeNames -> SpecializeArgs -> Map Name Name ->
                   Expr -> (Map Name Name, Expr)
   sem specializePass pnames args idMap =
-  | TmLet t ->
+  | tm & TmDecl (x & {decl = DeclLet t}) ->
     match mapLookup t.ident args.extractMap with Some e then
       -- Remove the copy of this let binding in the extracted bindings
       let e = rmCopy t.ident e in
@@ -63,8 +63,8 @@ lang SpecializeCompile = SpecializeAst + MExprPEval + MExprAst
       let fff = print_ ff in
       -- Update the specialize let-binding
       let bodyn = updateBody (semi_ fff never_) t.body in
-      (args.idMapping, TmLet {t with body = bodyn})
-    else smapAccumL_Expr_Expr (specializePass pnames args) idMap (TmLet t)
+      (args.idMapping, TmDecl {x with decl = DeclLet {t with body = bodyn}})
+    else smapAccumL_Expr_Expr (specializePass pnames args) idMap tm
   | t -> smapAccumL_Expr_Expr (specializePass pnames args) idMap t
 
   sem hasSpecializeTerm : Bool -> Expr -> Bool
@@ -93,13 +93,12 @@ lang SpecializeCompile = SpecializeAst + MExprPEval + MExprAst
     match specializePass names args (mapEmpty nameCmp) ast
     with (idMapping, ast) in
 
-    let ast = if gti (mapLength idMapping) 0 then
-      let symDefs = bindall_ (map (lam n:Name. nulet_ n (gensym_ uunit_))
-                  (mapValues idMapping)) in
-      bindall_ [
-          symDefs,
-          ast]
-    else ast in
+    let ast =
+      if gti (mapLength idMapping) 0 then
+        let symDefs = map (lam n:Name. nulet_ n (gensym_ uunit_))
+          (mapValues idMapping) in
+        bindall_ symDefs ast
+      else ast in
     ast
 
 end
@@ -141,45 +140,45 @@ in
 -- TyInt
 let unknownTyInt = preprocess (bindall_ [
     ulet_ "p" (lam_ "x" tyint_ (specialize_ (var_ "x"))),
-    ulet_ "k" (app_ (var_ "p") (int_ 4)),
-    app_ (var_ "p") (int_ 12)
-]) in
+    ulet_ "k" (app_ (var_ "p") (int_ 4))]
+    (app_ (var_ "p") (int_ 12)
+)) in
 
 -- TyFloat
 let unknownTyFloat = preprocess (bindall_ [
     ulet_ "p" (lam_ "x" tyfloat_ (specialize_ (var_ "x"))),
-    ulet_ "k" (app_ (var_ "p") (float_ 4.0)),
-    unit_
-]) in
+    ulet_ "k" (app_ (var_ "p") (float_ 4.0))]
+    (unit_
+)) in
 
 -- TyBool
 let unknownTyBool = preprocess (bindall_ [
     ulet_ "p" (lam_ "x" tybool_ (specialize_ (var_ "x"))),
-    ulet_ "k" (app_ (var_ "p") (bool_ false)),
+    ulet_ "k" (app_ (var_ "p") (bool_ false))]
     unit_
-]) in
+) in
 
 -- TyChar
 let unknownTyChar = preprocess (bindall_ [
     ulet_ "p" (lam_ "x" tychar_ (specialize_ (var_ "x"))),
-    ulet_ "k" (app_ (var_ "p") (char_ 'x')),
+    ulet_ "k" (app_ (var_ "p") (char_ 'x'))]
     unit_
-]) in
+) in
 
 -- TySeq
 let intseq = tyseq_ tyint_ in
 let unknownTySeq = preprocess (bindall_ [
     ulet_ "p" (lam_ "x" intseq (specialize_ (var_ "x"))),
-    ulet_ "k" (app_ (var_ "p") (seq_ [int_ 1, int_ 2])),
+    ulet_ "k" (app_ (var_ "p") (seq_ [int_ 1, int_ 2]))]
     unit_
-]) in
+) in
 
 -- TyRec
 let t = tyrecord_ [("a", tyint_), ("b", tyint_)] in
 let unknownTyRec = preprocess (bindall_ [
     ulet_ "p" (lam_ "x" t (specialize_ (var_ "x"))),
     ulet_ "k" (app_ (var_ "p") (urecord_ [("a",int_ 1), ("b", int_ 3)]))
-]) in
+] unit_) in
 
 -- TyRec with one unliftable field
 
@@ -187,7 +186,7 @@ let t = tyrecord_ [("a", tyint_), ("b", tyunknown_)] in
 let unknownTyRecUnknown = preprocess (bindall_ [
     ulet_ "p" (lam_ "x" t (specialize_ (var_ "x"))),
     ulet_ "k" (app_ (var_ "p") (urecord_ [("a",int_ 1), ("b", int_ 3)]))
-]) in
+] unit_) in
 
 -- TyArrow
 
@@ -196,7 +195,7 @@ let unknownTyArrow = preprocess (bindall_ [
     ulet_ "p" (lam_ "x" t (specialize_ (var_ "x"))),
     ulet_ "id" (lam_ "x" (tyint_) (var_ "x")),
     ulet_ "k" (app_ (var_ "p") (var_ "id"))
-]) in
+] unit_) in
 
 let recursiveThing = preprocess (bindall_ [
     (ureclets_
@@ -215,25 +214,25 @@ let recursiveThing = preprocess (bindall_ [
               (if_ (lti_ (var_ "x") (int_ 0))
                  false_
                  (app_ (var_ "odd") (subi_ (var_ "x") (int_ 1))))))]),
-    ulet_ "ra" (specialize_ (app_ (var_ "odd") (int_ 4)))]) in
+    ulet_ "ra" (specialize_ (app_ (var_ "odd") (int_ 4)))] unit_) in
 
 let e = match_ (int_ 3) (pvar_ "wo") (int_ 5) (int_ 6) in
 let e = bind_ (ulet_ "x" (int_ 3)) (addi_ (int_ 4) (var_ "x")) in
 let distinctCalls = preprocess (bindall_ [
     ulet_ "k" (specialize_ (e))
-]) in
+] unit_) in
 
 let distinctCalls = preprocess (bindall_ [
-  ulet_ "f" (ulam_ "x" (muli_ (var_ "x") (int_ 3))),
-  specialize_ (app_ (var_ "f") (int_ 1))
-]) in
+  ulet_ "f" (ulam_ "x" (muli_ (var_ "x") (int_ 3)))]
+  (specialize_ (app_ (var_ "f") (int_ 1))
+)) in
 
 let distinctCalls = preprocess (bindall_ [
     ulet_ "f" (ulam_ "x" (ulam_ "y" (addi_ (var_ "x") (var_ "y")))),
     ulet_ "p" (ulam_ "x" (
-        specialize_ (app_ (var_ "f") (var_ "x")))),
-    app_ (var_ "p") (int_ 4)
-]) in
+        specialize_ (app_ (var_ "f") (var_ "x"))))]
+    (app_ (var_ "p") (int_ 4)
+)) in
 
 match compileSpecialize unknownTyRecUnknown with ast in
 

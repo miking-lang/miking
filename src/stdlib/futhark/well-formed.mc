@@ -63,12 +63,12 @@ lang FutharkWellFormed = WellFormed + PMExprAst
       else wellFormedApp fun args
     else wellFormedApp fun args
   | TmLam t -> futharkWellFormedExpr acc t.body
-  | TmLet t ->
+  | TmDecl (x & {decl = DeclLet t}) ->
     let acc = futharkWellFormedExpr acc t.body in
-    futharkWellFormedExpr acc t.inexpr
-  | TmRecLets t ->
-    let acc = cons (FutharkRecLet (TmRecLets t)) acc in
-    futharkWellFormedExpr acc t.inexpr
+    futharkWellFormedExpr acc x.inexpr
+  | TmDecl (x & {decl = DeclRecLets t}) ->
+    let acc = cons (FutharkRecLet (TmDecl x)) acc in
+    futharkWellFormedExpr acc x.inexpr
   | TmConst t ->
     if isFutharkSupportedConstant t.val then acc
     else cons (FutharkConstantError t.info) acc
@@ -88,10 +88,10 @@ lang FutharkWellFormed = WellFormed + PMExprAst
     let acc = futharkWellFormedExpr acc t.rec in
     futharkWellFormedExpr acc t.value
   | TmSeq {tms = tms} -> foldl futharkWellFormedExpr acc tms
-  | TmExt t -> futharkWellFormedExpr acc t.inexpr
-  | TmType t ->
+  | TmDecl (x & {decl = DeclExt t}) -> futharkWellFormedExpr acc x.inexpr
+  | TmDecl (x & {decl = DeclType t}) ->
     let acc = futharkWellFormedType acc t.tyIdent in
-    futharkWellFormedExpr acc t.inexpr
+    futharkWellFormedExpr acc x.inexpr
   | TmFlatten t -> futharkWellFormedExpr acc t.e
   | TmMap2 t ->
     let acc = futharkWellFormedExpr acc t.f in
@@ -214,8 +214,8 @@ using eqSeq eqFutError in
 let funType = tyarrow_ tyint_ tyint_ in
 let foldExpr = foldl_ (var_ "f") (lam_ "x" tyint_ (var_ "x")) (seq_ []) in
 let expr = bindall_ [
-  ulet_ "f" (lam_ "x" funType (lam_ "y" funType (var_ "y"))),
-  foldExpr] in
+  ulet_ "f" (lam_ "x" funType (lam_ "y" funType (var_ "y")))]
+  foldExpr in
 utest checkWellFormedExpr expr with [FutharkFunctionFromFold foldExpr]
 using eqSeq eqFutError in
 

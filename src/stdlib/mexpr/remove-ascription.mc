@@ -5,7 +5,7 @@ include "eq.mc"
 lang MExprRemoveTypeAscription = MExprAst
   sem removeTypeAscription : Expr -> Expr
   sem removeTypeAscription =
-  | (TmLet {ident = idLet, body = body, inexpr = TmVar {ident = idExpr}}) & letexpr ->
+  | (TmDecl {decl = DeclLet {ident = idLet, body = body}, inexpr = TmVar {ident = idExpr}}) & letexpr ->
     if nameEq idLet idExpr then
       removeTypeAscription body
     else smap_Expr_Expr removeTypeAscription letexpr

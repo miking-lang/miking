@@ -104,7 +104,7 @@ lang MExprRuntimeCheck = MExprAst + MExprArity + MExprCmp + MExprPrettyPrint
     else setInsert t.val used
   | t -> sfold_Expr_Expr collectUsedRuntimeCheckedIntrinsics used t
 
-  sem defineRuntimeCheckedFunction : Name -> (Const, Name) -> Expr
+  sem defineRuntimeCheckedFunction : Name -> (Const, Name) -> Decl
   sem defineRuntimeCheckedFunction errId =
   | (intrinsic, id) ->
     -- NOTE(larshum, 2021-11-29): We don't store an info field for the
@@ -124,10 +124,10 @@ lang MExprRuntimeCheck = MExprAst + MExprArity + MExprCmp + MExprPrettyPrint
     let callBody = appSeq_ (uconst_ intrinsic) (map (lam a. var_ a) intrinsicArgs) in
     let infoId = "i" in
     let checks = map (generateCheck infoId) conditions in
-    let body = bindall_ (snoc checks callBody) in
+    let body = bindall_ checks callBody in
     nulet_ id (ulams_ (cons infoId intrinsicArgs) body)
 
-  sem defineRuntimeCheckedFunctions : [Const] -> (Map Const Name, Expr)
+  sem defineRuntimeCheckedFunctions : [Const] -> (Map Const Name, [Decl])
   sem defineRuntimeCheckedFunctions =
   | used ->
     let errorFunctionId = nameSym "errfn" in
@@ -142,7 +142,7 @@ lang MExprRuntimeCheck = MExprAst + MExprArity + MExprCmp + MExprPrettyPrint
     let intrinsicMap : Map Const Name = mapFromSeq cmpConst usedWithId in
     let runtimeCheckedFunctions =
       map (defineRuntimeCheckedFunction errorFunctionId) usedWithId in
-    (intrinsicMap, bindall_ (join [[errorFunction], runtimeCheckedFunctions]))
+    (intrinsicMap, cons errorFunction runtimeCheckedFunctions)
 
   sem callRuntimeCheckedFunctions : Map Const Name -> Expr -> Expr
   sem callRuntimeCheckedFunctions intrinsicIds =
@@ -172,7 +172,7 @@ lang MExprRuntimeCheck = MExprAst + MExprArity + MExprCmp + MExprPrettyPrint
       let used = setToSeq used in
       match defineRuntimeCheckedFunctions used with (intrinsicIds, functions) in
       let t = callRuntimeCheckedFunctions intrinsicIds t in
-      bind_ functions t
+      bindall_ functions t
 end
 
 lang TestLang = MExprRuntimeCheck + MExprPrettyPrint + MExprEq
@@ -195,7 +195,7 @@ let expectedDivi =
       (if_ (_nonZeroCond (var_ "1")) unit_ (err _divByZeroMsg)))
     (divi_ (var_ "0") (var_ "1")))))) in
 utest defineRuntimeCheckedFunction errorFunctionId (CDivi (), divId)
-with expectedDivi using eqExpr in
+with expectedDivi using eqDecl in
 
 let headId = id (CHead ()) in
 let expectedHead =
@@ -204,22 +204,22 @@ let expectedHead =
       (if_ (_nonEmptySequenceCond (var_ "0")) unit_ (err _headEmptyMsg)))
     (head_ (var_ "0"))))) in
 utest defineRuntimeCheckedFunction errorFunctionId (CHead (), headId)
-with expectedHead using eqExpr in
+with expectedHead using eqDecl in
 
 let subseqId = id (CSubsequence ()) in
 let expectedSubseq =
   ulet_ "_subsequence" (ulam_ "i" (ulam_ "0" (ulam_ "1" (ulam_ "2" (bindall_ [
     ulet_ ""
       (if_ (_nonNegativeCond (var_ "1"))
-        unit_ 
+        unit_
         (err _subseqNegativeIndexMsg)),
     ulet_ ""
       (if_ (_nonNegativeCond (var_ "2"))
         unit_
-        (err _subseqNegativeLenMsg)),
-    subsequence_ (var_ "0") (var_ "1") (var_ "2")]))))) in
+        (err _subseqNegativeLenMsg))]
+    (subsequence_ (var_ "0") (var_ "1") (var_ "2"))))))) in
 utest defineRuntimeCheckedFunction errorFunctionId (CSubsequence (), subseqId)
-with expectedSubseq using eqExpr in
+with expectedSubseq using eqDecl in
 
 let tensorGetId = id (CTensorGetExn ()) in
 let expectedTensorGet =
@@ -231,9 +231,9 @@ let expectedTensorGet =
     ulet_ ""
       (if_ (_tensorIdxShapeCond (var_ "0") (var_ "1"))
         unit_
-        (err _tensorShapeMismatchMsg)),
-    utensorGetExn_ (var_ "0") (var_ "1")])))) in
+        (err _tensorShapeMismatchMsg))]
+    (utensorGetExn_ (var_ "0") (var_ "1")))))) in
 utest defineRuntimeCheckedFunction errorFunctionId (CTensorGetExn (), tensorGetId)
-with expectedTensorGet using eqExpr in
+with expectedTensorGet using eqDecl in
 
 ()

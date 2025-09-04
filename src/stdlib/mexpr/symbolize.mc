@@ -203,6 +203,13 @@ lang Sym = Ast + SymLookup
     let t = smap_Expr_Type (symbolizeType env) t in
     t
 
+  sem symbolizeDecl : SymEnv -> Decl -> (SymEnv, Decl)
+  sem symbolizeDecl env =
+  | d ->
+    let d = smap_Decl_Expr (symbolizeExpr env) d in
+    let d = smap_Decl_Type (symbolizeType env) d in
+    (env, d)
+
   sem symbolizeType : SymEnv -> Type -> Type
   sem symbolizeType env =
   | t -> smap_Type_Type (symbolizeType env) t
@@ -243,7 +250,11 @@ lang Sym = Ast + SymLookup
   -- Add top-level identifiers (along the spine of the program) in `t`
   -- to the given environment.
   sem addTopNames (env : SymEnv) =
-  | t -> env
+  | _ -> env
+
+  sem declAddDefinition : SymEnv -> Decl -> SymEnv
+  sem declAddDefinition env =
+  | _ -> env
 end
 
 lang VarSym = Sym + VarAst
@@ -267,15 +278,30 @@ lang LamSym = Sym + LamAst + VarSym
                   body = symbolizeExpr (symbolizeUpdateVarEnv env varEnv) t.body}
 end
 
-lang LetSym = Sym + LetAst + AllTypeAst
-  sem symbolizeExpr (env : SymEnv) =
-  | TmLet t ->
+lang DeclSym = Sym + DeclAst
+  sem symbolizeExpr env =
+  | TmDecl x ->
+    match symbolizeDecl env x.decl with (env, decl) in
+    let inexpr = symbolizeExpr env x.inexpr in
+    TmDecl {x with decl = decl, inexpr = inexpr}
+
+  sem addTopNames (env : SymEnv) =
+  | TmDecl x ->
+    let env = declAddDefinition env x.decl in
+    addTopNames env x.inexpr
+end
+
+lang LetSym = Sym + LetDeclAst + AllTypeAst
+  sem symbolizeDecl (env : SymEnv) =
+  | DeclLet t ->
     match symbolizeTyAnnot env t.tyAnnot with (tyVarEnv, tyAnnot) in
     match setSymbol env.currentEnv.varEnv t.ident with (varEnv, ident) in
-    TmLet {t with ident = ident,
-                  tyAnnot = tyAnnot,
-                  body = symbolizeExpr (symbolizeUpdateTyVarEnv env tyVarEnv) t.body,
-                  inexpr = symbolizeExpr (symbolizeUpdateVarEnv env varEnv) t.inexpr}
+    let decl = DeclLet
+      {t with ident = ident
+      , tyAnnot = tyAnnot
+      , body = symbolizeExpr (symbolizeUpdateTyVarEnv env tyVarEnv) t.body
+      } in
+    (symbolizeUpdateVarEnv env varEnv, decl)
 
   sem symbolizeTyAnnot : SymEnv -> Type -> (Map String Name, Type)
   sem symbolizeTyAnnot env =
@@ -285,15 +311,15 @@ lang LetSym = Sym + LetAst + AllTypeAst
     (foldl (lam env. lam nk. mapInsert (nameGetStr nk.0) nk.0 env)
        env.currentEnv.tyVarEnv vars, symbolized)
 
-  sem addTopNames (env : SymEnv) =
-  | TmLet t ->
+  sem declAddDefinition env =
+  | DeclLet t ->
     let varEnv = mapInsert (nameGetStr t.ident) t.ident env.currentEnv.varEnv in
-    addTopNames (symbolizeUpdateVarEnv env varEnv) t.inexpr
+    symbolizeUpdateVarEnv env varEnv
 end
 
-lang RecLetsSym = Sym + RecLetsAst + LetSym
-  sem symbolizeExpr (env : SymEnv) =
-  | TmRecLets t ->
+lang RecLetsSym = Sym + RecLetsDeclAst + LetSym
+  sem symbolizeDecl (env : SymEnv) =
+  | DeclRecLets t ->
     -- Generate fresh symbols for all identifiers and add to the environment
     let setSymbolIdent = lam env. lam b.
       match setSymbol env b.ident with (env, ident) in
@@ -309,54 +335,58 @@ lang RecLetsSym = Sym + RecLetsAst + LetSym
                           tyAnnot = tyAnnot})
         bindings in
 
-    TmRecLets {t with bindings = bindings,
-                      inexpr = symbolizeExpr newEnv t.inexpr}
+    (newEnv, DeclRecLets {t with bindings = bindings})
 
-  sem addTopNames (env : SymEnv) =
-  | TmRecLets t ->
+  sem declAddDefinition env =
+  | DeclRecLets t ->
     let varEnv =
       foldr (lam b. mapInsert (nameGetStr b.ident) b.ident) env.currentEnv.varEnv t.bindings in
-    addTopNames (symbolizeUpdateVarEnv env varEnv) t.inexpr
+    symbolizeUpdateVarEnv env varEnv
 end
 
-lang ExtSym = Sym + ExtAst
-  sem symbolizeExpr (env : SymEnv) =
-  | TmExt t ->
+lang ExtSym = Sym + ExtDeclAst
+  sem symbolizeDecl (env : SymEnv) =
+  | DeclExt t ->
     let setName = if env.ignoreExternals then lam x. lam y. (x, y) else setSymbol in
     match setName env.currentEnv.varEnv t.ident with (varEnv, ident) in
-    TmExt {t with ident = ident,
-                  inexpr = symbolizeExpr (symbolizeUpdateVarEnv env varEnv) t.inexpr,
-                  tyIdent = symbolizeType env t.tyIdent}
+    ( symbolizeUpdateVarEnv env varEnv
+    , DeclExt {t with ident = ident, tyIdent = symbolizeType env t.tyIdent}
+    )
 
-  sem addTopNames (env : SymEnv) =
-  | TmExt t ->
+  sem declAddDefinition (env : SymEnv) =
+  | DeclExt t ->
     let varEnv = mapInsert (nameGetStr t.ident) t.ident env.currentEnv.varEnv in
-    addTopNames (symbolizeUpdateVarEnv env varEnv) t.inexpr
+    symbolizeUpdateVarEnv env varEnv
 end
 
-lang TypeSym = Sym + TypeAst
-  sem symbolizeExpr (env : SymEnv) =
-  | TmType t ->
+lang TypeSym = Sym + TypeDeclAst
+  sem symbolizeDecl (env : SymEnv) =
+  | DeclType t ->
     match setSymbol env.currentEnv.tyConEnv t.ident with (tyConEnv, ident) in
     match mapAccumL setSymbol env.currentEnv.tyVarEnv t.params with (tyVarEnv, params) in
-    TmType {t with ident = ident,
-                   params = params,
-                   tyIdent = symbolizeType (symbolizeUpdateTyVarEnv env tyVarEnv) t.tyIdent,
-                   inexpr = symbolizeExpr (symbolizeUpdateTyConEnv env tyConEnv) t.inexpr}
+    ( symbolizeUpdateTyConEnv env tyConEnv
+    , DeclType
+      {t with ident = ident
+      , params = params
+      , tyIdent = symbolizeType (symbolizeUpdateTyVarEnv env tyVarEnv) t.tyIdent
+      }
+    )
 
-  sem addTopNames (env : SymEnv) =
-  | TmType t ->
+  sem declAddDefinition (env : SymEnv) =
+  | DeclType t ->
     let tyConEnv = mapInsert (nameGetStr t.ident) t.ident env.currentEnv.tyConEnv in
-    addTopNames (symbolizeUpdateTyConEnv env tyConEnv) t.inexpr
+    symbolizeUpdateTyConEnv env tyConEnv
 end
 
-lang DataSym = Sym + DataAst
-  sem symbolizeExpr (env : SymEnv) =
-  | TmConDef t ->
+lang DataSym = Sym + DataAst + DataDeclAst
+  sem symbolizeDecl (env : SymEnv) =
+  | DeclConDef t ->
     match setSymbol env.currentEnv.conEnv t.ident with (conEnv, ident) in
-    TmConDef {t with ident = ident,
-                     tyIdent = symbolizeType env t.tyIdent,
-                     inexpr = symbolizeExpr (symbolizeUpdateConEnv env conEnv) t.inexpr}
+    ( symbolizeUpdateConEnv env conEnv
+    , DeclConDef {t with ident = ident, tyIdent = symbolizeType env t.tyIdent}
+    )
+
+  sem symbolizeExpr env =
   | TmConApp t ->
     let ident =
       getSymbol {kind = "constructor",
@@ -367,10 +397,10 @@ lang DataSym = Sym + DataAst
     TmConApp {t with ident = ident,
                      body = symbolizeExpr env t.body}
 
-  sem addTopNames (env : SymEnv) =
-  | TmConDef t ->
+  sem declAddDefinition (env : SymEnv) =
+  | DeclConDef t ->
     let conEnv = mapInsert (nameGetStr t.ident) t.ident env.currentEnv.conEnv in
-    addTopNames (symbolizeUpdateConEnv env conEnv) t.inexpr
+    symbolizeUpdateConEnv env conEnv
 end
 
 lang MatchSym = Sym + MatchAst
@@ -385,8 +415,8 @@ lang MatchSym = Sym + MatchAst
 end
 
 lang OpImplSym = OpImplAst + Sym + LetSym
-  sem symbolizeExpr env =
-  | TmOpImpl x ->
+  sem symbolizeDecl env =
+  | DeclOpImpl x ->
     let ident = getSymbol
       { kind = "variable"
       , info = [x.info]
@@ -396,13 +426,12 @@ lang OpImplSym = OpImplAst + Sym + LetSym
       x.ident in
     match symbolizeTyAnnot env x.specType with (tyVarEnv, specType) in
     let body = symbolizeExpr (symbolizeUpdateTyVarEnv env tyVarEnv) x.body in
-    let inexpr = symbolizeExpr env x.inexpr in
-    TmOpImpl {x with ident = ident, body = body, specType = specType, inexpr = inexpr}
+    (env, DeclOpImpl {x with ident = ident, body = body, specType = specType})
 end
 
 lang OpDeclSym = OpDeclAst + Sym + OpImplAst + ReprDeclAst + OpImplSym
-  sem symbolizeExpr env =
-  | TmOpDecl x ->
+  sem symbolizeDecl env =
+  | DeclOp x ->
     let symbolizeReprDecl = lam reprEnv. lam binding.
       match mapAccumL setSymbol env.currentEnv.tyVarEnv binding.1 .vars with (tyVarEnv, vars) in
       let newEnv = (symbolizeUpdateTyVarEnv env tyVarEnv) in
@@ -416,26 +445,25 @@ lang OpDeclSym = OpDeclAst + Sym + OpImplAst + ReprDeclAst + OpImplSym
       in (reprEnv, res) in
 
     match setSymbol env.currentEnv.varEnv x.ident with (varEnv, ident) in
-    let newEnv = symbolizeUpdateVarEnv env varEnv in
-    let inexpr = symbolizeExpr newEnv x.inexpr in
-    TmOpDecl
+    ( symbolizeUpdateVarEnv env varEnv
+    , DeclOp
       { x with ident = ident
       , tyAnnot = symbolizeType env x.tyAnnot
-      , inexpr = inexpr
-      , ty = symbolizeType env x.ty
       }
+    )
 end
 
 lang ReprTypeSym = Sym + ReprDeclAst
-  sem symbolizeExpr env =
-  | TmReprDecl x ->
+  sem symbolizeDecl env =
+  | DeclRepr x ->
     match setSymbol env.currentEnv.reprEnv x.ident with (reprEnv, ident) in
     match mapAccumL setSymbol env.currentEnv.tyVarEnv x.vars with (tyVarEnv, vars) in
     let rhsEnv = (symbolizeUpdateTyVarEnv env tyVarEnv) in
     let pat = symbolizeType rhsEnv x.pat in
     let repr = symbolizeType rhsEnv x.repr in
-    let inexpr = symbolizeExpr (symbolizeUpdateReprEnv env reprEnv) x.inexpr in
-    TmReprDecl {x with ident = ident, pat = pat, repr = repr, vars = vars, inexpr = inexpr}
+    ( symbolizeUpdateReprEnv env reprEnv
+    , DeclRepr {x with ident = ident, pat = pat, repr = repr, vars = vars}
+    )
 end
 
 lang OpVarSym = OpVarAst + Sym
@@ -627,7 +655,10 @@ end
 lang MExprSym =
 
   -- Default implementations (Terms)
-  RecordAst + ConstAst + UtestAst + SeqAst + NeverAst + AppAst +
+  RecordAst + ConstAst + SeqAst + NeverAst + AppAst +
+
+  -- Default implementations (Decls)
+  UtestDeclAst +
 
   -- Default implementations (Types)
   UnknownTypeAst + BoolTypeAst + IntTypeAst + FloatTypeAst + CharTypeAst +
@@ -640,8 +671,10 @@ lang MExprSym =
   SeqTotPat + RecordPat + IntPat + CharPat + BoolPat + AndPat + OrPat +
 
   -- Non-default implementations (Terms)
-  VarSym + LamSym + LetSym + ExtSym + TypeSym + RecLetsSym + DataSym +
-  MatchSym +
+  VarSym + LamSym + DataSym + MatchSym + DeclSym +
+
+  -- Non-default implementations (Decls)
+  LetSym + ExtSym + TypeSym + RecLetsSym +
 
   -- Non-default implementations (Types)
   VariantTypeSym + ConTypeSym + DataTypeSym + VarTypeSym + AllTypeSym +
@@ -670,6 +703,34 @@ lang SymCheck = MExprSym
   sem isFullySymbolized =
   | ast -> isFullySymbolizedExpr ast ()
 
+  sem isFullySymbolizedDecl : Decl -> () -> Bool
+  sem isFullySymbolizedDecl =
+  | DeclLet l ->
+    foldl _and (lam. true) [
+      lam. nameHasSym l.ident,
+      isFullySymbolizedType l.tyAnnot,
+      isFullySymbolizedExpr l.body
+    ]
+  | DeclRecLets l ->
+    let isFullySymbolizedBinding = lam b.
+      _and (lam. nameHasSym b.ident)
+        (_and
+           (isFullySymbolizedType b.tyAnnot)
+           (isFullySymbolizedExpr b.body))
+    in
+    foldl _and (lam. true) (map isFullySymbolizedBinding l.bindings)
+  | DeclType l ->
+    _and (lam. nameHasSym l.ident) (_and
+          (lam. (forAll nameHasSym l.params))
+          (isFullySymbolizedType l.tyIdent))
+  | DeclExt l ->
+    _and (lam. nameHasSym l.ident) (isFullySymbolizedType l.tyIdent)
+  | DeclConDef l ->
+    _and (lam. nameHasSym l.ident) (isFullySymbolizedType l.tyIdent)
+  | d ->
+    _and (sfold_Decl_Expr (_andFold isFullySymbolizedExpr) (lam. true) d)
+      (sfold_Decl_Type (_andFold isFullySymbolizedType) (lam. true) d)
+
   sem isFullySymbolizedExpr : Expr -> () -> Bool
   sem isFullySymbolizedExpr =
   | TmVar t -> lam. nameHasSym t.ident
@@ -678,39 +739,10 @@ lang SymCheck = MExprSym
       (_and
          (isFullySymbolizedType t.tyAnnot)
          (isFullySymbolizedExpr t.body))
-  | TmLet t ->
-    _and (lam. nameHasSym t.ident)
-      (_and (isFullySymbolizedType t.tyAnnot)
-         (_and
-            (isFullySymbolizedExpr t.body)
-            (isFullySymbolizedExpr t.inexpr)))
-  | TmRecLets t ->
-    let isFullySymbolizedBinding = lam b.
-      _and (lam. nameHasSym b.ident)
-        (_and
-           (isFullySymbolizedType b.tyAnnot)
-           (isFullySymbolizedExpr b.body))
-    in
-    _and
-      (foldl (_andFold isFullySymbolizedBinding) (lam. true) t.bindings)
-      (isFullySymbolizedExpr t.inexpr)
-  | TmType t ->
-    _and (lam. forAll nameHasSym t.params)
-      (_and
-         (isFullySymbolizedType t.tyIdent)
-         (isFullySymbolizedExpr t.inexpr))
-  | TmConDef t ->
-    _and (lam. nameHasSym t.ident)
-      (_and
-         (isFullySymbolizedType t.tyIdent)
-         (isFullySymbolizedExpr t.inexpr))
   | TmConApp t ->
     _and (lam. nameHasSym t.ident) (isFullySymbolizedExpr t.body)
-  | TmExt t ->
-    _and (lam. nameHasSym t.ident)
-      (_and
-         (isFullySymbolizedType t.tyIdent)
-         (isFullySymbolizedExpr t.inexpr))
+  | TmDecl x ->
+    _and (isFullySymbolizedDecl x.decl) (isFullySymbolizedExpr x.inexpr)
   | t ->
     _and (sfold_Expr_Expr (_andFold isFullySymbolizedExpr) (lam. true) t)
       (_and
@@ -772,9 +804,8 @@ utest testSymbolize letin false with true in
 
 let lettypein = bindall_ [
   type_ "Type" [] tystr_,
-  type_ "Type" [] (tycon_ "Type"),
-  lam_ "Type" (tycon_ "Type") (var_ "Type")
-] in
+  type_ "Type" [] (tycon_ "Type")
+] (lam_ "Type" (tycon_ "Type") (var_ "Type")) in
 utest testSymbolize lettypein false with true in
 
 let rlets =
@@ -812,10 +843,10 @@ let litpat =
     uunit_ in
 utest testSymbolize litpat false with true in
 
-let ut = utest_ base base base in
+let ut = bind_ (utest_ base base) unit_ in
 utest testSymbolize ut false with true in
 
-let utu = utestu_ base base base (uconst_ (CEqi{})) in
+let utu = bind_ (utestu_ base base (uconst_ (CEqi{}))) unit_ in
 utest testSymbolize utu false with true in
 
 let seq = seq_ [base, data, const, utu] in
@@ -839,15 +870,15 @@ utest testSymbolize matchoredge false with true in
 
 let lettyvar = let_ "f" (tyall_ "a" (tyarrow_ (tyvar_ "a") (tyvar_ "a")))
                         (lam_ "x" (tyvar_ "a") (var_ "x")) in
-utest testSymbolize lettyvar false with true in
+utest testSymbolize (bind_ lettyvar unit_) false with true in
 
 -- NOTE(larshum, 2023-01-20): This test checks that the type parameters of a
 -- type application are not erased when the constructor is a free variable.
-let tyconApps = bindall_ [
+let tyconApps = bind_ (
   let_ "f"
     (tyall_ "a" (tyarrow_ (tyapp_ (tycon_ "Con") (tyvar_ "a")) (tyvar_ "a")))
     (ulam_ "x" never_)
-] in
+) unit_ in
 utest expr2str (symbolizeAllowFree tyconApps) with expr2str tyconApps using eqString in
 
 ()

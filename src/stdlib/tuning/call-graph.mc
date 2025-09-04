@@ -56,7 +56,7 @@ let _handleApps = use AppAst in use VarAst in
 -- node exactly once and each time potentially perform a graph union operation,
 -- which we assume has complexity O(|F|). V is the set of nodes in the AST and F
 -- is the set of nodes in the call graph (i.e. set of functions in the AST).
-lang HoleCallGraph = LetAst + AppAst + LamAst + RecLetsAst
+lang HoleCallGraph = LetDeclAst + AppAst + LamAst + RecLetsDeclAst
   sem toCallGraph =
   | arg ->
     let gempty = digraphAddVertex callGraphTop
@@ -67,20 +67,20 @@ lang HoleCallGraph = LetAst + AppAst + LamAst + RecLetsAst
     digraphAddEdges edges g
 
   sem _findVertices (vertices: [NameInfo]) =
-  | TmLet t ->
+  | TmDecl (x & {decl = DeclLet t}) ->
     concat
       (_handleLetVertex _findVertices
         {ident = t.ident, body = t.body, info = t.info})
-      (_findVertices vertices t.inexpr)
+      (_findVertices vertices x.inexpr)
 
-  | TmRecLets t ->
+  | TmDecl (x & {decl = DeclRecLets t}) ->
     let res =
-      foldl (lam acc. lam b : RecLetBinding.
+      foldl (lam acc. lam b : DeclLetRecord.
                concat acc
                  (_handleLetVertex _findVertices
                    {ident = b.ident, body = b.body, info = b.info}))
             [] t.bindings
-    in concat res (_findVertices vertices t.inexpr)
+    in concat res (_findVertices vertices x.inexpr)
 
   | tm ->
 --    sfold_Expr_Expr concat [] (smap_Expr_Expr _findVertices tm)
@@ -88,23 +88,23 @@ lang HoleCallGraph = LetAst + AppAst + LamAst + RecLetsAst
 
   sem _findEdges (cg : CallGraph) (prev : NameInfo) (name2info : Map Name Info)
                  (edges : [(NameInfo, NameInfo, NameInfo)]) =
-  | TmLet ({body = TmApp a} & t) ->
+  | TmDecl (x & {decl = DeclLet ({body = TmApp a} & t)}) ->
     let resBody = _handleApps (t.ident, t.info) _findEdges prev cg name2info t.body in
-    concat resBody (_findEdges cg prev name2info edges t.inexpr)
+    concat resBody (_findEdges cg prev name2info edges x.inexpr)
 
-  | TmLet ({body = TmLam lm} & t) ->
+  | TmDecl (x & {decl = DeclLet ({body = TmLam lm} & t)}) ->
     let resBody = _findEdges cg (t.ident, t.info) name2info edges lm.body in
-    concat resBody (_findEdges cg prev name2info [] t.inexpr)
+    concat resBody (_findEdges cg prev name2info [] x.inexpr)
 
-  | TmRecLets t ->
+  | TmDecl (x & {decl = DeclRecLets t}) ->
     let res =
-      let handleBinding = lam g. lam b : RecLetBinding.
+      let handleBinding = lam g. lam b : DeclLetRecord.
         match b with { body = TmLam { body = lambody }, ident = ident, info = info } then
           _findEdges g (ident, info) name2info [] lambody
         else
           _findEdges g prev name2info [] b.body
       in foldl (lam acc. lam b. concat acc (handleBinding cg b)) [] t.bindings
-    in concat res (_findEdges cg prev name2info edges t.inexpr)
+    in concat res (_findEdges cg prev name2info edges x.inexpr)
 
   | tm ->
     sfold_Expr_Expr (_findEdges cg prev name2info) edges tm
@@ -157,8 +157,9 @@ let constant = {
 } in
 
 -- let foo = lam x. x in ()
+let identityDecl = ulet_ "foo" (ulam_ "x" (var_ "x")) in
 let identity = {
-  ast = ulet_ "foo" (ulam_ "x" (var_ "x")),
+  ast = bind_ identityDecl unit_,
   expected = uunit_,
   vs = ["top", "foo"],
   calls = []
@@ -167,8 +168,10 @@ let identity = {
 -- let foo = lam x. x in
 -- let bar = lam x. foo x in ()
 let funCall = {
-  ast = bind_ (ulet_ "foo" (ulam_ "x" (var_ "x")))
-              (ulet_ "bar" (ulam_ "x" (app_ (var_ "foo") (var_ "x")))),
+  ast = bindall_
+    [ ulet_ "foo" (ulam_ "x" (var_ "x"))
+    , ulet_ "bar" (ulam_ "x" (app_ (var_ "foo") (var_ "x")))
+    ] unit_,
   expected = uunit_,
   vs = ["top", "foo", "bar"],
   calls = [("bar", "foo")]
@@ -178,10 +181,10 @@ let funCall = {
 -- let bar = lam x. addi (foo x) (foo x) in
 -- bar 1
 let ast =
-  bindall_ [identity.ast,
+  bindall_ [identityDecl,
             ulet_ "bar" (ulam_ "x" (addi_ (app_ (var_ "foo") (var_ "x"))
-                                         (app_ (var_ "foo") (var_ "x")))),
-            (app_ (var_ "bar") (int_ 1))] in
+                                         (app_ (var_ "foo") (var_ "x"))))]
+    ((app_ (var_ "bar") (int_ 1))) in
 let callSameFunctionTwice = {
   ast = ast,
   expected = int_ 2,
@@ -207,7 +210,7 @@ let twoArgs = {
 --     addi (bar b) a
 -- in ()
 let innerFun = {
-  ast = ulet_ "foo" (ulam_ "a" (ulam_ "b" (
+  ast = bind_ (ulet_ "foo" (ulam_ "a" (ulam_ "b" (
           let bar = ulet_ "bar" (ulam_ "x"
                          (addi_ (var_ "b") (var_ "x"))) in
           let babar = ulet_ "b" (int_ 3) in
@@ -215,7 +218,7 @@ let innerFun = {
           bind_ babar (
             addi_ (app_ (var_ "bar")
                         (var_ "b"))
-                  (var_ "a")))))),
+                  (var_ "a"))))))) unit_,
   expected = uunit_,
   vs = ["top", "foo", "bar"],
   calls = [("foo", "bar")]
@@ -227,7 +230,7 @@ let innerFun = {
 let letWithFunCall = {
   ast = let foo = ulet_ "foo" (ulam_ "x" (var_ "x")) in
         let a = ulet_ "a" (app_ (var_ "foo") (int_ 1)) in
-        bind_ (bind_ foo a) (var_ "a"),
+        bind_ foo (bind_ a (var_ "a")),
   expected = int_ 1,
   vs = ["top", "foo"],
   calls = [("top", "foo")]
@@ -288,8 +291,8 @@ let evenOdd ={
 let hiddenCall = {
   ast = bindall_ [
           ulet_ "bar" (ulam_ "y" (var_ "y")),
-          ulet_ "foo" (ulam_ "f" (ulam_ "x" (app_ (var_ "f") (var_ "x")))),
-          appf2_ (var_ "foo") (var_ "bar") (int_ 1)],
+          ulet_ "foo" (ulam_ "f" (ulam_ "x" (app_ (var_ "f") (var_ "x"))))]
+          (appf2_ (var_ "foo") (var_ "bar") (int_ 1)),
   expected = int_ 1,
   vs = ["top", "foo", "bar"],
   calls = [("top", "foo")]

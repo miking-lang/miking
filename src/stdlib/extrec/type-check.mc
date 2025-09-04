@@ -130,27 +130,20 @@ lang ExtRecordTypeCheck = TypeCheck + ExtRecordAst +
     match mapLookup label innerMap with Some deps in
     deps
 
-  sem typeCheckExpr env =
-  | TmRecField t ->
+  sem typeCheckDecl env =
+  | DeclRecField t ->
     let newLvl = addi 1 env.currentLvl in
     let tyIdent = tyunknown_ in
     let conEnv = mapInsert (nameNoSym t.label) (newLvl, tyIdent) env.conEnv in
-    let env = {env with conEnv = conEnv,
-                        currentLvl = newLvl} in
-
-    let inexpr = typeCheckExpr env t.inexpr in
-    TmRecField {t with inexpr = inexpr, ty = tyTm inexpr}
-  | TmRecType t ->
+    let env = {env with conEnv = conEnv, currentLvl = newLvl} in
+    (env, DeclRecField t)
+  | DeclRecType t ->
     let newLvl = addi 1 env.currentLvl in
     let newTyConEnv = mapInsert t.ident (newLvl, t.params, tyvariant_ []) env.tyConEnv in
-    let env = {env with tyConEnv = newTyConEnv} in
-    let inexpr =
-      typeCheckExpr {env with currentLvl = newLvl,
-                              tyConEnv = newTyConEnv,
-                              reptypes = env.reptypes} t.inexpr in
-    unify env [t.info, infoTm inexpr] (newpolyvar env.currentLvl t.info) (tyTm inexpr);
-    TmRecType {t with inexpr = inexpr,
-                      ty =  tyTm inexpr}
+    let env = {env with tyConEnv = newTyConEnv, currentLvl = newLvl} in
+    (env, DeclRecType t)
+
+  sem typeCheckExpr env =
   | TmExtRecord t ->
     let labelToType = match mapLookup t.ident env.extRecordType.defs
                       with Some l then l

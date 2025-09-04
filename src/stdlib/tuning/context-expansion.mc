@@ -98,7 +98,7 @@ lang ContextExpand = HoleAst
 
   sem _contextExpandWithLookup (env : CallCtxEnv) (lookup : Int -> Expr) =
   -- Hole: lookup the value depending on call history.
-  | TmLet ({ body = TmHole { depth = depth }, ident = ident} & t) ->
+  | TmDecl (x & {decl = DeclLet ({ body = TmHole { depth = depth }, ident = ident} & t)}) ->
     let lookupGlobal = lam info.
       lookup (callCtxHole2Idx (ident, info) [] env)
     in
@@ -116,8 +116,8 @@ lang ContextExpand = HoleAst
         else
           -- Context-sensitive hole without any incoming calls
           lookupGlobal t.info
-    in TmLet {{t with body = body}
-                 with inexpr = _contextExpandWithLookup env lookup t.inexpr}
+    in TmDecl { x with decl = DeclLet {t with body = body}
+              , inexpr = _contextExpandWithLookup env lookup x.inexpr}
 
   | tm ->
     smap_Expr_Expr (_contextExpandWithLookup env lookup) tm
@@ -224,6 +224,11 @@ lang ContextExpand = HoleAst
 
     use MExprSym in
     let impl = symbolize impl in
+    let implDecls =
+      recursive let work = lam acc. lam tm. match tm with TmDecl x
+        then work (snoc acc x.decl) x.inexpr
+        else acc in
+      work [] impl in
 
     let getName : String -> Expr -> Name = lam s. lam expr.
       use MExprFindSym in
@@ -241,23 +246,23 @@ lang ContextExpand = HoleAst
     let p = nameSym "p" in
     let nbr = nameSym "n" in
     bindall_
-    [ impl
-    -- Parse tune file
-    , nulet_ fileContent (readFile_ (str_ tuneFile))
-    , nulet_ strVals (appf2_ (nvar_ strSplitName) (str_ "\n")
-        (app_ (nvar_ strTrimName) (nvar_ fileContent)))
-    , nulet_ nbr (app_ (nvar_ string2intName) (head_ (nvar_ strVals)))
-    , nulet_ strVals (subsequence_ (nvar_ strVals) (int_ 1) (nvar_ nbr))
-    , let x = nameSym "x" in
-      nulet_ strVals (map_ (nulam_ x
-        (get_ (appf2_ (nvar_ strSplitName) (str_ ": ") (nvar_ x)) (int_ 1)))
-        (nvar_ strVals))
-    -- Convert strings into values
-    , nulet_ contextExpansionTableName (map_ (nvar_ string2intName) (nvar_ strVals))
-    -- Convert table into a tensor (for constant-time lookups)
-    , nulet_ contextExpansionTableName (app_ (nvar_ seq2TensorName) (nvar_ contextExpansionTableName))
-    , tm
-    ]
+      (concat implDecls
+      -- Parse tune file
+      [ nulet_ fileContent (readFile_ (str_ tuneFile))
+      , nulet_ strVals (appf2_ (nvar_ strSplitName) (str_ "\n")
+          (app_ (nvar_ strTrimName) (nvar_ fileContent)))
+      , nulet_ nbr (app_ (nvar_ string2intName) (head_ (nvar_ strVals)))
+      , nulet_ strVals (subsequence_ (nvar_ strVals) (int_ 1) (nvar_ nbr))
+      , let x = nameSym "x" in
+        nulet_ strVals (map_ (nulam_ x
+          (get_ (appf2_ (nvar_ strSplitName) (str_ ": ") (nvar_ x)) (int_ 1)))
+          (nvar_ strVals))
+      -- Convert strings into values
+      , nulet_ contextExpansionTableName (map_ (nvar_ string2intName) (nvar_ strVals))
+      -- Convert table into a tensor (for constant-time lookups)
+      , nulet_ contextExpansionTableName (app_ (nvar_ seq2TensorName) (nvar_ contextExpansionTableName))
+      ])
+      tm
 end
 
 lang MExprHoles = HoleAst + GraphColoring + ContextExpand + MExprSym + MExprANF

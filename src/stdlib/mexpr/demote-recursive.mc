@@ -15,7 +15,7 @@ lang MExprDemoteRecursive = MExprAst + MExprFreeVars
   sem demoteRecursive : Expr -> Expr
   sem demoteRecursive =
   | tm -> smap_Expr_Expr demoteRecursive tm
-  | TmRecLets t ->
+  | TmDecl (x & {decl = DeclRecLets t}) ->
     let f = lam acc. lam binding.
       ( mapInsert binding.ident (binding, freeVars binding.body) acc
       , {binding with body = demoteRecursive binding.body}
@@ -36,13 +36,26 @@ lang MExprDemoteRecursive = MExprAst + MExprFreeVars
       case [name] then
         match mapFindExn name usedMap with (binding, free) in
         if setMem name free
-        then TmRecLets {t with inexpr = inexpr, bindings = [binding]}
-        else TmLet {ident = binding.ident, tyAnnot = binding.tyAnnot, tyBody = binding.tyBody, body = binding.body, inexpr = inexpr, ty = t.ty, info = binding.info}
+        then TmDecl
+          {x with decl = DeclRecLets {t with bindings = [binding]}
+          , inexpr = inexpr
+          }
+        else TmDecl
+          {x with decl = DeclLet
+            {ident = binding.ident
+            , tyAnnot = binding.tyAnnot
+            , tyBody = binding.tyBody
+            , body = binding.body
+            , info = binding.info
+            }
+          , inexpr = inexpr
+          , ty = x.ty
+          }
       case names then
         let bindings = mapReverse (lam name. (mapFindExn name usedMap).0) names in
-        TmRecLets {t with inexpr = inexpr, bindings = bindings}
+        TmDecl {x with decl = DeclRecLets {t with bindings = bindings}, inexpr = inexpr}
       end in
-    let inexpr = demoteRecursive t.inexpr in
+    let inexpr = demoteRecursive x.inexpr in
     foldr attachGroup inexpr (digraphTarjan g)
 end
 
@@ -52,17 +65,17 @@ mexpr
 
 use TestLang in
 
-let t = symbolize (ureclets_ [
+let t = symbolize (bind_ (ureclets_ [
   ("a", ulam_ "x" (app_ (var_ "b") (var_ "x"))),
   ("b", ulam_ "y" (app_ (var_ "b") (var_ "y")))
-]) in
+]) unit_) in
 let expected = symbolize (bindall_ [
   ureclets_ [ ("b", ulam_ "y" (app_ (var_ "b") (var_ "y"))) ],
   ulet_ "a" (ulam_ "x" (app_ (var_ "b") (var_ "x")))
-]) in
+] unit_) in
 utest demoteRecursive t with expected using eqExpr in
 
-let t = symbolize (ureclets_ [
+let t = symbolize (bind_ (ureclets_ [
   ("a", ulam_ "x" (addi_ (var_ "x") (int_ 1))),
   ("b", ulam_ "x" (app_ (var_ "c") (var_ "x"))),
   ("c", ulam_ "x" (app_ (var_ "b") (var_ "x"))),
@@ -70,7 +83,7 @@ let t = symbolize (ureclets_ [
     (ulet_ "e" (ulam_ "y" (app_ (var_ "c") (var_ "x"))))
     (app_ (var_ "e") (var_ "x")))),
   ("f", ulam_ "x" (app_ (var_ "a") (var_ "x")))
-]) in
+]) unit_) in
 let expected = symbolize (bindall_ [
   ulet_ "a" (ulam_ "x" (addi_ (var_ "x") (int_ 1))),
   ureclets_ [
@@ -80,20 +93,20 @@ let expected = symbolize (bindall_ [
     (ulet_ "e" (ulam_ "y" (app_ (var_ "c") (var_ "x"))))
     (app_ (var_ "e") (var_ "x")))),
   ulet_ "f" (ulam_ "x" (app_ (var_ "a") (var_ "x")))
-]) in
+] unit_) in
 utest demoteRecursive t with expected using eqExpr in
 
-let t = symbolize (ureclets_ [
+let t = symbolize (bind_ (ureclets_ [
   ("b", ulam_ "y" (muli_ (var_ "y") (app_ (var_ "a") (int_ 3)))),
   ("c", ulam_ "z" (subi_ (var_ "z") (app_ (var_ "b") (int_ 2)))),
   ("a", ulam_ "x" (addi_ (var_ "x") (int_ 2)))
-]) in
+]) unit_) in
 let expected = symbolize (bindall_ [
   ulet_ "a" (ulam_ "x" (addi_ (var_ "x") (int_ 2))),
   ulet_ "b" (ulam_ "y" (muli_ (var_ "y") (app_ (var_ "a") (int_ 3)))),
-  ulet_ "c" (ulam_ "z" (subi_ (var_ "z") (app_ (var_ "b") (int_ 2)))),
+  ulet_ "c" (ulam_ "z" (subi_ (var_ "z") (app_ (var_ "b") (int_ 2))))]
   unit_
-]) in
+) in
 utest demoteRecursive t with expected using eqExpr in
 
 ()

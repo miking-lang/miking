@@ -74,9 +74,9 @@ let extractSpecialize = lam t.
 in
 
 let noSpecializeCalls = preprocess (bindall_ [
-  ulet_ "f" (ulam_ "x" (addi_ (var_ "x") (int_ 1))),
-  app_ (var_ "f") (int_ 2)
-]) in
+  ulet_ "f" (ulam_ "x" (addi_ (var_ "x") (int_ 1)))]
+  (app_ (var_ "f") (int_ 2)
+)) in
 match extractSpecialize noSpecializeCalls with (m, ast) in
 utest mapSize m with 0 in
 utest ast with int_ 0 using eqExpr in
@@ -84,14 +84,14 @@ utest ast with int_ 0 using eqExpr in
 let t = preprocess (bindall_ [
   ulet_ "f" (ulam_ "x" (addi_ (var_ "x") (int_ 1))),
   ulet_ "g" (ulam_ "x" (muli_ (var_ "x") (int_ 2))),
-  ulet_ "h" (ulam_ "x" (subi_ (int_ 1) (var_ "x"))),
-  specialize_ (app_ (var_ "h") (int_ 2))
-]) in
+  ulet_ "h" (ulam_ "x" (subi_ (int_ 1) (var_ "x")))]
+  (specialize_ (app_ (var_ "h") (int_ 2))
+)) in
 let extracted = preprocess (bindall_ [
   ulet_ "h" (ulam_ "x" (subi_ (int_ 1) (var_ "x"))),
-  ulet_ "t" (ulam_ "t" (app_ (var_ "h") (int_ 2))),
-  int_ 0
-]) in
+  ulet_ "t" (ulam_ "t" (app_ (var_ "h") (int_ 2)))]
+  (int_ 0
+)) in
 match extractSpecialize t with (m, ast) in
 
 utest mapSize m with 1 in
@@ -100,15 +100,15 @@ utest ast with extracted using eqExpr in
 let t = preprocess (bindall_ [
   ulet_ "f" (ulam_ "x" (addi_ (var_ "x") (int_ 1))),
   ulet_ "g" (ulam_ "x" (muli_ (app_ (var_ "f") (var_ "x")) (int_ 2))),
-  ulet_ "h" (ulam_ "x" (subi_ (int_ 1) (var_ "x"))),
-  specialize_ (app_ (var_ "g") (int_ 4))
-]) in
+  ulet_ "h" (ulam_ "x" (subi_ (int_ 1) (var_ "x")))]
+  (specialize_ (app_ (var_ "g") (int_ 4))
+)) in
 let extracted = preprocess (bindall_ [
   ulet_ "f" (ulam_ "x" (addi_ (var_ "x") (int_ 1))),
   ulet_ "g" (ulam_ "x" (muli_ (app_ (var_ "f") (var_ "x")) (int_ 2))),
-  ulet_ "t" (ulam_ "t" (app_ (var_ "g") (int_ 4))),
-  int_ 0
-]) in
+  ulet_ "t" (ulam_ "t" (app_ (var_ "g") (int_ 4)))]
+  (int_ 0
+)) in
 match extractSpecialize t with (m, ast) in
 utest mapSize m with 1 in
 utest ast with extracted using eqExpr in
@@ -116,38 +116,38 @@ utest ast with extracted using eqExpr in
 let multipleCallsToSame = preprocess (bindall_ [
   ulet_ "f" (ulam_ "x" (muli_ (var_ "x") (int_ 3))),
   ulet_ "g" (ulam_ "x" (bindall_ [
-    ulet_ "y" (addi_ (var_ "x") (int_ 2)),
-    specialize_ (app_ (var_ "f") (var_ "y"))
-  ])),
-  ulet_ "h" (ulam_ "x" (specialize_ (app_ (var_ "f") (var_ "x")))),
-  addi_
+    ulet_ "y" (addi_ (var_ "x") (int_ 2))]
+    (specialize_ (app_ (var_ "f") (var_ "y"))
+  ))),
+  ulet_ "h" (ulam_ "x" (specialize_ (app_ (var_ "f") (var_ "x"))))]
+  (addi_
     (app_ (var_ "g") (int_ 1))
     (app_ (var_ "h") (int_ 3))
-]) in
+)) in
 let extracted = preprocess (bindall_ [
   ulet_ "f" (ulam_ "x" (muli_ (var_ "x") (int_ 3))),
   ulet_ "t" (ulam_ "y" (ulam_ "" (app_ (var_ "f") (var_ "y")))),
-  ulet_ "t" (ulam_ "x" (ulam_ "" (app_ (var_ "f") (var_ "x")))),
-  int_ 0
-]) in
+  ulet_ "t" (ulam_ "x" (ulam_ "" (app_ (var_ "f") (var_ "x"))))]
+  (int_ 0
+)) in
 match extractSpecialize multipleCallsToSame with (m, ast) in
 utest mapSize m with 2 in
 utest ast with extracted using eqExpr in
 
 let distinctCalls = preprocess (bindall_ [
   ulet_ "f" (ulam_ "x" (muli_ (var_ "x") (int_ 3))),
-  ulet_ "g" (ulam_ "x" (addi_ (var_ "x") (int_ 1))),
-  addi_
+  ulet_ "g" (ulam_ "x" (addi_ (var_ "x") (int_ 1)))]
+  (addi_
     (specialize_ (app_ (var_ "f") (int_ 1)))
     (specialize_ (app_ (var_ "g") (int_ 0)))
-]) in
+)) in
 let extracted = preprocess (bindall_ [
   ulet_ "f" (ulam_ "x" (muli_ (var_ "x") (int_ 3))),
   ulet_ "g" (ulam_ "x" (addi_ (var_ "x") (int_ 1))),
   ulet_ "t" (ulam_ "t" (app_ (var_ "f") (int_ 1))),
-  ulet_ "t" (ulam_ "t" (app_ (var_ "g") (int_ 0))),
-  int_ 0
-]) in
+  ulet_ "t" (ulam_ "t" (app_ (var_ "g") (int_ 0)))]
+  (int_ 0
+)) in
 match extractSpecialize distinctCalls with (m, ast) in
 utest mapSize m with 2 in
 utest ast with extracted using eqExpr in
@@ -156,33 +156,33 @@ let distinctCalls = preprocess (bindall_ [
   ulet_ "f" (ulam_ "x" (muli_ (var_ "x") (int_ 3))),
   ulet_ "g" (ulam_ "x" (addi_ (var_ "x") (int_ 1))),
   ulet_ "h" (specialize_ (app_ (var_ "g") (int_ 1))),
-  ulet_ "z" (ulam_ "x" (app_ (var_ "f") (var_ "x"))),
+  ulet_ "z" (ulam_ "x" (app_ (var_ "f") (var_ "x")))]
   (specialize_ (app_ (var_ "z") (int_ 1)))
-]) in
+) in
 let extracted = preprocess (bindall_ [
   ulet_ "f" (ulam_ "x" (muli_ (var_ "x") (int_ 3))),
   ulet_ "g" (ulam_ "x" (addi_ (var_ "x") (int_ 1))),
   ulet_ "t" (ulam_ "t" (app_ (var_ "g") (int_ 1))),
   ulet_ "z" (ulam_ "x" (app_ (var_ "f") (var_ "x"))),
-  ulet_ "t" (ulam_ "t" (app_ (var_ "z") (int_ 1))),
-  int_ 0
-]) in
+  ulet_ "t" (ulam_ "t" (app_ (var_ "z") (int_ 1)))]
+  (int_ 0
+)) in
 match extractSpecialize distinctCalls with (m, ast) in
 utest ast with extracted using eqExpr in
 
 let specializeVar = preprocess (bindall_ [
   ulet_ "foo" (ulam_ "x" (ulam_ "y" (addi_ (var_ "x") (var_ "y")))),
   -- Extraction does not work in this case
-  ulet_ "bar" (app_ (var_ "foo") (int_ 1)),
-  specialize_ (var_ "bar")
-]) in
+  ulet_ "bar" (app_ (var_ "foo") (int_ 1))]
+  (specialize_ (var_ "bar")
+)) in
 
 let expected = preprocess (bindall_ [
   ulet_ "foo" (ulam_ "x" (ulam_ "y" (addi_ (var_ "x") (var_ "y")))),
   ulet_ "bar" (app_ (var_ "foo") (int_ 1)),
-  ulet_ "t" (ulam_ "t" (app_ (var_ "bar") (int_ 3))),
-  int_ 0
-]) in
+  ulet_ "t" (ulam_ "t" (app_ (var_ "bar") (int_ 3)))]
+  (int_ 0
+)) in
 
 
 match extractSpecialize specializeVar with (m, ast) in
@@ -192,16 +192,16 @@ let inRecursiveBinding = preprocess (bindall_ [
   ulet_ "f" (ulam_ "x" (muli_ (var_ "x") (int_ 2))),
   ureclets_ [
     ("g", ulam_ "x" (app_ (var_ "f") (addi_ (var_ "x") (int_ 1)))),
-    ("h", ulam_ "x" (specialize_ (app_ (var_ "g") (var_ "x"))))],
-  app_ (var_ "h") (int_ 3)
-]) in
+    ("h", ulam_ "x" (specialize_ (app_ (var_ "g") (var_ "x"))))]]
+  (app_ (var_ "h") (int_ 3)
+)) in
 let extracted = preprocess (bindall_ [
   ulet_ "f" (ulam_ "x" (muli_ (var_ "x") (int_ 2))),
   ureclets_ [
-    ("g", ulam_ "x" (app_ (var_ "f") (addi_ (var_ "x") (int_ 1)))),
-    ("t", ulam_ "x" (ulam_ "" (app_ (var_ "g") (var_ "x"))))],
-  int_ 0
-]) in
+    ("t", ulam_ "x" (ulam_ "" (app_ (var_ "g") (var_ "x")))),
+    ("g", ulam_ "x" (app_ (var_ "f") (addi_ (var_ "x") (int_ 1))))]]
+  (int_ 0
+)) in
 match extractSpecialize inRecursiveBinding with (m, ast) in
 utest mapSize m with 1 in
 utest ast with extracted using eqExpr in
@@ -209,14 +209,13 @@ utest ast with extracted using eqExpr in
 let partialCalls = preprocess (bindall_ [
   ulet_ "g" (ulam_ "y" (ulam_ "x" (addi_ (var_ "x") (var_ "y")))),
   ulet_ "h" (specialize_ (app_ (var_ "g") (int_ 1)))
-]) in
+] unit_) in
 let extracted = preprocess (bindall_ [
   ulet_ "g" (ulam_ "y" (ulam_ "x" (addi_ (var_ "x") (var_ "y")))),
-  ulet_ "t" (ulam_ "t" (app_ (var_ "g") (int_ 1))),
-  int_ 0
-]) in
+  ulet_ "t" (ulam_ "t" (app_ (var_ "g") (int_ 1)))]
+  (int_ 0
+)) in
 match extractSpecialize partialCalls with (m, ast) in
 utest ast with extracted using eqExpr in
 
 ()
-

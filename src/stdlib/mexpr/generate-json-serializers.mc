@@ -142,9 +142,9 @@ lang GenerateJsonSerializers =
 
   sem _addType: GJSEnv -> Expr -> GJSEnv
   sem _addType env =
-  | TmType r & t ->
+  | TmDecl {decl = DeclType r} & t ->
     { env with namedTypes = mapInsert r.ident {params = r.params, tyIdent = r.tyIdent} env.namedTypes }
-  | TmConDef r & t ->
+  | TmDecl {decl = DeclConDef r} & t ->
     match getConDefType r.tyIdent with TyCon c then
       { env with constructors = mapInsertWith concat c.ident [{ident = r.ident, tyIdent = r.tyIdent}] env.constructors }
     else error "Not a TyCon at RHS of TmConDef type"
@@ -451,13 +451,13 @@ lang JsonSerializationLoader = MCoreLoader + GenerateJsonSerializers
     match
       match pair.serializer with TmVar x then (loader, x.ident) else
       let serName = nameSym (concat "serialize" (nameGetStr tyConName)) in
-      let loader = _addDeclExn loader (decl_nulet_ serName pair.serializer) in
+      let loader = _addDeclExn loader (nulet_ serName pair.serializer) in
       (loader, serName)
     with (loader, serName) in
     match
       match pair.deserializer with TmVar x then (loader, x.ident) else
       let deserName = nameSym (concat "deserialize" (nameGetStr tyConName)) in
-      let loader = _addDeclExn loader (decl_nulet_ deserName pair.deserializer) in
+      let loader = _addDeclExn loader (nulet_ deserName pair.deserializer) in
       (loader, deserName)
     with (loader, deserName) in
     let named =
@@ -500,7 +500,7 @@ lang JsonSerializationLoader = MCoreLoader + GenerateJsonSerializers
     match mapMapAccum f [] gjsAcc with (bindings, gjsAcc) in
     modref hook.gjsAcc gjsAcc;
     if null bindings then Some (loader, tys) else
-    let decl = decl_nureclets_ bindings in
+    let decl = nureclets_ bindings in
     Some (_addSymbolizedDeclExn loader decl, tys)
 
   sem serializationPairsFor : [Type] -> Loader -> (Loader, [GJSSerializer])

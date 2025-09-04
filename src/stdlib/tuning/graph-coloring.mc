@@ -96,7 +96,7 @@ let _findLetBinding : Name -> use Ast in Expr -> Option (use Ast in Expr) =
   lam name. lam expr.
     recursive let findLetBindingH = lam acc. lam expr.
       match acc with Some e then Some e
-      else match expr with TmLet {ident = ident, body = body, inexpr = inexpr}
+      else match expr with TmDecl {decl = DeclLet {ident = ident, body = body}, inexpr = inexpr}
       then
         if nameEq ident name then Some body
         else match findLetBindingH acc body with Some b then Some b
@@ -262,7 +262,7 @@ let callCtxHole2Idx : NameInfo -> [NameInfo] -> CallCtxEnv -> Int =
       mapFindExn path (mapFindExn nameInfo hole2idx)
     else never
 
-let callCtxDeclareIncomingVars : Int -> CallCtxEnv -> [use Ast in Expr] =
+let callCtxDeclareIncomingVars : Int -> CallCtxEnv -> [use Ast in Decl] =
   lam init : Int. lam env : CallCtxEnv.
     match env with { threadPoolInfo = threadPoolInfo } then
       switch threadPoolInfo
@@ -289,9 +289,9 @@ let callCtxReadIncomingVar : Name -> CallCtxEnv -> use Ast in Expr =
         let idxName = nameSym "idx" in
         bindall_
         [ nulet_ idxName (app_
-          (deref_ (nvar_ id2idxName)) uunit_)
-        , deref_ (tensorGetExn_ tyunknown_ (nvar_ iv) (seq_ [nvar_ idxName]))
-        ]
+          (deref_ (nvar_ id2idxName)) uunit_)]
+        ( deref_ (tensorGetExn_ tyunknown_ (nvar_ iv) (seq_ [nvar_ idxName]))
+        )
       case None () then
         deref_ (nvar_ iv)
       end
@@ -305,9 +305,9 @@ let callCtxModifyIncomingVar : Name -> Int -> CallCtxEnv -> use Ast in Expr =
         let idxName = nameSym "idx" in
         bindall_
         [ nulet_ idxName (app_
-          (deref_ (nvar_ id2idxName)) uunit_)
-        , modref_ (tensorGetExn_ tyunknown_ (nvar_ iv) (seq_ [nvar_ idxName])) (int_ v)
-        ]
+          (deref_ (nvar_ id2idxName)) uunit_)]
+        ( modref_ (tensorGetExn_ tyunknown_ (nvar_ iv) (seq_ [nvar_ idxName])) (int_ v)
+        )
       case None () then
         modref_ (nvar_ iv) (int_ v)
       end
@@ -460,13 +460,8 @@ lang GraphColoring = HoleAst + HoleCallGraph
     let env = callCtxInit publicFns pruned tm in
 
     -- Declare the incoming variables
-    let incVars =
-      let exprs =
-        callCtxDeclareIncomingVars _incUndef env in
-      if null exprs then uunit_
-      else bindall_ exprs
-    in
-    let tm = bind_ incVars tm in
+    let incVars = callCtxDeclareIncomingVars _incUndef env in
+    let tm = bindall_ incVars tm in
 
     -- Transform program to maintain the call history when needed
     match _maintainCallCtx eqPathsMap callGraphTop env tm with (env, prog) in
@@ -476,13 +471,13 @@ lang GraphColoring = HoleAst + HoleCallGraph
   -- updating incoming variables before function calls.
   sem _maintainCallCtx (eqPaths : Map NameInfo [Path]) (cur : NameInfo) (env : CallCtxEnv) =
   -- Application: caller updates incoming variable of callee
-  | TmLet ({ body = TmApp a } & t) ->
+  | TmDecl (x & {decl = DeclLet ({ body = TmApp a } & t)}) ->
     match
-      match _maintainCallCtx eqPaths cur env t.inexpr with (env, inexpr) in
+      match _maintainCallCtx eqPaths cur env x.inexpr with (env, inexpr) in
       match _maintainCallCtx eqPaths cur env t.body with (env, body) in
       ( env,
-        TmLet {{t with inexpr = inexpr}
-                  with body = body})
+        TmDecl { x with decl = DeclLet {t with body = body}
+               , inexpr = inexpr})
     with (env, le) in
     let env : CallCtxEnv = env in
     -- Track call only if edge is part of the call graph
@@ -501,24 +496,24 @@ lang GraphColoring = HoleAst + HoleCallGraph
       else (env, le) -- not an application with TmVar
     else (env, le) -- caller not part of call graph
 
-  | TmLet ({ body = TmHole { depth = depth }, ident = ident} & t) ->
+  | TmDecl (x & {decl = DeclLet ({ body = TmHole { depth = depth }, ident = ident} & t)}) ->
     let paths = mapFindExn (ident, t.info) eqPaths in
     let env = callCtxAddHole t.body (ident, t.info) paths cur env in
-    match _maintainCallCtx eqPaths cur env t.inexpr with (env, inexpr) in
-    (env, TmLet {t with inexpr = inexpr})
+    match _maintainCallCtx eqPaths cur env x.inexpr with (env, inexpr) in
+    (env, TmDecl {x with inexpr = inexpr})
 
   -- Function definitions: possibly update cur inside body of function
-  | TmLet ({ body = TmLam lm } & t) ->
+  | TmDecl (x & {decl = DeclLet ({ body = TmLam lm } & t)}) ->
     let curBody = (t.ident, t.info) in
     match _maintainCallCtx eqPaths curBody env t.body with (env, body) in
-    match _maintainCallCtx eqPaths cur env t.inexpr with (env, inexpr) in
+    match _maintainCallCtx eqPaths cur env x.inexpr with (env, inexpr) in
     ( env,
-      TmLet {{t with body = body}
-                with inexpr = inexpr})
+      TmDecl { x with decl = DeclLet {t with body = body}
+             , inexpr = inexpr})
 
-  | TmRecLets ({ bindings = bindings, inexpr = inexpr } & t) ->
+  | TmDecl (x & {decl = DeclRecLets ({ bindings = bindings } & t), inexpr = inexpr}) ->
     match
-      mapAccumL (lam env : CallCtxEnv. lam bind : RecLetBinding.
+      mapAccumL (lam env : CallCtxEnv. lam bind : DeclLetRecord.
         let curBody =
           match bind with { body = TmLam lm } then (bind.ident, bind.info)
           else cur
@@ -529,8 +524,8 @@ lang GraphColoring = HoleAst + HoleCallGraph
     with (env, newBinds) in
     match _maintainCallCtx eqPaths cur env inexpr with (env, inexpr) in
     ( env,
-      TmRecLets {{t with bindings = newBinds}
-                    with inexpr = inexpr})
+      TmDecl { x with decl = DeclRecLets {t with bindings = newBinds}
+             , inexpr = inexpr})
   | tm ->
     smapAccumL_Expr_Expr (_maintainCallCtx eqPaths cur) env tm
 
@@ -539,37 +534,35 @@ lang GraphColoring = HoleAst + HoleCallGraph
   -- forward the call to the public functions to their private equivalent.
   sem _replacePublic (pub2priv : Map Name Name) =
   -- Function call: forward call for public function
-  | TmLet ({ body = TmApp a } & t) ->
+  | TmDecl (x & {decl = DeclLet ({ body = TmApp a } & t)}) ->
     match _appGetCallee (TmApp a) with Some callee then
       match callee with (callee, _) then
         match mapLookup callee pub2priv
         with Some local then
-          TmLet {{t with body = _appSetCallee (TmApp a) local}
-                    with inexpr = _replacePublic pub2priv t.inexpr}
-        else TmLet {t with inexpr = _replacePublic pub2priv t.inexpr}
+          TmDecl { x with decl = DeclLet {t with body = _appSetCallee (TmApp a) local}
+                 , inexpr = _replacePublic pub2priv x.inexpr}
+        else TmDecl {x with inexpr = _replacePublic pub2priv x.inexpr}
       else never
-    else TmLet {t with inexpr = _replacePublic pub2priv t.inexpr}
+    else TmDecl {x with inexpr = _replacePublic pub2priv x.inexpr}
 
   -- Function definition: create private equivalent of public functions
-  | TmLet ({ body = TmLam lm } & t) & tm ->
+  | TmDecl (x & {decl = DeclLet ({ body = TmLam lm } & t)}) & tm ->
     match mapLookup t.ident pub2priv
     with Some local then
       match _forwardCall local (_replacePublic pub2priv) {ident = t.ident, body = t.body}
       with (priv, pub) then
         let pubAndRest =
-          TmLet {{{t with ident = pub.ident}
-                     with body = pub.body}
-                     with inexpr = _replacePublic pub2priv t.inexpr}
-        in TmLet {{{t with ident = priv.ident}
-                      with body = priv.body}
-                      with inexpr = pubAndRest}
+          TmDecl { x with decl = DeclLet {t with ident = pub.ident, body = pub.body}
+                 , inexpr = _replacePublic pub2priv x.inexpr}
+        in TmDecl { x with decl = DeclLet {t with ident = priv.ident, body = priv.body}
+                  , inexpr = pubAndRest}
       else never
-    else TmLet {{t with inexpr = _replacePublic pub2priv t.inexpr}
-                   with body = _replacePublic pub2priv t.body}
+    else TmDecl { x with decl = DeclLet {t with body = _replacePublic pub2priv t.body}
+                , inexpr = _replacePublic pub2priv x.inexpr}
 
-  | TmRecLets ({ bindings = bindings, inexpr = inexpr } & t) ->
+  | TmDecl (x & {decl = DeclRecLets ({ bindings = bindings } & t), inexpr = inexpr}) ->
     let newBinds = foldl
-      (lam acc : [RecLetBinding]. lam bind : RecLetBinding.
+      (lam acc : [DeclLetRecord]. lam bind : DeclLetRecord.
         match bind with { body = TmLam lm } then
           match mapLookup bind.ident pub2priv
           with Some local then
@@ -583,31 +576,31 @@ lang GraphColoring = HoleAst + HoleCallGraph
           else cons bind acc
         else cons bind acc)
       [] bindings
-    in TmRecLets {{t with bindings = newBinds}
-                     with inexpr = _replacePublic pub2priv t.inexpr}
+    in TmDecl { x with decl = DeclRecLets {t with bindings = newBinds}
+              , inexpr = _replacePublic pub2priv x.inexpr}
 
   | tm -> smap_Expr_Expr (_replacePublic pub2priv) tm
 
   -- Finds the home vertex and equivalence path for each hole.
   sem _eqPaths (g : CallGraph) (public : [NameInfo]) (cur : NameInfo) (acc: [EqPaths]) =
-  | TmLet ({body = TmHole {depth = depth}, ident = ident} & t) ->
+  | TmDecl (x & {decl = DeclLet ({body = TmHole {depth = depth}, ident = ident} & t)}) ->
     let paths = eqPaths g cur depth public in
     cons {id=(ident, t.info), home=cur, eqPaths=paths}
-      (_eqPaths g public cur acc t.inexpr)
+      (_eqPaths g public cur acc x.inexpr)
 
-  | TmLet ({ body = TmLam lm } & t) ->
+  | TmDecl (x & {decl = DeclLet ({ body = TmLam lm } & t)}) ->
     concat (_eqPaths g public (t.ident, t.info) acc t.body)
-           (_eqPaths g public cur [] t.inexpr)
+           (_eqPaths g public cur [] x.inexpr)
 
-  | TmRecLets t ->
+  | TmDecl (x & {decl = DeclRecLets t}) ->
     concat
-      (foldl (lam acc. lam bind: RecLetBinding.
+      (foldl (lam acc. lam bind: DeclLetRecord.
          let cur =
            match bind with { body = TmLam lm } then (bind.ident, bind.info)
            else cur
          in concat acc (_eqPaths g public cur [] bind.body))
          [] t.bindings)
-      (_eqPaths g public cur acc t.inexpr)
+      (_eqPaths g public cur acc x.inexpr)
 
   | tm ->
     sfold_Expr_Expr (_eqPaths g public cur) acc tm

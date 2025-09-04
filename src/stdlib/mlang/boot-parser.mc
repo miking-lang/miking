@@ -95,23 +95,23 @@ lang BootParserMLang = BootParser + MLangAst + CosemDeclAst
 
   sem mergeCosems : [Decl] -> [Decl]
   sem mergeCosems =| decls ->
-    let work = lam acc : ([Decl], Map String Decl). lam decl : Decl. 
-      match acc with (res, m) in 
-      match decl with DeclCosem s1 then 
-        let str = nameGetStr s1.ident in 
+    let work = lam acc : ([Decl], Map String Decl). lam decl : Decl.
+      match acc with (res, m) in
+      match decl with DeclCosem s1 then
+        let str = nameGetStr s1.ident in
         match mapLookup str m with Some (DeclCosem s2) then
           match s1.tyAnnot with TyUnknown _ then
-            let m = mapRemove str m in 
+            let m = mapRemove str m in
             (res, mapInsert str (DeclCosem {s1 with tyAnnot = s2.tyAnnot}) m)
-          else 
-            let m = mapRemove str m in 
+          else
+            let m = mapRemove str m in
             (res, mapInsert str (DeclCosem {s1 with args = s2.args, cases = s2.cases}) m)
-        else 
+        else
           (res, mapInsert str decl m)
-      else 
+      else
         (cons decl res, m)
-    in 
-    match foldl work ([], mapEmpty cmpString) decls with (res, m) in 
+    in
+    match foldl work ([], mapEmpty cmpString) decls with (res, m) in
     concat res (mapValues m)
 
 
@@ -121,17 +121,17 @@ lang BootParserMLang = BootParser + MLangAst + CosemDeclAst
     let nCons = glistlen d 0 in
     let nParams = if eqi nCons 0 then 0 else glistlen d 1 in
 
-    let parseCon = lam i. 
-      let ident = gname d (addi i 1) in 
-      let ty = gtype d i in 
-      let tyName = nameNoSym (concat (gstr d (addi i 1)) "Type") in 
+    let parseCon = lam i.
+      let ident = gname d (addi i 1) in
+      let ty = gtype d i in
+      let tyName = nameNoSym (concat (gstr d (addi i 1)) "Type") in
       {ident = ident, tyIdent = ty, tyName = tyName}
-    in 
+    in
 
-    let kind = switch gint d 0 
-      case 0 then base_kind_ 
-      case 1 then sumext_kind_ 
-    end in 
+    let kind = switch gint d 0
+      case 0 then base_kind_
+      case 1 then sumext_kind_
+    end in
 
     DeclSyn {ident = gname d 0,
              includes = [],
@@ -139,10 +139,10 @@ lang BootParserMLang = BootParser + MLangAst + CosemDeclAst
              params = map (lam i. gname d (addi (addi 1 nCons) i)) (range 0 nParams 1),
              info = ginfo d 0,
              declKind = kind}
-  | 703 -> 
-    let nCases = glistlen d 0 in 
-    let nArgs = glistlen d 1 in 
-    let parseCase = lam i. 
+  | 703 ->
+    let nCases = glistlen d 0 in
+    let nArgs = glistlen d 1 in
+    let parseCase = lam i.
       {pat = gpat d i, thn = gterm d i}
     in
     let parseArg = (lam i. {ident = gname d i, tyAnnot = gtype d i}) in
@@ -153,10 +153,10 @@ lang BootParserMLang = BootParser + MLangAst + CosemDeclAst
       Some (map (lam i. {ident = gname d i, tyAnnot = gtype d i}) (range 1 (addi 1 nArgs) 1))
     in
 
-    let kind = switch gint d 0 
-      case 0 then base_kind_ 
-      case 1 then sumext_kind_ 
-    end in 
+    let kind = switch gint d 0
+      case 0 then base_kind_
+      case 1 then sumext_kind_
+    end in
 
     DeclSem {ident = gname d 0,
              tyAnnot = gtype d 0,
@@ -185,9 +185,9 @@ lang BootParserMLang = BootParser + MLangAst + CosemDeclAst
       matchDecl a (bootParserGetId a)
     in
 
-    let decls = map parseDecl (range 0 nDecls 1) in 
-    let decls = reverse (mergeSems decls) in 
-    let decls = reverse (mergeCosems decls) in 
+    let decls = map parseDecl (range 0 nDecls 1) in
+    let decls = reverse (mergeSems decls) in
+    let decls = reverse (mergeCosems decls) in
 
 
 
@@ -232,11 +232,12 @@ lang BootParserMLang = BootParser + MLangAst + CosemDeclAst
              info = ginfo d 0}
 
   sem matchTerm t =
-  | 116 ->
-    TmUse {info = ginfo t 0,
-           inexpr = gterm t 0,
-           ty = tyunknown_,
-           ident = gname t 0}
+  | 116 -> TmDecl
+    { decl = DeclUse {ident = gname t 0, info = ginfo t 0}
+    , inexpr = gterm t 0
+    , info = ginfo t 0
+    , ty = tyunknown_
+    }
 
   sem matchType t =
   | 214 ->
@@ -529,7 +530,7 @@ let str = strJoin "\n" [
   "()"
 ] in
 let p = parseProgram str in
-match p.expr with TmUse u in
+match p.expr with TmDecl {decl = DeclUse u} in
 utest nameGetStr u.ident with "L" in
 
 -- Test TyUse parsing
@@ -584,7 +585,7 @@ let str = strJoin "\n" [
   "mexpr",
   "()"
 ] in
-let p = parseProgram str in 
+let p = parseProgram str in
 -- printLn (mlang2str p) ;
 
 ()

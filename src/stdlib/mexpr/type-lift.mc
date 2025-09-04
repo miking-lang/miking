@@ -187,10 +187,10 @@ lang TypeLiftAddRecordToEnv = TypeLift + RecordTypeAst
   -- | ty -> (env, ty) -- NOTE(dlunde,2021-10-06): I commented this out, so that it gives an error if a TyRecord is not supplied (less error-prone)
 end
 
-lang TypeTypeLift = TypeLift + TypeAst + VariantTypeAst + UnknownTypeAst +
+lang TypeTypeLift = TypeLift + TypeDeclAst + VariantTypeAst + UnknownTypeAst +
                     VariantNameTypeAst + RecordTypeAst
   sem typeLiftExpr (env : TypeLiftEnv) =
-  | TmType t ->
+  | TmDecl (x & {decl = DeclType t}) ->
     let tyIdent =
       match t.tyIdent with TyUnknown t2 then tyWithInfo t2.info (tyvariant_ [])
       else t.tyIdent
@@ -211,13 +211,13 @@ lang TypeTypeLift = TypeLift + TypeAst + VariantTypeAst + UnknownTypeAst +
         env
       else {env with typeEnv = assocSeqInsert t.ident tyIdent env.typeEnv}
     in
-    match typeLiftExpr env t.inexpr with (env, inexpr) in
+    match typeLiftExpr env x.inexpr with (env, inexpr) in
     (env, inexpr)
 end
 
 lang DataTypeLift = TypeLift + DataAst + FunTypeAst + ConTypeAst + AppTypeAst
   sem typeLiftExpr (env : TypeLiftEnv) =
-  | TmConDef t ->
+  | TmDecl (x & {decl = DeclConDef t}) ->
     recursive let unwrapTypeVarIdent = lam ty : Type.
       match ty with TyCon t then Some t.ident
       else match ty with TyApp t then unwrapTypeVarIdent t.lhs
@@ -240,7 +240,7 @@ lang DataTypeLift = TypeLift + DataAst + FunTypeAst + ConTypeAst + AppTypeAst
         else env
       else env
     in
-    match typeLiftExpr env t.inexpr with (env, inexpr) then
+    match typeLiftExpr env x.inexpr with (env, inexpr) then
       (env, inexpr)
     else never
 end
@@ -309,8 +309,8 @@ lang MExprTypeLift =
   MExprCmp +
 
   -- Default implementations (Terms)
-  VarAst + AppAst + LamAst + LetAst + RecLetsAst + ConstAst + SeqAst +
-  UtestAst + NeverAst + ExtAst +
+  VarAst + AppAst + LamAst + LetDeclAst + RecLetsDeclAst + ConstAst + SeqAst +
+  UtestDeclAst + NeverAst + ExtDeclAst +
 
   -- Default implementations (Types)
   UnknownTypeAst + BoolTypeAst + IntTypeAst + FloatTypeAst + CharTypeAst +
@@ -351,9 +351,9 @@ let eqEnv = lam lenv. lam renv.
 in
 
 let unitNotLifted = typeCheck (symbolize (bindall_ [
-  ulet_ "x" (int_ 2),
+  ulet_ "x" (int_ 2)]
   uunit_
-])) in
+)) in
 match typeLift unitNotLifted with (env, t) in
 utest env with [] using eqEnv in
 utest t with unitNotLifted using eqExpr in
@@ -361,9 +361,9 @@ utest t with unitNotLifted using eqExpr in
 let noVariantsOrRecords = typeCheck (symbolize (bindall_ [
   ulet_ "x" (int_ 3),
   ulet_ "y" (int_ 2),
-  ulet_ "z" (addi_ (var_ "x") (var_ "y")),
-  var_ "z"
-])) in
+  ulet_ "z" (addi_ (var_ "x") (var_ "y"))]
+  (var_ "z"
+))) in
 match typeLift noVariantsOrRecords with (env, t) in
 utest env with [] using eqEnv in
 utest t with noVariantsOrRecords using eqExpr in
@@ -376,9 +376,9 @@ let variant = typeCheck (symbolize (bindall_ [
   ncondef_ branchName (tyarrow_ (tytuple_ [
     ntycon_ treeName,
     ntycon_ treeName]) (ntycon_ treeName)),
-  ncondef_ leafName (tyarrow_ tyint_ (ntycon_ treeName)),
+  ncondef_ leafName (tyarrow_ tyint_ (ntycon_ treeName))]
   uunit_
-])) in
+)) in
 match typeLift variant with (_, t) in
 utest t with uunit_ using eqExpr in
 
@@ -394,9 +394,9 @@ let variantWithRecords = typeCheck (symbolize (bindall_ [
   ncondef_ branchName (tyarrow_ (tyrecord_ [
     ("lhs", ntycon_ treeName),
     ("rhs", ntycon_ treeName)]) (ntycon_ treeName)),
-  ncondef_ leafName (tyarrow_ tyint_ (ntycon_ treeName)),
+  ncondef_ leafName (tyarrow_ tyint_ (ntycon_ treeName))]
   lastTerm
-])) in
+)) in
 match typeLift variantWithRecords with (env, t) in
 let recid = fst (get env 0) in
 let expectedEnv = [
@@ -419,9 +419,9 @@ let nestedRecord = typeCheck (symbolize (bindall_ [
       ("z", uunit_)
     ]),
     ("b", int_ 7)
-  ]),
+  ])]
   uunit_
-])) in
+)) in
 match typeLift nestedRecord with (env, t) in
 let fstid = fst (get env 0) in
 let sndid = fst (get env 1) in
@@ -440,9 +440,9 @@ utest env with expectedEnv using eqEnv in
 utest t with nestedRecord using eqExpr in
 
 let nestedSeq = typeCheck (symbolize (bindall_ [
-  ulet_ "s" (seq_ [seq_ [seq_ [int_ 2]], seq_ [seq_ [int_ 3]]]),
+  ulet_ "s" (seq_ [seq_ [seq_ [int_ 2]], seq_ [seq_ [int_ 3]]])]
   uunit_
-])) in
+)) in
 match typeLift nestedSeq with (env, t) in
 let fstid = fst (get env 0) in
 let sndid = fst (get env 1) in
@@ -457,9 +457,9 @@ utest t with nestedSeq using eqExpr in
 
 let recordsSameFieldsDifferentTypes = typeCheck (symbolize (bindall_ [
   ulet_ "x" (urecord_ [("a", int_ 0), ("b", int_ 1)]),
-  ulet_ "y" (urecord_ [("a", int_ 2), ("b", true_)]),
+  ulet_ "y" (urecord_ [("a", int_ 2), ("b", true_)])]
   uunit_
-])) in
+)) in
 match typeLift recordsSameFieldsDifferentTypes with (env, t) in
 let fstid = fst (get env 0) in
 let sndid = fst (get env 1) in
@@ -472,9 +472,9 @@ utest t with recordsSameFieldsDifferentTypes using eqExpr in
 
 let recordsSameFieldsSameTypes = typeCheck (symbolize (bindall_ [
   ulet_ "x" (urecord_ [("a", int_ 0), ("b", int_ 1)]),
-  ulet_ "y" (urecord_ [("a", int_ 3), ("b", int_ 6)]),
+  ulet_ "y" (urecord_ [("a", int_ 3), ("b", int_ 6)])]
   uunit_
-])) in
+)) in
 match typeLift recordsSameFieldsSameTypes with (env, t) in
 let recid = fst (get env 0) in
 let expectedEnv = [
@@ -493,12 +493,12 @@ match assocSeqLookup {eq=nameEq} ident env with Some recordTy in
 utest recordTy with tyTm record using eqType in
 
 let recordUpdate = typeCheck (symbolize (bindall_ [
-  ulet_ "x" (urecord_ [("a", int_ 0), ("b", int_ 1)]),
-  recordupdate_ (var_ "x") "a" (int_ 2)
-])) in
+  ulet_ "x" (urecord_ [("a", int_ 0), ("b", int_ 1)])]
+  (recordupdate_ (var_ "x") "a" (int_ 2)
+))) in
 let recordType = tyrecord_ [("a", tyint_), ("b", tyint_)] in
 match typeLift recordUpdate with (env, t) in
-match t with TmLet {tyBody = TyCon {ident = ident}} in
+match t with TmDecl {decl = DeclLet {tyBody = TyCon {ident = ident}}} in
 match assocSeqLookup {eq=nameEq} ident env with Some ty in
 utest ty with recordType using eqType in
 
@@ -512,9 +512,9 @@ let typeAliases = typeCheck (symbolize (bindall_ [
   ulet_ "env" (urecord_ [
     ("global", seq_ [utuple_ [str_ "x", int_ 4]]),
     ("local", seq_ [utuple_ [str_ "a", int_ 0]])
-  ]),
-  var_ "env"
-])) in
+  ])]
+  (var_ "env"
+))) in
 match typeLift typeAliases with (env, t) in
 -- Note that records and variants are added to the front of the environment
 -- as they are processed, so the last record in the given term will be first
@@ -546,12 +546,12 @@ let recordTypeInBindingAnnotation = symbolize (bindall_ [
   reclet_ "gcd" (tyarrow_ tupleTy tyint_)
     (ulam_ "x" (bindall_ [
       ulet_ "a" (tupleproj_ 0 (var_ "x")),
-      ulet_ "b" (tupleproj_ 1 (var_ "x")),
-      if_ (eqi_ (var_ "b") (int_ 0))
+      ulet_ "b" (tupleproj_ 1 (var_ "x"))]
+      (if_ (eqi_ (var_ "b") (int_ 0))
         (var_ "a")
-        (app_ (var_ "gcd") (utuple_ [var_ "b", modi_ (var_ "a") (var_ "b")]))])),
-  app_ (var_ "gcd") (utuple_ [int_ 7, int_ 14])
-]) in
+        (app_ (var_ "gcd") (utuple_ [var_ "b", modi_ (var_ "a") (var_ "b")])))))]
+  (app_ (var_ "gcd") (utuple_ [int_ 7, int_ 14])
+)) in
 match typeLift recordTypeInBindingAnnotation with (env, t) in
 utest length env with 1 using eqi in
 

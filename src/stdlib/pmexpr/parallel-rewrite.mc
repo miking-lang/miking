@@ -5,7 +5,7 @@ include "pmexpr/promote.mc"
 lang PMExprParallelPattern = PMExprAst + PMExprPromote + PMExprVariableSub
   sem tryPatterns (patterns : [Pattern]) =
   | t ->
-    let binding : RecLetBinding = t in
+    let binding : DeclLetRecord = t in
     let n = length patterns in
     recursive let tryPattern = lam i.
       if lti i n then
@@ -26,11 +26,11 @@ lang PMExprParallelPattern = PMExprAst + PMExprPromote + PMExprVariableSub
 
   sem parallelPatternRewriteH (patterns : [Pattern])
                               (replacements : Map Name ([(Name, Type, Info)], Expr)) =
-  | TmRecLets t ->
+  | TmDecl (x & {decl = DeclRecLets t}) ->
     -- Collect the parameters
     let replacements =
       foldl
-        (lam replacements. lam binding : RecLetBinding.
+        (lam replacements. lam binding : DeclLetRecord.
           match functionParametersAndBody binding.body with (params, _) then
             match tryPatterns patterns binding with Some replacement then
               mapInsert binding.ident (params, replacement) replacements
@@ -42,18 +42,18 @@ lang PMExprParallelPattern = PMExprAst + PMExprPromote + PMExprVariableSub
     -- Remove bindings that have been replaced by parallel patterns
     let retainedBindings =
       filter
-        (lam binding : RecLetBinding.
+        (lam binding : DeclLetRecord.
           optionIsNone (mapLookup binding.ident replacements))
         t.bindings in
 
     if null retainedBindings then
-      parallelPatternRewriteH patterns replacements t.inexpr
+      parallelPatternRewriteH patterns replacements x.inexpr
     else
       -- Replace applications on replaced bindings within the bodies of the
       -- bindings that remain.
       let bindings =
         map
-          (lam binding : RecLetBinding.
+          (lam binding : DeclLetRecord.
             match parallelPatternRewriteH patterns replacements binding.body
             with (_, body) in
             {binding with body = body})
@@ -61,10 +61,10 @@ lang PMExprParallelPattern = PMExprAst + PMExprPromote + PMExprVariableSub
 
       -- Apply on the inexpr of the recursive let-expression (apply on the
       -- remaining part of the tree).
-      match parallelPatternRewriteH patterns replacements t.inexpr
+      match parallelPatternRewriteH patterns replacements x.inexpr
       with (replacements, inexpr) in
-      (replacements, TmRecLets {{t with bindings = bindings}
-                                   with inexpr = inexpr})
+      (replacements, TmDecl { x with decl = DeclRecLets {t with bindings = bindings}
+                            , inexpr = inexpr})
   | (TmApp {info = info}) & t ->
     let performSubstitution : Expr -> [(Name, Type, Info)] -> [Expr] -> Expr =
       lam e. lam params. lam args.
@@ -126,7 +126,7 @@ lang TestLang =
   sem isAtomic =
   | TmMap2 _ -> false
   | TmParallelReduce _ -> false
-  
+
   sem pprintCode (indent : Int) (env : PprintEnv) =
   | TmMap2 t ->
     match printParen indent env t.f with (env, f) in
@@ -151,7 +151,7 @@ let preprocess : Expr -> Expr = lam e.
 in
 
 let recletBindingCount : Expr -> Int = lam e.
-  match e with TmRecLets t then
+  match e with TmDecl {decl = DeclRecLets t} then
     length t.bindings
   else 0
 in
@@ -172,7 +172,7 @@ let h = nameSym "h" in
 let t = nameSym "t" in
 let addOne = nameSym "addOne" in
 let x = nameSym "x" in
-let expr = preprocess (nreclets_ [
+let expr = preprocess (bind_ (nreclets_ [
   (map, tyunknown_, nulam_ f (nulam_ s (
     match_ (nvar_ s)
       (pseqtot_ [])
@@ -185,7 +185,7 @@ let expr = preprocess (nreclets_ [
   (addOne, tyunknown_, nulam_ s (
     appf2_ (nvar_ map) (nulam_ x (addi_ (nvar_ x) (int_ 1))) (nvar_ s)
   ))
-]) in
+]) unit_) in
 let expr = parallelPatternRewrite patterns expr in
 utest recletBindingCount expr with 1 in
 utest containsParallelKeyword expr with true in
@@ -207,7 +207,7 @@ let expr = preprocess (bindall_ [
           (nvar_ acc)
           never_))))],
   ulet_ "sum" (appf2_ (nvar_ red) (int_ 0) (seq_ [int_ 1, int_ 2, int_ 3]))
-]) in
+] unit_) in
 let expr = parallelPatternRewrite patterns expr in
 utest recletBindingCount expr with 0 in
 utest containsParallelKeyword expr with true in
@@ -231,7 +231,7 @@ let expr = preprocess (bindall_ [
       (int_ 0)
       (uconst_ (CAddi ()))
       (seq_ [int_ 1, int_ 2, int_ 3]))
-]) in
+] unit_) in
 let expr = parallelPatternRewrite patterns expr in
 utest recletBindingCount expr with 0 in
 utest containsParallelKeyword expr with true in

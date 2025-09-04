@@ -16,8 +16,8 @@ lang CudaLanguageFragmentFix = PMExprAst
     TmLam {t with body = _eliminateFailureCodeInSemanticFunctionBody t.body}
   | TmMatch t ->
     TmMatch {t with els = _eliminateFailureCodeInSemanticFunctionBody t.els}
-  | TmLet {
-      body = TmApp {lhs = TmConst {val = CDPrint _}},
+  | TmDecl {decl = DeclLet {
+      body = TmApp {lhs = TmConst {val = CDPrint _}}},
       inexpr = TmApp {lhs = TmConst {val = CError _},
                       rhs = TmSeq _},
       info = info} ->
@@ -27,28 +27,21 @@ lang CudaLanguageFragmentFix = PMExprAst
     TmNever {ty = TyUnknown {info = info}, info = info}
   | t -> t
 
-  sem _eliminateFailureCodeInSemanticFunction : RecLetBinding -> RecLetBinding
+  sem _eliminateFailureCodeInSemanticFunction : DeclLetRecord -> DeclLetRecord
   sem _eliminateFailureCodeInSemanticFunction =
   | recLetBinding ->
-    let recLetBinding : RecLetBinding = recLetBinding in
+    let recLetBinding : DeclLetRecord = recLetBinding in
     let body = _eliminateFailureCodeInSemanticFunctionBody recLetBinding.body in
     {recLetBinding with body = body}
 
   sem fixLanguageFragmentSemanticFunction : Expr -> Expr
   sem fixLanguageFragmentSemanticFunction =
-  | TmLet t ->
-    TmLet {t with inexpr = fixLanguageFragmentSemanticFunction t.inexpr}
-  | TmRecLets t ->
+  | TmDecl x -> TmDecl {x with inexpr = fixLanguageFragmentSemanticFunction x.inexpr}
+  | TmDecl (x & {decl = DeclRecLets t}) ->
     let bindings = map _eliminateFailureCodeInSemanticFunction t.bindings in
-    TmRecLets {{t with bindings = bindings}
-                  with inexpr = fixLanguageFragmentSemanticFunction t.inexpr}
-  | TmType t ->
-    TmType {t with inexpr = fixLanguageFragmentSemanticFunction t.inexpr}
-  | TmConDef t ->
-    TmConDef {t with inexpr = fixLanguageFragmentSemanticFunction t.inexpr}
-  | TmUtest t ->
-    TmUtest {t with next = fixLanguageFragmentSemanticFunction t.next}
-  | TmExt t ->
-    TmExt {t with inexpr = fixLanguageFragmentSemanticFunction t.inexpr}
+    TmDecl
+    { x with decl = DeclRecLets {t with bindings = bindings}
+    , inexpr = fixLanguageFragmentSemanticFunction x.inexpr
+    }
   | t -> t
 end

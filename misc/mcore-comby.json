@@ -1,14 +1,8 @@
 {
     "user_defined_delimiters": [
-        [ "lang", "end" ],
         [ "(", ")" ],
         [ "[", "]" ],
-        [ "{", "}" ],
-        [ "let", "in" ],
-        [ "recursive", "in" ],
-        [ "recursive", "end" ],
-        [ "type", "in" ],
-        [ "use", "in" ]
+        [ "{", "}" ]
     ],
     "escapable_string_literals": {
         "delimiters": [ "\"" ],

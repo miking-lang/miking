@@ -188,21 +188,6 @@ let _unit = _record [] _unitTy
 let _recbind = lam id. lam ty. lam body.
   use MExprAst in
   {ident = id, tyAnnot = ty, tyBody = ty, body = body, info = _utestInfo}
-recursive let _bind = lam f. lam bind. lam expr.
-  use MExprAst in
-  let ty = tyTm expr in
-  switch bind
-  case TmLet t then TmLet {t with inexpr = _bind f t.inexpr expr, ty = ty}
-  case TmRecLets t then TmRecLets {t with inexpr = _bind f t.inexpr expr, ty = ty}
-  case TmType t then TmType {t with inexpr = _bind f t.inexpr expr, ty = ty}
-  case TmConDef t then TmConDef {t with inexpr = _bind f t.inexpr expr, ty = ty}
-  case TmExt t then TmExt {t with inexpr = _bind f t.inexpr expr, ty = ty}
-  case _ then f bind expr
-  end
-end
-let _binds = lam bindings.
-  use MExprAst in
-  foldr1 (_bind (lam. lam expr. expr)) bindings
 let _apps = lam fun. lam args.
   use MExprAst in
   foldl
@@ -844,18 +829,18 @@ lang MExprUtestGenerate =
   -- definitions for each subtype required to support pretty-printing all
   -- types in the provided sequence. If the user provided a custom on-fail
   -- printing function, we do not generate any bindings.
-  sem generatePrettyPrintBindings : Info -> UtestEnv -> [Type] -> Option Expr -> (UtestEnv, Expr)
+  sem generatePrettyPrintBindings : Info -> UtestEnv -> [Type] -> Option Expr -> (UtestEnv, Option Decl)
   sem generatePrettyPrintBindings info env types =
-  | Some _ -> (env, _unit)
+  | Some _ -> (env, None ())
   | None _ ->
     let types = map unwrapAlias types in
     match mapAccumL (generatePrettyPrintBindingsH info) env types with (env, binds) in
     ( env
-    , TmRecLets {bindings = join binds, inexpr = _unit, ty = _unitTy,
-                 info = _utestInfo} )
+    , Some (DeclRecLets {bindings = join binds, info = _utestInfo})
+    )
 
   sem generatePrettyPrintBindingsH : Info -> UtestEnv -> Type
-                                  -> (UtestEnv, [RecLetBinding])
+                                  -> (UtestEnv, [DeclLetRecord])
   sem generatePrettyPrintBindingsH info env =
   | (TySeq {ty = elemTy} | TyTensor {ty = elemTy}) & ty ->
     if setMem ty env.pprintDef then
@@ -892,17 +877,18 @@ lang MExprUtestGenerate =
   -- function (i.e., the tusing field is Some), we do not generate any
   -- bindings.
   sem generateEqualityBindings : Info -> UtestEnv -> Type -> Option Expr
-                              -> (UtestEnv, Expr)
+                              -> (UtestEnv, Option Decl)
   sem generateEqualityBindings info env ty =
-  | Some _ -> (env, _unit)
+  | Some _ -> (env, None ())
   | None _ ->
     let ty = unwrapAlias ty in
     match generateEqualityBindingsH info env ty with (env, binds) in
     ( env
-    , TmRecLets {bindings = binds, inexpr = _unit, ty = _unitTy, info = _utestInfo} )
+    , Some (DeclRecLets {bindings = binds, info = _utestInfo})
+    )
 
   sem generateEqualityBindingsH : Info -> UtestEnv -> Type
-                               -> (UtestEnv, [RecLetBinding])
+                               -> (UtestEnv, [DeclLetRecord])
   sem generateEqualityBindingsH info env =
   | (TySeq {ty = elemTy} | TyTensor {ty = elemTy}) & ty ->
     if setMem ty env.eqDef then
@@ -936,7 +922,7 @@ lang MExprUtestGenerate =
   -- for nested utests.
   sem replaceUtests : UtestEnv -> Expr -> (UtestEnv, Expr)
   sem replaceUtests env =
-  | TmUtest t ->
+  | TmDecl (x & {decl = DeclUtest t}) ->
     let info = _stringLit (info2str t.info) in
     let usingStr =
       _stringLit
@@ -988,24 +974,20 @@ lang MExprUtestGenerate =
 
     match replaceUtests env t.test with (_, test) in
     match replaceUtests env t.expected with (_, expected) in
-    match replaceUtests env t.next with (env, next) in
+    match replaceUtests env x.inexpr with (env, next) in
     let testExpr =
       _apps utestRunner [info, usingStr, ppfn, eqfn, test, expected]
     in
-    let utestBinds = TmLet {
-      ident = nameNoSym "", tyAnnot = _unitTy, tyBody = _unitTy,
-      body = testExpr, inexpr = next, ty = tyTm next, info = t.info
-    } in
-    (env, _binds [eqBinds, ppBinds, utestBinds])
-  | TmType t ->
+    (env, bindall_ (filterOption [eqBinds, ppBinds]) (semi_ testExpr next))
+  | TmDecl (x & {decl = DeclType t}) ->
     let env =
       match t.tyIdent with TyVariant _ then
         {env with variants = mapInsert t.ident (mapEmpty nameCmp) env.variants}
       else env
     in
-    match replaceUtests env t.inexpr with (env, inexpr) in
-    (env, TmType {t with inexpr = inexpr})
-  | TmConDef t ->
+    match replaceUtests env x.inexpr with (env, inexpr) in
+    (env, TmDecl {x with inexpr = inexpr})
+  | TmDecl (x & {decl = DeclConDef t}) ->
     recursive let extractVariantType = lam ty.
       match ty with TyAll {ty = innerTy} then extractVariantType innerTy
       else match ty with TyArrow {to = to} then extractVariantType to
@@ -1017,20 +999,20 @@ lang MExprUtestGenerate =
     let constrs = lookupVariant ident env t.info in
     let constrs = mapInsert t.ident t.tyIdent constrs in
     let env = {env with variants = mapInsert ident constrs env.variants} in
-    match replaceUtests env t.inexpr with (env, inexpr) in
-    (env, TmConDef {t with inexpr = inexpr})
-  | TmLet t ->
+    match replaceUtests env x.inexpr with (env, inexpr) in
+    (env, TmDecl {x with inexpr = inexpr})
+  | TmDecl (x & {decl = DeclLet t}) ->
     match replaceUtests env t.body with (_, body) in
-    match replaceUtests env t.inexpr with (env, inexpr) in
-    (env, TmLet {t with body = body, inexpr = inexpr})
-  | TmRecLets t ->
+    match replaceUtests env x.inexpr with (env, inexpr) in
+    (env, TmDecl {x with decl = DeclLet {t with body = body}, inexpr = inexpr})
+  | TmDecl (x & {decl = DeclRecLets t}) ->
     let replaceBinding = lam env. lam bind.
       match replaceUtests env bind.body with (env, body) in
       (env, {bind with body = body})
     in
     match mapAccumL replaceBinding env t.bindings with (_, bindings) in
-    match replaceUtests env t.inexpr with (env, inexpr) in
-    (env, TmRecLets {t with bindings = bindings, inexpr = inexpr})
+    match replaceUtests env x.inexpr with (env, inexpr) in
+    (env, TmDecl {x with decl = DeclRecLets {t with bindings = bindings}, inexpr = inexpr})
   | t -> smapAccumL_Expr_Expr replaceUtests env t
 
   -- Inserts utest runtime code at the tail of the program. In case any test
@@ -1039,24 +1021,9 @@ lang MExprUtestGenerate =
   -- evaluated, regardless of whether tests failed or not.
   sem insertUtestTail : Expr -> Expr
   sem insertUtestTail =
-  | TmLet t ->
-    let inexpr = insertUtestTail t.inexpr in
-    TmLet {t with inexpr = inexpr, ty = tyTm inexpr}
-  | TmRecLets t ->
-    let inexpr = insertUtestTail t.inexpr in
-    TmRecLets {t with inexpr = inexpr, ty = tyTm inexpr}
-  | TmType t ->
-    let inexpr = insertUtestTail t.inexpr in
-    TmType {t with inexpr = inexpr, ty = tyTm inexpr}
-  | TmConDef t ->
-    let inexpr = insertUtestTail t.inexpr in
-    TmConDef {t with inexpr = inexpr, ty = tyTm inexpr}
-  | TmUtest t ->
-    let next = insertUtestTail t.next in
-    TmUtest {t with next = next, ty = tyTm next}
-  | TmExt t ->
-    let inexpr = insertUtestTail t.inexpr in
-    TmExt {t with inexpr = inexpr, ty = tyTm inexpr}
+  | TmDecl x ->
+    let inexpr = insertUtestTail x.inexpr in
+    TmDecl {x with inexpr = inexpr, ty = tyTm inexpr}
   | t ->
     let exitOnFailure =
       _var (utestExitOnFailureName ()) (_tyarrows [tyTm t, tyTm t]) in
@@ -1065,7 +1032,7 @@ lang MExprUtestGenerate =
 
   sem stripUtests : Expr -> Expr
   sem stripUtests =
-  | TmUtest t -> stripUtests t.next
+  | TmDecl (x & {decl = DeclUtest _}) -> stripUtests x.inexpr
   | t -> smap_Expr_Expr stripUtests t
 
   sem generateUtest : Bool -> Expr -> Expr
@@ -1089,6 +1056,11 @@ use TestLang in
 
 let emptyEnv = utestEnvEmpty () in
 
+let maybeBind_ = lam binds. lam tm.
+  match binds with Some bind
+  then bind_ bind tm
+  else tm in
+
 let eval = lam env. lam e.
   let e = mergeWithHeader e (loadUtestRuntime ()) in
   eval (evalCtxEmpty ()) e
@@ -1098,14 +1070,14 @@ let evalEquality : UtestEnv -> Type -> Expr -> Expr -> Expr =
   lam env. lam ty. lam l. lam r.
   match getEqualityExpr (NoInfo ()) env ty with (env, expr) in
   match generateEqualityBindings (NoInfo ()) env ty (None ()) with (env, binds) in
-  eval env (bind_ binds (appf2_ expr l r))
+  eval env (maybeBind_ binds (appf2_ expr l r))
 in
 
 let evalPrettyPrint : UtestEnv -> Type -> Expr -> Expr =
   lam env. lam ty. lam t.
   match getPrettyPrintExpr (NoInfo ()) env ty with (env, expr) in
   match generatePrettyPrintBindings (NoInfo ()) env [ty] (None ()) with (env, binds) in
-  eval env (bind_ binds (app_ expr t))
+  eval env (maybeBind_ binds (app_ expr t))
 in
 
 let i1 = const_ tyint_ (CInt {val = 1}) in

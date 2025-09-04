@@ -23,7 +23,7 @@ lang ExtRecMonomorphise = MLangAst + MExprAst + ExtRecAst
 
   sem monomorphiseExpr : ExtRecEnvType -> Expr -> Expr
   sem monomorphiseExpr env =
-  | TmRecType t ->
+  | TmDecl (x & {decl = DeclRecType t}) ->
     match mapLookup t.ident env.defs with Some labelToType in
 
     let fields = mapFoldWithKey
@@ -37,15 +37,16 @@ lang ExtRecMonomorphise = MLangAst + MExprAst + ExtRecAst
       (mapEmpty cmpSID)
       labelToType
     in
-
-    TmType {ident = t.ident,
-             -- params = cons mapParamIdent t.params,
-            params = t.params,
-            tyIdent = TyRecord {info = NoInfo (), fields = fields},
-            inexpr = monomorphiseExpr env t.inexpr,
-            ty = t.ty,
-            info = t.info}
-  | TmRecField t -> monomorphiseExpr env t.inexpr
+    TmDecl
+    { x with decl = DeclType
+      { tyIdent = TyRecord {info = NoInfo (), fields = fields}
+      , ident = t.ident
+      , params = t.params
+      , info = t.info
+      }
+    , inexpr = monomorphiseExpr env x.inexpr
+    }
+  | TmDecl (x & {decl = DeclRecField _}) -> monomorphiseExpr env x.inexpr
   | TmExtRecord t ->
     match mapLookup t.ident env.defs with Some labelToType in
 
@@ -88,18 +89,18 @@ lang ExtRecMonomorphise = MLangAst + MExprAst + ExtRecAst
 
 
   sem removeExtRecTypes_Expr env =
-  | TmType t ->
+  | TmDecl (x & {decl = DeclType t}) ->
     -- We need to remove the first parameter from TmTypes representing
     -- open sum types or payloads. Type aliases should remain unaffected.
     if or (setMem t.ident env.sumTypeNames) (setMem t.ident env.payloadNames) then
-      TmType {t with params = tail t.params,
-                    tyIdent = removeExtRecTypes_Type env t.tyIdent,
-                    ty = removeExtRecTypes_Type env t.ty,
-                    inexpr = removeExtRecTypes_Expr env t.inexpr}
+      TmDecl {x with decl = DeclType {t with params = tail t.params,
+                    tyIdent = removeExtRecTypes_Type env t.tyIdent},
+                    ty = removeExtRecTypes_Type env x.ty,
+                    inexpr = removeExtRecTypes_Expr env x.inexpr}
     else
-      TmType {t with tyIdent = removeExtRecTypes_Type env t.tyIdent,
-                     ty = removeExtRecTypes_Type env t.ty,
-                     inexpr = removeExtRecTypes_Expr env t.inexpr}
+      TmDecl {x with decl = DeclType {t with tyIdent = removeExtRecTypes_Type env t.tyIdent},
+                     ty = removeExtRecTypes_Type env x.ty,
+                     inexpr = removeExtRecTypes_Expr env x.inexpr}
   | expr ->
     let expr = smap_Expr_Type (removeExtRecTypes_Type env) expr in
     let expr = smap_Expr_TypeLabel (removeExtRecTypes_Type env) expr in

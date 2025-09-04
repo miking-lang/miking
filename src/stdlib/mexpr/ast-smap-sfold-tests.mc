@@ -141,9 +141,9 @@ with match_ tmVarX punit_ tmVarX tmVarX using eqExpr in
 utest sfold_Expr_Expr fold2seq [] tmMatch with [tmVarZ, tmVarY, tmApp]
 using eqSeq eqExpr in
 
-let tmUtest = utest_ tmApp tmVarY tmVarZ in
+let tmUtest = bind_ (utest_ tmApp tmVarY) tmVarZ in
 
-utest smap_Expr_Expr map2varX tmUtest with utest_ tmVarX tmVarX tmVarX
+utest smap_Expr_Expr map2varX tmUtest with bind_ (utest_ tmVarX tmVarX) tmVarX
 using eqExpr in
 utest sfold_Expr_Expr fold2seq [] tmUtest with [tmVarZ, tmVarY, tmApp]
 using eqSeq eqExpr in
@@ -153,7 +153,7 @@ let tmnever = never_ in
 utest smap_Expr_Expr map2varX never_ with never_ using eqExpr in
 utest sfold_Expr_Expr fold2seq [] never_ with [] using eqSeq eqExpr in
 
-utest smap_Expr_Expr map2varX tmUtest with utest_ tmVarX tmVarX tmVarX
+utest smap_Expr_Expr map2varX tmUtest with bind_ (utest_ tmVarX tmVarX) tmVarX
 using eqExpr in
 utest sfold_Expr_Expr fold2seq [] tmUtest with [tmVarZ, tmVarY, tmApp]
 using eqSeq eqExpr in

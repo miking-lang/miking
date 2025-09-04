@@ -99,7 +99,7 @@ lang ConstSideEffect = ConstSideEffectBase + MExprAst
   | CBootParserGetId _ | CBootParserGetTerm _ | CBootParserGetType _
   | CBootParserGetString _ | CBootParserGetInt _ | CBootParserGetFloat _
   | CBootParserGetListLength _ | CBootParserGetConst _ | CBootParserGetPat _
-  | CBootParserGetCopat _ 
+  | CBootParserGetCopat _
   | CBootParserGetInfo _ -> true
 end
 
@@ -142,20 +142,20 @@ lang MExprSideEffect =
   | t -> constructSideEffectEnvH (sideEffectEnvEmpty ()) t
 
   sem constructSideEffectEnvH (env : SideEffectEnv) =
-  | TmLet t ->
+  | TmDecl (x & {decl = DeclLet t}) ->
     let bodySideEffect = exprHasSideEffectH env false false t.body in
     let lambdaCount = countArityExpr 0 t.body in
     let env = updateSideEffectEnv env t.ident lambdaCount bodySideEffect in
     let env = constructSideEffectEnvH env t.body in
-    constructSideEffectEnvH env t.inexpr
-  | TmRecLets t ->
+    constructSideEffectEnvH env x.inexpr
+  | tm & TmDecl (x & {decl = DeclRecLets t}) ->
     -- NOTE(larshum, 2022-02-01): The call graph implementation stores bindings
     -- by name, not index, so we need to use a map for binding lookup.
-    let bindMap : Map Name RecLetBinding =
+    let bindMap : Map Name DeclLetRecord =
       mapFromSeq nameCmp
-        (map (lam bind : RecLetBinding. (bind.ident, bind)) t.bindings) in
+        (map (lam bind : DeclLetRecord. (bind.ident, bind)) t.bindings) in
     let sideEffectsScc = lam env : SideEffectEnv. lam scc : [Name].
-      let sccBindings : [RecLetBinding] =
+      let sccBindings : [DeclLetRecord] =
         foldl
           (lam acc. lam id. optionMapOr acc (snoc acc) (mapLookup id bindMap))
           []
@@ -167,28 +167,28 @@ lang MExprSideEffect =
       -- each other.
       let sccHasSideEffect =
         foldl
-          (lam acc : Bool. lam bind : RecLetBinding.
+          (lam acc : Bool. lam bind : DeclLetRecord.
             exprHasSideEffectH env false acc bind.body)
           false sccBindings in
       -- Update the entries for all the bindings in this SCC.
       foldl
-        (lam env : SideEffectEnv. lam bind : RecLetBinding.
+        (lam env : SideEffectEnv. lam bind : DeclLetRecord.
           let lambdaCount = countArityExpr 0 bind.body in
           updateSideEffectEnv env bind.ident lambdaCount sccHasSideEffect)
       env sccBindings in
-    let g : Digraph Name Int = constructCallGraph (TmRecLets t) in
+    let g : Digraph Name Int = constructCallGraph tm in
     let sccs = digraphTarjan g in
     let env = foldl sideEffectsScc env (reverse sccs) in
     let env =
       foldl
-        (lam env : SideEffectEnv. lam bind : RecLetBinding.
+        (lam env : SideEffectEnv. lam bind : DeclLetRecord.
           constructSideEffectEnvH env bind.body)
         env t.bindings in
-    constructSideEffectEnvH env t.inexpr
-  | TmExt t ->
+    constructSideEffectEnvH env x.inexpr
+  | TmDecl (x & {decl = DeclExt t}) ->
     let lambdaCount = countArityType 0 t.tyIdent in
     let env = updateSideEffectEnv env t.ident lambdaCount t.effect in
-    constructSideEffectEnvH env t.inexpr
+    constructSideEffectEnvH env x.inexpr
   | t -> sfold_Expr_Expr constructSideEffectEnvH env t
 
   sem countArityExpr (count : Int) =
@@ -230,8 +230,8 @@ let y = nameSym "y" in
 let bindings = bindall_ [
   nulet_ a (ref_ (int_ 2)),
   nulet_ b (nulam_ x (addi_ (nvar_ x) (deref_ (nvar_ x)))),
-  nulet_ c (nulam_ x (nulam_ y (addi_ (nvar_ x) (nvar_ y)))),
-  appf2_ (nvar_ c) (int_ 2) (app_ (nvar_ b) (int_ 3))] in
+  nulet_ c (nulam_ x (nulam_ y (addi_ (nvar_ x) (nvar_ y))))]
+  (appf2_ (nvar_ c) (int_ 2) (app_ (nvar_ b) (int_ 3))) in
 let env : SideEffectEnv = constructSideEffectEnv bindings in
 match env with {sideEffectId = sideEffectId, arityId = arityId} in
 utest setToSeq sideEffectId with [a, b] using eqSeq nameEq in
@@ -250,8 +250,8 @@ let reclets = bindall_ [
     (b, nulam_ x (addi_ (app_ (nvar_ a) (int_ 3)) (app_ (nvar_ c) (nvar_ x)))),
     (c, nulam_ x (bind_ (nulet_ d (wallTimeMs_ (nvar_ x))) (app_ (nvar_ b) (int_ 2))))],
   nulet_ y (app_ (nvar_ b) (int_ 3)),
-  nulet_ z (app_ (nvar_ a) (int_ 2)),
-  int_ 0] in
+  nulet_ z (app_ (nvar_ a) (int_ 2))]
+  (int_ 0) in
 let env : SideEffectEnv = constructSideEffectEnv reclets in
 match env with {sideEffectId = sideEffectId, arityId = arityId} in
 utest setToSeq sideEffectId with [b, c, y, d] using eqSeq nameEq in
@@ -263,8 +263,8 @@ let exts = bindall_ [
   next_ a false (tyarrow_ tyint_ tyint_),
   next_ b true (tyarrow_ tyint_ tyint_),
   nulet_ x (app_ (nvar_ a) (int_ 4)),
-  nulet_ y (app_ (nvar_ b) (int_ 3)),
-  addi_ (nvar_ x) (nvar_ y)] in
+  nulet_ y (app_ (nvar_ b) (int_ 3))]
+  (addi_ (nvar_ x) (nvar_ y)) in
 let env : SideEffectEnv = constructSideEffectEnv exts in
 match env with {sideEffectId = sideEffectId, arityId = arityId} in
 utest setToSeq sideEffectId with [b, y] using eqSeq nameEq in

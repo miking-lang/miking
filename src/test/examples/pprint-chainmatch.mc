@@ -20,9 +20,9 @@ let ast = bindall_ [
   ulet_ "_" (appf1_ (var_ "printLn")
                    (appf1_ (var_ "int2string")
                            (appf1_ (var_ "square")
-                                   (int_ 5)))),
+                                   (int_ 5))))]
   -- A long chained match expression
-  matchall_ (
+  (matchall_ (
     create nMatches (lam i: Int.
       matchex_ (var_ "foo") (pand_ (pint_ i) (pvar_ "x")) (
         bindall_ [
@@ -30,18 +30,18 @@ let ast = bindall_ [
                                                                      "y1" (int_ i))
                                                        "y2" (float_ 30.33))
                                         "y3" (str_ "in match")),
-            ulet_ "x2" (appf1_ (var_ "square") (var_ "x")),
-            appf1_ (var_ "printLn") (
+            ulet_ "x2" (appf1_ (var_ "square") (var_ "x"))]
+            (appf1_ (var_ "printLn") (
                 appf1_ (var_ "join") (seq_ [
                     str_ "foo is ",
                     appf1_ (var_ "int2string")
                            (var_ "x2")
                 ])
             )
-        ]
+        )
       )
     )
   )
-] in
+) in
 
 printLn (expr2str ast)

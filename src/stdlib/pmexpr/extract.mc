@@ -115,21 +115,30 @@ lang PMExprExtractAccelerate = PMExprAst + MExprExtract
       info = info} in
     let env = {env with functions = mapInsert accelerateIdent functionData env.functions} in
     let funcType = TyArrow {from = paramTy, to = retType, info = info} in
-    let accelerateLet =
-      TmLet {
-        ident = accelerateIdent,
-        tyAnnot = funcType,
-        tyBody = funcType,
-        body = TmLam {
-          ident = paramId, tyAnnot = paramTy, tyParam = paramTy, body = t.e,
-          ty = TyArrow {from = paramTy, to = retType, info = info},
-          info = info},
-        inexpr = TmApp {
-          lhs = TmVar {ident = accelerateIdent, ty = funcType, info = info, frozen = false},
-          rhs = TmConst {val = CInt {val = 0}, ty = paramTy, info = info},
-          ty = retType,
-          info = info},
-        ty = retType, info = info}
+    let accelerateLet = TmDecl
+      { decl = DeclLet
+        { ident = accelerateIdent
+        , tyAnnot = funcType
+        , tyBody = funcType
+        , body = TmLam
+          { ident = paramId
+          , tyAnnot = paramTy
+          , tyParam = paramTy
+          , body = t.e
+          , ty = TyArrow {from = paramTy, to = retType, info = info}
+          , info = info
+          }
+        , info = info
+        }
+      , inexpr = TmApp
+        { lhs = TmVar {ident = accelerateIdent, ty = funcType, info = info, frozen = false}
+        , rhs = TmConst {val = CInt {val = 0}, ty = paramTy, info = info}
+        , ty = retType
+        , info = info
+        }
+      , ty = retType
+      , info = info
+      }
     in
     (env, accelerateLet)
 
@@ -169,26 +178,26 @@ lang PMExprExtractAccelerate = PMExprAst + MExprExtract
 
   sem eliminateDummyParameterH (solutions : Map Name (Map Name Type))
                                (accelerated : Map Name AccelerateData) =
-  | TmLet t ->
-    let inexpr = eliminateDummyParameterH solutions accelerated t.inexpr in
+  | TmDecl (x & {decl = DeclLet t}) ->
+    let inexpr = eliminateDummyParameterH solutions accelerated x.inexpr in
     if mapMem t.ident accelerated then
       match mapLookup t.ident solutions with Some idSols then
         if gti (mapSize idSols) 0 then
-          TmLet {{{t with tyBody = eliminateInnermostParameterType t.tyBody}
+          TmDecl {x with decl = DeclLet {{t with tyBody = eliminateInnermostParameterType t.tyBody}
                      with body = eliminateInnermostLambda t.body}
-                     with inexpr = inexpr}
-        else TmLet {t with inexpr = inexpr}
-      else TmLet {t with inexpr = inexpr}
-    else TmLet {t with inexpr = inexpr}
-  | TmRecLets t ->
-    let isAccelerateBinding = lam bind : RecLetBinding.
+                     , inexpr = inexpr}
+        else TmDecl {x with inexpr = inexpr}
+      else TmDecl {x with inexpr = inexpr}
+    else TmDecl {x with inexpr = inexpr}
+  | TmDecl (x & {decl = DeclRecLets t}) ->
+    let isAccelerateBinding = lam bind : DeclLetRecord.
       if mapMem bind.ident accelerated then
         match mapLookup bind.ident solutions with Some idSols then
           true
         else false
       else false
     in
-    let eliminateBinding = lam acc. lam bind : RecLetBinding.
+    let eliminateBinding = lam acc. lam bind : DeclLetRecord.
       if mapMem bind.ident accelerated then
         match mapLookup bind.ident solutions with Some idSols then
           match
@@ -198,21 +207,25 @@ lang PMExprExtractAccelerate = PMExprAst + MExprExtract
               (tyBody, body)
             else (bind.tyBody, bind.body)
           with (tyBody, body) in
-          TmLet {
-            ident = bind.ident,
-            tyAnnot = tyBody,
-            tyBody = tyBody,
-            body = body,
-            inexpr = acc,
-            ty = tyTm acc,
-            info = bind.info}
+          TmDecl
+          { decl = DeclLet
+            { ident = bind.ident
+            , tyAnnot = tyBody
+            , tyBody = tyBody
+            , body = body
+            , info = bind.info
+            }
+          , inexpr = acc
+          , ty = tyTm acc
+          , info = bind.info
+          }
         else acc
       else acc
     in
-    let inexpr = eliminateDummyParameterH solutions accelerated t.inexpr in
+    let inexpr = eliminateDummyParameterH solutions accelerated x.inexpr in
     match partition isAccelerateBinding t.bindings with (accelerated, bindings) in
-    TmRecLets {{t with bindings = bindings}
-                  with inexpr = foldl eliminateBinding inexpr accelerated}
+    TmDecl {x with decl = DeclRecLets {t with bindings = bindings}
+                  , inexpr = foldl eliminateBinding inexpr accelerated}
   | t -> smap_Expr_Expr (eliminateDummyParameterH solutions accelerated) t
 
   sem eliminateInnermostParameterType =
@@ -247,9 +260,9 @@ let extractAccelerate = lam t.
 in
 
 let noAccelerateCalls = preprocess (bindall_ [
-  ulet_ "f" (ulam_ "x" (addi_ (var_ "x") (int_ 1))),
-  app_ (var_ "f") (int_ 2)
-]) in
+  ulet_ "f" (ulam_ "x" (addi_ (var_ "x") (int_ 1)))]
+  (app_ (var_ "f") (int_ 2)
+)) in
 match extractAccelerate noAccelerateCalls with (m, ast) in
 utest mapSize m with 0 in
 utest ast with int_ 0 using eqExpr in
@@ -257,14 +270,14 @@ utest ast with int_ 0 using eqExpr in
 let t = preprocess (bindall_ [
   ulet_ "f" (ulam_ "x" (addi_ (var_ "x") (int_ 1))),
   ulet_ "g" (ulam_ "x" (muli_ (var_ "x") (int_ 2))),
-  ulet_ "h" (ulam_ "x" (subi_ (int_ 1) (var_ "x"))),
-  accelerate_ (app_ (var_ "h") (int_ 2))
-]) in
+  ulet_ "h" (ulam_ "x" (subi_ (int_ 1) (var_ "x")))]
+  (accelerate_ (app_ (var_ "h") (int_ 2))
+)) in
 let extracted = preprocess (bindall_ [
   ulet_ "h" (ulam_ "x" (subi_ (int_ 1) (var_ "x"))),
-  ulet_ "t" (ulam_ "t" (app_ (var_ "h") (int_ 2))),
-  int_ 0
-]) in
+  ulet_ "t" (ulam_ "t" (app_ (var_ "h") (int_ 2)))]
+  (int_ 0
+)) in
 match extractAccelerate t with (m, ast) in
 utest mapSize m with 1 in
 utest ast with extracted using eqExpr in
@@ -272,15 +285,15 @@ utest ast with extracted using eqExpr in
 let t = preprocess (bindall_ [
   ulet_ "f" (ulam_ "x" (addi_ (var_ "x") (int_ 1))),
   ulet_ "g" (ulam_ "x" (muli_ (app_ (var_ "f") (var_ "x")) (int_ 2))),
-  ulet_ "h" (ulam_ "x" (subi_ (int_ 1) (var_ "x"))),
-  accelerate_ (app_ (var_ "g") (int_ 4))
-]) in
+  ulet_ "h" (ulam_ "x" (subi_ (int_ 1) (var_ "x")))]
+  (accelerate_ (app_ (var_ "g") (int_ 4))
+)) in
 let extracted = preprocess (bindall_ [
   ulet_ "f" (ulam_ "x" (addi_ (var_ "x") (int_ 1))),
   ulet_ "g" (ulam_ "x" (muli_ (app_ (var_ "f") (var_ "x")) (int_ 2))),
-  ulet_ "t" (ulam_ "t" (app_ (var_ "g") (int_ 4))),
-  int_ 0
-]) in
+  ulet_ "t" (ulam_ "t" (app_ (var_ "g") (int_ 4)))]
+  (int_ 0
+)) in
 match extractAccelerate t with (m, ast) in
 utest mapSize m with 1 in
 utest ast with extracted using eqExpr in
@@ -288,38 +301,38 @@ utest ast with extracted using eqExpr in
 let multipleCallsToSame = preprocess (bindall_ [
   ulet_ "f" (ulam_ "x" (muli_ (var_ "x") (int_ 3))),
   ulet_ "g" (ulam_ "x" (bindall_ [
-    ulet_ "y" (addi_ (var_ "x") (int_ 2)),
-    accelerate_ (app_ (var_ "f") (var_ "y"))
-  ])),
-  ulet_ "h" (ulam_ "x" (accelerate_ (app_ (var_ "f") (var_ "x")))),
-  addi_
+    ulet_ "y" (addi_ (var_ "x") (int_ 2))]
+    (accelerate_ (app_ (var_ "f") (var_ "y"))
+  ))),
+  ulet_ "h" (ulam_ "x" (accelerate_ (app_ (var_ "f") (var_ "x"))))]
+  (addi_
     (app_ (var_ "g") (int_ 1))
     (app_ (var_ "h") (int_ 3))
-]) in
+)) in
 let extracted = preprocess (bindall_ [
   ulet_ "f" (ulam_ "x" (muli_ (var_ "x") (int_ 3))),
   ulet_ "t" (ulam_ "y" (ulam_ "" (app_ (var_ "f") (var_ "y")))),
-  ulet_ "t" (ulam_ "x" (ulam_ "" (app_ (var_ "f") (var_ "x")))),
-  int_ 0
-]) in
+  ulet_ "t" (ulam_ "x" (ulam_ "" (app_ (var_ "f") (var_ "x"))))]
+  (int_ 0
+)) in
 match extractAccelerate multipleCallsToSame with (m, ast) in
 utest mapSize m with 2 in
 utest ast with extracted using eqExpr in
 
 let distinctCalls = preprocess (bindall_ [
   ulet_ "f" (ulam_ "x" (muli_ (var_ "x") (int_ 3))),
-  ulet_ "g" (ulam_ "x" (addi_ (var_ "x") (int_ 1))),
-  addi_
+  ulet_ "g" (ulam_ "x" (addi_ (var_ "x") (int_ 1)))]
+  (addi_
     (accelerate_ (app_ (var_ "f") (int_ 1)))
     (accelerate_ (app_ (var_ "g") (int_ 0)))
-]) in
+)) in
 let extracted = preprocess (bindall_ [
   ulet_ "f" (ulam_ "x" (muli_ (var_ "x") (int_ 3))),
   ulet_ "g" (ulam_ "x" (addi_ (var_ "x") (int_ 1))),
   ulet_ "t" (ulam_ "t" (app_ (var_ "f") (int_ 1))),
-  ulet_ "t" (ulam_ "t" (app_ (var_ "g") (int_ 0))),
-  int_ 0
-]) in
+  ulet_ "t" (ulam_ "t" (app_ (var_ "g") (int_ 0)))]
+  (int_ 0
+)) in
 match extractAccelerate distinctCalls with (m, ast) in
 utest mapSize m with 2 in
 utest ast with extracted using eqExpr in
@@ -328,18 +341,18 @@ let inRecursiveBinding = preprocess (bindall_ [
   ulet_ "f" (ulam_ "x" (muli_ (var_ "x") (int_ 2))),
   ureclets_ [
     ("g", ulam_ "x" (app_ (var_ "f") (addi_ (var_ "x") (int_ 1)))),
-    ("h", ulam_ "x" (accelerate_ (app_ (var_ "g") (var_ "x"))))],
-  app_ (var_ "h") (int_ 3)
-]) in
+    ("h", ulam_ "x" (accelerate_ (app_ (var_ "g") (var_ "x"))))]]
+  (app_ (var_ "h") (int_ 3)
+)) in
 let extracted = preprocess (bindall_ [
   ulet_ "f" (ulam_ "x" (muli_ (var_ "x") (int_ 2))),
   ureclets_ [
-    ("g", ulam_ "x" (app_ (var_ "f") (addi_ (var_ "x") (int_ 1)))),
-    ("t", ulam_ "x" (ulam_ "" (app_ (var_ "g") (var_ "x"))))],
-  int_ 0
-]) in
+    ("t", ulam_ "x" (ulam_ "" (app_ (var_ "g") (var_ "x")))),
+    ("g", ulam_ "x" (app_ (var_ "f") (addi_ (var_ "x") (int_ 1))))]]
+  (int_ 0
+)) in
 match extractAccelerate inRecursiveBinding with (m, ast) in
 utest mapSize m with 1 in
-utest ast with extracted using eqExpr in
+utest ast with extracted using eqExpr else lam l. lam r. strJoin "\n" [expr2str l, expr2str r] in
 
 ()

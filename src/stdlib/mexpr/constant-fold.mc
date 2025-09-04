@@ -138,19 +138,15 @@ lang LamAppConstantFold = ConstantFold + AppAst + LamAst
       }
 end
 
-lang LetConstantFold = ConstantFold + LetAst
+lang LetConstantFold = ConstantFold + LetDeclAst
   sem constantFoldExpr ctx =
-  | TmLet r ->
+  | TmDecl (x & {decl = DeclLet r}) ->
     let body = constantFoldExpr ctx r.body in
     if doPropagate body then
       let ctx = { ctx with env = evalEnvInsert r.ident body ctx.env } in
-      constantFoldExpr ctx r.inexpr
+      constantFoldExpr ctx x.inexpr
     else
-      TmLet {
-        r with
-        body = body,
-        inexpr = constantFoldExpr ctx r.inexpr
-      }
+      TmDecl {x with decl = DeclLet {r with body = body}, inexpr = constantFoldExpr ctx x.inexpr}
 end
 
 lang RecordConstantFold = ConstantFold + RecordAst

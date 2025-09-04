@@ -227,6 +227,18 @@ lang GeneratePprintLoader = MCoreLoader + GeneratePprint
       } in
     addHook loader hook
 
+  sem _registerCustomPprintFunction : Name -> Expr -> Loader -> Hook -> Option (Loader, ())
+  sem _registerCustomPprintFunction tyConName f loader =
+  | _ -> None ()
+  | PprintHook hook ->
+    let pprintName = nameSym (concat "pprint" (nameGetStr tyConName)) in
+    let loader = _addDeclExn loader (nulet_ pprintName f) in
+    Some (loader, modref hook.functions (mapInsert tyConName pprintName (deref hook.functions)))
+
+  sem registerCustomPprintFunction : Name -> Expr -> Loader -> Loader
+  sem registerCustomPprintFunction tyConName f = | loader ->
+    (withHookState (_registerCustomPprintFunction tyConName f) loader).0
+
   sem _pprintFunctionsFor : [Type] -> Loader -> Hook -> Option (Loader, [Expr])
   sem _pprintFunctionsFor tys loader =
   | _ -> None ()
@@ -237,7 +249,7 @@ lang GeneratePprintLoader = MCoreLoader + GeneratePprint
     modref hook.functions env.conFunctions;
     let loader = if null env.newFunctions
       then loader
-      else _addDeclExn loader (decl_nureclets_ env.newFunctions) in
+      else _addDeclExn loader (nureclets_ env.newFunctions) in
     Some (loader, printFs)
 
   sem pprintFunctionsFor : [Type] -> Loader -> (Loader, [Expr])
@@ -271,10 +283,10 @@ lang DPrintViaPprintLoader = GeneratePprintLoader + IOAst
     in smapAccumL_Decl_Expr work loader decl
 end
 
-lang OldDPrintViaPprint = GeneratePprint + MExprAsDecl + AppTypeUtils
+lang OldDPrintViaPprint = GeneratePprint + AppTypeUtils
   sem findPprintDefinitions : GPprintEnv -> Expr -> GPprintEnv
   sem findPprintDefinitions env = | tm ->
-    match exprAsDecl tm with Some (decl, expr) then
+    match tm with TmDecl {decl = decl, inexpr = expr} then
       let env = switch decl
         case DeclLet (x & {info = Info {filename = filename}}) then
           _findPprintDefinitions env x.ident (nameGetStr x.ident, filename)

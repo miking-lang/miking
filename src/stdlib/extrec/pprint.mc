@@ -8,35 +8,19 @@ include "ast-builder.mc"
 
 lang ExtRecTermPrettyPrint = TypePrettyPrint + PrettyPrint + ExtRecordAst
   sem isAtomic =
-  | TmRecField _ | TmRecType _ -> false
   | TmExtRecord  _ -> true
   | TmExtExtend _ | TmExtExtend _ -> false
 
+  sem pprintDeclCode indent env =
+  | DeclRecType t ->
+    match pprintTypeName env t.ident with (env, name) in
+    match mapAccumL pprintEnvGetStr env t.params with (env, paramsStr) in
+    (env, join ["rectype ", name, " ", strJoin " " paramsStr])
+  | DeclRecField t ->
+    let ty =  typeToString env t.tyIdent in
+    (env, join ["recfield ", t.label, " : ", ty])
 
   sem pprintCode (indent : Int) (env: PprintEnv) =
-  | TmRecType t ->
-    match pprintTypeName env t.ident with (env, name) in
-    match pprintCode indent env t.inexpr with (env, inexpr) in
-    match mapAccumL pprintEnvGetStr env t.params with (env, paramsStr) in
-    (env, join [
-      "rectype ",
-      name,
-      " ",
-      strJoin " " paramsStr,
-      " in", pprintNewline indent,
-      inexpr])
-  | TmRecField t ->
-    let ty =  typeToString env t.tyIdent in
-    match pprintCode indent env t.inexpr with (env, inexpr) in
-    (env, join [
-      "recfield ",
-      t.label,
-      " : ",
-      ty,
-      " in ",
-      pprintNewline indent,
-      inexpr
-    ])
   | TmExtRecord {bindings = bindings, ident = ident} ->
     let innerIndent = pprintIncr (pprintIncr indent) in
       match

@@ -297,7 +297,7 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
   -- STATEMENTS --
   ----------------
 
-  | TmLet { ident = ident, body = body, inexpr = e, info = info } ->
+  | TmDecl {decl = DeclLet { ident = ident, body = body, info = info }, inexpr = e} ->
     match nameGetStr ident with [] then
       match compileMExpr ctx body with (ctx1, body) in
       match compileMExpr ctx e with (ctx2, e) in
@@ -319,9 +319,9 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
           ret = e})} in
       (ctx, bindingExpr)
 
-  | TmRecLets { bindings = bindings, inexpr = e, ty = ty } ->
+  | TmDecl {decl = DeclRecLets { bindings = bindings }, inexpr = e, ty = ty} ->
     match compileMExpr ctx e with (ctx, e) in
-    match foldl (lam acc: (CompileJSContext, [JSExpr]). lam bind : RecLetBinding.
+    match foldl (lam acc: (CompileJSContext, [JSExpr]). lam bind : DeclLetRecord.
       match acc with (ctx, es) in
       match bind with { ident = ident, body = body, info = info } in
       match body with TmLam _ then
@@ -339,8 +339,8 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
       ret = e
     }))
 
-  | TmType { inexpr = e } -> compileMExpr ctx e -- Ignore
-  | TmConDef { ident = ident, inexpr = e } ->
+  | TmDecl {decl = DeclType _, inexpr = e} -> compileMExpr ctx e -- Ignore
+  | TmDecl {decl = DeclConDef { ident = ident }, inexpr = e} ->
     let valueParam = nameSym "v" in
     match compileMExpr ctx e with (ctx, e) in
     match compileDeclarations ctx with (ctx, decs) in
@@ -374,8 +374,8 @@ lang MExprJSCompile = JSProgAst + PatJSCompile + MExprAst + MExprPrettyPrint +
       thn = immediatelyInvokeBlock thn,
       els = immediatelyInvokeBlock els} in
     (ctx, if ctx.options.generalOptimizations then optimizeExpr3 expr else expr)
-  | TmUtest _ & t -> errorSingle [infoTm t] "Unit test expressions cannot be handled in compileMExpr"
-  | TmExt _ & t -> errorSingle [infoTm t] "External expressions cannot be handled in compileMExpr"
+  | TmDecl {decl = DeclUtest _} & t -> errorSingle [infoTm t] "Unit test expressions cannot be handled in compileMExpr"
+  | TmDecl {decl = DeclExt _} & t -> errorSingle [infoTm t] "External expressions cannot be handled in compileMExpr"
   | TmNever _ -> (ctx, intrinsicStrGen "never" [JSENop {}])
 
 

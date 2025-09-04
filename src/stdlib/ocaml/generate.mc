@@ -80,23 +80,23 @@ lang OCamlTopGenerate = MExprAst + OCamlAst + OCamlGenerateExternalNaive
     else never
 
   sem generateTopsAndExpr (env : GenerateEnv) =
-  | TmLet t ->
+  | TmDecl (x & {decl = DeclLet t}) ->
     let here = OTopLet { ident = t.ident, tyBody = t.tyBody, body = generate env t.body } in
-    let later: ([Top], Expr) = generateTopsAndExpr env t.inexpr in
+    let later: ([Top], Expr) = generateTopsAndExpr env x.inexpr in
     (cons here later.0, later.1)
-  | TmRecLets t ->
-    let f = lam binding : RecLetBinding.
+  | TmDecl (x & {decl = DeclRecLets t}) ->
+    let f = lam binding : DeclLetRecord.
       { ident = binding.ident
       , tyBody = binding.tyBody
       , body = generate env binding.body
       } in
     let here = OTopRecLets { bindings = map f t.bindings } in
-    let later: ([Top], Expr) = generateTopsAndExpr env t.inexpr in
+    let later: ([Top], Expr) = generateTopsAndExpr env x.inexpr in
     (cons here later.0, later.1)
-  | TmExt t ->
+  | TmDecl (x & {decl = DeclExt t}) ->
     match convertExternalBody env t.ident t.tyIdent t.info with body in
     let here = OTopLet { ident = t.ident, tyBody = t.tyIdent, body = body } in
-    let later : ([Top], Expr) = generateTopsAndExpr env t.inexpr in
+    let later : ([Top], Expr) = generateTopsAndExpr env x.inexpr in
     (cons here later.0, later.1)
   | t ->
     ([], generate env t)
@@ -258,8 +258,8 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst + OCamlTopGenerate
     in
     bindall_ [
       nulet_ targetId (objMagic (generate env t.target)),
-      nulet_ lenId (length_ (nvar_ targetId)),
-      _if cond thn (generate env t.els)]
+      nulet_ lenId (length_ (nvar_ targetId))]
+      (_if cond thn (generate env t.els))
   | TmMatch (t & {pat = PatRecord {bindings = bindings, ty = ty}}) ->
     if mapIsEmpty bindings then
       generate env t.thn
@@ -367,17 +367,13 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst + OCamlTopGenerate
     -- sequence, as this can be compiled more efficiently (in particular, for
     -- lists).
     let targetId = nameSym "_target" in
-    let headBind =
-      match getPatNamedId head with Some id then
-        nulet_ id (head_ (nvar_ targetId))
-      else uunit_
-    in
-    let tailBind =
-      match getPatName tail with Some id then
-        nulet_ id (tail_ (nvar_ targetId))
-      else uunit_
-    in
-    let thn = bindall_ [headBind, tailBind, generate env t.thn] in
+    let headBind = optionMap
+      (lam id. nulet_ id (head_ (nvar_ targetId)))
+      (getPatNamedId head) in
+    let tailBind = optionMap
+      (lam id. nulet_ id (tail_ (nvar_ targetId)))
+      (getPatName tail) in
+    let thn = bindall_ (filterOption [headBind, tailBind]) (generate env t.thn) in
     bind_
       (nulet_ targetId (objMagic (generate env t.target)))
       (_if (null_ (nvar_ targetId)) (generate env t.els) thn)
@@ -461,10 +457,10 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlTopGenerate + OCamlMatchGenerate
           t.rec
       else (acc, rec)
     in
-    let f = lam binds. lam update.
+    let f = lam update.
       match update with (key, value) in
       let id = nameSym "_value" in
-      (bind_ (nulet_ id value) binds, (key, id))
+      (nulet_ id value, (key, id))
     in
     match collectNestedUpdates [] upd with (updateEntries, rec) in
     let ty = unwrapType t.ty in
@@ -476,7 +472,7 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlTopGenerate + OCamlMatchGenerate
           let inlineRecordName = nameSym "rec" in
           -- NOTE(larshum, 2022-12-21): To ensure record updates are evaluated
           -- in declaration order, we add bindings for each of the inner values.
-          match mapAccumL f uunit_ (reverse updateEntries) with (binds, updates) in
+          match unzip (map f updateEntries) with (binds, updates) in
           let combinedUpdate = OTmConApp {
             ident = id,
             args = [ OTmRecordUpdate {
@@ -484,7 +480,7 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlTopGenerate + OCamlMatchGenerate
               updates = map (lam u. match u with (sid, id) in (sid, nvar_ id)) updates
             } ]
           } in
-          let thn = bind_ binds combinedUpdate in
+          let thn = bindall_ binds combinedUpdate in
           _omatch_ rec
             [(OPatCon {ident = id, args = [npvar_ inlineRecordName]}, thn)]
         else
@@ -563,14 +559,17 @@ lang OCamlGenerate = MExprAst + OCamlAst + OCamlTopGenerate + OCamlMatchGenerate
       info = NoInfo ()
     }
   -- TmExt Generation
-  | TmExt {ident = ident, tyIdent = tyIdent, inexpr = inexpr, info = info} ->
+  | TmDecl {decl = DeclExt {ident = ident, tyIdent = tyIdent}, inexpr = inexpr, info = info} ->
     match convertExternalBody env ident tyIdent info with body in
     let inexpr = generate env inexpr in
-    TmLet {
-      ident = ident,
-      tyAnnot = tyIdent,
-      tyBody = tyIdent,
-      body = body,
+    TmDecl {
+      decl = DeclLet {
+        ident = ident,
+        tyAnnot = tyIdent,
+        tyBody = tyIdent,
+        body = body,
+        info = info
+      },
       inexpr = inexpr,
       ty = TyUnknown {info = info},
       info = info

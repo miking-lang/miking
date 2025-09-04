@@ -70,6 +70,10 @@ lang Eval = Ast
   sem eval : EvalCtx -> Expr -> Expr
   sem eval ctx =| _ ->
     error "Unsupported Expr in eval!"
+
+  sem evalDecl : EvalCtx -> Decl -> EvalCtx
+  sem evalDecl ctx =| _ ->
+    error "Unsupported Decl in eval!"
 end
 
 -----------
@@ -135,11 +139,17 @@ lang LamEval = Eval + LamAst + ClosAst + AppEval
   | TmClos t -> TmClos t
 end
 
-lang LetEval = Eval + LetAst
+lang DeclEval = Eval + DeclAst
   sem eval ctx =
-  | TmLet t ->
-    eval {ctx with env = evalEnvInsert t.ident (eval ctx t.body) ctx.env}
-      t.inexpr
+  | TmDecl x ->
+    let ctx = evalDecl ctx x.decl in
+    eval ctx x.inexpr
+end
+
+lang LetEval = Eval + LetDeclAst
+  sem evalDecl ctx =
+  | DeclLet t ->
+    {ctx with env = evalEnvInsert t.ident (eval ctx t.body) ctx.env}
 end
 
 lang RecordEval = Eval + RecordAst
@@ -157,11 +167,11 @@ lang RecordEval = Eval + RecordAst
 end
 
 lang RecLetsEval =
-  Eval + RecLetsAst + VarEval + RecordEval + LetEval + LamEval +
+  Eval + RecLetsDeclAst + VarEval + RecordEval + LetEval + LamEval +
   UnknownTypeAst
 
-  sem eval ctx =
-  | TmRecLets t ->
+  sem evalDecl ctx =
+  | DeclRecLets t ->
     recursive let envPrime : Lazy EvalEnv = lam.
       let wraplambda = lam v.
         match v with TmLam t then
@@ -175,7 +185,7 @@ lang RecLetsEval =
           evalEnvInsert bind.ident (wraplambda bind.body) env)
         ctx.env t.bindings
     in
-    eval {ctx with env = envPrime ()} t.inexpr
+    {ctx with env = envPrime ()}
 end
 
 lang ConstAppAst = ConstAst + PrettyPrint + Eq
@@ -233,15 +243,17 @@ lang ConstEval = ConstEvalNoDefault
            ])
 end
 
-lang TypeEval = Eval + TypeAst
-  sem eval ctx =
-  | TmType t -> eval ctx t.inexpr
+lang TypeEval = Eval + TypeDeclAst
+  sem evalDecl ctx =
+  | DeclType _ -> ctx
 end
 
-lang DataEval = Eval + DataAst + AppEval
+lang DataEval = Eval + DataAst + DataDeclAst
   sem eval ctx =
-  | TmConDef t -> eval ctx t.inexpr
   | TmConApp t -> TmConApp {t with body = eval ctx t.body}
+
+  sem evalDecl ctx =
+  | DeclConDef t -> ctx
 end
 
 lang MatchEvalBase = Eval
@@ -259,12 +271,12 @@ lang MatchEval = Eval + MatchAst + MatchEvalBase
   | _ -> None ()
 end
 
-lang UtestEval = Eval + Eq + AppEval + UtestAst + BoolAst + SeqAst
+lang UtestEval = Eval + Eq + AppEval + UtestDeclAst + BoolAst + SeqAst
   sem eq (e1 : Expr) =
   | _ -> errorSingle [infoTm e1] "Equality not defined for expression"
 
-  sem eval ctx =
-  | TmUtest r ->
+  sem evalDecl ctx =
+  | DeclUtest r ->
     let v1 = eval ctx r.test in
     let v2 = eval ctx r.expected in
     let tusing = optionMap (eval ctx) r.tusing in
@@ -283,7 +295,7 @@ lang UtestEval = Eval + Eq + AppEval + UtestAst + BoolAst + SeqAst
           print (_evalSeqOfCharsToString seqr.info seqr.tms)
         else errorSingle [r.info] "Invalid utest failure function"
       else print "Test failed\n");
-    eval ctx r.next
+    ctx
 end
 
 lang SeqEval = Eval + SeqAst
@@ -378,9 +390,9 @@ lang TensorEval = Eval + Eq + PrettyPrint
     else None ()
 end
 
-lang ExtEval = Eval + ExtAst
-  sem eval ctx =
-  | TmExt r -> eval ctx r.inexpr -- nop
+lang ExtEval = Eval + ExtDeclAst
+  sem evalDecl ctx =
+  | DeclExt r -> ctx -- nop
 end
 
 ---------------
@@ -1292,8 +1304,8 @@ end
 
 lang PlaceholderEval = PlaceholderAst + Eval + IntAst + IntTypeAst
   sem eval env =
-  | TmPlaceholder {} -> 
-    TmConst {val = CInt {val = 0}, ty = TyInt {info = NoInfo ()}, info = NoInfo ()} 
+  | TmPlaceholder {} ->
+    TmConst {val = CInt {val = 0}, ty = TyInt {info = NoInfo ()}, info = NoInfo ()}
 end
 
 -------------------------
@@ -1305,7 +1317,7 @@ lang MExprEval =
   -- Terms
   VarEval + AppEval + LamEval + RecordEval + RecLetsEval +
   ConstEval + TypeEval + DataEval + MatchEval + UtestEval + SeqEval +
-  NeverEval + RefEval + ExtEval +
+  NeverEval + RefEval + ExtEval + DeclEval +
 
   -- Constants
   IntArity + FloatArity + BoolArity + CharArity + SymbArity + BootParserArity +
@@ -1313,7 +1325,7 @@ lang MExprEval =
   SymbEval + CmpSymbEval + SeqOpEval + FileOpEval + IOEval + SysEval +
   RandomNumberGeneratorEval + FloatIntConversionEval + CmpCharEval +
   IntCharConversionEval + FloatStringConversionEval + TimeEval + RefOpEval +
-  ConTagEval + TensorOpEval + BootParserEval + UnsafeCoerceEval + PlaceholderEval + 
+  ConTagEval + TensorOpEval + BootParserEval + UnsafeCoerceEval + PlaceholderEval +
 
   -- Patterns
   NamedPatEval + SeqTotPatEval + SeqEdgePatEval + RecordPatEval + DataPatEval +
@@ -1406,9 +1418,11 @@ let matchOuter =
   match_ (app_ (var_ "eval") (var_ "e1")) (pcon_ "Num" (pvar_ "n1"))
     matchInner uunit_ in
 
-let deconstruct = lam t.
-  bindall_
-    [(ulet_ "e1" (tupleproj_ 0 t)), (ulet_ "e2" (tupleproj_ 1 t)), matchOuter]
+let deconstruct = lam t. bindall_
+  [ ulet_ "e1" (tupleproj_ 0 t)
+  , ulet_ "e2" (tupleproj_ 1 t)
+  ]
+  matchOuter
 in
 
 let addCase = lam arg. lam els.
@@ -1421,7 +1435,7 @@ in
 
 -- con Num in con Add in let eval = ... in t
 let wrapInDecls = lam t.
-  bindall_ [ucondef_ "Num", ucondef_ "Add", evalFn, t] in
+  bindall_ [ucondef_ "Num", ucondef_ "Add", evalFn] t in
 
 let evalAdd1 = wrapInDecls (app_ (var_ "eval") addOneTwo) in
 let addOneTwoThree = add (add one two) three in
@@ -1650,8 +1664,8 @@ utest
   , ulet_ ""
     (iter_ (nulam_ x (modref_ (nvar_ r) (addi_ (nvar_ x) (deref_ (nvar_ r)))))
            (seq_ [int_ 1, int_ 2, int_ 3, int_ 4]))
-  , deref_ (nvar_ r)
-  ] in
+  ]
+  (deref_ (nvar_ r)) in
   eval iterAst
 with int_ 10 using eqExpr in
 
@@ -1677,8 +1691,8 @@ utest
     (iteri_ (nulam_ i (nulam_ x (modref_ (nvar_ r)
               (addi_ (nvar_ i) (addi_ (nvar_ x) (deref_ (nvar_ r)))))))
             (seq_ [int_ 1, int_ 2, int_ 3, int_ 4]))
-  , deref_ (nvar_ r)
-  ] in
+  ]
+  (deref_ (nvar_ r)) in
   eval iteriAst
 with int_ 16 using eqExpr in
 
@@ -1995,9 +2009,9 @@ let p = bindall_ [ulet_ "r1" (ref_ (int_ 1)),
                   ulet_ "r4"
                     (ref_ (ulam_ "x" (concat_ (str_ "Hello ") (var_ "x"))))]
 in
-utest eval (bind_ p (modref_ (var_ "r1") (int_ 2))) with uunit_ using eqExpr in
+utest eval (p (modref_ (var_ "r1") (int_ 2))) with uunit_ using eqExpr in
 utest
-  eval (bind_ p
+  eval (p
     (utuple_ [deref_ (var_ "r1"),
              deref_ (var_ "r2"),
              deref_ (var_ "r3"),
@@ -2006,11 +2020,11 @@ with utuple_ [int_ 1, float_ 2., int_ 1, str_ "Hello test"]
 using eqExpr in
 
 utest
-  eval (bind_ p (bindall_
+  eval (p (bindall_
     [ulet_ "_" (modref_ (var_ "r1") (int_ 3)),
      ulet_ "_" (modref_ (var_ "r2") (float_ 3.14)),
-     ulet_ "_" (modref_ (var_ "r3") (int_ 4)),
-     utuple_ [deref_ (var_ "r1"), deref_ (var_ "r2"), deref_ (var_ "r3")]]))
+     ulet_ "_" (modref_ (var_ "r3") (int_ 4))]
+     (utuple_ [deref_ (var_ "r1"), deref_ (var_ "r2"), deref_ (var_ "r3")])))
 with utuple_ [int_ 4, float_ 3.14, int_ 4]
 using eqExpr in
 

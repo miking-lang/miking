@@ -18,18 +18,26 @@ lang ExtRecordBootParser = BootParserMLang + ExtRecordAst
   | 117 ->
     let n = glistlen t 0 in
     let params = map (lam i. gname t (addi i 1)) (range 0 n 1) in
-
-    TmRecType {ident = gname t 0,
-               params = params,
-               ty = tyunknown_,
-               inexpr = gterm t 0,
-               info = ginfo t 0}
-  | 118 ->
-    TmRecField {label = gstr t 0,
-                tyIdent = gtype t 0,
-                inexpr = gterm t 0,
-                ty = tyunknown_,
-                info = ginfo t 0}
+    TmDecl
+    { decl = DeclRecType
+      { ident = gname t 0
+      , params = params
+      , info = ginfo t 0
+      }
+    , ty = tyunknown_
+    , inexpr = gterm t 0
+    , info = ginfo t 0
+    }
+  | 118 -> TmDecl
+    { decl = DeclRecField
+      { label = gstr t 0
+      , tyIdent = gtype t 0
+      , info = ginfo t 0
+      }
+    , inexpr = gterm t 0
+    , ty = tyunknown_
+    , info = ginfo t 0
+    }
   | 119 ->
     let n = glistlen t 0 in
     let ident = gname t 0 in

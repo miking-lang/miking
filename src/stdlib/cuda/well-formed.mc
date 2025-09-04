@@ -11,6 +11,7 @@ include "pmexpr/well-formed.mc"
 lang CudaWellFormed = WellFormed + CudaPMExprAst
   syn WFError =
   | CudaExprError Expr
+  | CudaDeclError Decl
   | CudaTypeError Type
   | CudaPatternError Pat
   | CudaConstantError Info
@@ -76,6 +77,25 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst
       else foldl cudaWellFormedExpr acc args in
     cudaWellFormedExpr acc fun
 
+  sem cudaWellFormedDecl : [WFError] -> Decl -> [WFError]
+  sem cudaWellFormedDecl acc =
+  | DeclLet t ->
+    let acc =
+      if cudaWellFormedLambdas (t.body, t.tyBody) then acc
+      else cons (CudaFunctionDefError t.body) acc in
+    cudaWellFormedExpr acc t.body
+  | DeclRecLets t ->
+    let checkBinding = lam acc. lam bind.
+      let acc =
+        if cudaWellFormedLambdas (bind.body, bind.tyBody) then acc
+        else cons (CudaFunctionDefError bind.body) acc in
+      cudaWellFormedExpr acc bind.body
+    in
+    foldl checkBinding acc t.bindings
+  | DeclExt _ -> acc
+  | DeclType t -> cudaWellFormedType acc t.tyIdent
+  | decl -> cons (CudaDeclError decl) acc
+
   sem cudaWellFormedExprH : [WFError] -> Expr -> [WFError]
   sem cudaWellFormedExprH acc =
   | TmVar t -> acc
@@ -84,21 +104,9 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst
       cons (CudaAppResultTypeError app) acc
     else _cudaCheckApp acc app
   | TmLam t -> cudaWellFormedExpr acc t.body
-  | TmLet t ->
-    let acc =
-      if cudaWellFormedLambdas (t.body, t.tyBody) then acc
-      else cons (CudaFunctionDefError t.body) acc in
-    let acc = cudaWellFormedExpr acc t.body in
-    cudaWellFormedExpr acc t.inexpr
-  | TmRecLets t ->
-    let checkBinding = lam acc. lam bind.
-      let acc =
-        if cudaWellFormedLambdas (bind.body, bind.tyBody) then acc
-        else cons (CudaFunctionDefError bind.body) acc in
-      cudaWellFormedExpr acc bind.body
-    in
-    let acc = foldl checkBinding acc t.bindings in
-    cudaWellFormedExpr acc t.inexpr
+  | TmDecl x ->
+    let acc = cudaWellFormedDecl acc x.decl in
+    cudaWellFormedExpr acc x.inexpr
   | TmConst t ->
     if isCudaSupportedConstant t.val then acc
     else cons (CudaConstantError t.info) acc
@@ -115,13 +123,6 @@ lang CudaWellFormed = WellFormed + CudaPMExprAst
       (lam acc. lam. lam expr. cudaWellFormedExpr acc expr) acc bindings
   | TmSeq {tms = tms} ->
     foldl (lam acc. lam expr. cudaWellFormedExpr acc expr) acc tms
-  | TmExt t -> cudaWellFormedExpr acc t.inexpr
-  | TmType t ->
-    let acc = cudaWellFormedType acc t.tyIdent in
-    cudaWellFormedExpr acc t.inexpr
-  | TmConDef t ->
-    let acc = cons (CudaExprError (TmConDef t)) acc in
-    cudaWellFormedExpr acc t.inexpr
   | TmLoop t | TmParallelLoop t ->
     let acc = cudaWellFormedExpr acc t.n in
     cudaWellFormedHigherOrder acc t.f
@@ -215,6 +216,8 @@ let eqCudaError = lam lerr : WFError. lam rerr : WFError.
   let t = (lerr, rerr) in
   match t with (CudaExprError le, CudaExprError re) then
     eqExpr le re
+  else match t with (CudaDeclError le, CudaDeclError re) then
+    eqDecl le re
   else match t with (CudaTypeError lty, CudaTypeError rty) then
     eqType lty rty
   else match t with (CudaConstantError li, CudaConstantError ri) then
@@ -299,20 +302,20 @@ let recursiveConstructorExpr =
 in
 let conDef = bindall_ [
   ntype_ t [] (tyvariant_ []),
-  recursiveConstructorExpr,
-  int_ 0] in
-let expectedExpr = bind_ recursiveConstructorExpr (int_ 0) in
+  recursiveConstructorExpr]
+  (int_ 0) in
+let expectedExpr = recursiveConstructorExpr in
 -- NOTE(larshum, 2022-07-12): Skip the first expression (a type) since we
 -- cannot compare those.
-utest tail (checkWellFormedExpr conDef) with [CudaExprError expectedExpr]
+utest tail (checkWellFormedExpr conDef) with [CudaDeclError expectedExpr]
 using eqSeq eqCudaError in
 
-let ext = ext_ "sin" false (tyarrow_ tyfloat_ tyfloat_) in
+let ext = bind_ (ext_ "sin" false (tyarrow_ tyfloat_ tyfloat_)) unit_ in
 utest checkWellFormedExpr ext with []
 using eqSeq eqCudaError in
 
-let utestTerm = utest_ (int_ 1) (int_ 2) (int_ 0) in
-utest checkWellFormedExpr utestTerm with [CudaExprError utestTerm]
+let utestTerm = utest_ (int_ 1) (int_ 2)in
+utest checkWellFormedExpr (bind_ utestTerm (int_ 0)) with [CudaDeclError utestTerm]
 using eqSeq eqCudaError in
 
 let i = Info {filename = "", row1 = 0, row2 = 0, col1 = 0, col2 = 0} in

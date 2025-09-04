@@ -34,10 +34,8 @@ lang SynPayloadTypesDeclCompiler = SynDeclAst + ExtRecordAst
   | DeclSyn s ->
     -- Generate a record type for each definition in the syntax type.
     let work = lam ctx. lam def.
-      withExpr ctx (TmRecType {ident = def.tyName,
+      withDecl ctx (DeclRecType {ident = def.tyName,
                                params = s.params,
-                               ty = tyunknown_,
-                               inexpr = uunit_,
                                info = infoTy def.tyIdent}) in
     foldl work ctx s.defs
 end
@@ -57,10 +55,8 @@ lang SynProdDeclCompiler = SynProdExtDeclAst + ExtRecordAst + RecordTypeAst
       let work = lam acc. lam sid. lam ty.
           let label = sidToString sid in
           let tyIdent = tyarrow_ (ntycon_ recIdent) ty in
-          withExpr acc (TmRecField {label = label,
+          withDecl acc (DeclRecField {label = label,
                                     tyIdent = nstyall_ (head s.params) (data_ recIdent) tyIdent,
-                                    inexpr = uunit_,
-                                    ty = tyunknown_,
                                     info = infoTy ty})
       in
       mapFoldWithKey work ctx rec.fields
@@ -84,7 +80,7 @@ lang SynProdDeclCompiler = SynProdExtDeclAst + ExtRecordAst + RecordTypeAst
       --   let work = lam acc. lam sid. lam ty.
       --     let label = sidToString sid in
       --     let tyIdent = tyarrow_ (ntycon_ recIdent) ty in
-      --       withExpr acc (TmRecField {label = label,
+      --       withDecl acc (TmRecField {label = label,
       --                                 tyIdent = nstyall_ mapParamIdent (data_ s.ident) tyIdent,
       --                                 inexpr = uunit_,
       --                                 ty = tyunknown_,
@@ -136,25 +132,19 @@ lang ExtrecSynDefCompiler = SynDeclAst + ExtRecordAst + MExprAst
         let work = lam ctx. lam sid. lam ty.
           let label = sidToString sid in
           let tyIdent = tyarrow_ (conappWrapper (ntycon_ recIdent)) ty in
-          withExpr ctx (TmRecField {label = label,
+          withDecl ctx (DeclRecField {label = label,
                                     tyIdent = forallWrapper tyIdent,
-                                    inexpr = uunit_,
-                                    ty = tyunknown_,
                                     info = infoTy ty}) in
         let ctx = mapFoldWithKey work ctx rec.fields in
         let lhs = TyCon {info = infoTy def.tyIdent,
                          ident = recIdent,
                          data = intyvar_ s.info (head s.params)} in
-        withExpr ctx (TmConDef {ident = def.ident,
+        withDecl ctx (DeclConDef {ident = def.ident,
                                 tyIdent = forallWrapper (tyarrow_ (conappWrapper lhs) (conappWrapper tyconApp)),
-                                inexpr = uunit_,
-                                ty = tyunknown_,
                                 info = s.info})
       else
-        withExpr ctx (TmConDef {ident = def.ident,
+        withDecl ctx (DeclConDef {ident = def.ident,
                                 tyIdent = forallWrapper (tyarrow_ def.tyIdent tyconApp),
-                                inexpr = uunit_,
-                                ty = tyunknown_,
                                 info = s.info})
     in
     let ctx = foldl compileDef ctx s.defs in
@@ -235,21 +225,17 @@ lang CosynDeclCompiler = CosynDeclAst + RecordTypeAst + ExtRecAst
     with Some baseIdent in
 
     let ctx = if s.isBase
-              then withExpr ctx (TmRecType {ident = s.ident,
+              then withDecl ctx (DeclRecType {ident = s.ident,
                                             params = s.params,
-                                            info = s.info,
-                                            ty = tyunknown_,
-                                            inexpr = uunit_})
+                                            info = s.info})
               else ctx in
 
     let wrap = lam ty. lam n. nstyall_ n (data_ baseIdent) ty in
 
     let compileField = lam ctx. lam sid. lam ty.
       let tyIdent = tyarrow_ (ntycon_ baseIdent) ty in
-      withExpr ctx (TmRecField {label = sidToString sid,
+      withDecl ctx (DeclRecField {label = sidToString sid,
                                 tyIdent = foldl wrap tyIdent s.params,
-                                inexpr = uunit_,
-                                ty = tyunknown_,
                                 info = s.info}) in
 
     match s.ty with TyRecord rec then
@@ -295,9 +281,7 @@ lang ExtRecLangDeclCompiler = DeclCompiler + LangDeclAst + MExprAst + SemDeclAst
       = lam ctx. lam sems. lam cosems.
         let semBindings = map (compileSem langStr ctx semNames) sems in
         let cosemBindings = map (compileCosem langStr ctx semNames) cosems in
-        withExpr ctx (TmRecLets {bindings = concat semBindings cosemBindings,
-                                 inexpr = uunit_,
-                                 ty = tyunknown_,
+        withDecl ctx (DeclRecLets {bindings = concat semBindings cosemBindings,
                                  info = l.info})
     in
     result.map (lam ctx. compileSemToResult ctx semDecls cosemDecls) res
@@ -317,13 +301,13 @@ lang MLangTopLevelCompiler = MLangTopLevel + DeclCompiler + LangDeclAst + SynDec
   | _ -> acc
 
 
-  sem compileProg : CompilationContext -> MLangProgram -> CompilationResult
+  sem compileProg : CompilationContext -> MLangProgram -> Result CompilationWarning CompilationError (CompilationContext, Expr)
   sem compileProg ctx =
   | prog ->
     let ctx = {ctx with allBaseSyns = foldl _gatherBaseSemNames (setEmpty nameCmp) prog.decls} in
 
     let res = result.foldlM compileDecl ctx prog.decls in
-    result.map (lam ctx. withExpr ctx prog.expr) res
+    result.map (lam ctx. (ctx, prog.expr)) res
 end
 
 lang MLangCompiler = MLangAst + MExprAst +
@@ -336,8 +320,8 @@ lang MLangCompiler = MLangAst + MExprAst +
     switch res
       case Left err then
         result.err (head err)
-      case Right ctx then
-        result.ok (bindall_ (concat ctx.toplevelExprs ctx.exprs))
+      case Right (ctx, expr) then
+        result.ok (bindall_ (concat ctx.toplevelDecls ctx.decls) expr)
     end
 end
 

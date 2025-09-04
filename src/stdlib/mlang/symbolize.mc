@@ -41,13 +41,18 @@ let name2pair : Name -> (String, Name) = lam n.
 let updateEnv : SymEnv -> NameEnv -> SymEnv = lam symEnv. lam langEnv.
   {symEnv with currentEnv = mergeNameEnv (symEnv.currentEnv) langEnv}
 
-lang TmUseSym = Sym + UseAst
+lang DeclUseSym = Sym + UseDeclAst + DeclAst
   sem symbolizeExpr env =
-  | TmUse t ->
+  | TmDecl {decl = d & DeclUse _, inexpr = inexpr} ->
+    match symbolizeDecl env d with (env, _) in
+    symbolizeExpr env inexpr
+
+  sem symbolizeDecl env =
+  | d & DeclUse t ->
     -- TODO: Prevent TmUse <lang> in that specific lang.
     match mapLookup (nameGetStr t.ident) env.langEnv with Some langEnv
       then
-        symbolizeExpr (updateEnv env langEnv) t.inexpr
+        (updateEnv env langEnv, d)
       else
         symLookupError
           env.langEnv
@@ -70,84 +75,6 @@ end
 
 lang DeclSym = DeclAst + Sym
   sem symbolizeDecl : SymEnv -> Decl -> (SymEnv, Decl)
-end
-
-lang DeclLetSym = DeclSym + LetDeclAst + LetSym
-  sem symbolizeDecl env =
-  | DeclLet t ->
-    match symbolizeTyAnnot env t.tyAnnot with (tyVarEnv, tyAnnot) in
-    match setSymbol env.currentEnv.varEnv t.ident with (varEnv, ident) in
-    let decl = DeclLet {t with ident = ident,
-                        tyAnnot = tyAnnot,
-                        body = symbolizeExpr (symbolizeUpdateTyVarEnv env tyVarEnv) t.body} in
-    (symbolizeUpdateVarEnv env varEnv, decl)
-end
-
-lang DeclTypeSym = DeclSym + TypeDeclAst
-  sem symbolizeDecl env =
-  | DeclType t ->
-    match setSymbol env.currentEnv.tyConEnv t.ident with (tyConEnv, ident) in
-    match mapAccumL setSymbol env.currentEnv.tyVarEnv t.params with (tyVarEnv, params) in
-    let decl = DeclType {t with ident = ident,
-                                params = params,
-                                tyIdent = symbolizeType (symbolizeUpdateTyVarEnv env tyVarEnv) t.tyIdent} in
-    (symbolizeUpdateTyConEnv env tyConEnv, decl)
-end
-
-
-lang DeclRecLetsSym = DeclSym + RecLetsDeclAst + LetSym
-  sem symbolizeDecl env =
-  | DeclRecLets t ->
-    -- Generate fresh symbols for all identifiers and add to the environment
-    let setSymbolIdent = lam env. lam b.
-      match setSymbol env b.ident with (env, ident) in
-      (env, {b with ident = ident})
-    in
-
-    match mapAccumL setSymbolIdent env.currentEnv.varEnv t.bindings with (varEnv, bindings) in
-    let newEnv = symbolizeUpdateVarEnv env varEnv in
-
-    -- Symbolize all bodies with the new environment
-    let bindings =
-    map (lam b. match symbolizeTyAnnot env b.tyAnnot with (tyVarEnv, tyAnnot) in
-                {b with body = symbolizeExpr (symbolizeUpdateTyVarEnv newEnv tyVarEnv) b.body,
-                        tyAnnot = tyAnnot})  bindings in
-
-    (newEnv, DeclRecLets {t with bindings = bindings})
-end
-
-lang DeclConDefSym = DeclSym + DataDeclAst
-  sem symbolizeDecl env =
-  | DeclConDef t ->
-    match setSymbol env.currentEnv.conEnv t.ident with (conEnv, ident) in
-
-    let decl = DeclConDef {t with ident = ident,
-                                  tyIdent = symbolizeType env t.tyIdent} in
-    (symbolizeUpdateConEnv env conEnv, decl)
-end
-
-lang DeclUtestSym = DeclSym + UtestDeclAst
-  sem symbolizeDecl env =
-  | DeclUtest t ->
-    -- This can be rewritten to use a shallow map on declarations. E.g.
-    -- smap (symbolizeExpr env) (DeclUtest t)
-    let decl = DeclUtest {t with test = symbolizeExpr env t.test,
-                                  expected = symbolizeExpr env t.expected,
-                                  tusing = optionMap (symbolizeExpr env) t.tusing} in
-    (env, decl)
-end
-
-lang DeclExtSym = DeclSym + ExtDeclAst
-  sem symbolizeDecl env =
-  | DeclExt t & d->
-    if env.ignoreExternals then
-      (env, d)
-    else
-      match setSymbol env.currentEnv.varEnv t.ident with (varEnv, ident) in
-      let decl = DeclExt {t with ident = ident,
-                                 tyIdent = symbolizeType env t.tyIdent} in
-      let env = symbolizeUpdateVarEnv env varEnv in
-      (env, decl)
 end
 
 lang DeclSynSym = DeclSym + SynDeclAst
@@ -342,9 +269,7 @@ lang MLangProgramSym = MLangTopLevel + DeclSym
 end
 
 lang MLangSymWihoutLang = MLangAst + MExprSym +
-                          TmUseSym + TyUseSym +
-                          DeclLetSym + DeclTypeSym + DeclRecLetsSym +
-                          DeclConDefSym + DeclUtestSym + DeclExtSym +
+                          DeclUseSym + TyUseSym +
                           MLangProgramSym
 end
 
@@ -352,12 +277,8 @@ lang MLangSym = MLangSymWihoutLang + DeclMLangLangSym
 end
 
 lang TestLangWithoutLang = MLangSymWihoutLang + SymCheck + MLangPrettyPrint
-  sem isFullySymbolizedExpr =
-  | TmUse t ->
-    error "Symbolization should get rid of all occurrences of TmUse!"
-
-  sem isFullySymbolizedDecl : Decl -> () -> Bool
   sem isFullySymbolizedDecl =
+  | DeclUse _ -> error "Symbolization should get rid of all occurrences of DeclUse!"
   | DeclLang l ->
     _and (lam. nameHasSym l.ident) (_and
         (lam. forAll nameHasSym l.includes)
@@ -384,18 +305,6 @@ lang TestLangWithoutLang = MLangSymWihoutLang + SymCheck + MLangPrettyPrint
       foldl (_andFold isFullySymbolizedPat) (lam. true) casePats,
       foldl (_andFold isFullySymbolizedExpr) (lam. true) caseThns
     ]
-  | DeclLet l ->
-    foldl _and (lam. true) [
-      lam. nameHasSym l.ident,
-      isFullySymbolizedType l.tyAnnot,
-      isFullySymbolizedExpr l.body
-    ]
-  | DeclType l ->
-    _and (lam. nameHasSym l.ident) (_and
-          (lam. (forAll nameHasSym l.params))
-          (isFullySymbolizedType l.tyIdent))
-  | DeclConDef l ->
-    _and (lam. nameHasSym l.ident) (isFullySymbolizedType l.tyIdent)
 
   sem isFullySymbolizedType =
   | TyUse _ -> error "Symbolization should get rid of TyUse!"
@@ -472,7 +381,7 @@ let p : MLangProgram = {
   decls = [
     decl_lang_ "L1" [
       decl_syn_ "Foo" [("Baz", tyint_), ("BazBaz", tychar_)],
-      decl_type_ "Bar" [] tyint_,
+      type_ "Bar" [] tyint_,
       decl_sem_ "f" [] []
     ]
   ],
@@ -490,9 +399,9 @@ utest nameHasSym l.ident with true in
 -- Test DeclType wand DeclConDef with polymorhpic parameters
 let p : MLangProgram = {
   decls = [
-    decl_type_ "Option" ["a"] (tyvariant_ []),
-    decl_condef_ "None" (tyall_ "a" (tyarrow_ tyunit_ (tyapp_ (tycon_ "Option") (tyvar_ "a")))),
-    decl_condef_ "Some" (tyall_ "a" (tyarrow_ (tyvar_ "a") (tyapp_ (tycon_ "Option") (tyvar_ "a"))))
+    type_ "Option" ["a"] (tyvariant_ []),
+    condef_ "None" (tyall_ "a" (tyarrow_ tyunit_ (tyapp_ (tycon_ "Option") (tyvar_ "a")))),
+    condef_ "Some" (tyall_ "a" (tyarrow_ (tyvar_ "a") (tyapp_ (tycon_ "Option") (tyvar_ "a"))))
   ],
   expr = uunit_
 } in
@@ -504,7 +413,7 @@ let p : MLangProgram = {
   decls = [
     decl_lang_ "L1" [
       decl_syn_ "Foo" [("Baz", tyint_), ("BazBaz", tychar_)],
-      decl_type_ "Bar" [] tyint_,
+      type_ "Bar" [] tyint_,
       decl_sem_ "f" [] []
     ],
     decl_langi_ "L2" ["L1"] [
@@ -685,7 +594,7 @@ utest isFullySymbolizedProgram p () with true in
 
 -- Test type variable, 'all', and let type annotations
 let p : MLangProgram = {
-  decls = [decl_let_ "id"
+  decls = [let_ "id"
                      (tyall_ "a" (tyarrow_ (tyvar_ "a") (tyvar_ "a")))
                      (lam_ "x" (tyvar_ "a") (var_ "x"))],
   expr = appf1_ (var_ "id") (int_ 1)
@@ -720,7 +629,7 @@ utest isFullySymbolizedProgram p () with true in
 -- Test usage of type defined outside of language used in language
 let p : MLangProgram = {
   decls = [
-    decl_type_ "Foo" [] tyint_,
+    type_ "Foo" [] tyint_,
     decl_lang_ "SomeListLang" [
       decl_syn_ "MyList" [("Nil", tycon_ "Foo")]
     ]
@@ -735,9 +644,9 @@ utest isFullySymbolizedProgram p () with true in
 let p : MLangProgram = {
   decls = [
     decl_lang_ "SomeLang" [
-      decl_type_ "Foo" [] tyint_
+      type_ "Foo" [] tyint_
     ],
-    decl_type_ "Bar" [] (tyuse_ "SomeLang" (tycon_ "Foo"))
+    type_ "Bar" [] (tyuse_ "SomeLang" (tycon_ "Foo"))
   ],
   expr = uunit_
 } in
@@ -750,7 +659,7 @@ utest isFullySymbolizedProgram p () with true in
 let p : MLangProgram = {
   decls = [
     decl_lang_ "SomeLang" [
-      decl_type_ "Foo" [] tyint_
+      type_ "Foo" [] tyint_
     ],
     decl_langi_ "OtherLang" ["SomeLang"] [
       decl_syn_ "Baz" [("Bar", tycon_ "Foo")]
@@ -787,9 +696,9 @@ let p : MLangProgram = {
     decl_lang_ "L" [
       decl_semty_cases_ "f"
                         (tyall_ "a" (tyarrow_ (tyvar_ "a") tyint_))
-                        [(pvarw_, let_ "x"
+                        [(pvarw_, bind_ (let_ "x"
                                         (tyarrow_ (tyvar_ "a") tyint_)
-                                        (int_ 10))]
+                                        (int_ 10)) unit_)]
       ]
   ],
   expr = uunit_
@@ -802,12 +711,12 @@ utest isFullySymbolizedProgram p () with true in
 let p : MLangProgram = {
   decls = [
     decl_lang_ "L" [
-      decl_type_ "T" ["a"] (tyarrow_ (tyvar_ "a") tyint_),
+      type_ "T" ["a"] (tyarrow_ (tyvar_ "a") tyint_),
       decl_semty_cases_ "f"
                         (tyall_ "a" (tyarrow_ (tyvar_ "a") tyint_))
-                        [(pvarw_, let_ "x"
+                        [(pvarw_, bind_ (let_ "x"
                                         (tyarrow_ (tyvar_ "a") (tyapp_ (tycon_ "T") (tyvar_ "a")))
-                                        (int_ 10))]
+                                        (int_ 10)) unit_)]
       ]
   ],
   expr = uunit_

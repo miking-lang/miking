@@ -12,11 +12,11 @@ lang CudaInlineHigherOrder = MExprAst
   sem inlinePartialFunctionsH inlineBodies =
   | TmVar t ->
     match mapLookup t.ident inlineBodies with Some body then body else TmVar t
-  | TmLet (t & {body = !TmLam _}) ->
+  | TmDecl (x & {decl = DeclLet (t & {body = !TmLam _})}) ->
     match t.tyBody with TyArrow _ then
       let inlineBodies = mapInsert t.ident t.body inlineBodies in
-      inlinePartialFunctionsH inlineBodies t.inexpr
-    else TmLet {t with body = inlinePartialFunctionsH inlineBodies t.body,
-                       inexpr = inlinePartialFunctionsH inlineBodies t.inexpr}
+      inlinePartialFunctionsH inlineBodies x.inexpr
+    else TmDecl {x with decl = DeclLet {t with body = inlinePartialFunctionsH inlineBodies t.body},
+                       inexpr = inlinePartialFunctionsH inlineBodies x.inexpr}
   | t -> smap_Expr_Expr (inlinePartialFunctionsH inlineBodies) t
 end

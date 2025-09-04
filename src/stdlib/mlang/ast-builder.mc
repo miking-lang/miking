@@ -9,52 +9,30 @@ include "extrec/ast.mc"
 
 -- Extending the bind function for mlang expressions
 
-let base_kind_ = BaseKind () 
-let sumext_kind_ = SumExtKind () 
-
-recursive let mlang_bindF_ = 
-  use MLangAst in
-  use ExtRecordAst in
-  lam f : Expr -> Expr -> Expr. lam letexpr. lam expr.
-  bindF_ (lam letexpr. lam expr.
-    match letexpr with TmUse t then
-      TmUse {t with inexpr = mlang_bindF_ f t.inexpr expr}
-    else match letexpr with TmRecField t then
-      TmRecField {t with inexpr = mlang_bindF_ f t.inexpr expr} 
-    else match letexpr with TmRecType t then
-      TmRecType {t with inexpr = mlang_bindF_ f t.inexpr expr} 
-    else
-      f letexpr expr -- Insert at the end of the chain
-  ) letexpr expr
-end
-
-let bind_ = mlang_bindF_ (lam. lam expr. expr)
-
-let bindall_ = use MLangAst in
-  lam exprs.
-  foldr1 bind_ exprs
+let base_kind_ = BaseKind ()
+let sumext_kind_ = SumExtKind ()
 
 
 -- Extended expressions --
 
-let nuse_ = use UseAst in
+let nuse_ = use UseDeclAst in
   lam n.
-  TmUse {ident = n, inexpr = uunit_, ty = tyunknown_, info = NoInfo {}}
+  DeclUse {ident = n, info = NoInfo {}}
 
-let use_ = use UseAst in
+let use_ =
   lam s.
   nuse_ (nameNoSym s)
 
 --  Extended types --
 
-let ntyuse_ = use TyUseAst in 
-  lam n : Name. lam inty : Type. 
+let ntyuse_ = use TyUseAst in
+  lam n : Name. lam inty : Type.
   TyUse {ident = n,
          info = NoInfo {},
          inty = inty}
 
-let tyuse_ = use TyUseAst in 
-  lam s : String. lam inty : Type. 
+let tyuse_ = use TyUseAst in
+  lam s : String. lam inty : Type.
   TyUse {ident = nameNoSym s,
          info = NoInfo {},
          inty = inty}
@@ -115,10 +93,10 @@ let decl_syn_ext_ = use MLangAst in
   lam s. lam defs: [(String, Type)].
   decl_nsyn_ false (nameNoSym s) defs
 
-let decl_syn_params_ = use MLangAst in 
+let decl_syn_params_ = use MLangAst in
   lam s : String. lam ss : [String]. lam defs : [(String, Type)].
   DeclSyn {ident = nameNoSym s,
-           defs = map (lam t. {ident = nameNoSym t.0, 
+           defs = map (lam t. {ident = nameNoSym t.0,
                                tyIdent = t.1,
                                tyName = nameNoSym (concat s "Type")}) defs,
            params = map nameNoSym ss,
@@ -137,9 +115,9 @@ let decl_semty_ = use MLangAst in
   lam s. lam ty.
   decl_nsemty_ (nameNoSym s) ty
 
-let decl_semty_cases_ = use MLangAst in 
+let decl_semty_cases_ = use MLangAst in
   lam s. lam ty. lam cases.
-  let n = nameNoSym s in 
+  let n = nameNoSym s in
   DeclSem {ident = n, tyAnnot = ty,
            tyBody = tyunknown_, includes = [],
            args = Some [],
@@ -147,9 +125,9 @@ let decl_semty_cases_ = use MLangAst in
            info = NoInfo {},
            declKind = base_kind_}
 
-let decl_sem_args_ty_cases_ = use MLangAst in 
+let decl_sem_args_ty_cases_ = use MLangAst in
   lam s : String. lam args : [(String, Type)]. lam ty : Type. lam cases.
-  let n = nameNoSym s in 
+  let n = nameNoSym s in
   DeclSem {ident = n, tyAnnot = ty,
            tyBody = tyunknown_, includes = [],
            args = Some (map (lam t. {ident = nameNoSym t.0, tyAnnot = t.1}) args),
@@ -181,111 +159,6 @@ let decl_sem_ext_ = use MLangAst in
 let decl_usem_ = use MLangAst in
   lam s. lam uargs: [String]. lam cases.
   decl_nusem_ (nameNoSym s) (map nameNoSym uargs) cases
-
-
-let decl_nlet_ = use MLangAst in
-  lam n. lam ty. lam body.
-  DeclLet {ident = n,
-           tyAnnot = ty,
-           tyBody = ty,
-           body = body,
-           info = NoInfo ()}
-
-let decl_let_ = use MLangAst in
-  lam s. lam ty. lam body.
-  decl_nlet_ (nameNoSym s) ty body
-
-let decl_nulet_ = use MLangAst in
-  lam n. lam body.
-  decl_nlet_ n tyunknown_ body
-
-let decl_ulet_ = use MLangAst in
-  lam s. lam body.
-  decl_let_ s tyunknown_ body
-
-
-let decl_ntype_ = use MLangAst in
-  lam n. lam params. lam ty.
-  DeclType {ident = n,
-            params = params,
-            tyIdent = ty,
-            info = NoInfo ()}
-
-let decl_type_ = use MLangAst in
-  lam s. lam params. lam ty.
-  decl_ntype_ (nameNoSym s) (map nameNoSym params) ty
-
-
-let decl_nreclets_ = use MLangAst in
-  lam bs: [(Name, Type, Expr)].
-  let bindings = map (lam b.
-    {ident = b.0, tyAnnot = b.1, tyBody = b.1,
-     body = b.2, info = NoInfo ()}
-  ) bs in
-  DeclRecLets {bindings = bindings, info = NoInfo ()}
-
-let decl_reclets_ = use MLangAst in
-  lam bs: [(String, Type, Expr)].
-  decl_nreclets_ (map (lam b. (nameNoSym b.0, b.1, b.2)) bs)
-
-let decl_nureclets_ = use MLangAst in
-  lam bs: [(Name, Expr)].
-  decl_nreclets_ (map (lam b. (b.0, tyunknown_, b.1)) bs)
-
-let decl_ureclets_ = use MLangAst in
-  lam bs: [(String, Expr)].
-  decl_reclets_ (map (lam b. (b.0, tyunknown_, b.1)) bs)
-
-let decl_reclet_ = use MLangAst in
-  lam s. lam ty. lam body.
-  decl_reclets_ [(s, ty, body)]
-
-let decl_ureclet_ = use MLangAst in
-  lam s. lam body.
-  decl_ureclets_ [(s, body)]
-
-
-let decl_ncondef_ = use MLangAst in
-  lam n. lam ty.
-  DeclConDef {ident = n, tyIdent = ty, info = NoInfo ()}
-
-let decl_condef_ = use MLangAst in
-  lam s. lam ty.
-  decl_ncondef_ (nameNoSym s) ty
-
-let decl_nucondef_ = use MLangAst in
-  lam n.
-  decl_ncondef_ n tyunknown_
-
-let decl_ucondef_ = use MLangAst in
-  lam s.
-  decl_condef_ s tyunknown_
-
-
-let decl_utestuf_ = use MLangAst in
-  lam t. lam e. lam u. lam f.
-  DeclUtest {test = t, expected = e, tusing = Some u, tonfail = Some f, info = NoInfo ()}
-
-let decl_utestu_ = use MLangAst in
-  lam t. lam e. lam u.
-  DeclUtest {test = t, expected = e, tusing = Some u, tonfail = None (), info = NoInfo ()}
-
-let decl_utestf_ = use MLangAst in
-  lam t. lam e. lam f.
-  DeclUtest {test = t, expected = e, tusing = None (), tonfail = Some f, info = NoInfo ()}
-
-let decl_utest_ = use MLangAst in
-  lam t. lam e.
-  DeclUtest {test = t, expected = e, tusing = None (), tonfail = None (), info = NoInfo ()}
-
-
-let decl_next_ = use MLangAst in
-  lam n. lam e. lam ty.
-  DeclExt {ident = n, tyIdent = ty, effect = e, info = NoInfo ()}
-
-let decl_ext_ = use MLangAst in
-  lam s. lam e. lam ty.
-  decl_next_ (nameNoSym s) e ty
 
 
 let decl_include_ = use MLangAst in

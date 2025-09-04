@@ -8,30 +8,30 @@
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
 include "ocaml/ast.mc"
+include "either.mc"
 
 lang OCamlTryWithWrap = MExprAst + OCamlAst
-  sem wrapTopInTryWith (acc : (Expr, [Top])) =
+  sem wrapTopInTryWith : Top -> Either Decl Top
+  sem wrapTopInTryWith =
   | (OTopVariantTypeDecl _ | OTopCExternalDecl _) & t ->
-    (acc.0, snoc acc.1 t)
+    Right t
   | OTopLet t ->
-    let letExpr = TmLet {
+    let letDecl = DeclLet {
       ident = t.ident, tyAnnot = t.tyBody, tyBody = t.tyBody, body = t.body,
-      inexpr = unit_, ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()} in
-    (bind_ acc.0 letExpr, acc.1)
+      info = NoInfo ()} in
+    Left letDecl
   | OTopRecLets t ->
-    let toRecLetBinding = lam bind : OCamlTopBinding.
+    let toDeclLetRecord = lam bind : OCamlTopBinding.
       { ident = bind.ident, tyAnnot = bind.tyBody, tyBody = bind.tyBody
       ,  body = bind.body, info = NoInfo ()} in
-    let recLetExpr = TmRecLets {
-      bindings = map toRecLetBinding t.bindings, inexpr = unit_,
-      ty = TyUnknown {info = NoInfo ()}, info = NoInfo ()} in
-    (bind_ acc.0 recLetExpr, acc.1)
-  | OTopExpr t -> (bind_ acc.0 t.expr, acc.1)
+    let recLetDecl = DeclRecLets {bindings = map toDeclLetRecord t.bindings, info = NoInfo ()} in
+    Left recLetDecl
+  | OTopExpr t -> Left (nulet_ (nameSym "") t.expr)
   | OTopTryWith t -> error "Nested try-with expressions currently not supported"
 
   sem wrapInTryWith =
   | tops /- [Top] -/ ->
-    match foldl wrapTopInTryWith (unit_, []) tops with (tryExpr, tops) in
+    match eitherPartition (map wrapTopInTryWith tops) with (decls, tops) in
     let enableBacktracesTop = OTopLet {
       ident = nameSym "",
       tyBody = TyRecord {fields = mapEmpty cmpSID, info = NoInfo ()},
@@ -41,10 +41,11 @@ lang OCamlTryWithWrap = MExprAst + OCamlAst
       ulet_ "" (appf2_ (OTmVarExt {ident = "Printf.printf"})
         (OTmString {text = "MExpr runtime error: %s\\n"})
         (app_ (OTmVarExt {ident = "Printexc.to_string"}) (nvar_ excId))),
-      ulet_ "" (OTmExprExt {expr = "Printexc.print_backtrace Stdlib.stdout"}),
-      OTmExprExt {expr = "Stdlib.exit 1"}] in
+      ulet_ "" (OTmExprExt {expr = "Printexc.print_backtrace Stdlib.stdout"})]
+      (OTmExprExt {expr = "Stdlib.exit 1"}) in
+    match decls with decls ++ [DeclLet {body = body}] in
     let tryWithTop = OTopTryWith {
-      try = tryExpr,
+      try = bindall_ decls body,
       arms = [(npvar_ excId, withExpr)]} in
     snoc (cons enableBacktracesTop tops) tryWithTop
 end

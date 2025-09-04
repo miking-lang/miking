@@ -94,45 +94,45 @@ lang MExprEliminateDuplicateCode = MExprAst
     match eliminateDuplicateCodeExpr env replaced t.body with (replaced, body) in
     match eliminateDuplicateCodeType env replaced t.ty with (replaced, ty) in
     (replaced, TmConApp {t with ident = ident, body = body, ty = ty})
-  | TmLet t ->
+  | TmDecl (x & {decl = DeclLet t}) ->
     lookupDefinition
-      env replaced t.ident t.info t.inexpr
+      env replaced t.ident t.info x.inexpr
       (lam env.
         match eliminateDuplicateCodeType env replaced t.tyAnnot with (replaced, tyAnnot) in
         match eliminateDuplicateCodeType env replaced t.tyBody with (replaced, tyBody) in
         match eliminateDuplicateCodeExpr env replaced t.body with (replaced, body) in
-        match eliminateDuplicateCodeExpr env replaced t.inexpr with (replaced, inexpr) in
-        match eliminateDuplicateCodeType env replaced t.ty with (replaced, ty) in
+        match eliminateDuplicateCodeExpr env replaced x.inexpr with (replaced, inexpr) in
+        match eliminateDuplicateCodeType env replaced x.ty with (replaced, ty) in
         ( replaced
-        , TmLet {t with body = body, tyAnnot = tyAnnot, tyBody = tyBody, inexpr = inexpr, ty = ty} ))
-  | TmType t ->
+        , TmDecl {x with decl = DeclLet {t with body = body, tyAnnot = tyAnnot, tyBody = tyBody}, inexpr = inexpr, ty = ty} ))
+  | TmDecl (x & {decl = DeclType t}) ->
     lookupDefinition
-      env replaced t.ident t.info t.inexpr
+      env replaced t.ident t.info x.inexpr
       (lam env.
         match eliminateDuplicateCodeType env replaced t.tyIdent with (replaced, tyIdent) in
-        match eliminateDuplicateCodeExpr env replaced t.inexpr with (replaced, inexpr) in
-        match eliminateDuplicateCodeType env replaced t.ty with (replaced, ty) in
+        match eliminateDuplicateCodeExpr env replaced x.inexpr with (replaced, inexpr) in
+        match eliminateDuplicateCodeType env replaced x.ty with (replaced, ty) in
         ( replaced
-        , TmType {t with tyIdent = tyIdent, inexpr = inexpr, ty = ty} ))
-  | TmConDef t ->
+        , TmDecl {x with decl = DeclType {t with tyIdent = tyIdent}, inexpr = inexpr, ty = ty} ))
+  | TmDecl (x & {decl = DeclConDef t}) ->
     lookupDefinition
-      env replaced t.ident t.info t.inexpr
+      env replaced t.ident t.info x.inexpr
       (lam env.
         match eliminateDuplicateCodeType env replaced t.tyIdent with (replaced, tyIdent) in
-        match eliminateDuplicateCodeExpr env replaced t.inexpr with (replaced, inexpr) in
-        match eliminateDuplicateCodeType env replaced t.ty with (replaced, ty) in
+        match eliminateDuplicateCodeExpr env replaced x.inexpr with (replaced, inexpr) in
+        match eliminateDuplicateCodeType env replaced x.ty with (replaced, ty) in
         ( replaced
-        , TmConDef {t with tyIdent = tyIdent, inexpr = inexpr, ty = ty} ))
-  | TmExt t ->
+        , TmDecl {x with decl = DeclConDef {t with tyIdent = tyIdent}, inexpr = inexpr, ty = ty} ))
+  | TmDecl (x & {decl = DeclExt t}) ->
     lookupDefinition
-      env replaced t.ident t.info t.inexpr
+      env replaced t.ident t.info x.inexpr
       (lam env.
         match eliminateDuplicateCodeType env replaced t.tyIdent with (replaced, tyIdent) in
-        match eliminateDuplicateCodeExpr env replaced t.inexpr with (replaced, inexpr) in
-        match eliminateDuplicateCodeType env replaced t.ty with (replaced, ty) in
+        match eliminateDuplicateCodeExpr env replaced x.inexpr with (replaced, inexpr) in
+        match eliminateDuplicateCodeType env replaced x.ty with (replaced, ty) in
         ( replaced
-        , TmExt {t with tyIdent = tyIdent, inexpr = inexpr, ty = ty} ))
-  | TmRecLets t ->
+        , TmDecl {x with decl = DeclExt {t with tyIdent = tyIdent}, inexpr = inexpr, ty = ty} ))
+  | TmDecl (x & {decl = DeclRecLets t}) ->
     let eliminateDuplicateBinding = lam acc. lam binding.
       match acc with (replaced, env) in
       let defn = (binding.info, nameGetStr binding.ident) in
@@ -155,10 +155,10 @@ lang MExprEliminateDuplicateCode = MExprAst
     with ((replaced, env), optBindings) in
     let bindings = filterOption optBindings in
     match mapAccumL (eliminateDuplicateBody env) replaced bindings with (replaced, bindings) in
-    match eliminateDuplicateCodeExpr env replaced t.inexpr with (replaced, inexpr) in
-    match eliminateDuplicateCodeType env replaced t.ty with (replaced, ty) in
+    match eliminateDuplicateCodeExpr env replaced x.inexpr with (replaced, inexpr) in
+    match eliminateDuplicateCodeType env replaced x.ty with (replaced, ty) in
     ( replaced
-    , TmRecLets {t with bindings = reverse bindings, inexpr = inexpr, ty = ty} )
+    , TmDecl {x with decl = DeclRecLets {t with bindings = reverse bindings}, inexpr = inexpr, ty = ty} )
   | t ->
     match smapAccumL_Expr_Expr (eliminateDuplicateCodeExpr env) replaced t with (replaced, t) in
     match smapAccumL_Expr_Type (eliminateDuplicateCodeType env) replaced t with (replaced, t) in
@@ -199,20 +199,20 @@ lang MExprEliminateDuplicateCode = MExprAst
   sem eliminateDuplicateExternalsExpr
     : Map String Name -> Map Name Name -> Expr -> (Map Name Name, Expr)
   sem eliminateDuplicateExternalsExpr externals replaced =
-  | TmExt r ->
+  | TmDecl (x & {decl = DeclExt r}) ->
     let identStr = nameGetStr r.ident in
     optionMapOrElse
       (lam.
         let externals = mapInsert identStr r.ident externals in
-        match eliminateDuplicateExternalsExpr externals replaced r.inexpr
+        match eliminateDuplicateExternalsExpr externals replaced x.inexpr
           with (replaced, inexpr)
         in
-        (replaced, TmExt { r with inexpr = inexpr }))
+        (replaced, TmDecl {x with inexpr = inexpr }))
       (lam ident.
         eliminateDuplicateExternalsExpr
           externals
           (mapInsert r.ident ident replaced)
-          r.inexpr)
+          x.inexpr)
       (mapLookup identStr externals)
   | TmVar r ->
     optionMapOr (replaced, TmVar r)
@@ -233,58 +233,64 @@ use MExprPrettyPrint in
 let i = lam idx.
   Info {filename = "dummy.txt", row1 = idx, col1 = 0, row2 = idx, col2 = 0} in
 
+recursive let exprBind = lam tm1. lam tm2.
+  match tm1 with TmDecl x
+  then TmDecl {x with inexpr = exprBind x.inexpr tm2}
+  else tm2
+in
+
 -- Tests that it works for expressions
 let fooDef =
-  withInfo (i 0) (ulet_ "foo" (ulam_ "x" (addi_ (var_ "x") (int_ 1)))) in
+  declWithInfo (i 0) (ulet_ "foo" (ulam_ "x" (addi_ (var_ "x") (int_ 1)))) in
 let t1 = bindall_ [
   fooDef,
-  ulet_ "foo" (addi_ (int_ 1) (int_ 1))] in
+  ulet_ "foo" (addi_ (int_ 1) (int_ 1))] unit_ in
 let t2 = bindall_ [
-  fooDef,
-  app_ (var_ "foo") (int_ 3)] in
-let t = bind_ (symbolize t1) (symbolize t2) in
+  fooDef]
+  (app_ (var_ "foo") (int_ 3)) in
+let t = exprBind (symbolize t1) (symbolize t2) in
 let foo1 = nameSym "foo" in
 let foo2 = nameSym "foo" in
 let fooDefSym = nulet_ foo1 (ulam_ "x" (addi_ (var_ "x") (int_ 1))) in
 let expected = bindall_ [
   fooDefSym,
-  nulet_ foo2 (addi_ (int_ 1) (int_ 1)),
-  app_ (nvar_ foo1) (int_ 3)
-] in
+  nulet_ foo2 (addi_ (int_ 1) (int_ 1))]
+  (app_ (nvar_ foo1) (int_ 3)
+) in
 utest eliminateDuplicateCode t with expected using eqExpr in
 
 -- Tests that it works for types
 let optionDef = bindall_ [
-  withInfo (i 1) (type_ "Option" ["a"] (tyvariant_ [])),
-  withInfo (i 2) (condef_ "Some" (tyall_ "a" (tyarrow_ (tyvar_ "a") (tyapp_ (tycon_ "Option") (tyvar_ "a"))))),
-  withInfo (i 3) (condef_ "None" (tyall_ "a" (tyarrow_ tyunit_ (tyapp_ (tycon_ "Option") (tyvar_ "a")))))] in
-let fDef =
-  withInfo (i 4)
+  declWithInfo (i 1) (type_ "Option" ["a"] (tyvariant_ [])),
+  declWithInfo (i 2) (condef_ "Some" (tyall_ "a" (tyarrow_ (tyvar_ "a") (tyapp_ (tycon_ "Option") (tyvar_ "a"))))),
+  declWithInfo (i 3) (condef_ "None" (tyall_ "a" (tyarrow_ tyunit_ (tyapp_ (tycon_ "Option") (tyvar_ "a")))))] unit_ in
+let fDef = bind_
+  (declWithInfo (i 4)
     (ulet_ "f" (ulam_ "o"
       (match_ (var_ "o") (pcon_ "Some" (pvar_ "x"))
         (var_ "x")
-        never_))) in
-let included = bind_ optionDef fDef in
-let t1 = withInfo (i 5) (ulet_ "f" (ulam_ "x" (addi_ (var_ "x") (int_ 1)))) in
+        never_)))) unit_ in
+let included = exprBind optionDef fDef in
+let t1 = withInfo (i 5) (bind_ (ulet_ "f" (ulam_ "x" (addi_ (var_ "x") (int_ 1)))) unit_) in
 let t2 = bind_
-  (withInfo (i 6) (ulet_ "x" ((conapp_ "Some" (int_ 3)))))
+  (declWithInfo (i 6) (ulet_ "x" ((conapp_ "Some" (int_ 3)))))
   (app_ (var_ "f") (var_ "x")) in
-let t = bind_
-  (symbolize (bind_ included t1))
-  (symbolize (bind_ included t2)) in
+let t = exprBind
+  (symbolize (exprBind included t1))
+  (symbolize (exprBind included t2)) in
 
 let fId = nameSym "f" in
 let f =
-  withInfo (i 7)
+  declWithInfo (i 7)
     (nulet_ fId (ulam_ "o"
       (match_ (var_ "o") (pcon_ "Some" (pvar_ "x"))
         (var_ "x")
         never_))) in
-let expected = symbolize (bindall_ [
+let expected = symbolize (foldr1 exprBind [
   optionDef,
-  f,
+  (bind_ f unit_),
   t1,
-  ulet_ "x" ((conapp_ "Some" (int_ 3))),
+  bind_ (ulet_ "x" ((conapp_ "Some" (int_ 3)))) unit_,
   app_ (nvar_ fId) (var_ "x")]) in
 -- NOTE(larshum, 2022-09-13): Compare pretty-printed strings as expression
 -- equality is not yet implemented for TmType.
@@ -294,8 +300,8 @@ utest expr2str (eliminateDuplicateCode t) with expr2str expected using eqString 
 let ireclets = lam bindings.
   let bindFn = lam idx. lam entry : (String, Expr).
     {ident = nameNoSym entry.0, tyAnnot = tyunknown_, tyBody = tyunknown_, body = entry.1, info = i idx} in
-  TmRecLets { bindings = mapi bindFn bindings, inexpr = uunit_,
-              ty = tyunknown_, info = NoInfo () } in
+  TmDecl {decl = DeclRecLets { bindings = mapi bindFn bindings, info = NoInfo () }, inexpr = uunit_,
+              ty = tyunknown_, info = NoInfo ()} in
 let baseBindings = [
   ("a", ulam_ "x" (addi_ (var_ "x") (int_ 1))),
   ("b", ulam_ "x" (muli_ (var_ "x") (int_ 2)))
@@ -303,36 +309,36 @@ let baseBindings = [
 let extraBinding = [
   ("c", ulam_ "x" (addi_ (app_ (var_ "a") (var_ "x")) (app_ (var_ "b") (var_ "x"))))] in
 let extendedBindings = concat baseBindings extraBinding in
-let t1 = bind_
+let t1 = exprBind
   (ireclets baseBindings)
-  (withInfo (i 3) (ulet_ "x" (app_ (var_ "a") (int_ 2)))) in
-let t2 = bind_
+  (bind_ (declWithInfo (i 3) (ulet_ "x" (app_ (var_ "a") (int_ 2)))) unit_) in
+let t2 = exprBind
   (ireclets extendedBindings)
   (withInfo (i 4) (addi_ (app_ (var_ "b") (int_ 3)) (app_ (var_ "c") (int_ 1)))) in
-let t = bind_ (symbolize t1) (symbolize t2) in
-let expected = symbolize (bindall_ [
+let t = exprBind (symbolize t1) (symbolize t2) in
+let expected = symbolize (foldr1 exprBind [
   ireclets baseBindings,
-  ulet_ "x" (app_ (var_ "a") (int_ 2)),
+  bind_ (ulet_ "x" (app_ (var_ "a") (int_ 2))) unit_,
   ireclets extraBinding,
   addi_ (app_ (var_ "b") (int_ 3)) (app_ (var_ "c") (int_ 1))]) in
 
 utest eliminateDuplicateCode t with expected using eqExpr in
 
 -- Tests that it works for external identifiers
-let sinExt = withInfo (i 0) (ext_ "sin" false (tyarrow_ tyfloat_ tyfloat_)) in
-let t = bind_ sinExt sinExt in
-utest eliminateDuplicateCode t with sinExt using eqExpr in
+let sinExt = declWithInfo (i 0) (ext_ "sin" false (tyarrow_ tyfloat_ tyfloat_)) in
+let t = bind_ sinExt (bind_ sinExt unit_) in
+utest eliminateDuplicateCode t with bind_ sinExt unit_ using eqExpr in
 
 -- Tests that it works for patterns
-let t1 = withInfo (i 4) (ulet_ "x" (conapp_ "Some" (int_ 2))) in
-let t2 = bind_
-  (ulet_ "o" (conapp_ "Some" (int_ 4)))
+let t1 = bind_ (declWithInfo (i 4) (ulet_ "x" (conapp_ "Some" (int_ 2)))) unit_ in
+let t2 = exprBind
+  (bind_ (ulet_ "o" (conapp_ "Some" (int_ 4))) unit_)
   (match_ (var_ "o") (pcon_ "Some" (pvar_ "x"))
     (var_ "x") never_) in
-let t = bind_
-  (symbolize (bind_ optionDef t1))
-  (symbolize (bind_ optionDef t2)) in
-let expected = symbolize (bindall_ [optionDef, t1, t2]) in
+let t = exprBind
+  (symbolize (exprBind optionDef t1))
+  (symbolize (exprBind optionDef t2)) in
+let expected = symbolize (foldr1 exprBind [optionDef, t1, t2]) in
 
 match eliminateDuplicateCodeWithSummary t with (summary, t) in
 utest expr2str t with expr2str expected using eqString in
@@ -342,27 +348,26 @@ utest mapSize summary with 3 using eqi in
 -- they have no info-fields.
 let t = bindall_ [
   ulet_ "t" (addi_ (int_ 2) (int_ 3)),
-  ulet_ "t" (addi_ (int_ 4) (var_ "t")),
-  var_ "t"
-] in
+  ulet_ "t" (addi_ (int_ 4) (var_ "t"))]
+  (var_ "t") in
 utest eliminateDuplicateCode t with t using eqExpr in
 
 let t = symbolize (bindall_ [
-  withInfo (i 0) (type_ "T1" [] tyint_),
-  withInfo (i 0) (type_ "T1" [] tyint_),
+  declWithInfo (i 0) (type_ "T1" [] tyint_),
+  declWithInfo (i 0) (type_ "T1" [] tyint_),
   type_ "T2" [] (tyseq_ (tycon_ "T1"))
-]) in
+] unit_) in
 let expected = symbolize (bindall_ [
   type_ "T1" [] tyint_,
   type_ "T2" [] (tyseq_ (tycon_ "T1"))
-]) in
+] unit_) in
 utest expr2str (eliminateDuplicateCode t) with expr2str expected using eqString in
 
 -- Tests that eliminateDuplicateExternalsWithSummary works.
-let sinExt = withInfo (i 0) (ext_ "sin" false (tyarrow_ tyfloat_ tyfloat_)) in
-let t = bind_ sinExt sinExt in
+let sinExt = declWithInfo (i 0) (ext_ "sin" false (tyarrow_ tyfloat_ tyfloat_)) in
+let t = bind_ sinExt (bind_ sinExt unit_) in
 match eliminateDuplicateExternalsWithSummary t with (replaced, t) in
 utest mapSize replaced with 1 in
-utest eliminateDuplicateCode t with sinExt using eqExpr in
+utest eliminateDuplicateCode t with bind_ sinExt unit_ using eqExpr in
 
 ()

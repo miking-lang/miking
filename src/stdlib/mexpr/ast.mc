@@ -17,6 +17,9 @@ lang Ast
   syn Expr =
   -- Intentionally left blank
 
+  syn Decl =
+  -- Intentionally left blank
+
   syn Type =
   -- Intentionally left blank
 
@@ -36,10 +39,12 @@ lang Ast
   sem withInfoPat: Info -> Pat -> Pat
   sem withTypePat: Type -> Pat -> Pat
 
+  sem infoDecl: Decl -> Info
+  sem declWithInfo: Info -> Decl -> Decl
+
   sem infoTy: Type -> Info
   sem tyWithInfo: Info -> Type -> Type
 
-  -- TODO(vipa, 2021-05-27): Replace smap and sfold with smapAccumL for Expr and Type as well
   sem smapAccumL_Expr_Expr : all acc. (acc -> Expr -> (acc, Expr)) -> acc -> Expr -> (acc, Expr)
   sem smapAccumL_Expr_Expr f acc =
   | p -> (acc, p)
@@ -143,6 +148,56 @@ lang Ast
   | p ->
     match smapAccumL_Expr_Pat (lam acc. lam a. (f acc a, a)) acc p
     with (acc, _) in acc
+
+  sem smapAccumL_Decl_Expr : all acc. (acc -> Expr -> (acc, Expr)) -> acc -> Decl -> (acc, Decl)
+  sem smapAccumL_Decl_Expr f acc = | d -> (acc, d)
+
+  sem smap_Decl_Expr : (Expr -> Expr) -> Decl -> Decl
+  sem smap_Decl_Expr f = | d -> (smapAccumL_Decl_Expr (lam. lam a. ((), f a)) () d).1
+
+  sem sfold_Decl_Expr : all acc. (acc -> Expr -> acc) -> acc -> Decl -> acc
+  sem sfold_Decl_Expr f acc = | d -> (smapAccumL_Decl_Expr (lam acc. lam a. (f acc a, a)) acc d).0
+
+  sem smapAccumL_Decl_Type : all acc. (acc -> Type -> (acc, Type)) -> acc -> Decl -> (acc, Decl)
+  sem smapAccumL_Decl_Type f acc = | d -> (acc, d)
+
+  sem smap_Decl_Type : (Type -> Type) -> Decl -> Decl
+  sem smap_Decl_Type f = | d -> (smapAccumL_Decl_Type (lam. lam a. ((), f a)) () d).1
+
+  sem sfold_Decl_Type : all acc. (acc -> Type -> acc) -> acc -> Decl -> acc
+  sem sfold_Decl_Type f acc = | d -> (smapAccumL_Decl_Type (lam acc. lam a. (f acc a, a)) acc d).0
+
+  sem smapAccumL_Decl_TypeLabel : all acc. (acc -> Type -> (acc, Type)) -> acc -> Decl -> (acc, Decl)
+  sem smapAccumL_Decl_TypeLabel f acc = | d -> (acc, d)
+
+  sem smap_Decl_TypeLabel : (Type -> Type) -> Decl -> Decl
+  sem smap_Decl_TypeLabel f =
+  | p ->
+    let res = smapAccumL_Decl_TypeLabel (lam. lam a. ((), f a)) () p in
+    res.1
+
+  sem sfold_Decl_TypeLabel : all acc. (acc -> Type -> acc) -> acc -> Decl -> acc
+  sem sfold_Decl_TypeLabel f acc =
+  | p ->
+    let res = smapAccumL_Decl_TypeLabel (lam acc. lam a. (f acc a, a)) acc p in
+    res.0
+
+  sem smapAccumL_Decl_Decl : all acc. (acc -> Decl -> (acc, Decl)) -> acc -> Decl -> (acc, Decl)
+  sem smapAccumL_Decl_Decl f acc = | d -> (acc, d)
+  sem smapAccumL_Decl_Pat : all acc. (acc -> Pat -> (acc, Pat)) -> acc -> Decl -> (acc, Decl)
+  sem smapAccumL_Decl_Pat f acc = | d -> (acc, d)
+
+  sem smap_Decl_Decl : (Decl -> Decl) -> Decl -> Decl
+  sem smap_Decl_Decl f = | d -> (smapAccumL_Decl_Decl (lam. lam a. ((), f a)) () d).1
+
+  sem sfold_Decl_Decl : all acc. (acc -> Decl -> acc) -> acc -> Decl -> acc
+  sem sfold_Decl_Decl f acc = | d -> (smapAccumL_Decl_Decl (lam acc. lam a. (f acc a, a)) acc d).0
+
+  sem smap_Decl_Pat : (Pat -> Pat) -> Decl -> Decl
+  sem smap_Decl_Pat f = | d -> (smapAccumL_Decl_Pat (lam. lam a. ((), f a)) () d).1
+
+  sem sfold_Decl_Pat : all acc. (acc -> Pat -> acc) -> acc -> Decl -> acc
+  sem sfold_Decl_Pat f acc = | d -> (smapAccumL_Decl_Pat (lam acc. lam a. (f acc a, a)) acc d).0
 
   sem smapAccumL_Type_Type : all acc. (acc -> Type -> (acc, Type)) -> acc -> Type -> (acc, Type)
   sem smapAccumL_Type_Type f acc =
@@ -349,104 +404,113 @@ lang LamAst = Ast
     (acc, TmLam {t with body = body})
 end
 
-
--- TmLet --
-lang LetAst = Ast + VarAst
+-- TmDecl --
+lang DeclAst = Ast
   syn Expr =
-  | TmLet {ident : Name,
-           tyAnnot : Type,
-           tyBody : Type,
-           body : Expr,
-           inexpr : Expr,
-           ty : Type,
-           info : Info}
+  | TmDecl {decl : Decl, inexpr : Expr, info : Info, ty : Type}
 
-  sem infoTm =
-  | TmLet r -> r.info
-
-  sem tyTm =
-  | TmLet t -> t.ty
-
-  sem withInfo info =
-  | TmLet t -> TmLet {t with info = info}
-
-  sem withType (ty : Type) =
-  | TmLet t -> TmLet {t with ty = ty}
-
-  sem smapAccumL_Expr_Type f acc =
-  | TmLet t ->
-    match f acc t.tyAnnot with (acc, tyAnnot) in
-    (acc, TmLet {t with tyAnnot = tyAnnot})
-
-  sem smapAccumL_Expr_TypeLabel f acc =
-  | TmLet t ->
-    match f acc t.tyBody with (acc, tyBody) in
-    match f acc t.ty with (acc, ty) in
-    (acc, TmLet {t with tyBody = tyBody, ty = ty})
+  sem infoTm = | TmDecl x -> x.info
+  sem tyTm = | TmDecl x -> x.ty
+  sem withInfo info = | TmDecl x -> TmDecl {x with info = info}
+  sem withType ty = | TmDecl x -> TmDecl {x with ty = ty}
 
   sem smapAccumL_Expr_Expr f acc =
-  | TmLet t ->
-    match f acc t.body with (acc, body) in
-    match f acc t.inexpr with (acc, inexpr) in
-    (acc, TmLet {{t with body = body} with inexpr = inexpr})
-end
-
--- TmRecLets --
-lang RecLetsAst = Ast + VarAst
-  type RecLetBinding = {
-    ident : Name,
-    tyAnnot : Type,
-    tyBody : Type,
-    body : Expr,
-    info : Info }
-
-  syn Expr =
-  | TmRecLets {bindings : [RecLetBinding],
-               inexpr : Expr,
-               ty : Type,
-               info : Info}
-
-  sem infoTm =
-  | TmRecLets r -> r.info
-
-  sem tyTm =
-  | TmRecLets t -> t.ty
-
-  sem withInfo info =
-  | TmRecLets t -> TmRecLets {t with info = info}
-
-  sem withType (ty : Type) =
-  | TmRecLets t -> TmRecLets {t with ty = ty}
+  | TmDecl x ->
+    -- NOTE(vipa, 2025-05-07): We currently see a TmDecl as a
+    -- composite value that includes the Decl in itself, thus
+    -- smapAccumL looks "through" the decl as well
+    match smapAccumL_Decl_Expr f acc x.decl with (acc, decl) in
+    match f acc x.inexpr with (acc, inexpr) in
+    (acc, TmDecl {x with decl = decl, inexpr = inexpr})
 
   sem smapAccumL_Expr_Type f acc =
-  | TmRecLets t ->
-    let bindingFunc = lam acc. lam b: RecLetBinding.
+  | TmDecl x ->
+    -- NOTE(vipa, 2025-05-07): We currently see a TmDecl as a
+    -- composite value that includes the Decl in itself, thus
+    -- smapAccumL looks "through" the decl as well
+    match smapAccumL_Decl_Type f acc x.decl with (acc, decl) in
+    (acc, TmDecl {x with decl = decl})
+
+  sem smapAccumL_Expr_TypeLabel f acc =
+  | TmDecl x ->
+    match smapAccumL_Decl_TypeLabel f acc x.decl with (acc, decl) in
+    match f acc x.ty with (acc, ty) in
+    (acc, TmDecl {x with decl = decl, ty = ty})
+end
+
+-- DeclLetRecord --
+lang LetDeclAst = DeclAst
+  type DeclLetRecord =
+    { ident : Name
+    , tyAnnot : Type
+    , tyBody : Type
+    , body : Expr
+    , info: Info
+    }
+
+  syn Decl =
+  | DeclLet DeclLetRecord
+
+  sem infoDecl =
+  | DeclLet d -> d.info
+
+  sem declWithInfo info =
+  | DeclLet d -> DeclLet {d with info = info}
+
+  sem smapAccumL_Decl_Expr f acc =
+  | DeclLet x ->
+    match f acc x.body with (acc, body) in
+    (acc, DeclLet {x with body = body})
+
+  sem smapAccumL_Decl_Type f acc =
+  | DeclLet x ->
+    match f acc x.tyAnnot with (acc, tyAnnot) in
+    (acc, DeclLet {x with tyAnnot = tyAnnot})
+
+  sem smapAccumL_Decl_TypeLabel f acc =
+  | DeclLet x ->
+    match f acc x.tyBody with (acc, tyBody) in
+    (acc, DeclLet {x with tyBody = tyBody})
+end
+
+-- DeclRecLets --
+lang RecLetsDeclAst = DeclAst + LetDeclAst
+  syn Decl =
+  | DeclRecLets
+    { bindings : [DeclLetRecord]
+    , info : Info
+    }
+
+  sem infoDecl =
+  | DeclRecLets d -> d.info
+
+  sem declWithInfo info =
+  | DeclRecLets d -> DeclRecLets {d with info = info}
+
+  sem smapAccumL_Decl_Type f acc =
+  | DeclRecLets x ->
+    let fbinding = lam acc. lam b.
       match f acc b.tyAnnot with (acc, tyAnnot) in
       (acc, {b with tyAnnot = tyAnnot}) in
-    match mapAccumL bindingFunc acc t.bindings with (acc, bindings) in
-    (acc, TmRecLets {t with bindings = bindings})
+    match mapAccumL fbinding acc x.bindings with (acc, bindings) in
+    (acc, DeclRecLets {x with bindings = bindings})
 
-  sem smapAccumL_Expr_TypeLabel f acc =
-  | TmRecLets t ->
-    let bindingFunc = lam acc. lam b: RecLetBinding.
-      match f acc b.tyBody with (acc, tyBody) in
-      (acc, {b with tyBody = tyBody})
-    in
-    match mapAccumL bindingFunc acc t.bindings with (acc, bindings) in
-    match f acc t.ty with (acc, ty) in
-    (acc, TmRecLets {t with bindings = bindings, ty = ty})
-
-  sem smapAccumL_Expr_Expr f acc =
-  | TmRecLets t ->
-    let bindingFunc = lam acc. lam b: RecLetBinding.
+  sem smapAccumL_Decl_Expr f acc =
+  | DeclRecLets x ->
+    let fbinding = lam acc. lam b.
       match f acc b.body with (acc, body) in
-      (acc, {b with body = body})
-    in
-    match mapAccumL bindingFunc acc t.bindings with (acc, bindings) in
-    match f acc t.inexpr with (acc, inexpr) in
-    (acc, TmRecLets {{t with bindings = bindings} with inexpr = inexpr})
-end
+      (acc, {b with body = body}) in
+    match mapAccumL fbinding acc x.bindings with (acc, bindings) in
+    (acc, DeclRecLets {x with bindings = bindings})
 
+  sem smapAccumL_Decl_TypeLabel f acc =
+  | DeclRecLets x ->
+    let fbinding = lam acc. lam b.
+      match f acc b.tyBody with (acc, tyBody) in
+      (acc, {b with tyBody = tyBody}) in
+    match mapAccumL fbinding acc x.bindings with (acc, bindings) in
+    (acc, DeclRecLets {x with bindings = bindings})
+end
 
 -- TmConst --
 lang ConstAst = Ast
@@ -538,81 +602,66 @@ lang RecordAst = Ast
     else never
 end
 
--- TmType --
-lang TypeAst = Ast
-  syn Expr =
-  | TmType {ident : Name,
-            params : [Name],
-            tyIdent : Type,
-            inexpr : Expr,
-            ty : Type,
-            info : Info}
+-- DeclType --
+lang TypeDeclAst = DeclAst
+  syn Decl =
+  | DeclType {ident : Name,
+              params : [Name],
+              tyIdent : Type,
+              info : Info}
 
-  sem infoTm =
-  | TmType r -> r.info
+  sem infoDecl =
+  | DeclType d -> d.info
 
-  sem tyTm =
-  | TmType t -> t.ty
+  sem declWithInfo info =
+  | DeclType d -> DeclType {d with info = info}
 
-  sem withInfo info =
-  | TmType t -> TmType {t with info = info}
-
-  sem withType (ty : Type) =
-  | TmType t -> TmType {t with ty = ty}
-
-  sem smapAccumL_Expr_Type f acc =
-  | TmType t ->
-    match f acc t.tyIdent with (acc, tyIdent) then
-      (acc, TmType {t with tyIdent = tyIdent})
-    else never
-
-  sem smapAccumL_Expr_Expr f acc =
-  | TmType t ->
-    match f acc t.inexpr with (acc, inexpr) then
-      (acc, TmType {t with inexpr = inexpr})
-    else never
+  sem smapAccumL_Decl_Type f acc =
+  | DeclType x ->
+    match f acc x.tyIdent with (acc, tyIdent) in
+    (acc, DeclType {x with tyIdent = tyIdent})
 end
 
--- TmConDef and TmConApp --
+-- DeclConDef --
+lang DataDeclAst = DeclAst
+  syn Decl =
+  | DeclConDef {ident : Name,
+                tyIdent : Type,
+                info : Info}
+
+  sem infoDecl =
+  | DeclConDef d -> d.info
+
+  sem declWithInfo info =
+  | DeclConDef d -> DeclConDef {d with info = info}
+
+  sem smapAccumL_Decl_Type f acc =
+  | DeclConDef x ->
+    match f acc x.tyIdent with (acc, tyIdent) in
+    (acc, DeclConDef {x with tyIdent = tyIdent})
+end
+
+-- TmConApp --
 lang DataAst = Ast
   syn Expr =
-  | TmConDef {ident : Name,
-              tyIdent : Type,
-              inexpr : Expr,
-              ty : Type,
-              info : Info}
   | TmConApp {ident : Name,
               body : Expr,
               ty : Type,
               info: Info}
 
   sem infoTm =
-  | TmConDef r -> r.info
   | TmConApp r -> r.info
 
   sem tyTm =
-  | TmConDef t -> t.ty
   | TmConApp t -> t.ty
 
   sem withInfo info =
-  | TmConDef t -> TmConDef {t with info = info}
   | TmConApp t -> TmConApp {t with info = info}
 
   sem withType (ty : Type) =
-  | TmConDef t -> TmConDef {t with ty = ty}
   | TmConApp t -> TmConApp {t with ty = ty}
 
-  sem smapAccumL_Expr_Type f acc =
-  | TmConDef t ->
-    match f acc t.tyIdent with (acc, tyIdent) then
-      (acc, TmConDef {t with tyIdent = tyIdent})
-    else never
-
   sem smapAccumL_Expr_Expr f acc =
-  | TmConDef t ->
-    match f acc t.inexpr with (acc, inexpr) then
-      (acc, TmConDef {t with inexpr = inexpr})
-    else never
   | TmConApp t ->
     match f acc t.body with (acc, body) then
       (acc, TmConApp {t with body = body})
@@ -660,48 +709,32 @@ lang MatchAst = Ast
     (acc, TmMatch {t with pat = pat})
 end
 
+-- DeclUtest --
+lang UtestDeclAst = DeclAst
+  syn Decl =
+  | DeclUtest {test : Expr,
+               expected : Expr,
+               tusing : Option Expr,
+               tonfail : Option Expr,
+               info : Info}
 
--- TmUtest --
-lang UtestAst = Ast
-  syn Expr =
-  | TmUtest {test : Expr,
-             expected : Expr,
-             next : Expr,
-             tusing : Option Expr,
-             tonfail : Option Expr,
-             ty : Type,
-             info : Info}
+  sem infoDecl =
+  | DeclUtest d -> d.info
 
-  sem infoTm =
-  | TmUtest r -> r.info
+  sem declWithInfo info =
+  | DeclUtest d -> DeclUtest {d with info = info}
 
-  sem tyTm =
-  | TmUtest t -> t.ty
-
-  sem withInfo info =
-  | TmUtest t -> TmUtest {t with info = info}
-
-  sem withType (ty : Type) =
-  | TmUtest t -> TmUtest {t with ty = ty}
-
-  sem smapAccumL_Expr_Expr f acc =
-  | TmUtest t ->
-    match f acc t.test with (acc, test) in
-    match f acc t.expected with (acc, expected) in
-    match f acc t.next with (acc, next) in
-    match optionMapAccum f acc t.tusing with (acc, tusing) in
-    match optionMapAccum f acc t.tonfail with (acc, tonfail) in
-    ( acc
-    , TmUtest {
-      t with
-      test = test,
-      expected = expected,
-      next = next,
-      tusing = tusing,
-      tonfail = tonfail
-    })
+  sem smapAccumL_Decl_Expr f acc =
+  | DeclUtest x ->
+    match f acc x.test with (acc, test) in
+    match f acc x.expected with (acc, expected) in
+    match optionMapAccum f acc x.tusing with (acc, tusing) in
+    match optionMapAccum f acc x.tonfail with (acc, tonfail) in
+    (acc, DeclUtest {x with test = test,
+                            expected = expected,
+                            tusing = tusing,
+                            tonfail = tonfail})
 end
-
 
 -- TmNever --
 lang NeverAst = Ast
@@ -724,56 +757,41 @@ end
 
 -- TmPlaceholder --
 lang PlaceholderAst = Ast
-  syn Expr = 
+  syn Expr =
   | TmPlaceholder {ty : Type,
                    info : Info}
 
-  sem infoTm = 
+  sem infoTm =
   | TmPlaceholder t -> t.info
 
-  sem withInfo info = 
+  sem withInfo info =
   | TmPlaceholder t -> TmPlaceholder {t with info = info}
 
   sem tyTm =
   | TmPlaceholder t -> t.ty
 
-  sem withType ty = 
+  sem withType ty =
   | TmPlaceholder t -> TmPlaceholder {t with ty = ty}
 end
 
--- TmExt --
-lang ExtAst = Ast + VarAst
-  syn Expr =
-  | TmExt {ident : Name,
-           tyIdent : Type,
-           inexpr : Expr,
-           effect : Bool,
-           ty : Type,
-           info : Info}
+-- DeclExt --
+lang ExtDeclAst = DeclAst
+  syn Decl =
+  | DeclExt {ident : Name,
+             tyIdent : Type,
+             effect : Bool,
+             info : Info}
 
-  sem infoTm =
-  | TmExt r -> r.info
+  sem infoDecl =
+  | DeclExt d -> d.info
 
-  sem tyTm =
-  | TmExt t -> t.ty
+  sem declWithInfo info =
+  | DeclExt d -> DeclExt {d with info = info}
 
-  sem withInfo info =
-  | TmExt t -> TmExt {t with info = info}
-
-  sem withType (ty : Type) =
-  | TmExt t -> TmExt {t with ty = ty}
-
-  sem smapAccumL_Expr_Type f acc =
-  | TmExt t ->
-    match f acc t.tyIdent with (acc, tyIdent) then
-      (acc, TmExt {t with tyIdent = tyIdent})
-    else never
-
-  sem smapAccumL_Expr_Expr f acc =
-  | TmExt t ->
-    match f acc t.inexpr with (acc, inexpr) then
-      (acc, TmExt {t with inexpr = inexpr})
-    else never
+  sem smapAccumL_Decl_Type f acc =
+  | DeclExt x ->
+    match f acc x.tyIdent with (acc, tyIdent) in
+    (acc, DeclExt {x with tyIdent = tyIdent})
 end
 
 ---------------
@@ -967,7 +985,7 @@ lang RefOpAst = ConstAst
   | CDeRef {}
 end
 
-lang TypeOpAst = ConstAst 
+lang TypeOpAst = ConstAst
   syn Const =
   | CTypeOf {}
 end
@@ -1613,9 +1631,12 @@ end
 lang MExprAst =
 
   -- Terms
-  VarAst + AppAst + LamAst + RecordAst + LetAst + TypeAst + RecLetsAst +
-  ConstAst + DataAst + MatchAst + UtestAst + SeqAst + NeverAst + ExtAst +
-  PlaceholderAst +
+  VarAst + AppAst + LamAst + RecordAst + ConstAst + DataAst + MatchAst +
+  SeqAst + NeverAst + PlaceholderAst +
+
+  -- Decls
+  LetDeclAst + TypeDeclAst + RecLetsDeclAst + DataDeclAst + UtestDeclAst +
+  ExtDeclAst +
 
   -- Constants
   IntAst + ArithIntAst + ShiftIntAst + FloatAst + ArithFloatAst + BoolAst +
@@ -1623,7 +1644,7 @@ lang MExprAst =
   SymbAst + CmpSymbAst + SeqOpAst + FileOpAst + IOAst +
   RandomNumberGeneratorAst + SysAst + FloatIntConversionAst +
   FloatStringConversionAst + TimeAst + ConTagAst + RefOpAst + TensorOpAst +
-  BootParserAst + UnsafeCoerceAst + TypeOpAst + 
+  BootParserAst + UnsafeCoerceAst + TypeOpAst +
 
   -- Patterns
   NamedPat + SeqTotPat + SeqEdgePat + RecordPat + DataPat + IntPat + CharPat +
@@ -1632,8 +1653,8 @@ lang MExprAst =
   -- Types
   UnknownTypeAst + BoolTypeAst + IntTypeAst + FloatTypeAst + CharTypeAst +
   FunTypeAst + SeqTypeAst + RecordTypeAst + VariantTypeAst + ConTypeAst +
-  DataTypeAst + VarTypeAst + AppTypeAst + TensorTypeAst + AllTypeAst + 
-  AliasTypeAst +  
+  DataTypeAst + VarTypeAst + AppTypeAst + TensorTypeAst + AllTypeAst +
+  AliasTypeAst +
 
   -- Kinds
   PolyKindAst + MonoKindAst + RecordKindAst + DataKindAst

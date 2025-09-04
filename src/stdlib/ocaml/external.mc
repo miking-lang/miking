@@ -252,7 +252,7 @@ lang OCamlDataConversionHelpers =
 end
 
 lang OCamlDataConversionList = OCamlDataConversionHelpers + OCamlAst
-  + SeqTypeAst + UnknownTypeAst + ExtAst + LamAst
+  + SeqTypeAst + UnknownTypeAst + ExtDeclAst + LamAst
 
   sem convertDataInner info env t =
   | (OTyList {ty = ty1}, TySeq {ty = ty2}) ->
@@ -266,7 +266,7 @@ lang OCamlDataConversionList = OCamlDataConversionHelpers + OCamlAst
 end
 
 lang OCamlDataConversionArray = OCamlDataConversionHelpers + OCamlAst
-  + SeqTypeAst + UnknownTypeAst + ExtAst + LamAst
+  + SeqTypeAst + UnknownTypeAst + ExtDeclAst + LamAst
 
   sem convertDataInner info env t =
   | (TySeq {ty = ty1}, OTyArray {ty = ty2}) ->
@@ -407,7 +407,7 @@ lang OCamlDataConversionRecords = OCamlDataConversion + OCamlAst
 end
 
 lang OCamlDataConversionBigArray = OCamlDataConversionHelpers + OCamlAst
-  + TensorTypeAst + UnknownTypeAst + ExtAst + LamAst
+  + TensorTypeAst + UnknownTypeAst + ExtDeclAst + LamAst
 
   sem convertDataInner info env t =
   | (OTyBigarrayGenarray
@@ -574,10 +574,10 @@ end
 -- implementation with the lowest cost with respect to the type given at the
 -- external term definition.
 lang OCamlGenerateExternalNaive =
-  OCamlDataConversionMExpr + OCamlChooseExternalImpl + ExtAst
+  OCamlDataConversionMExpr + OCamlChooseExternalImpl + ExtDeclAst
 
   sem chooseExternalImpls implsMap env =
-  | TmExt {ident = ident, tyIdent = tyIdent, inexpr = inexpr, info = info} ->
+  | TmDecl {decl = DeclExt {ident = ident, tyIdent = tyIdent}, inexpr = inexpr, info = info} ->
     let identStr = nameGetStr ident in
     let impls = mapLookup identStr implsMap in
 

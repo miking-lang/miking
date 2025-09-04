@@ -97,8 +97,8 @@ case ResultOk {value = lrtable} then
       let_ "initLexerState" (tycon_ "Stream")
                         (urecord_ [("pos", appf1_ (var_ "initPos") (str_ "file")),
                                    ("str", get_ (var_ "argv") (int_ 1))]),
-      let_ "parse_result" (tyTm parser) parser,
-      matchall_ [
+      let_ "parse_result" (tyTm parser) parser]
+      (matchall_ [
         matchex_ (var_ "parse_result") (pcon_ "ResultOk" (prec_ [("value", (pvar_ "result"))])) (
           appf1_ (var_ "printLn") (appf1_ (var_ "join") (seq_ [
             str_ "success: ", appf1_ (var_ "seq2string") (var_ "result")
@@ -117,7 +117,7 @@ case ResultOk {value = lrtable} then
                                                 (appf1_ (var_ "mapValues") (var_ "errors"))))
         )
       ]
-    ]),
+    )),
     ""
   ] in
   let fname = match argv with [_, fname] ++ _

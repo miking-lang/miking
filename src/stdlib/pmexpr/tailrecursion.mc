@@ -78,15 +78,10 @@ lang PMExprTailRecursion = PMExprAst + PMExprFunctionProperties +
   -- the given binding into a tail-recursive form. Otherwise, None is returned.
   sem getTailRecursiveRewriteEnv =
   | t ->
-    let binding : RecLetBinding = t in
+    let binding : DeclLetRecord = t in
     recursive let findExpressionsAtTailPosition : Expr -> [Expr] = lam expr.
       match expr with TmLam t then findExpressionsAtTailPosition t.body
-      else match expr with TmLet t then findExpressionsAtTailPosition t.inexpr
-      else match expr with TmRecLets t then findExpressionsAtTailPosition t.inexpr
-      else match expr with TmType t then findExpressionsAtTailPosition t.inexpr
-      else match expr with TmConDef t then findExpressionsAtTailPosition t.inexpr
-      else match expr with TmUtest t then findExpressionsAtTailPosition t.next
-      else match expr with TmExt t then findExpressionsAtTailPosition t.inexpr
+      else match expr with TmDecl x then findExpressionsAtTailPosition x.inexpr
       else match expr with TmMatch t then
         concat
           (findExpressionsAtTailPosition t.thn)
@@ -126,7 +121,7 @@ lang PMExprTailRecursion = PMExprAst + PMExprFunctionProperties +
   sem toTailRecursiveForm (env : TailRecursiveEnv) =
   | t ->
     -- env = {binop : Expr, ne : Expr, leftArgRecursion : Bool}
-    let binding : RecLetBinding = t in
+    let binding : DeclLetRecord = t in
 
     -- Generate a new symbol for the name so that we can easily identify calls
     -- to which we need to add an accumulator argument.
@@ -181,18 +176,8 @@ lang PMExprTailRecursion = PMExprAst + PMExprFunctionProperties +
     recursive let rewriteTailRecursive : Expr -> Expr = lam expr.
       match expr with TmLam t then
         TmLam {t with body = rewriteTailRecursive t.body}
-      else match expr with TmLet t then
-        TmLet {t with inexpr = rewriteTailRecursive t.inexpr}
-      else match expr with TmRecLets t then
-        TmRecLets {t with inexpr = rewriteTailRecursive t.inexpr}
-      else match expr with TmType t then
-        TmType {t with inexpr = rewriteTailRecursive t.inexpr}
-      else match expr with TmConDef t then
-        TmConDef {t with inexpr = rewriteTailRecursive t.inexpr}
-      else match expr with TmUtest t then
-        TmUtest {t with next = rewriteTailRecursive t.next}
-      else match expr with TmExt t then
-        TmExt {t with inexpr = rewriteTailRecursive t.inexpr}
+      else match expr with TmDecl x then
+        TmDecl {x with inexpr = rewriteTailRecursive x.inexpr}
       else match expr with TmMatch t then
         TmMatch {{t with thn = rewriteTailRecursive t.thn}
                     with els = rewriteTailRecursive t.els}
@@ -232,11 +217,11 @@ lang PMExprTailRecursion = PMExprAst + PMExprFunctionProperties +
 
   sem tailRecursiveRewrite (subMap : Map Name (Info -> Expr)) =
   | t ->
-    let t : RecLetBinding = t in
+    let t : DeclLetRecord = t in
     match getTailRecursiveRewriteEnv t with Some env then
       let env : TailRecursiveEnv = env in
       match toTailRecursiveForm env t with Some tailRecursiveBinding then
-        let binding : RecLetBinding = tailRecursiveBinding in
+        let binding : DeclLetRecord = tailRecursiveBinding in
         let oldIdent = t.ident in
         let replacementFunctionCall = lam info.
           TmApp {
@@ -260,8 +245,8 @@ lang PMExprTailRecursion = PMExprAst + PMExprFunctionProperties +
     match mapLookup t.ident subMap with Some subFn then
       (subMap, subFn t.info)
     else (subMap, TmVar t)
-  | TmRecLets t ->
-    let tailRecursiveBinding = lam subMap. lam binding : RecLetBinding.
+  | TmDecl (x & {decl = DeclRecLets t}) ->
+    let tailRecursiveBinding = lam subMap. lam binding : DeclLetRecord.
       optionGetOrElse
         (lam. (subMap, binding))
         (tailRecursiveRewrite subMap binding)
@@ -272,15 +257,15 @@ lang PMExprTailRecursion = PMExprAst + PMExprFunctionProperties +
       -- Translate calls to rewritten bindings within each binding.
       let bindings =
         map
-          (lam bind : RecLetBinding.
+          (lam bind : DeclLetRecord.
             match tailRecursiveH subMap bind.body with (_, body) then
               {bind with body = body}
             else never)
           bindings in
 
       -- Translate calls to rewritten bindings in the inexpr term.
-      match tailRecursiveH subMap t.inexpr with (subMap, inexpr) then
-        (subMap, TmRecLets {{t with bindings = bindings} with inexpr = inexpr})
+      match tailRecursiveH subMap x.inexpr with (subMap, inexpr) then
+        (subMap, TmDecl {x with decl = DeclRecLets {t with bindings = bindings}, inexpr = inexpr})
       else never
     else never
   | t -> smapAccumL_Expr_Expr tailRecursiveH subMap t
@@ -308,8 +293,8 @@ let fact = preprocess (bindall_ [
       if_ (leqi_ (var_ "n") (int_ 1))
         (int_ 1)
         (muli_ (var_ "n") (app_ (var_ "fact") (subi_ (var_ "n") (int_ 1))))
-    ))],
-  app_ (var_ "fact") (int_ 10)]) in
+    ))]]
+  (app_ (var_ "fact") (int_ 10))) in
 let factTr = preprocess (bindall_ [
   ureclets_ [
     ("fact", ulam_ "acc" (ulam_ "n" (
@@ -318,20 +303,20 @@ let factTr = preprocess (bindall_ [
         (appf2_ (var_ "fact")
           (muli_ (var_ "acc") (var_ "n"))
           (subi_ (var_ "n") (int_ 1)))
-    )))],
-  (appf2_ (var_ "fact") (int_ 1) (int_ 10))]) in
+    )))]]
+  (appf2_ (var_ "fact") (int_ 1) (int_ 10))) in
 utest tailRecursive fact with factTr using eqExpr in
 utest tailRecursive factTr with factTr using eqExpr in
 
-let filter = preprocess (ureclets_ [
+let filter = preprocess (bind_ (ureclets_ [
   ("filter", ulam_ "p" (ulam_ "s" (
     if_ (null_ (var_ "s"))
       (seq_ [])
       (if_ (app_ (var_ "p") (head_ (var_ "s")))
         (concat_ (seq_ [head_ (var_ "s")])
                  (appf2_ (var_ "filter") (var_ "p") (tail_ (var_ "s"))))
-        (appf2_ (var_ "filter") (var_ "p") (tail_ (var_ "s")))))))]) in
-let filterTr = preprocess (ureclets_ [
+        (appf2_ (var_ "filter") (var_ "p") (tail_ (var_ "s")))))))]) unit_) in
+let filterTr = preprocess (bind_ (ureclets_ [
   ("filter", ulam_ "acc" (ulam_ "p" (ulam_ "s" (
     if_ (null_ (var_ "s"))
       (var_ "acc")
@@ -342,18 +327,18 @@ let filterTr = preprocess (ureclets_ [
         (concat_
           (var_ "acc")
           (appf3_ (var_ "filter") (seq_ []) (var_ "p")
-                                  (tail_ (var_ "s")))))))))]) in
+                                  (tail_ (var_ "s")))))))))]) unit_) in
 utest tailRecursive filter with filterTr using eqExpr in
 
-let fib = preprocess (ureclets_ [
+let fib = preprocess (bind_ (ureclets_ [
   ("fib", ulam_ "n" (
     if_ (eqi_ (var_ "n") (int_ 0))
       (int_ 0)
       (if_ (eqi_ (var_ "n") (int_ 1))
         (int_ 1)
         (addi_ (app_ (var_ "fib") (subi_ (var_ "n") (int_ 1)))
-               (app_ (var_ "fib") (subi_ (var_ "n") (int_ 2)))))))]) in
-let fibTr = preprocess (ureclets_ [
+               (app_ (var_ "fib") (subi_ (var_ "n") (int_ 2)))))))]) unit_) in
+let fibTr = preprocess (bind_ (ureclets_ [
   ("fib", ulam_ "acc" (ulam_ "n" (
     if_ (eqi_ (var_ "n") (int_ 0))
       (var_ "acc")
@@ -362,22 +347,22 @@ let fibTr = preprocess (ureclets_ [
         (appf2_ (var_ "fib")
           (addi_ (appf2_ (var_ "fib") (int_ 0)
                  (subi_ (var_ "n") (int_ 2))) (var_ "acc"))
-          (subi_ (var_ "n") (int_ 1)))))))]) in
+          (subi_ (var_ "n") (int_ 1)))))))]) unit_) in
 utest tailRecursive fib with fibTr using eqExpr in
 utest tailRecursive fibTr with fibTr using eqExpr in
 
-let map0 = preprocess (ureclets_ [
+let map0 = preprocess (bind_ (ureclets_ [
   ("map0", ulam_ "f" (ulam_ "s" (
     match_ (var_ "s") (pseqedge_ [pvar_ "h"] "t" [])
       (concat_ (seq_ [app_ (var_ "f") (var_ "h")]) (appf2_ (var_ "map0") (var_ "f") (var_ "t")))
-      (seq_ [int_ 0]))))]) in
-let map0Tr = preprocess (ureclets_ [
+      (seq_ [int_ 0]))))]) unit_) in
+let map0Tr = preprocess (bind_ (ureclets_ [
   ("map0", ulam_ "acc" (ulam_ "f" (ulam_ "s" (
     match_ (var_ "s") (pseqedge_ [pvar_ "h"] "t" [])
       (appf3_ (var_ "map0")
         (concat_ (var_ "acc") (seq_ [app_ (var_ "f") (var_ "h")]))
         (var_ "f") (var_ "t"))
-      (concat_ (var_ "acc") (seq_ [int_ 0]))))))]) in
+      (concat_ (var_ "acc") (seq_ [int_ 0]))))))]) unit_) in
 utest tailRecursive map0 with map0Tr using eqExpr in
 utest tailRecursive map0Tr with map0Tr using eqExpr in
 

@@ -23,25 +23,25 @@ lang PMExprUtestSizeConstraint = PMExprAst
     findDimension params (addi dim 1) s
 
   sem replaceUtestsWithSizeConstraintH (params : Map Name Type) =
-  | TmUtest t ->
+  | TmDecl (x & {decl = DeclUtest t}) ->
     let generateSizeEquality = lam s1 : Expr. lam s2 : Expr.
       match findDimension params 1 s1 with Some (x1, d1) then
         match findDimension params 1 s2 with Some (x2, d2) then
           let ty = tyWithInfo t.info tyunit_ in
-          let inexpr = replaceUtestsWithSizeConstraintH params t.next in
+          let inexpr = replaceUtestsWithSizeConstraintH params x.inexpr in
           let eq = TmParallelSizeEquality {x1 = x1, d1 = d1, x2 = x2, d2 = d2,
                                            ty = ty, info = t.info} in
-          Some (TmLet {ident = nameNoSym "", tyAnnot = ty, tyBody = ty, body = eq,
-                       inexpr = inexpr, ty = t.ty, info = t.info})
+          Some (TmDecl {decl = DeclLet {ident = nameNoSym "", tyAnnot = ty, tyBody = ty, body = eq,
+                       info = t.info}, inexpr = inexpr, ty = x.ty, info = x.info})
         else None ()
       else None () in
     let generateSizeCoercion = lam s : Expr. lam id : Name. lam sizeId : Name.
-      let inexpr = replaceUtestsWithSizeConstraintH params t.next in
+      let inexpr = replaceUtestsWithSizeConstraintH params x.inexpr in
       let coercion =
         TmParallelSizeCoercion {e = s, size = sizeId,
                                 ty = tyTm s, info = infoTm s} in
-      TmLet {ident = id, tyAnnot = tyTm s, tyBody = tyTm s, body = coercion,
-             inexpr = inexpr, ty = t.ty, info = t.info} in
+      TmDecl {decl = DeclLet {ident = id, tyAnnot = tyTm s, tyBody = tyTm s, body = coercion,
+             info = t.info}, inexpr = inexpr, ty = x.ty, info = x.info} in
     let result =
       match t.tusing with None _ | Some (TmConst {val = CEqi _}) then
         let p = (t.test, t.expected) in
@@ -59,7 +59,7 @@ lang PMExprUtestSizeConstraint = PMExprAst
         else None ()
       else None () in
     match result with Some e then e
-    else replaceUtestsWithSizeConstraintH params t.next
+    else replaceUtestsWithSizeConstraintH params x.inexpr
   | t -> smap_Expr_Expr (replaceUtestsWithSizeConstraintH params) t
 
   sem replaceUtestsWithSizeConstraint =
@@ -76,7 +76,7 @@ lang PMExprUtestSizeConstraint = PMExprAst
     match extractLambdas (mapEmpty nameCmp) (TmLam t) with (params, body) in
     let newBody = replaceUtestsWithSizeConstraintH params body in
     replaceFunctionBody newBody (TmLam t)
-  | TmUtest t -> replaceUtestsWithSizeConstraint t.next
+  | TmDecl (x & {decl = DeclUtest _}) -> replaceUtestsWithSizeConstraint x.inexpr
   | t -> smap_Expr_Expr replaceUtestsWithSizeConstraint t
 end
 
@@ -91,7 +91,7 @@ let preprocess = lam t.
   typeCheck (symbolize t)
 in
 
-let topLevelUtest = preprocess (utest_ (addi_ (int_ 1) (int_ 1)) (int_ 2) unit_) in
+let topLevelUtest = preprocess (bind_ (utest_ (addi_ (int_ 1) (int_ 1)) (int_ 2)) unit_) in
 utest replaceUtestsWithSizeConstraint topLevelUtest with unit_ using eqExpr in
 
 let s = nameSym "s" in
@@ -104,16 +104,16 @@ let exampleTerm = lam inexpr.
       inexpr) in
 
 let utestImplicitUsing = preprocess
-  (exampleTerm (utest_ (length_ (nvar_ s)) (nvar_ n) unit_)) in
-let expected = exampleTerm (nulet_ s (parallelSizeCoercion_ (nvar_ s) n)) in
+  (exampleTerm (bind_ (utest_ (length_ (nvar_ s)) (nvar_ n)) unit_)) in
+let expected = exampleTerm (bind_ (nulet_ s (parallelSizeCoercion_ (nvar_ s) n)) unit_) in
 utest replaceUtestsWithSizeConstraint utestImplicitUsing with expected using eqExpr in
 
 let utestExplicitEqi = preprocess (exampleTerm
-  (utestu_ (length_ (nvar_ s)) (nvar_ n) unit_ (uconst_ (CEqi ())))) in
+  (bind_ (utestu_ (length_ (nvar_ s)) (nvar_ n) (uconst_ (CEqi ()))) unit_)) in
 utest replaceUtestsWithSizeConstraint utestExplicitEqi with expected using eqExpr in
 
 let utestExplicitNonEqi = preprocess (exampleTerm (
-  utestu_ (length_ (nvar_ s)) (nvar_ n) unit_ (uconst_ (CGti ())))) in
+  bind_ (utestu_ (length_ (nvar_ s)) (nvar_ n) (uconst_ (CGti ()))) unit_)) in
 let expected = exampleTerm unit_ in
 utest replaceUtestsWithSizeConstraint utestExplicitNonEqi with expected using eqExpr in
 
@@ -121,18 +121,18 @@ let s1 = nameSym "s1" in
 let s2 = nameSym "s2" in
 let utestSizeEquality = preprocess
   (nlam_ s1 (tyseq_ tyint_) (nlam_ s2 (tyseq_ tyint_)
-    (utest_ (length_ (nvar_ s1)) (length_ (nvar_ s2)) unit_))) in
+    (bind_ (utest_ (length_ (nvar_ s1)) (length_ (nvar_ s2))) unit_))) in
 let expected =
   nlam_ s1 (tyseq_ tyint_) (nlam_ s2 (tyseq_ tyint_)
-    (ulet_ "" (parallelSizeEquality_ s1 1 s2 1))) in
+    (bind_ (ulet_ "" (parallelSizeEquality_ s1 1 s2 1)) unit_)) in
 utest replaceUtestsWithSizeConstraint utestSizeEquality with expected using eqExpr in
 
 let utestSizeEqMultiDim = preprocess
   (nlam_ s1 (tyseq_ (tyseq_ (tyseq_ tyint_))) (nlam_ s2 (tyseq_ (tyseq_ tyint_))
-    (utest_ (length_ (head_ (nvar_ s2))) (length_ (head_ (head_ (nvar_ s1)))) unit_))) in
+    (bind_ (utest_ (length_ (head_ (nvar_ s2))) (length_ (head_ (head_ (nvar_ s1))))) unit_))) in
 let expected =
   nlam_ s1 (tyseq_ tyint_) (nlam_ s2 (tyseq_ tyint_)
-    (ulet_ "" (parallelSizeEquality_ s2 2 s1 3))) in
+    (bind_ (ulet_ "" (parallelSizeEquality_ s2 2 s1 3)) unit_)) in
 utest replaceUtestsWithSizeConstraint utestSizeEqMultiDim with expected using eqExpr in
 
 ()

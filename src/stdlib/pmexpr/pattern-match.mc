@@ -312,7 +312,7 @@ recursive
                          -> PatternMatchState -> Option PatternMatchState =
     use PMExprAst in
     lam bindingIdent. lam params. lam expr. lam state.
-    match expr with TmLet {ident = ident, body = body, inexpr = inexpr} then
+    match expr with TmDecl {decl = DeclLet {ident = ident, body = body}, inexpr = inexpr} then
       let updatedState =
         optionGetOrElse
           (lam. updateVariableDependencies state ident body (None ()))
@@ -337,8 +337,8 @@ recursive
             (matchVariablePattern expr state pvar)
         else None ()
       else None ()
-    else match expr with TmRecLets t then
-      matchAtomicPatterns bindingIdent params t.inexpr state
+    else match expr with TmDecl (x & {decl = DeclRecLets _}) then
+      matchAtomicPatterns bindingIdent params x.inexpr state
     else None ()
 end
 
@@ -363,7 +363,7 @@ let constructLookup : use Ast in PatternMatchState -> Map VarPattern (Name, Expr
 
 let matchPattern =
   use PMExprAst in
-  lam binding : RecLetBinding. lam pattern : Pattern.
+  lam binding : DeclLetRecord. lam pattern : Pattern.
   let initState =
     {{emptyPatternMatchState pattern
         with active = pattern.activePatterns}
@@ -394,7 +394,7 @@ in
 
 let matchBindingsWithPattern : Expr -> Pattern -> [PatternMatchResult] =
   lam recLets. lam pattern.
-  match recLets with TmRecLets {bindings = bindings} then
+  match recLets with TmDecl {decl = DeclRecLets {bindings = bindings}} then
     map (lam binding. matchPattern binding pattern) bindings
   else never
 in
@@ -411,7 +411,7 @@ let f = nameSym "f" in
 let s = nameSym "s" in
 let h = nameSym "h" in
 let t = nameSym "t" in
-let expr = typeCheck (preprocess (nreclets_ [
+let expr = typeCheck (preprocess (bind_ (nreclets_ [
   (map, tyunknown_, nlam_ f (tyarrow_ tyint_ tyint_) (nulam_ s (
     match_ (nvar_ s)
       (pseqtot_ [])
@@ -420,7 +420,7 @@ let expr = typeCheck (preprocess (nreclets_ [
         (pseqedgen_ [npvar_ h] t [])
         (cons_ (app_ (nvar_ f) (head_ (nvar_ s)))
                (appf2_ (nvar_ map) (nvar_ f) (tail_ (nvar_ s))))
-        never_))))])) in
+        never_))))]) unit_)) in
 let mapPat = getMapPattern () in
 let mapPatternMatchResult = matchBindingsWithPattern expr mapPat in
 let fst = optionGetOrElse (lam. never) (get mapPatternMatchResult 0) in
@@ -436,7 +436,7 @@ let acc = nameSym "acc" in
 let s2 = nameSym "s" in
 let h2 = nameSym "h" in
 let t2 = nameSym "t" in
-let expr = preprocess (nreclets_ [
+let expr = preprocess (bind_ (nreclets_ [
   (map2id, tyunknown_, nulam_ acc (nulam_ s (nulam_ s2 (
     match_ (nvar_ s)
       (pseqtot_ [])
@@ -455,7 +455,7 @@ let expr = preprocess (nreclets_ [
             never_)
           never_))
   ))))
-]) in
+]) unit_) in
 let map2Pat = getMap2Pattern () in
 let map2PatternMatchResult = matchBindingsWithPattern expr map2Pat in
 let fst = optionGetOrElse (lam. never) (get map2PatternMatchResult 0) in
@@ -465,7 +465,7 @@ using optionEq eqExpr in
 utest mapSize fst with 19 in
 
 let fold = nameSym "fold" in
-let expr = preprocess (nreclets_ [
+let expr = preprocess (bind_ (nreclets_ [
   (fold, tyunknown_, nulam_ f (nulam_ acc (nulam_ s (
     match_ (nvar_ s)
       (pseqedgen_ [npvar_ h] t [])
@@ -477,7 +477,7 @@ let expr = preprocess (nreclets_ [
         (pseqtot_ [])
         (nvar_ acc)
         never_)))))
-]) in
+]) unit_) in
 let reducePat = getReducePattern () in
 let reducePatternMatchResult = matchBindingsWithPattern expr reducePat in
 let fst = optionGetOrElse (lam. never) (get reducePatternMatchResult 0) in

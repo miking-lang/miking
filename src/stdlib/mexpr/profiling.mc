@@ -197,15 +197,18 @@ let getProfilerReportCode = lam.
 
 lang MExprProfileInstrument = MExprAst + BootParser
   sem collectToplevelFunctions (env : ProfileEnv) =
-  | TmLet t ->
+  | _ -> env
+  | TmDecl x ->
+    collectToplevelFunctions env x.inexpr
+  | TmDecl (x & {decl = DeclLet t}) ->
     let env =
       match t.body with TmLam _ then
         let idx = mapSize env in
         mapInsert t.ident (idx, t.info) env
       else env in
-    collectToplevelFunctions env t.inexpr
-  | TmRecLets t ->
-    let collectBinding : ProfileEnv -> RecLetBinding -> ProfileEnv =
+    collectToplevelFunctions env x.inexpr
+  | TmDecl (x & {decl = DeclRecLets t}) ->
+    let collectBinding : ProfileEnv -> DeclLetRecord -> ProfileEnv =
       lam env. lam binding.
       match binding.body with TmLam _ then
         let idx = mapSize env in
@@ -213,8 +216,7 @@ lang MExprProfileInstrument = MExprAst + BootParser
       else env
     in
     let env = foldl collectBinding env t.bindings in
-    collectToplevelFunctions env t.inexpr
-  | t -> sfold_Expr_Expr collectToplevelFunctions env t
+    collectToplevelFunctions env x.inexpr
 
   sem instrumentProfilingCalls (functionIndex : Int) =
   | TmLam t ->
@@ -223,38 +225,42 @@ lang MExprProfileInstrument = MExprAst + BootParser
     bindall_ [
       ulet_ "" (app_ (var_ "pushCallStack") (int_ functionIndex)),
       ulet_ "tmp" t,
-      ulet_ "" (app_ (var_ "popCallStack") unit_),
-      var_ "tmp"]
+      ulet_ "" (app_ (var_ "popCallStack") unit_)]
+      (var_ "tmp")
 
   sem instrumentProfilingH (env : ProfileEnv) =
-  | TmLet t ->
-    match mapLookup t.ident env with Some (idx, _) then
-      TmLet {{t with body = instrumentProfilingCalls idx t.body}
-                with inexpr = instrumentProfilingH env t.inexpr}
-    else TmLet {t with inexpr = instrumentProfilingH env t.inexpr}
-  | TmRecLets t ->
-    let instrumentBinding : RecLetBinding -> RecLetBinding =
+  | TmDecl (x & {decl = DeclLet t}) ->
+    match mapLookup t.ident env with Some (idx, _)
+    then TmDecl
+      { x with decl = DeclLet {t with body = instrumentProfilingCalls idx t.body}
+      , inexpr = instrumentProfilingH env x.inexpr
+      }
+    else TmDecl {x with inexpr = instrumentProfilingH env x.inexpr}
+  | TmDecl (x & {decl = DeclRecLets t}) ->
+    let instrumentBinding : DeclLetRecord -> DeclLetRecord =
       lam binding.
       match mapLookup binding.ident env with Some (idx, _) then
         {binding with body = instrumentProfilingCalls idx binding.body}
       else binding
-    in
-    TmRecLets {{t with bindings = map instrumentBinding t.bindings}
-                  with inexpr = instrumentProfilingH env t.inexpr}
-  | TmType t -> TmType {t with inexpr = instrumentProfilingH env t.inexpr}
-  | TmConDef t -> TmConDef {t with inexpr = instrumentProfilingH env t.inexpr}
-  | TmUtest t -> TmUtest {t with next = instrumentProfilingH env t.next}
-  | TmExt t -> TmExt {t with inexpr = instrumentProfilingH env t.inexpr}
+    in TmDecl
+    {x with decl = DeclRecLets {t with bindings = map instrumentBinding t.bindings}
+    , inexpr = instrumentProfilingH env x.inexpr
+    }
+  | TmDecl x -> TmDecl {x with inexpr = instrumentProfilingH env x.inexpr}
   | t -> t
 
   sem instrumentProfiling =
   | t ->
     let emptyEnv = mapEmpty nameCmp in
     let env = collectToplevelFunctions emptyEnv t in
-    bindall_ [
-      parseMExprStringKeywordsExn [] (_profilerInitStr env),
-      ulet_ "" (instrumentProfilingH env t),
-      getProfilerReportCode ()]
+    let initDecls =
+      recursive let work = lam acc. lam tm.
+        match tm with TmDecl x
+        then work (snoc acc x.decl) x.inexpr
+        else acc in
+      work [] (parseMExprStringKeywordsExn [] (_profilerInitStr env)) in
+    bindall_ (snoc initDecls (ulet_ "" (instrumentProfilingH env t)))
+      (getProfilerReportCode ())
 end
 
 lang TestLang = MExprProfileInstrument + MExprSym + MExprEval
@@ -274,9 +280,8 @@ let t = bindall_ [
       if_ (leqi_ (var_ "n") (int_ 0))
         (true_)
         (app_ (var_ "nonsense") (subi_ (var_ "n") (int_ 1)))))],
-  ulet_ "f" (ulam_ "x" (app_ (var_ "fact") (addi_ (var_ "x") (int_ 3)))),
-  app_ (var_ "f") (int_ 4)
-] in
+  ulet_ "f" (ulam_ "x" (app_ (var_ "fact") (addi_ (var_ "x") (int_ 3))))]
+  (app_ (var_ "f") (int_ 4)) in
 let t = instrumentProfiling t in
 eval (evalCtxEmpty ()) (symbolize t);
 utest fileExists profilingResultFileName with true in

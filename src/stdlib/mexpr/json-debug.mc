@@ -76,20 +76,20 @@ lang LamToJson = AstToJson + LamAst
     ] )
 end
 
-lang DeclsToJson = AstToJson + MExprAsDecl
+lang DeclToJson = AstToJson + DeclAst
   sem exprToJson =
-  | tm & (TmLet _ | TmRecLets _ | TmType _ | TmConDef _ | TmUtest _ | TmExt _) ->
-    recursive let work = lam acc. lam expr.
-      match exprAsDecl expr with Some (decl, inexpr) then
-        work (snoc acc decl) inexpr
-      else (acc, expr) in
+  | tm & TmDecl x ->
+    recursive let work = lam acc. lam tm.
+      match tm with TmDecl x
+      then work (snoc acc x.decl) x.inexpr
+      else (acc, tm) in
     match work [] tm with (decls, inexpr) in
     JsonObject (mapFromSeq cmpString
       [ ("con", JsonString "TmDecl (merged)")
       , ("decls", JsonArray (map declToJson decls))
       , ("inexpr", exprToJson inexpr)
-      , ("ty", typeToJson (tyTm tm))
-      , ("info", infoToJson (infoTm tm))
+      , ("ty", typeToJson x.ty)
+      , ("info", infoToJson x.info)
       ] )
 end
 
@@ -475,15 +475,14 @@ lang DataKindToJson = AstToJson + DataKindAst
     ] )
 end
 
-lang UseToJson = AstToJson + UseAst
+lang UseToJson = AstToJson + UseDeclAst
   -- TODO(vipa, 2024-05-17): This should probably actually be a Decl,
   -- it's just not a good idea to do a `use` on the top-level right
   -- now because of how includes work.
-  sem exprToJson =
-  | TmUse x -> JsonObject (mapFromSeq cmpString
-    [ ("con", JsonString "TmUse")
+  sem declToJson =
+  | DeclUse x -> JsonObject (mapFromSeq cmpString
+    [ ("con", JsonString "DeclUse")
     , ("ident", nameToJson x.ident)
-    , ("ty", typeToJson x.ty)
     , ("info", infoToJson x.info)
     ] )
 end
@@ -513,7 +512,7 @@ lang TypeToJson = TypeDeclAst + AstToJson
 end
 
 -- DeclRecLets --
-lang RecLetsToJson = RecLetsDeclAst + RecLetsAst + AstToJson
+lang RecLetsToJson = RecLetsDeclAst + RecLetsDeclAst + AstToJson
   sem declToJson =
   | DeclRecLets x -> JsonObject (mapFromSeq cmpString
     [ ("con", JsonString "DeclRecLets")
@@ -597,7 +596,7 @@ lang MExprToJson
   = VarToJson
   + AppToJson
   + LamToJson
-  + DeclsToJson
+  + DeclToJson
   + ConstToJson
   + SeqToJson
   + RecordToJson

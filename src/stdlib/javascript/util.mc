@@ -69,12 +69,12 @@ let getRFR : Name -> RecursiveFunctionRegistry -> Option Name =
 recursive let extractRFR : use Ast in RecursiveFunctionRegistry -> Expr -> RecursiveFunctionRegistry =
   use MExprAst in
   lam rfr : RecursiveFunctionRegistry. lam e.
-  match e with TmRecLets t then
-    let rfr = foldl (lam rfr: RecursiveFunctionRegistry. lam b: RecLetBinding.
+  match e with TmDecl (x & {decl = DeclRecLets t}) then
+    let rfr = foldl (lam rfr: RecursiveFunctionRegistry. lam b: DeclLetRecord.
       match b with { ident = ident, body = body } in
       match body with TmLam _ then (setRFR ident rfr) else rfr
     ) rfr t.bindings in
-    extractRFR rfr t.inexpr
+    extractRFR rfr x.inexpr
   else sfold_Expr_Expr extractRFR rfr e
 end
 

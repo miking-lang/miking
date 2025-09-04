@@ -165,11 +165,11 @@ let eliminateUnusedLetExpressions : use Ast in Expr -> Expr =
   recursive let work = lam acc. lam expr.
     match expr with TmVar {ident = ident} then
       (setInsert ident acc, expr)
-    else match expr with TmLet t then
-      match work acc t.inexpr with (acc, inexpr) in
+    else match expr with TmDecl (x & {decl = DeclLet t}) then
+      match work acc x.inexpr with (acc, inexpr) in
       if setMem t.ident acc then
         let acc = collectVariables acc t.body in
-        (acc, TmLet {t with inexpr = inexpr})
+        (acc, TmDecl {x with inexpr = inexpr})
       else (acc, inexpr)
     else smapAccumL_Expr_Expr work acc expr
   in
@@ -215,7 +215,7 @@ let mapPattern : () -> Pattern =
                    info = info, frozen = false})
         ] in
         let els = substituteVariables subMap els in
-        let els = eliminateUnusedLetExpressions (bind_ els fResultVar) in
+        let els = eliminateUnusedLetExpressions (oldBind_ els fResultVar) in
         let fType = TyArrow {
           from = tyTm headExpr, to = tyTm els, info = infoTm els} in
         let innerAppType = TyArrow {
@@ -308,7 +308,7 @@ let map2Pattern : () -> Pattern =
                    info = info, frozen = false})
         ] in
         let els = substituteVariables subMap els in
-        let els = eliminateUnusedLetExpressions (bind_ els fResultVar) in
+        let els = eliminateUnusedLetExpressions (oldBind_ els fResultVar) in
         TmMap2 {
           f = TmLam {
             ident = x, tyAnnot = tyTm headFstExpr, tyParam = tyTm headFstExpr,
@@ -418,7 +418,7 @@ let reducePattern : () -> Pattern =
       let els = substituteVariables subMap els in
       let fResultVar = TmVar {ident = fResultId, ty = tyTm fResultExpr,
                               info = infoTm fResultExpr, frozen = false} in
-      let els = eliminateUnusedLetExpressions (bind_ els fResultVar) in
+      let els = eliminateUnusedLetExpressions (oldBind_ els fResultVar) in
       let elemTy = tyTm headExpr in
       let accTy = tyTm accExpr in
       let f = TmLam {

@@ -16,24 +16,8 @@ lang MExprLoadRuntime = BootParser + MExprSym + MExprTypeCheck
 
   sem mergeWithHeader : Expr -> Expr -> Expr
   sem mergeWithHeader ast =
-  | TmLet t ->
-    TmLet {t with inexpr = mergeWithHeader ast t.inexpr,
-                  ty = tyTm ast}
-  | TmRecLets t ->
-    TmRecLets {t with inexpr = mergeWithHeader ast t.inexpr,
-                      ty = tyTm ast}
-  | TmType t ->
-    TmType {t with inexpr = mergeWithHeader ast t.inexpr,
-                   ty = tyTm ast}
-  | TmConDef t ->
-    TmConDef {t with inexpr = mergeWithHeader ast t.inexpr,
-                     ty = tyTm ast}
-  | TmUtest t ->
-    TmUtest {t with next = mergeWithHeader ast t.next, ty = tyTm ast}
-  | TmExt t ->
-    TmExt {t with inexpr = mergeWithHeader ast t.inexpr,
-                  ty = tyTm ast}
+  | TmDecl x ->
+    TmDecl {x with inexpr = mergeWithHeader ast x.inexpr, ty = tyTm ast}
   | _ -> ast
 
 end
-

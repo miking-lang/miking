@@ -215,7 +215,7 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
   sem generateHoleConstraints (graph: CFAGraphInit) =
   | _ -> graph
     -- Holes
-  | TmLet { ident = ident, body = TmHole _, info = info} ->
+  | TmDecl {decl = DeclLet { ident = ident, body = TmHole _, info = info}} ->
     match graph with {graphData = graphData} in
     match graphData with Some (HoleCtxInfo {contextMap = contextMap}) then
       let ident = name2intAcc graph.ia info ident in
@@ -226,7 +226,7 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
       let cstr = CstrInit {lhs = av, rhs = ident } in
       { graph with cstrs = cons cstr graph.cstrs }
     else errorSingle [info] "Expected context information"
-  | TmLet { ident = ident, body = TmConst { val = c }, info = info } ->
+  | TmDecl {decl = DeclLet { ident = ident, body = TmConst { val = c }, info = info }} ->
     let arity = constArity c in
     let cstrs =
       if eqi arity 0 then []
@@ -235,7 +235,7 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
                rhs = name2intAcc graph.ia info ident } ]
     in
     { graph with cstrs = concat cstrs graph.cstrs }
-  | TmLet { ident = ident, body = TmApp app, info = info } ->
+  | TmDecl {decl = DeclLet { ident = ident, body = TmApp app, info = info }} ->
     match app.lhs with TmVar l then
       match app.rhs with TmVar r then
         let lhs = name2intAcc graph.ia l.info l.ident in
@@ -248,7 +248,7 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
         { graph with cstrs = concat cstrs graph.cstrs }
       else errorSingle [infoTm app.rhs] "Not a TmVar in application"
     else errorSingle [infoTm app.lhs] "Not a TmVar in application"
-  | TmLet { ident = ident, body = TmIndependent t, info = info} ->
+  | TmDecl {decl = DeclLet { ident = ident, body = TmIndependent t, info = info}} ->
     match t.lhs with TmVar lhs then
       match t.rhs with TmVar rhs then
         let lhs = name2intAcc graph.ia lhs.info lhs.ident in

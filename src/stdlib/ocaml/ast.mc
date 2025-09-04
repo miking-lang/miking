@@ -338,7 +338,7 @@ lang OCamlAst =
   OCamlTopAst +
 
   -- Terms
-  VarAst + LamAst + AppAst + LetAst + RecLetsAst + RecordAst + OCamlMatch + OCamlTuple +
+  VarAst + LamAst + AppAst + LetDeclAst + RecLetsDeclAst + RecordAst + OCamlMatch + OCamlTuple +
   OCamlArray + OCamlData + OCamlRecord + OCamlRecordUpdate + OCamlLabel +
   OCamlLam + PlaceholderAst + 
 

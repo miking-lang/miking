@@ -57,8 +57,18 @@ lang CSE = MExprCmp
           foldl
             (lam acc. lam namedExpr : (Name, Expr).
               match namedExpr with (id, e) then
-                TmLet {ident = id, tyAnnot = tyTm e, tyBody = tyTm e,
-                       body = e, inexpr = acc, ty = tyTm acc, info = infoTm e}
+                TmDecl
+                { decl = DeclLet
+                  { ident = id
+                  , tyAnnot = tyTm e
+                  , tyBody = tyTm e
+                  , body = e
+                  , info = infoTm e
+                  }
+                , ty = tyTm acc
+                , info = infoTm e
+                , inexpr = acc
+                }
               else never)
             t
             exprs)
@@ -158,53 +168,56 @@ lang LamCSE = CSE + LamAst
     else never
 end
 
-lang LetCSE = CSE + LetAst
+lang LetCSE = CSE + LetDeclAst
   sem cseSearchH (pos : ProgramPos) (env : CSESearchEnv) =
-  | TmLet t ->
+  | TmDecl { decl = DeclLet t, inexpr = inexpr } ->
     let env : CSESearchEnv = cseSearch pos env t.body in
     let inexprPos = snoc pos env.index in
-    cseSearch inexprPos env t.inexpr
+    cseSearch inexprPos env inexpr
 
   sem cseApplyH (env : CSEApplyEnv) =
-  | TmLet t ->
+  | TmDecl (d & { decl = DeclLet t, inexpr = inexpr }) ->
     match cseApply env t.body with (thnEnv, body) then
-      match cseApply thnEnv t.inexpr with (env, inexpr) then
+      match cseApply thnEnv inexpr with (env, inexpr) then
         let inexpr = insertSubexpressionDeclarations thnEnv inexpr in
-        (env, TmLet {{t with body = body}
-                        with inexpr = inexpr})
+        ( env
+        , TmDecl {d with decl = DeclLet {t with body = body}, inexpr = inexpr}
+        )
       else never
     else never
 end
 
-lang RecLetsCSE = CSE + RecLetsAst
+lang RecLetsCSE = CSE + RecLetsDeclAst
   sem cseSearchH (pos : ProgramPos) (env : CSESearchEnv) =
-  | TmRecLets t ->
+  | TmDecl { decl = DeclRecLets t, inexpr = inexpr } ->
     let recursiveIdents =
       foldl
-        (lam acc. lam binding : RecLetBinding. setInsert binding.ident acc)
+        (lam acc. lam binding : DeclLetRecord. setInsert binding.ident acc)
         env.recursiveIdents
         t.bindings in
     let bindEnv =
       foldl
-        (lam acc. lam binding : RecLetBinding.
+        (lam acc. lam binding : DeclLetRecord.
           cseSearch pos acc binding.body)
         {env with recursiveIdents = recursiveIdents}
         t.bindings in
-    cseSearch pos bindEnv t.inexpr
+    cseSearch pos bindEnv inexpr
 
   sem cseApplyH (env : CSEApplyEnv) =
-  | TmRecLets t ->
-    let applyBinding : CSEApplyEnv -> RecLetBinding
-                    -> (CSEApplyEnv, RecLetBinding) =
+  | TmDecl (d & {decl = DeclRecLets t, inexpr = inexpr}) ->
+    let applyBinding : CSEApplyEnv -> DeclLetRecord
+                    -> (CSEApplyEnv, DeclLetRecord) =
       lam env. lam binding.
       match cseApply env binding.body with (env, body) then
         (env, {binding with body = body})
       else never
     in
     match mapAccumL applyBinding env t.bindings with (inexprEnv, bindings) then
-      match cseApply inexprEnv t.inexpr with (env, inexpr) then
+      match cseApply inexprEnv inexpr with (env, inexpr) then
         let inexpr = insertSubexpressionDeclarations inexprEnv inexpr in
-        (env, TmRecLets {{t with bindings = bindings} with inexpr = inexpr})
+        ( env
+        , TmDecl {d with decl = DeclRecLets {t with bindings = bindings}, inexpr = inexpr}
+        )
       else never
     else never
 end
@@ -259,23 +272,23 @@ lang MExprCSE =
     TmLam {t with body = cseFunction true t.body}
   | t -> if inLambda then cse t else t
 
-  -- Runs CSE globally within the body of each top-level function.
-  sem cseGlobal =
-  | TmLet t ->
-    TmLet {{t with body = cseFunction false t.body}
-              with inexpr = cseGlobal t.inexpr}
-  | TmRecLets t ->
+  sem cseDecl =
+  | DeclLet t -> DeclLet {t with body = cseFunction false t.body}
+  | DeclRecLets t ->
     let bindings =
       map
-        (lam bind : RecLetBinding.
+        (lam bind : DeclLetRecord.
           {bind with body = cseFunction false bind.body})
         t.bindings in
-    TmRecLets {{t with bindings = bindings}
-                  with inexpr = cseGlobal t.inexpr}
-  | TmType t -> TmType {t with inexpr = cseGlobal t.inexpr}
-  | TmConDef t -> TmConDef {t with inexpr = cseGlobal t.inexpr}
-  | TmUtest t -> TmUtest {t with next = cseGlobal t.next}
-  | TmExt t -> TmExt {t with inexpr = cseGlobal t.inexpr}
+    DeclRecLets {t with bindings = bindings}
+  | d -> d
+
+  -- Runs CSE globally within the body of each top-level function.
+  sem cseGlobal =
+  | TmDecl x ->
+    let decl = cseDecl x.decl in
+    let inexpr = cseGlobal x.inexpr in
+    TmDecl {x with decl = decl, inexpr = inexpr}
   | t -> t
 end
 
@@ -286,8 +299,8 @@ mexpr
 use TestLang in
 
 recursive let withoutTypes = lam e.
-  match e with TmType t then
-    withoutTypes t.inexpr
+  match e with TmDecl {decl = DeclType _, inexpr = inexpr} then
+    withoutTypes inexpr
   else e
 in
 
@@ -302,9 +315,9 @@ let t = preprocess (bindall_ [
     ("x", ulam_ "a" (muli_ commonExpr commonExpr)),
     ("x", ulam_ "a" commonExpr)],
   ulet_ "x" (muli_ commonExpr commonExpr),
-  ulet_ "x" (ulam_ "a" commonExpr),
+  ulet_ "x" (ulam_ "a" commonExpr)]
   unit_
-]) in
+) in
 let expected = preprocess (bindall_ [
   ulet_ "x" (ulam_ "a" (
     bind_ (ulet_ "t" commonExpr) (muli_ (var_ "t") (var_ "t")))),
@@ -312,40 +325,40 @@ let expected = preprocess (bindall_ [
     ("x", ulam_ "a" (bind_ (ulet_ "t" commonExpr) (muli_ (var_ "t") (var_ "t")))),
     ("x", ulam_ "a" commonExpr)],
   ulet_ "x" (muli_ commonExpr commonExpr),
-  ulet_ "x" (ulam_ "a" commonExpr),
+  ulet_ "x" (ulam_ "a" commonExpr)]
   unit_
-]) in
+) in
 utest cseGlobal t with expected using eqExpr in
 
 let t = preprocess (muli_ commonExpr commonExpr) in
-let expected = preprocess (bindall_ [
-  ulet_ "t" commonExpr,
-  muli_ (var_ "t") (var_ "t")]) in
+let expected = preprocess (bind_
+  (ulet_ "t" commonExpr)
+  (muli_ (var_ "t") (var_ "t"))) in
 utest cse t with expected using eqExpr in
 
-let t = preprocess (ulet_ "x" (muli_ commonExpr commonExpr)) in
+let t = preprocess (bind_ (ulet_ "x" (muli_ commonExpr commonExpr)) unit_) in
 let expected = preprocess (bindall_ [
   ulet_ "t" commonExpr,
-  ulet_ "x" (muli_ (var_ "t") (var_ "t"))]) in
+  ulet_ "x" (muli_ (var_ "t") (var_ "t"))] unit_) in
 utest cse t with expected using eqExpr in
 
 let t = preprocess (bindall_ [
   ulet_ "x" (muli_ commonExpr commonExpr),
-  ulet_ "y" (addi_ commonExpr commonExpr),
-  addi_ (var_ "x") (var_ "y")]) in
+  ulet_ "y" (addi_ commonExpr commonExpr)]
+  (addi_ (var_ "x") (var_ "y"))) in
 let expected = preprocess (bindall_ [
   ulet_ "t" commonExpr,
   ulet_ "x" (muli_ (var_ "t") (var_ "t")),
-  ulet_ "y" (addi_ (var_ "t") (var_ "t")),
-  addi_ (var_ "x") (var_ "y")]) in
+  ulet_ "y" (addi_ (var_ "t") (var_ "t"))]
+  (addi_ (var_ "x") (var_ "y"))) in
 utest cse t with expected using eqExpr in
 
-let t = preprocess (ureclets_ [
-  ("a", ulam_ "x" (addi_ (muli_ (var_ "x") commonExpr) commonExpr))]) in
-let expected = preprocess (ureclets_ [
-    ("a", ulam_ "x" (bindall_ [
-      ulet_ "t" commonExpr,
-      addi_ (muli_ (var_ "x") (var_ "t")) (var_ "t")]))]) in
+let t = preprocess (bind_ (ureclets_ [
+  ("a", ulam_ "x" (addi_ (muli_ (var_ "x") commonExpr) commonExpr))]) unit_) in
+let expected = preprocess (bind_ (ureclets_ [
+    ("a", ulam_ "x" (bind_
+      (ulet_ "t" commonExpr)
+      (addi_ (muli_ (var_ "x") (var_ "t")) (var_ "t"))))]) unit_) in
 utest cse t with expected using eqExpr in
 
 let t = preprocess (
@@ -361,29 +374,29 @@ let t = preprocess (
   if_ (eqi_ (int_ 0) (int_ 0))
     (muli_ commonExpr commonExpr)
     (addi_ commonExpr commonExpr)) in
-let expected = preprocess (bindall_ [
-  ulet_ "t" commonExpr,
-  if_ (eqi_ (int_ 0) (int_ 0))
+let expected = preprocess (bind_
+  (ulet_ "t" commonExpr)
+  (if_ (eqi_ (int_ 0) (int_ 0))
     (muli_ (var_ "t") (var_ "t"))
-    (addi_ (var_ "t") (var_ "t"))]) in
+    (addi_ (var_ "t") (var_ "t")))) in
 utest cse t with expected using eqExpr in
 
 let t = preprocess (
   if_ (eqi_ (subi_ commonExpr commonExpr) (int_ 0))
     (int_ 1)
     (int_ 2)) in
-let expected = preprocess (bindall_ [
-  ulet_ "t" commonExpr,
-  if_ (eqi_ (subi_ (var_ "t") (var_ "t")) (int_ 0))
+let expected = preprocess (bind_
+  (ulet_ "t" commonExpr)
+  (if_ (eqi_ (subi_ (var_ "t") (var_ "t")) (int_ 0))
     (int_ 1)
-    (int_ 2)]) in
+    (int_ 2))) in
 utest cse t with expected using eqExpr in
 
 -- Partial applications are not eliminated (in this case, 'muli 2 _')
 let t = preprocess (bindall_ [
   ulet_ "x" (muli_ (int_ 2) (int_ 3)),
-  ulet_ "y" (muli_ (int_ 2) (int_ 4)),
-  addi_ (var_ "x") (var_ "y")]) in
+  ulet_ "y" (muli_ (int_ 2) (int_ 4))]
+  (addi_ (var_ "x") (var_ "y"))) in
 utest cse t with t using eqExpr in
 
 let t = preprocess (bindall_ [
@@ -391,33 +404,31 @@ let t = preprocess (bindall_ [
   condef_ "CInt" (tyarrow_ tyint_ (tycon_ "Num")),
   ulet_ "x" (int_ 4),
   ulet_ "y" (conapp_ "CInt" (var_ "x")),
-  ulet_ "z" (conapp_ "CInt" (var_ "x")),
-  var_ "y",
-  uunit_
-]) in
+  ulet_ "z" (conapp_ "CInt" (var_ "x"))]
+  (utuple_ [var_ "y", uunit_])
+) in
 let expected = preprocess (bindall_ [
   type_ "Num" [] (tyvariant_ []),
   condef_ "CInt" (tyarrow_ tyint_ (tycon_ "Num")),
   ulet_ "x" (int_ 4),
   ulet_ "t" (conapp_ "CInt" (var_ "x")),
   ulet_ "y" (var_ "t"),
-  ulet_ "z" (var_ "t"),
-  var_ "y",
-  uunit_
-]) in
+  ulet_ "z" (var_ "t")]
+  (utuple_ [var_ "y", uunit_])
+) in
 utest cse t with expected using eqExpr in
 
 let t = preprocess (bindall_ [
   ulet_ "x" (urecord_ [("a", int_ 1), ("b", char_ 'x')]),
-  ulet_ "y" (urecord_ [("b", char_ 'x'), ("a", int_ 1)]),
+  ulet_ "y" (urecord_ [("b", char_ 'x'), ("a", int_ 1)])]
   unit_
-]) in
+) in
 let expected = preprocess (bindall_ [
   ulet_ "t" (urecord_ [("a", int_ 1), ("b", char_ 'x')]),
   ulet_ "x" (var_ "t"),
-  ulet_ "y" (var_ "t"),
+  ulet_ "y" (var_ "t")]
   unit_
-]) in
+) in
 utest cse t with expected using eqExpr in
 
 let t = preprocess (ulam_ "a" (ulam_ "b" (
@@ -428,37 +439,37 @@ let t = preprocess (ulam_ "a" (ulam_ "b" (
       (ptuple_ [pvarw_, pint_ 1])
       (int_ 1)
       (int_ 3))))) in
-let expected = preprocess (ulam_ "a" (ulam_ "b" (bindall_ [
-  ulet_ "t" (utuple_ [var_ "a", var_ "b"]),
-  match_ (var_ "t")
+let expected = preprocess (ulam_ "a" (ulam_ "b" (bind_
+  (ulet_ "t" (utuple_ [var_ "a", var_ "b"]))
+  (match_ (var_ "t")
     (ptuple_ [pint_ 1, pvarw_])
     (int_ 2)
     (match_ (var_ "t")
       (ptuple_ [pvarw_, pint_ 1])
       (int_ 1)
-      (int_ 3))]))) in
+      (int_ 3)))))) in
 utest cse t with expected using eqExpr in
 
-let t = preprocess (bindall_ [
-  ureclets_ [("f", ulam_ "x" commonExpr)],
-  commonExpr]) in
+let t = preprocess (bind_
+  (ureclets_ [("f", ulam_ "x" commonExpr)])
+  commonExpr) in
 let expected = preprocess (bindall_ [
   ulet_ "t" commonExpr,
-  ureclets_ [("f", ulam_ "x" (var_ "t"))],
-  var_ "t"]) in
+  ureclets_ [("f", ulam_ "x" (var_ "t"))]]
+  (var_ "t")) in
 utest cse t with expected using eqExpr in
 
 let t = preprocess (bindall_ [
   ulet_ "k" commonExpr,
-  ureclets_ [("f", ulam_ "x" commonExpr)],
+  ureclets_ [("f", ulam_ "x" commonExpr)]]
   unit_
-]) in
+) in
 let expected = preprocess (bindall_ [
   ulet_ "t" commonExpr,
   ulet_ "k" (var_ "t"),
-  ureclets_ [("f", ulam_ "x" (var_ "t"))],
+  ureclets_ [("f", ulam_ "x" (var_ "t"))]]
   unit_
-]) in
+) in
 utest cse t with expected using eqExpr in
 
 let t = preprocess (
@@ -478,14 +489,14 @@ let expected = preprocess (if_ true_
     ulet_ "x"
       (if_ true_
          (var_ "t")
-         (var_ "t")),
-    int_ 0
-  ])
-  (bindall_ [
-    ulet_ "t" commonExpr,
+         (var_ "t"))]
+    (int_ 0)
+  )
+  (bind_
+    (ulet_ "t" commonExpr)
     (if_ true_
       (var_ "t")
-      (var_ "t"))])) in
+      (var_ "t")))) in
 utest cse t with expected using eqExpr in
 
 -- Ignore subexpressions that are applications of recursive bindings
@@ -494,8 +505,8 @@ let t = preprocess (bindall_ [
     ("f", ulam_ "x" (var_ "x"))
   ],
   ulet_ "x" (app_ (var_ "f") (int_ 3)),
-  ulet_ "y" (app_ (var_ "f") (int_ 3)),
-  unit_]) in
+  ulet_ "y" (app_ (var_ "f") (int_ 3))]
+  unit_) in
 utest cse t with t using eqExpr in
 
 ()
