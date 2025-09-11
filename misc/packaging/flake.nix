@@ -20,7 +20,7 @@
           devShells.default = pkgs.mkShell {
             name = "Miking dev shell";
             inputsFrom = [ packages.miking-lib packages.miking-unwrapped ];
-            buildInputs = [ pkgs.tup pkgs.ocamlformat ];
+            buildInputs = [ pkgs.tup pkgs.ocamlformat_0_24_1 ];
           };
         };
     in
