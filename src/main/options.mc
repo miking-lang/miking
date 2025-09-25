@@ -1,6 +1,7 @@
 include "arg.mc"
 include "common.mc"
 include "options-type.mc"
+include "docgen/options/docgen-options.mc"
 include "tuning/tune-options.mc"
 
 -- Default values for options
@@ -40,6 +41,7 @@ let optionsDefault : Options = {
   disableJsTCO = false,
   output = None (),
   tuneOptions = tuneOptionsDefault,
+  docgenOptions = docGenOptionsDefault,    
   mlangPipeline = false,
   experimentalRecords = false,
   disableStrictSumExtension = false

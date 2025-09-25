@@ -13,6 +13,8 @@ include "run.mc"
 include "assoc.mc"
 include "options.mc"
 include "options-config.mc"
+include "docgen.mc"
+include "docgen-config.mc"
 include "tune.mc"
 include "tune-config.mc"
 
@@ -29,6 +31,7 @@ Commands:
   run        Combines eval and compile, to run the program as fast as possible
   tune       Tunes a program with holes
   syn        Run the built-in parser generator
+  docgen     Generates the documentation of the project
 
 If no command is given, the file will be executed using the run command
 and all arguments after the file are arguments to the .mc executed file.
@@ -83,6 +86,7 @@ let commandsMap : [(String, SubConfig)] = map (lam c : SubConfig. (c.name, c))
 , {name = "compile", cmd = compile, config = optionsConfig}
 , {name = "tune", cmd = tune, config = tuneOptionsConfig}
 , {name = "syn", cmd = parserGen, config = optionsConfig}
+, {name = "docgen", cmd = docgen, config = docGenOptionsConfig}
 ] in
 
 -- Print the usage message and exit.
