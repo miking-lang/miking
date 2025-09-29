@@ -33,22 +33,22 @@ let label : Logger -> ObjectTree -> MAst -> ObjectTree =
     recursive let labelRec : TypeStreamContext -> String -> Option LangContext -> ObjectTree -> LabelRecRes =
         lam ctx. lam fileName. lam langContext. lam tree.
     
-        type FoldRes = { ctx : TypeStreamContext, sons: [ObjectTree], langContext : Option LangContext } in
-        let foldSons: [ObjectTree] -> Option LangContext -> TypeStreamContext -> FoldRes =
-            lam sons. lam langContext. lam ctx.
+        type FoldRes = { ctx : TypeStreamContext, children: [ObjectTree], langContext : Option LangContext } in
+        let foldChildren: [ObjectTree] -> Option LangContext -> TypeStreamContext -> FoldRes =
+            lam children. lam langContext. lam ctx.
                 let fRes = foldl (
                     lam a: FoldRes. lam s: ObjectTree.
                     match labelRec a.ctx fileName a.langContext s with { ctx = ctx, tree = tree, langContext = langContext } in
-                    { ctx = ctx, sons = cons tree a.sons, langContext = langContext }
-                ) { ctx = ctx, langContext = langContext, sons = [] } sons in
-                { fRes with sons = reverse fRes.sons } in
+                    { ctx = ctx, children = cons tree a.children, langContext = langContext }
+                ) { ctx = ctx, langContext = langContext, children = [] } children in
+                { fRes with children = reverse fRes.children } in
     
         let default = { tree = tree, ctx = ctx, langContext = langContext } in
-        let buildRes = lam obj. lam ctx. lam langContext. lam sons. lam ty.
+        let buildRes = lam obj. lam ctx. lam langContext. lam children. lam ty.
             let ty = match ty with Some t then Some (removeMetaVarType t) else None {} in
             {
                     tree = ObjectNode {
-                            sons = sons,
+                            children = children,
                             obj = objSetType obj ty
                             },
                     ctx = ctx,
@@ -56,22 +56,22 @@ let label : Logger -> ObjectTree -> MAst -> ObjectTree =
                 }
         in
     
-        match tree with ObjectNode { obj = { kind = kind, name = name, namespace = namespace } & obj, sons = sons } then
+        match tree with ObjectNode { obj = { kind = kind, name = name, namespace = namespace } & obj, children = children } then
             let warn = lam name. labelingWarn (join ["Found a typeless token in ", fileName, " with name ", name, "."]) in
             switch kind
             case ObjLet {} then
                 match typeStreamNext name ctx with { t = t, ctx = ctx } in
                 (match t with None {} then warn name else ());
-                match foldSons sons (None {}) ctx with { ctx = ctx, sons = sons} in
-               buildRes obj ctx langContext sons t
+                match foldChildren children (None {}) ctx with { ctx = ctx, children = children} in
+               buildRes obj ctx langContext children t
             case ObjSem {} then
                 match langContext with Some { langName = langName, semMap = semMap } then
                     let prefix = join ["v", langName, "_"] in
                     let name = concat prefix name in
                     match hmLookup name semMap with Some { t = t, ctx = tmpCtx } then
-                        match foldSons sons (None {}) tmpCtx with { ctx = tmpCtx, sons = sons} in
+                        match foldChildren children (None {}) tmpCtx with { ctx = tmpCtx, children = children} in
                         let semMap = hmInsert name { ctx = tmpCtx, t = t } semMap in
-                        buildRes obj ctx (Some { langName = langName, semMap = semMap }) sons (Some t)        
+                        buildRes obj ctx (Some { langName = langName, semMap = semMap }) children (Some t)        
                     else
                         let updateLangContext = lam semMap. lam skipped.
                             let semMap =  foldl (lam semMap. lam skip.
@@ -84,32 +84,32 @@ let label : Logger -> ObjectTree -> MAst -> ObjectTree =
                         case { t = Some t, ctx = ctx, skipped = skipped } then
                             match typeStreamPop ctx with { ctx = ctx, ast = ast } in
                             let tmpCtx = typeStreamFromExpr ast in
-                            match foldSons sons (None {}) tmpCtx with { ctx = tmpCtx, sons = sons} in
+                            match foldChildren children (None {}) tmpCtx with { ctx = tmpCtx, children = children} in
                             let semMap = hmInsert name { t = t, ctx = tmpCtx } semMap in
-                            buildRes obj ctx (updateLangContext semMap skipped) sons (Some t)    
+                            buildRes obj ctx (updateLangContext semMap skipped) children (Some t)    
                         case { t = None {}, ctx = ctx, skipped = skipped } then
                             warn name;
-                            buildRes obj ctx (updateLangContext semMap skipped) sons (None {})
+                            buildRes obj ctx (updateLangContext semMap skipped) children (None {})
                         end                    
                 else
                     labelingWarn "Lang context in None, should never happend while labeling a Sem"; default
             case ObjLang {} then
                 let langContext = Some { langName = name, semMap = hashmapEmpty () } in
-                match foldSons sons langContext ctx  with { ctx = ctx, sons = sons } in
-                buildRes obj ctx (None {}) sons (None {})
+                match foldChildren children langContext ctx  with { ctx = ctx, children = children } in
+                buildRes obj ctx (None {}) children (None {})
             case ObjInclude { pathInFile = pathInFile } then
-                switch sons
+                switch children
                 case [program] then    
                     log (concat "Labeling in" namespace);
                     match labelRec ctx pathInFile (None {}) program with { ctx = ctx, tree = tree } in
                     log (concat namespace " is labeled");
                     buildRes obj ctx langContext [tree] (None {})
                 case [] then default
-                case _ then labelingWarn "Include objects should all have 0 or 1 son."; default
+                case _ then labelingWarn "Include objects should all have 0 or 1 child."; default
                 end
             case _ then
-                match foldSons sons (None {}) ctx with { ctx = ctx, sons = sons} in
-                buildRes obj ctx langContext sons (None {})            
+                match foldChildren children (None {}) ctx with { ctx = ctx, children = children} in
+                buildRes obj ctx langContext children (None {})            
             end
         else default
     in

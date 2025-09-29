@@ -83,11 +83,11 @@ include "./recursive-stream.mc"
 include "../../mast-gen/mast.mc"
 
 -- Holds the MAST and the recursive data stream used during lexing.
-type LexingCtx = { ast: MAst, recursiveDataStream: RecursiveDataStream }
+type LexingCtx = { ast: MAst, rds: use RecursiveDataStream in RDS }
 
 -- Creates a new lexing context from a MAST.
-let lexingCtxNew: MAst -> LexingCtx = lam ast.
-    { ast = ast, recursiveDataStream = createRecursiveDataStream ast.expr }
+let lexingCtxNew: MAst -> LexingCtx = use RecursiveDataStream in lam ast.
+    { ast = ast, rds = createRDS ast.expr }
 
 -- A list of tokens paired with their position in the source file.
 type TokenStream = use TokenReader in [(Token, Pos)]
@@ -96,7 +96,7 @@ type TokenStream = use TokenReader in [(Token, Pos)]
 type LexOutput = { stream: TokenStream, ctx: LexingCtx }
 
 -- Lexical analysis: converts a raw source string into a stream of (token, position) pairs.
-let lex : use TokenReader in LexingCtx -> String -> LexOutput = use TokenReader in lam ctx. lam stream.
+let lex : use TokenReader in LexingCtx -> String -> LexOutput = use TokenReader in use RecursiveDataStream in lam ctx. lam stream.
     recursive let nthWord : String -> Int -> String = lam stream. lam n.
         match next stream pos0 with { stream = stream, token = token } in
         switch token
@@ -118,18 +118,18 @@ let lex : use TokenReader in LexingCtx -> String -> LexOutput = use TokenReader 
              let default = (stack, token, ctx, switchCount) in
              let switchRes = switch token
                  case TokenWord { content = "recursive" } then
-                     match recursiveDataStreamNext ctx.recursiveDataStream with
+                     match rdsNext ctx.rds with
                      { inCount = inCount, stream = newStream } in
-                         (cons inCount stack, token, { ctx with recursiveDataStream = newStream }, switchCount)
+                         (cons inCount stack, token, { ctx with rds = newStream }, switchCount)
                  case TokenWord { content = "lang" } then
                      let semStream = getSemMap stream in
                      match nthWord stream 0 with langName in
-                     let stream = recursiveDataStreamLang ctx.recursiveDataStream langName semStream in
-                     (stack, token, { ctx with recursiveDataStream = stream }, switchCount)
+                     let stream = rdsLang ctx.rds langName semStream in
+                     (stack, token, { ctx with rds = stream }, switchCount)
                  case TokenWord { content = "sem" } then
                      match nthWord stream 0 with semName in
-                     let stream = recursiveDataStreamSem ctx.recursiveDataStream semName in
-                     (stack, token, { ctx with recursiveDataStream = stream }, switchCount)
+                     let stream = rdsSem ctx.rds semName in
+                     (stack, token, { ctx with rds = stream }, switchCount)
                  case TokenWord { content = "match" | "case" | "if" | "use" } then
                       let stack = match stack with [h] ++ t then cons (addi 1 h) t else stack in
                       (stack, token, ctx, switchCount)

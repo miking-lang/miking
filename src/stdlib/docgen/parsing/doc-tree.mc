@@ -21,7 +21,7 @@ con DocTreeLeaf : use TokenReader in use BreakerChooser in { token: Token, state
 
 -- A code block node, representing a structural block (e.g., a `let ... in`)
 con DocTreeNode : use TokenReader in use BreakerChooser in {
-    sons: [DocTree], -- Subtree of this node
+    children: [DocTree], -- Subtree of this node
     token: Token,    -- Token that started the block (e.g. a `Word "let"`)
     state: State,    -- State after encountering this node
     pos: Pos         -- Position of the node (x, y)
@@ -52,9 +52,9 @@ let displayTree : (DocTree -> ()) = use TokenReader in use BreakerChooser in lam
     -- Recursive printer with depth tracking
     recursive let displayTreeIndented = lam tree. lam depth.
         switch tree
-        case DocTreeNode { sons = sons, token = token, state = state } then
+        case DocTreeNode { children = children, token = token, state = state } then
             printLn (join [indentString depth, "Node (", toString state, ")"]);
-            iter (lam child. displayTreeIndented child (addi depth 1)) sons
+            iter (lam child. displayTreeIndented child (addi depth 1)) children
         case DocTreeLeaf { token = token, state = state } then
             -- Skip separators and EOF for cleaner output
             match token with TokenSeparator {} | TokenEof {} then () else 

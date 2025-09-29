@@ -148,7 +148,7 @@ let topLvlBreak = ["lang", "mexpr"]
 let topLvlAnyBreak = concat topLvlBreak ["let", "recursive", "con", "type", "mexpr", "utest"]
 
 -- Same as topLvlBreak, but when the block could be nested and thus may also end with "in".
-let innerCandidateBreak = concat ["in", "#in"] topLvlBreak
+let innerCandidateBreak = concat ["in", "#in", "#end"] topLvlBreak
 
 -- Same as topLvlAnyBreak, but when the block could be nested and thus may also end with "in".
 let innerCandidateAnyBreak = cons "in" topLvlAnyBreak

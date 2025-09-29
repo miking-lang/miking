@@ -25,34 +25,34 @@ include "../global/util.mc"
 -- sem semX = | x -> addi x 1
 --
 -- Since only the last sem remains, the previous documentation would be lost.
-let removeDoubleNames : [RenderingData] -> [RenderingData] = lam sons.
-    type MergeFoldArg = { doc: String, prev: String, sons: [RenderingData] } in
+let removeDoubleNames : [RenderingData] -> [RenderingData] = lam children.
+    type MergeFoldArg = { doc: String, prev: String, children: [RenderingData] } in
     -- Merging the documentations of consecutive same elements.
     let merged = foldl
     (
-        lam arg. lam son.
-        match arg with { doc = doc, prev = prev, sons = sons } in
-        let namespace = objNamespace son.obj in
+        lam arg. lam child.
+        match arg with { doc = doc, prev = prev, children = children } in
+        let namespace = objNamespace child.obj in
         if eqString namespace prev then
-           let doc = concat doc (objDoc son.obj) in
-           let son = { son with obj = objWithDoc son.obj doc } in
-           { arg with doc = doc, sons = cons son sons }
+           let doc = concat doc (objDoc child.obj) in
+           let child = { child with obj = objWithDoc child.obj doc } in
+           { arg with doc = doc, children = cons child children }
         else
-           { arg with doc = objDoc son.obj, sons = cons son sons, prev = namespace }
+           { arg with doc = objDoc child.obj, children = cons child children, prev = namespace }
         
-    ) { doc = "", prev = "", sons = [] } sons in
+    ) { doc = "", prev = "", children = [] } children in
 
-    type SanitizeFoldArg = { saw: HashMap String (), sons: [RenderingData] } in
+    type SanitizeFoldArg = { saw: HashMap String (), children: [RenderingData] } in
     -- Removing double names
     let sanitized =  foldl
     (
-        lam arg. lam son.
-        match arg with { saw = saw, sons = sons } in
-        let namespace = objNamespace son.obj in
+        lam arg. lam child.
+        match arg with { saw = saw, children = children } in
+        let namespace = objNamespace child.obj in
         match hmLookup namespace saw with Some _ then arg
-        else { sons = cons son sons, saw = hmInsert namespace () saw }
-    ) { sons = [], saw = hashmapEmpty () } merged.sons in
-    sanitized.sons
+        else { children = cons child children, saw = hmInsert namespace () saw }
+    ) { children = [], saw = hashmapEmpty () } merged.children in
+    sanitized.children
         
 
 
@@ -61,7 +61,7 @@ let removeDoubleNames : [RenderingData] -> [RenderingData] = lam sons.
 --
 -- Post-processes a list of `RenderingData` nodes to attach unit tests to their parent
 -- documentation blocks.
--- - Iterates through children (`sons`).
+-- - Iterates through children (`children`).
 -- - Buffers any `RenderingData` elements that correspond to test code.
 -- - When a new non-test block (`current`) is encountered, merges the buffered tests
 --   into that block by:
@@ -71,14 +71,14 @@ let removeDoubleNames : [RenderingData] -> [RenderingData] = lam sons.
 --
 -- Returns: the transformed list of `RenderingData`, where test blocks are folded into
 -- the corresponding parent documentation block.
-let injectTests : [RenderingData] -> [RenderingData] = use ObjectKinds in lam sons.
+let injectTests : [RenderingData] -> [RenderingData] = use ObjectKinds in lam children.
     type Arg = { current: Option RenderingData, acc: [RenderingData], tests: [RenderingData] } in
 
     -- - Takes the accumulated list, the current block, and buffered tests.
     -- - Extracts the "lastRow" of the last test, trimming trailing comments and empty lines.
     -- - Builds the final `tests` and `rowTests` strings by concatenating buffered test code.
     -- - Produces a new `RenderingData` with its tests attached, then pushes it into the accumulator.
-    let pushSonInAcc: [RenderingData] -> RenderingData -> [RenderingData] -> [RenderingData] = lam acc. lam current. lam tests.
+    let pushChildInAcc: [RenderingData] -> RenderingData -> [RenderingData] -> [RenderingData] = lam acc. lam current. lam tests.
         let testsStr: (String, String) =
             match tests with [last] ++ tests then
                 let lastRow = last.row in
@@ -103,27 +103,27 @@ let injectTests : [RenderingData] -> [RenderingData] = use ObjectKinds in lam so
         join [tests, [current], acc]
     in
                     
-    let foldRes: Arg = foldl (lam arg. lam son.
+    let foldRes: Arg = foldl (lam arg. lam child.
         match arg with { current = current, acc = acc, tests = tests } in
-        let isUtest = match objKind son.obj with ObjUtest {} then true else false in
+        let isUtest = match objKind child.obj with ObjUtest {} then true else false in
         switch current
         case Some current then
-             if isUtest then { arg with tests = cons son tests }
-             else { arg with current = Some son, tests = [], acc = pushSonInAcc acc current tests }
+             if isUtest then { arg with tests = cons child tests }
+             else { arg with current = Some child, tests = [], acc = pushChildInAcc acc current tests }
         case None {} then
-             if isUtest then { arg with acc = cons son acc }
-             else { arg with current =  Some son }
+             if isUtest then { arg with acc = cons child acc }
+             else { arg with current =  Some child }
         end
-    ) { current = None {}, acc = [], tests = [] } sons
+    ) { current = None {}, acc = [], tests = [] } children
     in
     
-    let sons = switch foldRes.current
-        case Some current then pushSonInAcc foldRes.acc current foldRes.tests
+    let children = switch foldRes.current
+        case Some current then pushChildInAcc foldRes.acc current foldRes.tests
         case None {} then foldRes.acc
         end
     in
     
-    reverse sons
+    reverse children
 
 -- ## RenderingDataSet
 --
@@ -144,34 +144,34 @@ type RenderingDataSet = {
 }
 
 -- Constructs a `RenderingDataSet` from:
--- - A list of rendered children (`sons`).
+-- - A list of rendered children (`children`).
 -- - Recursive block data (`recDatas`), extracted earlier.
-let buildSet: [RenderingData] -> [[RenderingData]] -> RenderingDataSet = use ObjectKinds in lam sons. lam recDatas.
+let buildSet: [RenderingData] -> [[RenderingData]] -> RenderingDataSet = use ObjectKinds in lam children. lam recDatas.
     recursive
-    let buildSet = lam set. lam sons. lam recDatas.
-        switch sons
-        case [son] ++ sons then
-            let switchRes = switch son.obj.kind
-            case ObjUse {} then ({ set with sUse = cons son.obj set.sUse }, recDatas)
-            case ObjLet {} then ({ set with sLet = cons son set.sLet }, recDatas)
-            case ObjLang {} then ({ set with sLang = cons son set.sLang }, recDatas)
-            case ObjSem {} then ({ set with sSem = cons son set.sSem }, recDatas)
-            case ObjSyn {} then ({ set with sSyn = cons son set.sSyn }, recDatas)
-            case ObjCon {} then ({ set with sCon = cons son set.sCon }, recDatas)
-            case ObjMexpr {} then ({ set with sMexpr = cons son set.sMexpr }, recDatas)
-            case ObjType {} then ({ set with sType = cons son set.sType }, recDatas)
-            case ObjUtest {} then ({ set with sUtest = cons son set.sUtest }, recDatas)
+    let buildSet = lam set. lam children. lam recDatas.
+        switch children
+        case [child] ++ children then
+            let switchRes = switch child.obj.kind
+            case ObjUse {} then ({ set with sUse = cons child.obj set.sUse }, recDatas)
+            case ObjLet {} then ({ set with sLet = cons child set.sLet }, recDatas)
+            case ObjLang {} then ({ set with sLang = cons child set.sLang }, recDatas)
+            case ObjSem {} then ({ set with sSem = cons child set.sSem }, recDatas)
+            case ObjSyn {} then ({ set with sSyn = cons child set.sSyn }, recDatas)
+            case ObjCon {} then ({ set with sCon = cons child set.sCon }, recDatas)
+            case ObjMexpr {} then ({ set with sMexpr = cons child set.sMexpr }, recDatas)
+            case ObjType {} then ({ set with sType = cons child set.sType }, recDatas)
+            case ObjUtest {} then ({ set with sUtest = cons child set.sUtest }, recDatas)
             case ObjInclude {} then
-                (if objIsStdlib son.obj then { set with sLibInclude = cons son.obj set.sLibInclude } else { set with sInclude = cons son.obj set.sInclude }, recDatas)
+                (if objIsStdlib child.obj then { set with sLibInclude = cons child.obj set.sLibInclude } else { set with sInclude = cons child.obj set.sInclude }, recDatas)
             case ObjRecursiveBloc {} then
-                match recDatas with [sons] ++ recDatas then
-                    ({ set with sLet = concat sons set.sLet }, recDatas)
+                match recDatas with [children] ++ recDatas then
+                    ({ set with sLet = concat children set.sLet }, recDatas)
                 else
                    renderingWarn "Running out of recursive datas.";
                    (set, recDatas)
             end in
             match switchRes with (set, recDatas) in
-            buildSet set sons recDatas
+            buildSet set children recDatas
         case [] then set
         end
-    in buildSet { sUse = [], sLet = [], sLang = [],  sSem = [], sSyn = [], sCon = [], sMexpr = [], sInclude = [], sLibInclude = [], sType = [], sUtest = [] } (reverse sons) (reverse recDatas)
+    in buildSet { sUse = [], sLet = [], sLang = [],  sSem = [], sSyn = [], sCon = [], sMexpr = [], sInclude = [], sLibInclude = [], sType = [], sUtest = [] } (reverse children) (reverse recDatas)

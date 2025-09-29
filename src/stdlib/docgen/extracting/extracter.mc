@@ -87,7 +87,7 @@ let extract : Logger -> DocTree -> Option Int -> ObjectTree =
         in
     
         switch tree 
-        case DocTreeNode { sons = sons, token = token, state = state } then
+        case DocTreeNode { children = children, token = token, state = state } then
 
             -- Builds doc string from comments
             let buildDoc : [String] -> String = lam commentBuffer.
@@ -103,24 +103,24 @@ let extract : Logger -> DocTree -> Option Int -> ObjectTree =
 
             -- Process children nodes
             let process : State -> [DocTree] -> String -> String -> String -> ObjectKind -> Int -> ExtractRecOutput =
-                lam state. lam sons. lam name. lam namespace. lam doc. lam kind. lam utestCount.
+                lam state. lam children. lam name. lam namespace. lam doc. lam kind. lam utestCount.
                 
                 let obj = { obj with name = name, kind = kind, doc = doc } in
                 let obj = objWithNamespace obj namespace in
                 match depthProcess depth obj with { obj = obj, depth = depth } in
 
-                type Arg = { sons: [ObjectTree], ctx: ExtractRecOutput } in
+                type Arg = { children: [ObjectTree], ctx: ExtractRecOutput } in
                 let foldResult = foldl
                     (lam arg: Arg. lam s: DocTree.
                         let ctx = arg.ctx in
                         let ctx = extractRec s namespace ctx.commentBuffer ctx.sourceCodeBuilder inStdlib ctx.utestCount depth in
-                        let sons = match ctx.obj with Some obj then cons obj arg.sons else arg.sons in
-                        { sons = sons, ctx = ctx })
-                    { sons = [], ctx = { commentBuffer = [], sourceCodeBuilder = sourceCodeBuilder, utestCount = utestCount, obj = None {} } }
-                    sons in
+                        let children = match ctx.obj with Some obj then cons obj arg.children else arg.children in
+                        { children = children, ctx = ctx })
+                    { children = [], ctx = { commentBuffer = [], sourceCodeBuilder = sourceCodeBuilder, utestCount = utestCount, obj = None {} } }
+                    children in
                     
                 match finish obj foldResult.ctx.sourceCodeBuilder with { obj = obj, builder = sourceCodeBuilder } in
-                let obj = ObjectNode { obj = obj, sons = reverse foldResult.sons } in
+                let obj = ObjectNode { obj = obj, children = reverse foldResult.children } in
                 { foldResult.ctx with obj = Some obj, sourceCodeBuilder = sourceCodeBuilder } in
 
             -- Dispatch by token type + state
@@ -128,59 +128,59 @@ let extract : Logger -> DocTree -> Option Int -> ObjectTree =
             switch state
             case StateProgram {} then
                 recursive
-                let extractProgramComments = lam sons.
-                    switch sons
+                let extractProgramComments = lam children.
+                    switch children
                     case [DocTreeLeaf { token = TokenComment { content = content } | TokenMultiLineComment { content = content } }] ++ rest then
                         let output = extractProgramComments rest in
                         { output with comments = cons content output.comments }
                     case [DocTreeLeaf { token = TokenSeparator { content = content } }] ++ rest then
-                        if shouldClear content then { comments = [], sons = sons }
+                        if shouldClear content then { comments = [], children = children }
                         else extractProgramComments rest
-                    case _ then { comments = [], sons = sons }
+                    case _ then { comments = [], children = children }
                     end
                 in
-                let extractRes = extractProgramComments sons in
-                process state sons content content
+                let extractRes = extractProgramComments children in
+                process state children content content
                     (buildDoc extractRes.comments)
                     (ObjProgram {})
                     utestCount
 
             case StateMexpr {} then
-                process state sons "mexpr" (getNamespace namespace "mexpr" "") doc (ObjMexpr {}) utestCount
+                process state children "mexpr" (getNamespace namespace "mexpr" "") doc (ObjMexpr {}) utestCount
 
             case (StateUse {} | StateTopUse {}) then
-                let name = getName sons in
+                let name = getName children in
                 let obj = { obj with name = name.word, kind = ObjUse {} } in
-                let sourceCodeBuilder = foldl absorbWord sourceCodeBuilder sons in
+                let sourceCodeBuilder = foldl absorbWord sourceCodeBuilder children in
                 match finish obj sourceCodeBuilder with { obj = obj, builder = sourceCodeBuilder } in
-                { obj = Some (ObjectNode { obj = obj, sons = [] }), commentBuffer = [], sourceCodeBuilder = sourceCodeBuilder, utestCount = utestCount }
+                { obj = Some (ObjectNode { obj = obj, children = [] }), commentBuffer = [], sourceCodeBuilder = sourceCodeBuilder, utestCount = utestCount }
 
             case StateTopUtest {} | StateUtest {} then
                 let name = int2string utestCount in
-                process state sons name (getNamespace namespace name "utest") doc (ObjUtest {}) (addi utestCount 1)
+                process state children name (getNamespace namespace name "utest") doc (ObjUtest {}) (addi utestCount 1)
             case StateRec {} | StateTopRec {} then
-                process state sons "" namespace doc (ObjRecursiveBloc {}) utestCount 
+                process state children "" namespace doc (ObjRecursiveBloc {}) utestCount 
             case state then
                 -- Look for '=' in children
-                recursive let goToEqual = lam sons.
-                    switch nthWord sons 0
+                recursive let goToEqual = lam children.
+                    switch nthWord children 0
                     case Some { word = "=", rest = rest } then rest
                     case Some { rest = rest } then goToEqual rest
                     case None {} then []
                     end in
                 
-                let name = getName sons in
+                let name = getName children in
                 let kind = switch state
                     case (StateLet {} | StateTopLet {} | StateRecLet {}) then
                         let rec = match state with StateLet {} | StateTopLet {} then false else true in
-                        let sons = goToEqual sons in
-                        let sons = skipUseIn sons in
+                        let children = goToEqual children in
+                        let children = skipUseIn children in
                         -- Extract params if any
-                        let args = extractParams sons in
+                        let args = extractParams children in
                         ObjLet { rec = rec, args = args, ty = None {} }
                     case StateSem {} then
-                        ObjSem { langName = extractLastNamespaceElement namespace, variants = extractVariants (goToEqual sons), ty = None {} }
-                    case StateSyn {} then ObjSyn { langName = extractLastNamespaceElement namespace, variants = extractVariants (goToEqual sons) }
+                        ObjSem { langName = extractLastNamespaceElement namespace, variants = extractVariants (goToEqual children), ty = None {} }
+                    case StateSyn {} then ObjSyn { langName = extractLastNamespaceElement namespace, variants = extractVariants (goToEqual children) }
                     case StateLang {} then ObjLang { parents = extractParents name.rest }
                     case (StateCon {} | StateTopCon {}) then
                         let t =
@@ -199,7 +199,7 @@ let extract : Logger -> DocTree -> Option Int -> ObjectTree =
 
                     end in
                 let namespace = getNamespace namespace name.word (getFirstWord kind) in
-                process state sons name.word namespace doc kind utestCount
+                process state children name.word namespace doc kind utestCount
                 end
             case _ then
                error (concat "Not covered: " (toString state))
@@ -221,16 +221,16 @@ let extract : Logger -> DocTree -> Option Int -> ObjectTree =
             let defaultObject = defaultObject path isStdlib in
             let defaultObject = objWithKind defaultObject (ObjInclude { pathInFile = content }) in
             let defaultObject = objWithName defaultObject path in
-            let emptyInclude = ObjectNode { obj = defaultObject, sons = [] } in
+            let emptyInclude = ObjectNode { obj = defaultObject, children = [] } in
 
             let defaultRes = { commentBuffer = [], sourceCodeBuilder = sourceCodeBuilder, obj = Some emptyInclude, utestCount = utestCount } in
             match tree with Some tree then
                 log (concat "Extracting on: " path);
                 let res = extractRec tree path [] (newSourceCodeBuilder ()) isStdlib utestCount depth in
-                match res with { obj = Some (ObjectNode { obj = progObj, sons = sons } & progObjTree) } then
+                match res with { obj = Some (ObjectNode { obj = progObj, children = children } & progObjTree) } then
                     let includeObj = { progObj with renderIt = false, isStdlib = isStdlib, kind = ObjInclude { pathInFile = content }, sourceCode = sourceCodeEmpty () } in
                     
-                    { defaultRes with obj = Some (ObjectNode { obj = includeObj, sons = [ progObjTree ] })  }
+                    { defaultRes with obj = Some (ObjectNode { obj = includeObj, children = [ progObjTree ] })  }
                 else
                     extractingWarn "Found a leaf at the root of a Program"; defaultRes
             else defaultRes

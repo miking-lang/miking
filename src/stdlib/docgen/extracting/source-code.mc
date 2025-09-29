@@ -2,7 +2,7 @@
 --
 -- We need a way to represent source code so that each node has its own slice of code,
 -- while avoiding duplicating text in memory or introducing a heavyweight recursive structure.
--- We rely on the fact that child nodes appear in order among a node’s `sons`.
+-- We rely on the fact that child nodes appear in order among a node’s `children`.
 -- Therefore, we represent the source as an array of optional `SourceCodeWord`.
 -- Each `None` marks **the next child**, letting us assemble the full text later
 -- by interleaving parent words with the children’s rendered code.

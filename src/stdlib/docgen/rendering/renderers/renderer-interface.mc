@@ -89,7 +89,7 @@ lang RendererInterface =
 
     -- Renders a block of code wrapped in a toggleable hidden section.
     -- Bool argument decides whether it starts hidden.
-    sem renderHidenCode : String -> Bool -> RenderingOptions -> String
+    sem renderHidenCode : String -> String -> Bool -> RenderingOptions -> String
 
     -- Renders code with preview:
     -- - Left part (raw code)

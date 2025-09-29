@@ -29,12 +29,12 @@ utest extractLastNamespaceElement "" with ""
 
 -- Removes all comment tokens from a list of syntax tree nodes.
 let removeComments : [DocTree] -> [DocTree] = use TokenReader in
-    lam sons. filter (lam s. match s with DocTreeLeaf { token = TokenComment {} } then false else true) sons
+    lam children. filter (lam s. match s with DocTreeLeaf { token = TokenComment {} } then false else true) children
 
 -- Returns the nth word in the list of syntax tree nodes.
 -- Ignores non-word tokens.
-recursive let nthWord = use TokenReader in lam sons. lam n.
-    switch sons
+recursive let nthWord = use TokenReader in lam children. lam n.
+    switch children
     case [DocTreeLeaf { token = (TokenWord { content = word } | TokenStr { content = word }) }] ++ rest then
         if eqi n 0 then Some { word = word, rest = rest }
         else nthWord rest (subi n 1)
@@ -43,13 +43,13 @@ recursive let nthWord = use TokenReader in lam sons. lam n.
     end
 end
 
-recursive let getName: [DocTree] -> { word: String, rest: [DocTree]} = use TokenReader in lam sons.
-    switch sons
+recursive let getName: [DocTree] -> { word: String, rest: [DocTree]} = use TokenReader in lam children.
+    switch children
     case [DocTreeLeaf { token = TokenWord { content = "#var" } }, DocTreeLeaf { token = TokenStr { between = name } } ] ++ rest then
         { word = name, rest = rest }
     case [DocTreeLeaf { token = TokenWord { content = name } }] ++ rest then
         { word = name, rest = rest }
-    case [_] ++ sons then getName sons
+    case [_] ++ children then getName children
     end
 end
 
@@ -89,15 +89,15 @@ recursive let extractParents = lam words.
 end
 
 -- Skips any 'use' declarations in the syntax tree and returns the remaining nodes.
-recursive let skipUseIn : [DocTree] -> [DocTree] = lam sons.
-    match nthWord sons 0 with
-    Some { word = "use", rest = sons } then
-        match (nthWord sons 1) with Some { rest = sons } then
-            skipUseIn sons
+recursive let skipUseIn : [DocTree] -> [DocTree] = lam children.
+    match nthWord children 0 with
+    Some { word = "use", rest = children } then
+        match (nthWord children 1) with Some { rest = children } then
+            skipUseIn children
         else
             warn "The last word of the stream is a use without any name after.";
             []
-    else sons
+    else children
 end
 
 -- Extracts variant names from a stream of syntax tree nodes starting with '|'.
@@ -118,14 +118,14 @@ let extractVariants : [DocTree] -> [String] = lam stream.
 
 -- Extracts argument names from a lambda expression represented as syntax tree nodes.
 -- Returns a list of parameter names.
-recursive let extractParams = lam sons.
-    switch nthWord sons 0 
+recursive let extractParams = lam children.
+    switch nthWord children 0 
     case Some { word = "lam", rest = rest } then
         let res = switch getName rest
         case { word = ".", rest = rest} then { word = "_", rest = rest }
         case { word = word, rest = rest} then
-            recursive let goToPoint = lam sons.
-                switch nthWord sons 0
+            recursive let goToPoint = lam children.
+                switch nthWord children 0
                 case Some { rest = rest, word = "." } then rest
                 case Some { rest = rest } then goToPoint rest
                 case None {} then

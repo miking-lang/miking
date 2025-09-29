@@ -82,18 +82,18 @@ lang ObjectsRenderer = ObjectKinds + Formats
       recursive let objToJsDict = lam opt. lam tree. 
           let obj = objTreeObj tree in
           -- Recursive calls: render all children and transmit the name-context through the fold.
-          let res =  foldl (lam arg. lam son.
-              let obj = objTreeObj son in
-              match (objTreeSons son, obj.kind) with ([], ObjInclude {}) then arg else
+          let res =  foldl (lam arg. lam child.
+              let obj = objTreeObj child in
+              match (objTreeChildren child, obj.kind) with ([], ObjInclude {}) then arg else
               let nameContext =
                   match objNameIfHas obj with Some name then
                    hmInsert name (objGetPureLink obj arg.opt) arg.opt.nameContext
                   else arg.opt.nameContext
               in
               let opt = { arg.opt with nameContext = nameContext } in
-              match objToJsDict opt son with { dicts = dicts, opt = opt } in
+              match objToJsDict opt child with { dicts = dicts, opt = opt } in
               { opt = opt, dicts = concat dicts arg.dicts }
-              ) { dicts = [], opt = opt } (objTreeSons tree)
+              ) { dicts = [], opt = opt } (objTreeChildren tree)
           in
           let link = concat opt.urlPrefix (objLink obj opt) in
           let link = if strEndsWith ".md" link then subsequence link 0 (subi (length link) 3) else link in 

@@ -188,8 +188,8 @@ lang MdxRenderer = RendererInterface
           <DocBlock title=\"", title, "\" kind=\"", kind, "\"", link, ">\n",
           mdxRenderCode opt sign, "\n",
           desc, "\n\n",
-          "<ToggleWrapper text=\"Code..\">", mdxRenderCode opt code, "</ToggleWrapper>\n",
-          (if hasTests then join ["<ToggleWrapper text=\"Tests..\">", mdxRenderCode opt tests, "</ToggleWrapper>\n"] else ""),
+          "<ToggleWrapper text=\"Show Implementation\">", mdxRenderCode opt code, "</ToggleWrapper>\n",
+          (if hasTests then join ["<ToggleWrapper text=\"Show Tests\">", mdxRenderCode opt tests, "</ToggleWrapper>\n"] else ""),
           "</DocBlock>\n\n"
         ]
 end

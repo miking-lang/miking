@@ -119,7 +119,7 @@ let parse : Logger -> String -> MAst -> DocTree = use TokenReader in use Breaker
     
     let parseRes2tree : ParseRes -> String -> DocTree = lam parseRes. lam progName.
         DocTreeNode {
-            sons = parseRes.tree,
+            children = parseRes.tree,
             pos = { x = 1, y = 1 },
             token = TokenProgram {
                 content = progName,
@@ -164,19 +164,19 @@ let parse : Logger -> String -> MAst -> DocTree = use TokenReader in use Breaker
     
                     match (if and (not snippet.absorbed) (absorbIt (newState, content last)) then
                         let leaf = DocTreeLeaf { token = last, state = newState, pos = lastPos } in
-                        { stream = lastStream, newPos = lastPos, sons = concat snippet.tree [leaf] }
+                        { stream = lastStream, newPos = lastPos, children = concat snippet.tree [leaf] }
                     else
-                        { stream = snippet.stream, newPos = snippet.pos, sons = snippet.tree }) with
-                    { stream = stream, sons = sons, newPos = newPos } in
+                        { stream = snippet.stream, newPos = snippet.pos, children = snippet.tree }) with
+                    { stream = stream, children = children, newPos = newPos } in
 
-                    let docNode = DocTreeNode { sons = sons, pos = pos, token = token, state = newState } in
+                    let docNode = DocTreeNode { children = children, pos = pos, token = token, state = newState } in
                     let tree = reverse (cons docNode snippet.toAdd) in
                     parseStream stream newPos (tail breakers) (concat tree treeAcc)
                 else
                     -- Handle hard break
                     let docNode = DocTreeNode {
                         pos = pos,
-                        sons = snippet.tree, token = token,
+                        children = snippet.tree, token = token,
                         state = newState
                     } in
                     let concatToAdd = cons docNode snippet.toAdd in

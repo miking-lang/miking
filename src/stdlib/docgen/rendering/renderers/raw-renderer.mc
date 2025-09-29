@@ -81,7 +81,7 @@ lang RawRenderer = RendererInterface
         case ObjLet { args = args, ty = ty } then
             let t = match ty with Some t then type2str t else "?" in
             let args = strJoin " " args in
-            join ["let ", name, " ", args, " : ", t]
+            join ["let ", name, " : ", t]
         case ObjType { t = t } then
             join ["type ", name, match t with Some t then concat " : " t else ""]
         case ObjCon { t = t } then
@@ -104,7 +104,7 @@ lang RawRenderer = RendererInterface
     | opt -> let opt = fixOptFormat opt in
         let nl = renderNewLine opt in
         if eqString data.tests "" then ""
-        else join [nl, "Tests:", nl, renderHidenCode (strFullTrim data.tests) true opt]
+        else concat nl (renderHidenCode "Show Tests" (strFullTrim data.tests) true opt)
     
     -- Goto link wrapper (uses renderLink).
     sem renderGotoLink (link: String) =
@@ -122,7 +122,7 @@ lang RawRenderer = RendererInterface
     -- Renders code as a hidden, toggleable block (raw + preview-less).
     sem renderCodeWithoutPreview (data: RenderingData) = 
     | opt -> let opt = fixOptFormat opt in
-        renderHidenCode (concat data.left data.right) true opt
+        renderHidenCode "Show Implementation" (concat data.left data.right) true opt
 
     -- Renders code with an optional preview section (uses renderHidenCode).
     sem renderCodeWithPreview (data: RenderingData) =
@@ -130,10 +130,10 @@ lang RawRenderer = RendererInterface
         match data.right with [] then
             join [data.left, data.trimmed]
         else 
-            join [data.left, renderHidenCode data.right false opt, data.trimmed]
+            join [data.left, renderHidenCode "..." data.right false opt, data.trimmed]
 
     -- Default hidden-code renderer (no-op for raw).
-    sem renderHidenCode (code : String) (jumpLine: Bool) =
+    sem renderHidenCode (buttonText: String) (code : String) (jumpLine: Bool) =
     | _ -> ""
 
     -- String → tokenized/colored source code (delegates to renderSourceCode).
@@ -183,7 +183,7 @@ lang RawRenderer = RendererInterface
         let getFormatedString : [TreeSourceCode] -> String = lam code.
             foldl (lam s. lam node.
                 concat (switch node 
-                case TreeSourceCodeNode son then renderCodeWithPreview son opt
+                case TreeSourceCodeNode child then renderCodeWithPreview child opt
                 case TreeSourceCodeSnippet code then renderSourceCode code
                 end) s
                 ) "" (reverse code) in
@@ -191,7 +191,7 @@ lang RawRenderer = RendererInterface
         let buildSourceCodeRaw = lam code. join (map (lam w. lit w.word) code) in
         let row = foldl (lam row. lam tree.
              concat (switch tree 
-                case TreeSourceCodeNode son then son.row
+                case TreeSourceCodeNode child then child.row
                 case TreeSourceCodeSnippet code then buildSourceCodeRaw code
                 end) row)
                 "" (reverse (concat left right)) in

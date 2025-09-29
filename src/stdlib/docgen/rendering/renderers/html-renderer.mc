@@ -137,9 +137,9 @@ lang HtmlRenderer = RendererInterface
     | { fmt = Html {} } & opt -> join ["<a class=\"gotoLink\" href=\"", link, "\">[→]</a>"]
     
     -- Toggleable hidden code block; uses a button and a collapsible div
-    sem renderHidenCode (code: String) (jumpLine: Bool) =
+    sem renderHidenCode (buttonText: String) (code: String) (jumpLine: Bool) =
     | { fmt = Html {} } & opt ->
-        let jsDisplay = "<button class=\"toggle-btn\" onclick=\"toggle(this)\">...</button><div class=\"hiden-code\" style=\"display: none;\">" in
+        let jsDisplay = join ["<button class=\"toggle-btn\" onclick=\"toggle(this)\">", buttonText, "</button><div class=\"hiden-code\" style=\"display: none;\">"] in
         join [jsDisplay, if jumpLine then "\n" else "", code, "</div>"]
     
     -- Generic link with optional URL prefix

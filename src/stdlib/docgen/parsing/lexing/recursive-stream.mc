@@ -55,156 +55,240 @@ include "mexpr/ast.mc"
 include "../../global/util.mc"
 include "./sem-map.mc"
 
--- Maps semantic names to recursive block counts.
-type RecursiveDataStreamMap = HashMap String [Int]
+lang RDSInterface = MExprAst
 
--- Represents the recursive data stream used to track expected `in` tokens.
-type RecursiveDataStream = use MExprAst in {
-     stack: [Expr],
-     cache: [Int],
-     langMap: RecursiveDataStreamMap,
-     currentSem: String,
-     langName: String
-}
+    -- Maps semantic names to recursive block counts.
+    type RDSMap = HashMap String [Int]
 
--- Removes a prefix before the first '_' in a string.
-let removePrefix : String -> String = lam name. reverse (splitOnR (eqChar '_') (reverse name)).left 
+    -- Represents the recursive data stream used to track expected `in` tokens.
+    type RDS = {
+         stack: [Expr],
+         cache: [Int],
+         langMap: RDSMap,
+         currentSem: String,
+         langName: String
+    }
 
--- Creates a new recursive data stream from an expression.
-let createRecursiveDataStream : use MExprAst in Expr -> RecursiveDataStream = use MExprAst in lam expr.
-    { stack = [expr], cache = [], currentSem = "", langName = "", langMap = hashmapEmpty () }
-
--- Result type for computing the next recursive block count, private usage, use recursiveDataStreamNext instead.
-type DataStreamComputeNextRes = {
-     stream: RecursiveDataStream, -- New stream
-     acc: [Int],                  -- The row cache
-     map: RecursiveDataStreamMap, -- A map binding each rec branchs to its cache
-     inCount: Int                 -- The actual number of ins.
-}
-
--- Computes the next recursive block count from the data stream.
-let recursiveDataStreamComputeNext: RecursiveDataStream -> Option SemMap -> DataStreamComputeNextRes = use MExprAst in lam stream. lam semMap.
-    type WorkRes = { acc: [Int], inCount: Int, stack: [Expr], map: RecursiveDataStreamMap } in  
-    recursive let work : Bool -> [Int] -> [Expr] -> Int -> WorkRes = lam first. lam acc. lam stack. lam inCount.
-        match stack with [] then { inCount = inCount, acc = acc, stack = [], map = hashmapEmpty () } else
-        match stack with [expr] ++ rest in
-        
-        let go : [Expr] -> WorkRes = lam toAdd. work first acc (concat toAdd rest) inCount in
-        let addAndGo : [Expr] -> WorkRes = lam toAdd. work first acc (concat toAdd rest) (addi inCount 1) in
-            
-        switch expr       
-        case TmVar {} | TmConst {} | TmNever {} | TmPlaceholder {} then go []
-        case TmApp { lhs = e2, rhs = e1 }
-           | TmRecordUpdate { rec = e1, value = e2 } then go [e1, e2]
-        case TmRecord { bindings = map } then  go (mapValues map)
-        case TmSeq { tms = arr } then  go arr
-        case TmLam { body = e } | TmConApp { body = e } then go [e]
-        case TmMatch { target = e1, thn = e2, els = e3 } then go [e1, e2, e3]
-        case TmDecl { decl = decl, inexpr = inexpr} then
-             let go = lam arr. go (concat arr [inexpr]) in
-             let addAndGo = lam arr. addAndGo (concat arr [inexpr]) in 
-             switch decl
-             case DeclRecLets { bindings = bindings } then
-                type Arg = { recLetCount: Int, acc: [Int], map: RecursiveDataStreamMap } in
-                let foldRes = foldl (lam arg: Arg. lam node.
-                    let name = removePrefix node.ident.0 in
-                    match work false [] [node.body] 0 with { inCount = inCount, acc = subAcc } in
-                    let subAcc = match (first, semMap) with (true, Some semMap) then
-                        match hmLookup name semMap with Some count then
-                            if lti (length subAcc) count then
-                               parsingWarn (join ["The number of recursive in the sem (", int2string (length subAcc), ") is lower than the counter in the semMap (", int2string count, ")."]);
-                               subAcc
-                            else
-                                subsequence subAcc 0 count
-                        else subAcc
-                    else subAcc
-                    in
-                    let map: RecursiveDataStreamMap = hmInsert node.ident.0 (reverse subAcc) arg.map in
-                    { recLetCount = addi inCount arg.recLetCount, acc = concat subAcc arg.acc, map = map }
-                ) { recLetCount = 0, acc = [], map = hashmapEmpty () } bindings in
-            
-                if first then
-                   { acc = reverse foldRes.acc, inCount = foldRes.recLetCount, stack = cons inexpr rest, map = foldRes.map }
-                else
-                   let acc = join [foldRes.acc, [foldRes.recLetCount], acc] in
-                   work false acc (cons inexpr rest) inCount
-            case DeclExt {} then go []
-            case DeclType {} | DeclConDef {} then addAndGo []
-            case DeclLet { body = e1 } then  addAndGo [e1]
-            case DeclUtest { test = e1, expected = e2, tusing = None {}, tonfail = None {} }
-                 then addAndGo [e1, e2]
-            case DeclUtest { test = e1, expected = e2, tusing = Some e3, tonfail = None {} }
-               | DeclUtest { test = e1, expected = e2, tusing = None {}, tonfail = Some e3 }
-                 then addAndGo [e1, e2, e3]
-            case DeclUtest { test = e1, expected = e2, tusing = Some e3, tonfail = Some e4 }
-                 then addAndGo [e1, e2, e3, e4]
-            end
-        end
-    in
-    match work true [] stream.stack 0 with { map = map, acc = acc, inCount = inCount, stack = stack } in
-    { inCount = inCount, stream = { stream with stack = stack }, map = map, acc = acc }
-
-
-
--- Result type for fetching the next recursive count. 
-type RecursiveDataStreamNextRes = { inCount: Int, stream: RecursiveDataStream }
-
--- Returns the next recursive count from the stream, will take from the cache if not empty.
-let recursiveDataStreamNext: RecursiveDataStream -> RecursiveDataStreamNextRes = use MExprAst in lam stream.
-    match stream.cache with [inCount] ++ cache then
-        { inCount = inCount, stream = { stream with cache = cache } } 
-    else 
-        match recursiveDataStreamComputeNext stream (None {}) with { acc = acc, inCount = inCount, stream = stream } in
-        { inCount = inCount, stream = { stream with cache = acc } }
-
-
--- Called when encountering a `lang` keyword. The argument `langName` must be
--- the identifier following `lang`.
---
--- The function first calls `recursiveDataStreamComputeNext` to access the
--- bindings map (other returned data can be ignored).
---
--- Because the Miking compiler prunes all `lang` definitions that contain no
--- `sem`, we face three cases:
--- 1. The `lang` contains no `sem` *and* it is the last recursive of the file.
---    The stream will return an empty map.
--- 2. The `lang` contains no `sem`, but another recursive follows. We detect
---    this by checking whether one of the binding names starts with
---    `v$langName_`, which is the prefix of all sem identifiers.
--- 3. Default case: the stream is updated with a map binding each `sem` to its
---    recursive blocks. The `langName` field is set so we know we are inside a
---    `lang`, and `currentSem` is reset to `""`. This also allows us to tell if
---    the next `sem` is the first one.
---
--- In the first two cases, the function simply returns the unchanged stream.
-let recursiveDataStreamLang : RecursiveDataStream -> String -> SemMap -> RecursiveDataStream = lam oldStream. lam langName. lam semMap.
-    match recursiveDataStreamComputeNext oldStream (Some semMap) with { map = map, stream = stream } in
-    match hmKeys map with [h] ++ _ then
-        if strStartsWith (join ["v", langName, "_"]) h then
-           (match stream.cache with [] then () else parsingWarn "The cache should be empty at this point");
-           { stream with langMap = map, langName = langName, currentSem = "" }
-        else oldStream
-    else oldStream
-
-
--- Called when encountering a `sem` keyword. The argument `semName` must be
--- the identifier following `sem`.
---
--- We want to switch the cache and update the `langMap` if needed. Two cases:
--- 1. If `currentSem` is `""`, this is the first `sem`. We simply fetch its
---    cache from the map.
--- 2. Otherwise, we update the `langMap` by storing the cache of the previous
---    `sem` under its name, then switch to the cache of the new `sem`. If we
---    later encounter the same `sem` again, it will reuse the updated cache.
-let recursiveDataStreamSem : RecursiveDataStream -> String -> RecursiveDataStream = lam stream. lam semName.
-    let semName = join ["v", stream.langName, "_", semName] in
-
-    let stream = if eqString "" stream.currentSem then stream else
-       { stream with langMap = hmInsert stream.currentSem stream.cache stream.langMap }
-    in
+    -- Removes a prefix before the first '_' in a string.
+    sem removePrefix: String -> String
+    sem removePrefix =
+    | name -> reverse (splitOnR (eqChar '_') (reverse name)).left 
     
-    match hmLookup semName stream.langMap with Some cache then
-        { stream with cache = cache, currentSem = semName }
-    else
-        parsingWarn (join ["semName ", semName, " is not in the langMap of the lang ", stream.langName, "."]);
-        stream
+    -- Creates a new recursive data stream from an expression.
+    sem createRDS: Expr -> RDS
+    sem createRDS =
+    | expr -> { stack = [expr], cache = [], currentSem = "", langName = "", langMap = hashmapEmpty () }
+
+    -- Result type for computing the next recursive block count, private usage, use rdsNext instead.
+    type DataStreamComputeNextRes = {
+         stream: RDS, -- New stream
+         acc: [Int],                  -- The row cache
+         map: RDSMap, -- A map binding each rec branchs to its cache
+         inCount: Int                 -- The actual number of ins.
+    }
+
+    -- Computes the next result, is essentially called by rdsComputeNext.
+    sem rdsWork: Option SemMap -> Bool -> [Int] -> [Expr] -> Int -> { acc: [Int], inCount: Int, stack: [Expr], map: RDSMap }
+    sem rdsWork semMap first acc =
+    | [] -> lam inCount. { inCount = inCount, acc = acc, stack = [], map = hashmapEmpty () }
+
+    -- Result type for fetching the next recursive count. 
+    type RDSNextRes = { inCount: Int, stream: RDS }
+
+    -- Computes the next recursive block count from the data stream.
+    sem rdsComputeNext: RDS -> Option SemMap -> DataStreamComputeNextRes
+    sem rdsComputeNext =
+    | stream -> lam semMap.
+        match rdsWork semMap true [] stream.stack 0 with { map = map, acc = acc, inCount = inCount, stack = stack } in
+        { inCount = inCount, stream = { stream with stack = stack }, map = map, acc = acc }
+
+
+    -- Returns the next recursive count from the stream, will take from the cache if not empty.
+    sem rdsNext: RDS -> RDSNextRes
+    sem rdsNext =
+    | stream ->
+        match stream.cache with [inCount] ++ cache then
+            { inCount = inCount, stream = { stream with cache = cache } } 
+        else 
+            match rdsComputeNext stream (None {}) with { acc = acc, inCount = inCount, stream = stream } in
+            { inCount = inCount, stream = { stream with cache = acc } }
+
+
+    -- Called when encountering a `lang` keyword. The argument `langName` must be
+    -- the identifier following `lang`.
+    --
+    -- The function first calls `rdsComputeNext` to access the
+    -- bindings map (other returned data can be ignored).
+    --
+    -- Because the Miking compiler prunes all `lang` definitions that contain no
+    -- `sem`, we face three cases:
+    -- 1. The `lang` contains no `sem` *and* it is the last recursive of the file.
+    --    The stream will return an empty map.
+    -- 2. The `lang` contains no `sem`, but another recursive follows. We detect
+    --    this by checking whether one of the binding names starts with
+    --    `v$langName_`, which is the prefix of all sem identifiers.
+    -- 3. Default case: the stream is updated with a map binding each `sem` to its
+    --    recursive blocks. The `langName` field is set so we know we are inside a
+    --    `lang`, and `currentSem` is reset to `""`. This also allows us to tell if
+    --    the next `sem` is the first one.
+    --
+    -- In the first two cases, the function simply returns the unchanged stream.
+    sem rdsLang: RDS -> String -> SemMap -> RDS
+    sem rdsLang =
+    | oldStream -> lam langName. lam semMap.
+        match rdsComputeNext oldStream (Some semMap) with { map = map, stream = stream } in
+        match hmKeys map with [h] ++ _ then
+            if strStartsWith (join ["v", langName, "_"]) h then
+               (match stream.cache with [] then () else parsingWarn "The cache should be empty at this point");
+               { stream with langMap = map, langName = langName, currentSem = "" }
+            else oldStream
+        else oldStream
+
+    -- Called when encountering a `sem` keyword. The argument `semName` must be
+    -- the identifier following `sem`.
+    --
+    -- We want to switch the cache and update the `langMap` if needed. Two cases:
+    -- 1. If `currentSem` is `""`, this is the first `sem`. We simply fetch its
+    --    cache from the map.
+    -- 2. Otherwise, we update the `langMap` by storing the cache of the previous
+    --    `sem` under its name, then switch to the cache of the new `sem`. If we
+    --    later encounter the same `sem` again, it will reuse the updated cache.
+    sem rdsSem: RDS -> String -> RDS
+    sem rdsSem =
+    | stream -> lam semName.
+        let semName = join ["v", stream.langName, "_", semName] in
+    
+        let stream = if eqString "" stream.currentSem then stream else
+           { stream with langMap = hmInsert stream.currentSem stream.cache stream.langMap }
+        in
+        
+        match hmLookup semName stream.langMap with Some cache then
+            { stream with cache = cache, currentSem = semName }
+        else
+            parsingWarn (join ["semName ", semName, " is not in the langMap of the lang ", stream.langName, "."]);
+            stream
+end
+
+
+lang RDSFullIgnore = RDSInterface
+
+    sem rdsWork semMap first acc =
+    | [TmVar {} | TmConst {} | TmNever {} | TmPlaceholder {} ] ++ rest -> lam inCount.
+        rdsWork semMap first acc rest inCount 
+        
+end
+
+lang RDSSimpleIgnore = RDSInterface
+
+    sem rdsWork semMap first acc =
+    | [TmLam { body = e } | TmConApp { body = e } | TmDecl { decl = DeclExt {}, inexpr = e}] ++ rest -> lam inCount.
+        rdsWork semMap first acc (cons e rest) inCount 
+        
+end
+
+lang RDSDoubleIgnore = RDSInterface
+
+    sem rdsWork semMap first acc =
+    | [TmApp { lhs = e2, rhs = e1 } | TmRecordUpdate { rec = e1, value = e2 }] ++ rest -> lam inCount.
+        rdsWork semMap first acc (concat [e1, e2] rest) inCount 
+        
+end
+
+lang RDSTripleIgnore = RDSInterface
+
+    sem rdsWork semMap first acc =
+    | [TmMatch { target = e1, thn = e2, els = e3 }] ++ rest -> lam inCount.
+        rdsWork semMap first acc (concat [e1, e2, e3] rest) inCount 
+        
+end
+
+lang RDSRecord = RDSInterface
+
+    sem rdsWork semMap first acc =
+    | [TmRecord { bindings = map }] ++ rest -> lam inCount.
+        rdsWork semMap first acc (concat (mapValues map) rest) inCount 
+        
+end
+
+lang RDSSeq = RDSInterface
+
+    sem rdsWork semMap first acc =
+    | [TmSeq { tms = arr }] ++ rest -> lam inCount.
+        rdsWork semMap first acc (concat arr rest) inCount 
+        
+end
+    
+lang RDSSimpleConsider = RDSInterface
+
+    sem rdsWork semMap first acc =
+    | [TmDecl { decl = DeclType {} | DeclConDef {}, inexpr = e}] ++ rest -> lam inCount.
+        rdsWork semMap first acc (cons e rest) (addi 1 inCount) 
+        
+end
+
+lang RDSDoubleConsider = RDSInterface
+
+    sem rdsWork semMap first acc =
+    | [TmDecl { decl = DeclLet { body = e1 }, inexpr = e2}] ++ rest -> lam inCount.
+        rdsWork semMap first acc (concat [e1, e2] rest) (addi 1 inCount)
+
+end
+
+
+lang RDSTripleConsider = RDSInterface
+
+    sem rdsWork semMap first acc =
+    | [TmDecl { decl = DeclUtest { test = e1, expected = e2, tusing = None {}, tonfail = None {} }, inexpr = e3}] ++ rest -> lam inCount.
+        rdsWork semMap first acc (concat [e1, e2, e3] rest) (addi 1 inCount)
+
+end
+
+lang RDSQuadrupleConsider = RDSInterface
+
+    sem rdsWork semMap first acc =
+    | [TmDecl { decl = DeclUtest { test = e1, expected = e2, tusing = Some e3, tonfail = None {} }
+                     | DeclUtest { test = e1, expected = e2, tusing = None {}, tonfail = Some e3 }, inexpr = e4}] ++ rest -> lam inCount.
+        rdsWork semMap first acc (concat [e1, e2, e3, e4] rest) (addi 1 inCount)
+
+end
+
+lang RDSQuintupleConsider = RDSInterface
+
+    sem rdsWork semMap first acc =
+    | [TmDecl { decl = DeclUtest { test = e1, expected = e2, tusing = Some e3, tonfail = Some e4 }, inexpr = e5 }] ++ rest -> lam inCount.
+        rdsWork semMap first acc (concat [e1, e2, e3, e4, e5] rest) (addi 1 inCount)
+
+end
+
+
+lang RDSRec = RDSInterface
+    sem rdsWork semMap first acc =
+    | [TmDecl { decl = DeclRecLets { bindings = bindings }, inexpr = inexpr }] ++ rest -> lam inCount.
+        type Arg = { recLetCount: Int, acc: [Int], map: RDSMap } in
+        let foldRes = foldl (lam arg: Arg. lam node.
+            let name = removePrefix node.ident.0 in
+            match rdsWork semMap false [] [node.body] 0 with { inCount = inCount, acc = subAcc } in
+            let subAcc = match (first, semMap) with (true, Some semMap) then
+                match hmLookup name semMap with Some count then
+                    if lti (length subAcc) count then
+                       parsingWarn (join ["The number of recursive in the sem (", int2string (length subAcc), ") is lower than the counter in the semMap (", int2string count, ")."]);
+                       subAcc
+                    else
+                        subsequence subAcc 0 count
+                else subAcc
+            else subAcc
+            in
+            let map: RDSMap = hmInsert node.ident.0 (reverse subAcc) arg.map in
+            { recLetCount = addi inCount arg.recLetCount, acc = concat subAcc arg.acc, map = map }
+        ) { recLetCount = 0, acc = [], map = hashmapEmpty () } bindings in
+        if first then
+           { acc = reverse foldRes.acc, inCount = foldRes.recLetCount, stack = cons inexpr rest, map = foldRes.map }
+        else
+           let acc = join [foldRes.acc, [foldRes.recLetCount], acc] in
+           rdsWork semMap false acc (cons inexpr rest) inCount
+end
+
+lang RecursiveDataStream = RDSFullIgnore + RDSSimpleIgnore + RDSDoubleIgnore + RDSTripleIgnore + RDSSeq + RDSRecord + RDSSimpleConsider + RDSDoubleConsider + RDSTripleConsider + RDSQuadrupleConsider + RDSQuintupleConsider + RDSRec end
+
+
+
