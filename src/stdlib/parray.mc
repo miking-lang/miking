@@ -174,6 +174,42 @@ let setPA = lam pa. lam n. lam y.
   else pa
 end
 
+-- `updatePA pa n f` updates value (random access) at index `n` in
+-- `pa` using function `f`. Note that the input `pa` is not
+-- affected. The updated pure array is the result value.  The
+-- complexity of the function is O(log n) with a low constant factor
+recursive
+let updatePA : all a. PA a -> Int -> (a -> a) -> PA a = lam pa. lam n. lam f.
+  match pa with PANode(i,l,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9) then
+    let n2 = modi n l in
+    let i2 = divi n l in
+    (switch i2
+     case 0 then PANode(i,l,updatePA x0 n2 f,x1,x2,x3,x4,x5,x6,x7,x8,x9)
+     case 1 then PANode(i,l,x0,updatePA x1 n2 f,x2,x3,x4,x5,x6,x7,x8,x9)
+     case 2 then PANode(i,l,x0,x1,updatePA x2 n2 f,x3,x4,x5,x6,x7,x8,x9)
+     case 3 then PANode(i,l,x0,x1,x2,updatePA x3 n2 f,x4,x5,x6,x7,x8,x9)
+     case 4 then PANode(i,l,x0,x1,x2,x3,updatePA x4 n2 f,x5,x6,x7,x8,x9)
+     case 5 then PANode(i,l,x0,x1,x2,x3,x4,updatePA x5 n2 f,x6,x7,x8,x9)
+     case 6 then PANode(i,l,x0,x1,x2,x3,x4,x5,updatePA x6 n2 f,x7,x8,x9)
+     case 7 then PANode(i,l,x0,x1,x2,x3,x4,x5,x6,updatePA x7 n2 f,x8,x9)
+     case 8 then PANode(i,l,x0,x1,x2,x3,x4,x5,x6,x7,updatePA x8 n2 f,x9)
+     case _ then PANode(i,l,x0,x1,x2,x3,x4,x5,x6,x7,x8,updatePA x9 n2 f) end)
+     else
+  match pa with PAData(k,x0,x1,x2,x3,x4,x5,x6,x7,x8,x9) then
+    (switch n
+     case 0 then PAData(k,f x0,x1,x2,x3,x4,x5,x6,x7,x8,x9)
+     case 1 then PAData(k,x0,f x1,x2,x3,x4,x5,x6,x7,x8,x9)
+     case 2 then PAData(k,x0,x1,f x2,x3,x4,x5,x6,x7,x8,x9)
+     case 3 then PAData(k,x0,x1,x2,f x3,x4,x5,x6,x7,x8,x9)
+     case 4 then PAData(k,x0,x1,x2,x3,f x4,x5,x6,x7,x8,x9)
+     case 5 then PAData(k,x0,x1,x2,x3,x4,f x5,x6,x7,x8,x9)
+     case 6 then PAData(k,x0,x1,x2,x3,x4,x5,f x6,x7,x8,x9)
+     case 7 then PAData(k,x0,x1,x2,x3,x4,x5,x6,f x7,x8,x9)
+     case 8 then PAData(k,x0,x1,x2,x3,x4,x5,x6,x7,f x8,x9)
+     case _ then PAData(k,x0,x1,x2,x3,x4,x5,x6,x7,x8,f x9) end)
+  else pa
+end
+
 
 -- Helper for `makePA`
 recursive
@@ -250,6 +286,21 @@ with
     foldl (lam acc. lam x. match x with (i,v) in set acc i v) ls setlist in
   (testlen, ls2)
 
+utest
+  let len = 100 in
+  let steps = 30 in
+  let initState = (create len (lam i. i), makePA len (lam i. i)) in
+  recursive let step = lam steps. lam st.
+    if eqi steps 0 then () else
+    let idx = randIntU 0 len in
+    let f = addi 1 in
+    let s = set st.0 idx (f (get st.0 idx)) in
+    let pa = updatePA st.1 idx f in
+    utest s with pa2seq pa in
+    step (subi steps 1) (s, pa) in
+  step steps initState
+with ()
+
 -- Another large test, iterates over all lengths, tests all operations
 utest
   let steps = 1500 in
@@ -279,4 +330,3 @@ utest
   in
   maintest 0
 with true
-
