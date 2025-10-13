@@ -16,7 +16,7 @@ lang RawRenderer = RendererInterface
 
     -- Runs before rendering all files (e.g., to generate global headers).
     sem renderSetup obj =
-    | opt -> ()
+    | opt -> []
     
     -- Default block renderer: composes signature, description, code, and tests.
     sem renderBlocDefault : RenderingData -> RenderingOptions -> String -> String -> String -> String -> String

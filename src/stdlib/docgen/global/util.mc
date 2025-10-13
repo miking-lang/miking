@@ -9,7 +9,6 @@ include "hashmap.mc"
 include "sys.mc"
 include "stdlib.mc"
 include "common.mc"
-include "ext/file-ext.mc"
 
 -- Changes the extension of a file.
 -- If the file has an extension, it's replaced; if not, the extension is added.
@@ -111,15 +110,6 @@ let goHere : String -> String -> { path: String, isStdlib: Bool } = lam currentL
     else
         { path = join [stdlibLoc, "/", target], isStdlib = true }
 
-
--- Try to open a file in a String, panic if it fails
-let readOrNever : String -> String = lam fileName.
-    match fileReadOpen fileName with Some rc then
-        let s = fileReadString rc in
-        fileReadClose rc;
-        s
-    else
-        error (join ["Failed to read a file: file ", fileName, " doesn't exists."])
 
 -- Returns the longest common prefix between two strings.
 let strLongestCommonPrefix : String -> String -> String = lam a. lam b.

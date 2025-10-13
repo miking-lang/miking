@@ -832,8 +832,17 @@ testMain
         , "stdlib/multicore/cond.mc"
         , "stdlib/multicore/mutex.mc"
         , "stdlib/multicore/pseq.mc"
-        , "stdlib/stats.mc"
+        , "stdlib/stats.mc"     
         , "stdlib/math.mc"
+        , "main/docgen.mc"
+        , "stdlib/docgen/execution-context.mc"
+        , "stdlib/docgen/docgen.mc"
+        , "stdlib/docgen/rendering/files-opener.mc"
+        , "stdlib/docgen/rendering/renderer.mc"
+        , "stdlib/docgen/mast-gen/file-opener.mc"
+        , "stdlib/docgen/mast-gen/mast-generator.mc"
+        , "stdlib/docgen/server/server.mc"
+        , "stdlib/docgen/server/python-server.mc"
         ]);
 
       -- Files that *should* fail to compile

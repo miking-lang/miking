@@ -23,6 +23,8 @@ include "./types-stream.mc"
 include "../extracting/objects.mc"
 include "../global/util.mc"
 
+include "mexpr/type-check.mc"
+
 let label : Logger -> ObjectTree -> MAst -> ObjectTree =
     use ObjectKinds in use TypeStream in use RemoveMetaVar in lam log. lam tree. lam ast.
 

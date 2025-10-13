@@ -27,17 +27,15 @@ lang HtmlRenderer = RendererInterface
     sem renderSetup obj =
     | { fmt = Html {} } & opt ->
         let srcPath = normalizePath (join [opt.outputFolder, "/", opt.srcFolder]) in
-        let openAndWrite = lam s. lam path.
-            let path = normalizePath (join [srcPath, "/", path]) in
-            match fileWriteOpen path with Some wc then
-                fileWriteString wc s;
-                fileWriteClose wc
-            else
-                renderingWarn (join ["Failed to create ", path, " file."])
+        let format = lam content. lam path.
+            {
+                file = normalizePath (join [srcPath, "/", path]),
+                content = content
+            }
         in
-        openAndWrite (searchJs (objToJsDict opt obj)) (searchPath ".js");
-        openAndWrite htmlStyle htmlStylePath;
-        openAndWrite htmlScript htmlScriptPath
+        [format (searchJs (objToJsDict opt obj)) (searchPath ".js"),
+        format htmlStyle htmlStyle
+        format htmlScript htmlScriptPath]
         
 
     -- Page/file header: injects theme header and object name into the HTML head/body.

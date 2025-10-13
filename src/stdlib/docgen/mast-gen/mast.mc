@@ -6,7 +6,7 @@
 
 include "mexpr/ast.mc"
 include "./include-set.mc"
-include "./file-opener.mc"
+include "./parsing-file.mc"
 
 -- Represents the Miking AST paired with its IncludeSet.
 type MAst = use MExprAst in {

@@ -28,6 +28,7 @@ include "mexpr/type-check.mc"
 include "mexpr/ast.mc"
 include "mexpr/info.mc"
 include "sys.mc"
+include "ext/file-ext.mc"
 
 include "./include-set.mc"
 include "./file-opener.mc"

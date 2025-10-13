@@ -41,7 +41,8 @@ lang RendererInterface =
 
     -- Called before rendering starts for all files.
     -- Typically used to generate global headers.
-    sem renderSetup : ObjectTree -> RenderingOptions -> ()
+    -- Returns a list of file paths with associated content.
+    sem renderSetup : ObjectTree -> RenderingOptions -> [{ file: String, content: String }]
 
     -- Called before rendering each file.
     -- Typically used to push file headers or includes.

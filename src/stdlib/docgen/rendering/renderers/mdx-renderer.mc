@@ -15,8 +15,6 @@
 include "./renderer-interface.mc"
 include "./headers/mdx-components.mc"
 
-include "sys.mc"
-
 let componentFileName = "MikingDocGen"
 let searchFileName = searchPath ""
 
@@ -36,21 +34,15 @@ lang MdxRenderer = RendererInterface
     sem renderSetup obj =
     | { fmt = Mdx {} } & opt ->
         let srcPath = normalizePath (join [opt.outputFolder, "/", opt.srcFolder, "/"]) in
-        let path = getComponentPath opt.fmtLang srcPath componentFileName in
-        (match fileWriteOpen path with Some wc then
-            let write = fileWriteString wc in
-            let components = match opt.fmtLang with Ts {} then mdxTsComponents else mdxJsComponents in
-            write components;
-            fileWriteClose wc
-        else
-            renderingWarn (concat "Failed to create components file: " path));
-
-        let path = getComponentPath (Js {}) srcPath searchFileName in
-        (match fileWriteOpen path with Some wc then
-            fileWriteString wc (searchReact (objToJsDict opt obj));
-            fileWriteClose wc
-        else
-            renderingWarn (concat "Failed to create search file: " path))
+        let components = {
+            file = getComponentPath opt.fmtLang srcPath componentFileName,
+            content = match opt.fmtLang with Ts {} then mdxTsComponents else mdxJsComponents
+        } in            
+        let searchEngine = {
+            file = getComponentPath (Js {}) srcPath searchFileName,
+            content = searchReact (objToJsDict opt obj) 
+        } in
+        [components, searchEngine]
 
     -- Emit import line for MDX components used by the page.
     sem renderHeader obj =

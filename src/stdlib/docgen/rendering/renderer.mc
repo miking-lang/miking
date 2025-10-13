@@ -72,7 +72,13 @@ let render : RenderingOptions -> ObjectTree -> () = use Renderer in
     let opt = { opt with jsSearchCode = searchJs (objToJsDict opt obj) } in
     
     preprocess obj opt;
-    renderSetup obj opt;
+    iter (lam file.
+       match fileWriteOpen file.file with Some wc then
+            fileWriteString wc file.content;
+            fileWriteClose wc
+       else
+            renderingWarn (join ["Failed to create ", file.file, " file."])
+       ) (renderSetup obj opt);
 
     log "Beginning of rendering stage.";
     recursive

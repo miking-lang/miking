@@ -1,3 +1,5 @@
+include "string.mc"
+
 let mdxCss =
 "export const S = {
 

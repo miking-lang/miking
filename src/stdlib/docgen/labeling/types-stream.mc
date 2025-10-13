@@ -10,6 +10,7 @@
 --
 -- This interface supports scenarios where expressions are not encountered in their declaration order, and enables deferred or conditional type lookups, crucial for features like `Lang` and `Sem` handling in Miking's semantics.
 include "map.mc"
+include "mexpr/ast.mc"
 
 include "../global/logger.mc"
 include "../global/util.mc"
@@ -122,7 +123,7 @@ lang DeclTypeStream = TypeStreamInterface
 
 end
 
-lang TypeStream = DeclTypeStream + LamTypeStream + AppTypeStream + SeqTypeStream + RecordTypeStream + MatchTypeStream + MExprPrettyPrint
+lang TypeStream = DeclTypeStream + LamTypeStream + AppTypeStream + SeqTypeStream + RecordTypeStream + MatchTypeStream
     sem typeStreamFromExpr : Expr -> TypeStreamContext 
     sem typeStreamFromExpr =
         | ast -> { stack = [ast] }

@@ -8,7 +8,6 @@
 -- - With higher depths, nested objects will also be processed.
 
 include "./objects.mc"
-include "ext/file-ext.mc"
 
 -- ## Depth
 --

@@ -7,13 +7,9 @@
 -- This file provides a function that takes a file name and returns a data
 -- structure representing the file and its includes.
 
-include "../parsing/lexing/token-readers.mc"
-include "sys.mc"
+include "./parsing-file.mc"
 
--- Represents a parsed file header, including its `include`s, header tokens, and full text.
-type ParsingFile = use TokenReader in { includes: [String], headerTokens: [{ token: Token, pos: Pos }], fileText: String }
-
-let parsingFileEmpty = { includes = [], fileText = "", headerTokens = [] }
+include "ext/file-ext.mc"
 
 -- Processes a file and returns its header as a `ParsingFile`, or None if the path is invalid.
 -- Tokens are read until a non-header token is found.
@@ -28,10 +24,10 @@ let parsingOpenFile : String -> Option ParsingFile = use TokenReader in lam file
         case _ then { includes = reverse acc.includes, headerTokens = reverse acc.headerTokens, fileText = s }
         end
     in
-    
+
     match fileReadOpen file with Some rc then
         let s = fileReadString rc in
         fileReadClose rc;
-        Some (work (readOrNever file) pos0 { includes = [], headerTokens = [], fileText = "" })
+        Some (work s pos0 { includes = [], headerTokens = [], fileText = "" })
     else
         None {}
