@@ -4,7 +4,6 @@
 -- File miking.mi is the main file of the Miking tool chain.
 
 include "parser/tool.mc"
-include "accelerate.mc"
 include "compile.mc"
 include "seq.mc"
 include "string.mc"

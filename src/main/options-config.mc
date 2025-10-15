@@ -88,25 +88,6 @@ let optionsConfig : ParseConfig Options = [
     "Compile directly after tuning",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with compileAfterTune = true}),
-  ([("--accelerate", "", "")],
-    "Enables expression acceleration which outputs GPU code by default",
-    lam p: ArgPart Options.
-      let o: Options = p.options in {o with accelerate = true}),
-  ([("--tensor-max-rank", " ", "<rank>")],
-    "Sets the maximum rank of tensors to <rank> in accelerated code",
-    lam p: ArgPart Options.
-      let o: Options = p.options in
-      {o with accelerateTensorMaxRank = string2int (argToString p)}),
-  ([("--debug-accelerate", "", "")],
-    join ["Enables static and dynamic checks for accelerated expressions, ",
-          "and runs the program on the CPU."],
-    lam p: ArgPart Options.
-      let o: Options = p.options in {o with debugAccelerate = true,
-                                            runtimeChecks = true}),
-  ([("--cpu-only", "", "")],
-    "Translate accelerated code to multicore CPU code",
-    lam p: ArgPart Options.
-      let o: Options = p.options in {o with cpuOnly = true}),
   ([("--use-32bit-integers", "", "")],
     "Enables use of 32-bit integers in the C compiler",
     lam p: ArgPart Options.
