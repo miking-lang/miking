@@ -1,4 +1,5 @@
 include "mexpr/ast.mc"
+include "mexpr/ast-builder.mc"
 include "string.mc"
 include "jvm/ast.mc"
 include "javascript/util.mc"

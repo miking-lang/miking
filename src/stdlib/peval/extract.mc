@@ -140,7 +140,7 @@ let extractSpecialize = lam t.
   match addIdentifierToSpecializeTerms t with (specialized, t) in
   let ids = mapMap (lam. ()) specialized in
   let t = liftLambdas t in
-  (specialized, extractAccelerateTerms ids t)
+  (specialized, extractSpecializeTerms ids t)
 in
 
 let noSpecializeCalls = preprocess (bindall_ [
