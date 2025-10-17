@@ -34,7 +34,7 @@ lang HtmlRenderer = RendererInterface
             }
         in
         [format (searchJs (objToJsDict opt obj)) (searchPath ".js"),
-        format htmlStyle htmlStyle
+        format htmlStyle htmlStylePath,
         format htmlScript htmlScriptPath]
         
 
