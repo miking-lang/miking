@@ -4,12 +4,14 @@ include "ocaml/external-includes.mc"
 include "mexpr/cmp.mc"
 
 type GenerateEnv = {
+  variants : Map Name (Map Name (use Ast in Type)),
   constrs : Map Name (use Ast in Type),
   records : Map (Map SID (use Ast in Type)) Name,
   exts : Map Name [ExternalImpl]
 }
 
 let emptyGenerateEnv = use MExprCmp in {
+  variants = mapEmpty nameCmp,
   constrs = mapEmpty nameCmp,
   records = mapEmpty (mapCmp cmpType),
   exts = mapEmpty nameCmp

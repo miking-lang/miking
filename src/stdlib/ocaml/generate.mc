@@ -147,7 +147,6 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst + OCamlTopGenerate
             -> (acc, Expr)
   sem collectNestedMatches env isNestedPat acc addMatchCase =
   | t ->
-    let t : MatchRecord = t in
     -- We assume that the target is a variable because otherwise there is no
     -- easy way to determine that the expressions are the same, as we don't
     -- have access to the outer scope where variables have been defined.
@@ -377,49 +376,79 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst + OCamlTopGenerate
     bind_
       (nulet_ targetId (objMagic (generate env t.target)))
       (_if (null_ (nvar_ targetId)) (generate env t.els) thn)
-  | TmMatch ({target = TmVar _, pat = PatCon pc, els = TmMatch em} & t) ->
+  | TmMatch ({target = TmVar _, pat = PatCon pc} & t) ->
     match collectNestedMatchesByConstructor env t with (arms, defaultCase) in
-		-- Assign the term of the final else-branch to a variable so that we
-		-- don't introduce unnecessary code duplication (the default case could
-		-- be large).
-		let defaultCaseName = nameSym "defaultCase" in
-		let defaultCaseVal = ulam_ "" (generate env defaultCase) in
-		let defaultCaseLet = nulet_ defaultCaseName defaultCaseVal in
+    -- Assign the term of the final else-branch to a variable so that we
+    -- don't introduce unnecessary code duplication (the default case could
+    -- be large).
+    let defaultCaseName = nameSym "defaultCase" in
+    let defaultCaseVal = ulam_ "" (generate env defaultCase) in
+    let defaultCaseLet = nulet_ defaultCaseName defaultCaseVal in
+    let toNestedMatch = lam target : Expr. lam patExpr : [(Pat, Expr)].
+      assocSeqFold
+        (lam acc. lam pat. lam thn. match_ target pat thn acc)
+        (app_ (nvar_ defaultCaseName) uunit_)
+        patExpr
+    in
+    let f = lam arm : (Name, [(Pat, Expr)]).
+      match mapLookup arm.0 env.constrs with Some argTy then
+        let patVarName = nameSym "x" in
+        let target =
+          match argTy with TyRecord _ then t.target
+          else nvar_ patVarName
+        in
+        let isUnit = match argTy with TyRecord {fields = fields} then
+          mapIsEmpty fields else false in
+        let pat = if isUnit
+          then OPatCon {ident = arm.0, args = []}-- TODO(vipa, 2021-05-12): this will break if there actually is an inner pattern that wants to look at the unit
+          else OPatCon {ident = arm.0, args = [npvar_ patVarName]} in
+        let innerPatternTerm = toNestedMatch (withType argTy (objMagic target)) arm.1 in
+        (pat, generate env innerPatternTerm)
+      else
+        let msg = join [
+          "Unknown constructor referenced in nested match expression: ",
+          nameGetStr arm.0
+        ] in
+        errorSingle [t.info] msg
+    in
 
-		let toNestedMatch = lam target : Expr. lam patExpr : [(Pat, Expr)].
-			assocSeqFold
-				(lam acc. lam pat. lam thn. match_ target pat thn acc)
-				(app_ (nvar_ defaultCaseName) uunit_)
-				patExpr
-		in
-		let f = lam arm : (Name, [(Pat, Expr)]).
-			match mapLookup arm.0 env.constrs with Some argTy then
-				let patVarName = nameSym "x" in
-				let target =
-					match argTy with TyRecord _ then t.target
-					else nvar_ patVarName
-				in
-				let isUnit = match argTy with TyRecord {fields = fields} then
-					mapIsEmpty fields else false in
-				let pat = if isUnit
-					then OPatCon {ident = arm.0, args = []}-- TODO(vipa, 2021-05-12): this will break if there actually is an inner pattern that wants to look at the unit
-					else OPatCon {ident = arm.0, args = [npvar_ patVarName]} in
-				let innerPatternTerm = toNestedMatch (withType argTy (objMagic target)) arm.1 in
-				(pat, generate env innerPatternTerm)
-			else
-				let msg = join [
-					"Unknown constructor referenced in nested match expression: ",
-					nameGetStr arm.0
-				] in
-				errorSingle [t.info] msg
-		in
-		let flattenedMatch =
-			_omatch_ (objMagic (generate env t.target))
-				(snoc
-						(map f (mapBindings arms))
-						(pvarw_, (app_ (nvar_ defaultCaseName) uunit_)))
-		in bind_ defaultCaseLet flattenedMatch
+    let cases = map f (mapBindings arms) in
+    let target = objMagic (generate env t.target) in
+    if and (casesCoverAllConstructorsOfTarget env cases t)
+           (not (casesReferToDefault env defaultCaseName cases)) then
+      _omatch_ target cases
+    else
+      let flattenedMatch =
+        _omatch_ target (snoc cases (pvarw_, app_ (nvar_ defaultCaseName) uunit_))
+      in bind_ defaultCaseLet flattenedMatch
   | TmMatch t -> generateMatchBaseCase env (TmMatch t)
+
+  sem casesCoverAllConstructorsOfTarget : GenerateEnv -> [(Pat, Expr)] -> MatchRecord -> Bool
+  sem casesCoverAllConstructorsOfTarget env arms =
+  | t ->
+    -- NOTE(larshum, 2025-10-20): The type of the target seems to have been
+    -- lost at this stage, but the pattern contains the correct type
+    -- information.
+    let ty = unwrapType (tyPat t.pat) in
+    match ty with TyCon {ident = ident} then
+      match mapLookup ident env.variants with Some constrs then
+        eqi (length arms) (mapSize constrs)
+      else errorSingle [infoPat t.pat] "env.variants lookup failed"
+    else errorSingle [infoPat t.pat] "expected TyCon"
+
+  sem casesReferToDefault : GenerateEnv -> Name -> [(Pat, Expr)] -> Bool
+  sem casesReferToDefault env id =
+  | cases ->
+    let caseRefersToDefault = lam c.
+      match c with (_, e) in
+      containsIdentifier id false e
+    in
+    any caseRefersToDefault cases
+
+  sem containsIdentifier : Name -> Bool -> Expr -> Bool
+  sem containsIdentifier id acc =
+  | TmVar t -> or acc (nameEq t.ident id)
+  | e -> if acc then true else sfold_Expr_Expr (containsIdentifier id) false e
 end
 
 lang OCamlGenerate = MExprAst + OCamlAst + OCamlTopGenerate + OCamlMatchGenerate
@@ -625,7 +654,8 @@ let _typeLiftEnvToGenerateEnv = use MExprAst in
       else error "Type lifting error"
     else match ty with TyVariant {constrs = constrs} then
       let constrs = mapMap unwrapType constrs in
-      {env with constrs = mapUnion env.constrs constrs}
+      {env with constrs = mapUnion env.constrs constrs,
+                variants = mapInsert name constrs env.variants}
     else
       env
   in
