@@ -62,6 +62,7 @@ end
 
 lang ConstSideEffect = ConstSideEffectBase + MExprAst
   sem constHasSideEffect =
+  | CUnsafeCoerce _ -> false
   | CTypeOf _ -> false
   | CInt _ | CFloat _ | CBool _ | CChar _ -> false
   | CAddi _ | CSubi _ | CMuli _ | CDivi _ | CNegi _ | CModi _ -> false
@@ -78,7 +79,7 @@ lang ConstSideEffect = ConstSideEffectBase + MExprAst
   | CSet _ | CGet _ | CCons _ | CSnoc _ | CConcat _ | CLength _ | CReverse _
   | CHead _ | CTail _ | CNull _ | CMap _ | CMapi _ | CIter _ | CIteri _
   | CFoldl _ | CFoldr _ | CCreate _ | CCreateList _ | CCreateRope _
-  | CSplitAt _ | CSubsequence _ -> false
+  | CIsList _ | CIsRope _ | CSplitAt _ | CSubsequence _ -> false
   | CFileRead _ | CFileWrite _ | CFileExists _ | CFileDelete _ -> true
   | CPrint _ | CPrintError _ | CDPrint _ | CFlushStdout _ | CFlushStderr _
   | CReadLine _ | CReadBytesAsString _ -> true
@@ -87,6 +88,7 @@ lang ConstSideEffect = ConstSideEffectBase + MExprAst
   | CWallTimeMs _ | CSleepMs _ -> true
   | CConstructorTag _ -> true
   | CRef _ | CModRef _ | CDeRef _ -> true
+  | CTensorCreateUninitInt _ | CTensorCreateUninitFloat _
   | CTensorCreateInt _ | CTensorCreateFloat _ | CTensorCreate _
   | CTensorGetExn _ | CTensorSetExn _
   | CTensorLinearGetExn _ | CTensorLinearSetExn _
