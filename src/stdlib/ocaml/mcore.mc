@@ -1,5 +1,6 @@
 -- Defines functions for compiling (and running) an MCore program.
 
+include "mexpr/deadcode.mc"
 include "mexpr/remove-ascription.mc"
 include "mexpr/type-annot.mc"
 include "mexpr/type-lift.mc"
@@ -23,7 +24,7 @@ let mkEmptyHooks : all a. ([String] -> [String] -> String -> a) -> Hooks a =
   }
 
 lang MCoreCompileLang =
-  MExprRemoveTypeAscription + MExprTypeLift +
+  MExprRemoveTypeAscription + MExprDeadcodeElimination + MExprTypeLift +
   OCamlTypeDeclGenerate + OCamlGenerate + OCamlGenerateExternalNaive
 
   sem collectLibraries : Map Name [ExternalImpl] -> Set String -> ([String], [String])
@@ -46,6 +47,7 @@ lang MCoreCompileLang =
   | hooks ->
     let ast = removeTypeAscription ast in
 
+    let ast = deadcodeElimination ast in
     match typeLift ast with (env, ast) in
     match generateTypeDecls env with (env, typeTops) in
     let env : GenerateEnv =
