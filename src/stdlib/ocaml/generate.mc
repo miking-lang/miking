@@ -230,7 +230,7 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst + OCamlTopGenerate
     let n2 = length postfix in
     let targetId = nameSym "_target" in
     let lenId = nameSym "n" in
-    let cond = _isLengthAtLeast (nvar_ targetId) (addi_ (int_ n1) (int_ n2)) in
+    let cond = _isLengthAtLeast (nvar_ targetId) (int_ (addi n1 n2)) in
     -- NOTE(larshum, 2022-12-20): Add a binding for each of the non-wildcard
     -- patterns in the sequence pattern, starting with the postfix and prefix,
     -- followed by the middle.
@@ -250,7 +250,7 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst + OCamlTopGenerate
       match middle with PName id then
         let midExpr =
           subsequence_ (nvar_ targetId) (int_ n1)
-            (subi_ (nvar_ lenId) (addi_ (int_ n1) (int_ n2)))
+            (subi_ (nvar_ lenId) (int_ (addi n1 n2)))
         in
         bind_ (nulet_ id midExpr) thn
       else thn
