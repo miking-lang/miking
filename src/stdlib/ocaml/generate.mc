@@ -239,7 +239,7 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst + OCamlTopGenerate
       mapi
         (lam i. lam p. (p, subi_ (nvar_ lenId) (int_ (addi i 1))))
         (reverse postfix) in
-    let thn =
+    match
       let thn = generate env t.thn in
       let thn =
         foldl
@@ -252,12 +252,15 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst + OCamlTopGenerate
           subsequence_ (nvar_ targetId) (int_ n1)
             (subi_ (nvar_ lenId) (int_ (addi n1 n2)))
         in
-        bind_ (nulet_ id midExpr) thn
+        (bind_ (nulet_ id midExpr) thn, true)
+      else (thn, not (null postfixIndexedPats))
+    with (thn, usesLen) in
+    let thn =
+      if usesLen then bind_ (nulet_ lenId (length_ (nvar_ targetId))) thn
       else thn
     in
-    bindall_ [
-      nulet_ targetId (objMagic (generate env t.target)),
-      nulet_ lenId (length_ (nvar_ targetId))]
+    bind_
+      (nulet_ targetId (objMagic (generate env t.target)))
       (_if cond thn (generate env t.els))
   | TmMatch (t & {pat = PatRecord {bindings = bindings, ty = ty}}) ->
     if mapIsEmpty bindings then
