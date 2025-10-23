@@ -457,14 +457,31 @@ end
 lang OCamlGenerate = MExprAst + OCamlAst + OCamlTopGenerate + OCamlMatchGenerate
   sem generate (env : GenerateEnv) =
   | TmSeq {tms = tms} ->
+    let toAsciiString = lam tms.
+      let isAsciiChar = lam c.
+        and (geqi (char2int c) 0) (lti (char2int c) 128)
+      in
+      recursive let helper = lam tm.
+        match tm with TmConst {val = CChar {val = c}} then
+          if isAsciiChar c then Some c
+          else None ()
+        else None ()
+      in
+      optionMapM helper tms
+    in
     -- NOTE(vipa, 2021-05-14): Assume that explicit Consts have the same type, since the program wouldn't typecheck otherwise
     let innerGenerate = lam tm.
       let tm = generate env tm in
       match tm with TmConst _ then tm
       else objMagic tm in
-    app_
-      (objMagic (OTmVarExt {ident = (intrinsicOpSeq "Helpers.of_array")}))
-      (OTmArray {tms = map innerGenerate tms})
+    match toAsciiString tms with Some s then
+      app_
+        (objMagic (OTmVarExt {ident = intrinsicOpSeq "Helpers.of_ascii_string"}))
+        (OTmString {text = s})
+    else
+      app_
+        (objMagic (OTmVarExt {ident = intrinsicOpSeq "Helpers.of_array"}))
+        (OTmArray {tms = map innerGenerate tms})
   | TmRecord t ->
     if mapIsEmpty t.bindings then TmRecord t
     else
