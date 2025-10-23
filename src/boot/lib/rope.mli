@@ -119,4 +119,8 @@ module Convert : sig
   val of_ustring_array : ustring -> int t
   (** [Rope.Convert.of_ustring_* u] converts the ustring [u] into a rope of
       integers. *)
+
+  val of_ascii_string_array : string -> int t
+  (** [Rope.Convert.of_ascii_string_* s] converts the string [s] consisting of
+      ASCII characters into a rope of integers. *)
 end

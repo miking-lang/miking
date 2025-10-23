@@ -256,4 +256,8 @@ module Convert = struct
   let to_ustring_array (s : int t) : ustring = array2ustring (to_array_array s)
 
   let of_ustring_array (u : ustring) : int t = of_array_array (ustring2array u)
+
+  let of_ascii_string_array (s: string) : int t =
+    let a = Array.init (String.length s) (fun i -> Char.code (String.get s i)) in
+    of_array_array a
 end

@@ -190,6 +190,12 @@ module Mseq : sig
 
     val of_utf8 : string -> int t
 
+    val of_ascii_string_rope : string -> int t
+
+    val of_ascii_string_list : string -> int t
+
+    val of_ascii_string : string -> int t
+
     (* Complexity:
      * rope (?): O(n*k), where n is the length of the sequence, k is the
      *   complexity of the function (flattens)
