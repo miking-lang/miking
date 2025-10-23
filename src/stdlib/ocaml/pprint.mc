@@ -625,7 +625,7 @@ lang OCamlPrettyPrint =
                     "with", join arms])
       else never
     else never
-  | OTmString t -> (env, join ["\"", t.text, "\""])
+  | OTmString t -> (env, join ["\"", escapeString t.text, "\""])
   | OTmLabel {label = label, arg = arg} ->
     match pprintCode indent env arg with (env, arg) then
       (env, join ["~", label, ":(", arg, ")"])
