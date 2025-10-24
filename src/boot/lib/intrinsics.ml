@@ -285,7 +285,8 @@ module Mseq = struct
 
     let of_ascii_string_rope s = Rope (Rope.Convert.of_ascii_string_array s)
 
-    let of_ascii_string_list s = List (List.map Char.code (List.of_seq (String.to_seq s)))
+    let of_ascii_string_list s =
+      List (List.map Char.code (List.of_seq (String.to_seq s)))
 
     let of_ascii_string = of_ascii_string_rope
   end
