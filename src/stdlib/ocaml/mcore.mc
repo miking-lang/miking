@@ -49,9 +49,6 @@ lang MCoreCompileLang =
   | hooks ->
     let ast = removeTypeAscription ast in
 
-    -- Inline let-bindings that are only used once.
-    let ast = inlineSingleUseBindings ast in
-
     match typeLift ast with (env, ast) in
     match generateTypeDecls env with (env, typeTops) in
     let env : GenerateEnv =
