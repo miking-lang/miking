@@ -7,6 +7,7 @@
 include "mexpr/ast.mc"
 include "mexpr/eq.mc"
 include "mexpr/pprint.mc"
+include "mexpr/symbolize.mc"
 
 lang Resymbolize = Ast
   sem resymbolizeBindings : Expr -> Expr
@@ -221,3 +222,55 @@ lang MExprResymbolize =
   sem resymbolizeType nameMap =
   | ty -> smap_Type_Type (resymbolizeType nameMap) ty
 end
+
+lang TestLang = MExprResymbolize + MExprEq + MExprPrettyPrint + MExprSym
+  sem collectSymVars : Expr -> Map String Name
+  sem collectSymVars =
+  | e -> collectSymVarsH (mapEmpty cmpString) e
+
+  sem collectSymVarsH : Map String Name -> Expr -> Map String Name
+  sem collectSymVarsH acc =
+  | TmVar t ->
+    if nameHasSym t.ident then mapInsert (nameGetStr t.ident) t.ident acc
+    else acc
+  | t -> sfold_Expr_Expr collectSymVarsH acc t
+end
+
+mexpr
+
+use TestLang in
+
+let optionGet = lam o. optionGetOrElse (lam. never) o in
+let nameNotEq = lam l. lam r. not (nameEq l r) in
+
+-- Unsymbolized variables in the AST are symbolized
+let e = resymbolizeBindings (var_ "x") in
+let syms = collectSymVars e in
+utest mapMem "x" syms with false in
+
+-- Variables bound in the AST are re-symbolized
+let x = nameSym "x" in
+let e = resymbolizeBindings (bind_ (nulet_ x (int_ 2)) (nvar_ x)) in
+let syms = collectSymVars e in
+utest mapMem "x" syms with true in
+utest optionGet (mapLookup "x" syms) with x using nameNotEq in
+
+-- Unsymbolized variables that are bound in the AST are symbolized
+let e = resymbolizeBindings (bind_ (ulet_ "x" (int_ 2)) (var_ "x")) in
+let syms = collectSymVars e in
+utest mapMem "x" syms with true in
+
+-- Symbolized free variables are not re-symbolized
+let y = nameSym "y" in
+let e = resymbolizeBindings
+  (bind_
+    (nulet_ x (int_ 2))
+    (addi_ (nvar_ x) (nvar_ y)))
+in
+let syms = collectSymVars e in
+utest mapMem "x" syms with true in
+utest mapMem "y" syms with true in
+utest optionGet (mapLookup "x" syms) with x using nameNotEq in
+utest optionGet (mapLookup "y" syms) with y using nameEq in
+
+()
