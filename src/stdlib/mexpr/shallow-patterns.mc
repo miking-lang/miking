@@ -767,22 +767,7 @@ lang CollectBranches = MatchAst + VarAst + NamedPat + AndPat + OrPat + NotPat
   | _ -> None ()
 end
 
-lang SimpleExprHeuristic =
-  VarAst + AppAst + ConstAst + SeqAst + RecordAst + DataAst + NeverAst
-  sem isSimpleExpr : Expr -> Bool
-  sem isSimpleExpr =
-  | TmVar _ | TmConst _ | TmConApp _ | TmNever _ -> true
-  | TmApp t -> and (isSimpleExpr t.lhs) (isSimpleExpr t.rhs)
-  | TmSeq t ->
-    if lti (length t.tms) 5 then forAll isSimpleExpr t.tms
-    else false
-  | TmRecord t ->
-    if lti (mapSize t.bindings) 5 then mapAll isSimpleExpr t.bindings
-    else false
-  | _ -> false
-end
-
-lang LowerNestedPatterns = CollectBranches + ShallowBase + SimpleExprHeuristic
+lang LowerNestedPatterns = CollectBranches + ShallowBase
   sem lowerAll : Expr -> Expr
   sem lowerAll = | t ->
     let f = lam pair. (pair.0, lowerAll pair.1) in
@@ -792,15 +777,10 @@ lang LowerNestedPatterns = CollectBranches + ShallowBase + SimpleExprHeuristic
         let targetId = nameSym "_target" in
         let elseId = nameSym "_elsBranch" in
         let els = lowerAll fallthrough in
-        if isSimpleExpr els then
-          bind_
-            (nulet_ targetId (lowerAll expr))
-            (lowerToExpr targetId (map f branches) els)
-        else
-          bindall_ [
-            nulet_ elseId (ulam_ "" (lowerAll fallthrough)),
-            nulet_ targetId (lowerAll expr)]
-          (lowerToExpr targetId (map f branches) (app_ (nvar_ elseId) uunit_))
+        bindall_ [
+          nulet_ elseId (ulam_ "" (lowerAll fallthrough)),
+          nulet_ targetId (lowerAll expr)]
+        (lowerToExpr targetId (map f branches) (app_ (nvar_ elseId) uunit_))
       else match target with Right name then
         lowerToExpr name (map f branches) (lowerAll fallthrough)
       else never
