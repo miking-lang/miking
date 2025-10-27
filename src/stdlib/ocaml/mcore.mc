@@ -2,7 +2,6 @@
 
 include "mexpr/deadcode.mc"
 include "mexpr/remove-ascription.mc"
-include "mexpr/inline.mc"
 include "mexpr/type-annot.mc"
 include "mexpr/type-lift.mc"
 include "ocaml/generate.mc"
@@ -26,8 +25,7 @@ let mkEmptyHooks : all a. ([String] -> [String] -> String -> a) -> Hooks a =
 
 lang MCoreCompileLang =
   MExprRemoveTypeAscription + MExprDeadcodeElimination + MExprTypeLift +
-  MExprInlineSingleUse + OCamlTypeDeclGenerate + OCamlGenerate +
-  OCamlGenerateExternalNaive
+  OCamlTypeDeclGenerate + OCamlGenerate + OCamlGenerateExternalNaive
 
   sem collectLibraries : Map Name [ExternalImpl] -> Set String -> ([String], [String])
   sem collectLibraries extNameMap =
