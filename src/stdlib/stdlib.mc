@@ -13,7 +13,7 @@ let parseMCoreLibs : String -> Map String String = lam str.
   match str with "" then mapEmpty cmpString else
   let processBinding = lam acc. lam str.
     match strSplit "=" str with [lib, path] ++ paths
-    then mapInsert lib (strJoin "=" (cons path paths)) acc
+    then mapInsertWith (lam prev. lam. prev) lib (strJoin "=" (cons path paths)) acc
     else
       warnSingle [] (join
         [ "Invalid element of MCORE_LIBS: \""
