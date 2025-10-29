@@ -21,8 +21,8 @@
 -- 3. The parsing step later needs the raw code, and re-opening files would be
 --    wasteful. We therefore insert all file contents into the `include-set`.
 
+include "mexpr/boot-parser.mc"
 include "mexpr/keywords.mc"
-include "pmexpr/demote.mc"
 include "ocaml/external.mc"
 include "mexpr/type-check.mc"
 include "mexpr/ast.mc"
@@ -40,7 +40,11 @@ include "../global/logger.mc"
 -- Builds the AST from a file using the Miking compiler parser.
 -- Generates a temporary file, processes includes, preserves utests/mexpr,
 -- and type-checks the final AST.
-let buildMAstFromFile: Logger -> String -> MAst = use PMExprDemote in use BootParser in use TokenReader in lam log. lam file.
+let buildMAstFromFile: Logger -> String -> MAst = lam log. lam file.
+    use MExprTypeCheck in
+    use MExprSym in
+    use BootParser in
+    use TokenReader in
 
     let externalsExclude = mapKeys (externalGetSupportedExternalImpls ()) in
     let parseOpt = {{{{{{{ defaultBootParserParseMCoreFileArg
