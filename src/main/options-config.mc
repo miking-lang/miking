@@ -129,5 +129,9 @@ let optionsConfig : ParseConfig Options = [
   ([("--mlang-pipeline", "", "")],
     "Compile using the MLang Pipeline. Note that this is an unstable, experimental feature!",
     lam p: ArgPart Options.
-      let o: Options = p.options in {o with mlangPipeline = true})
+      let o: Options = p.options in {o with mlangPipeline = true}),
+  ([("--fast-eval", "", "")],
+    "Use fast evaluator",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with fastEval = true})
 ]

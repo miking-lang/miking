@@ -43,8 +43,9 @@ let optionsDefault : Options = {
   disableJsTCO = false,
   output = None (),
   tuneOptions = tuneOptionsDefault,
-  docgenOptions = docGenOptionsDefault,
-  mlangPipeline = false
+  docgenOptions = docGenOptionsDefault,    
+  mlangPipeline = false,
+  fastEval = false
 }
 
 -- Get the help string for options

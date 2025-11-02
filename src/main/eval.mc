@@ -20,6 +20,7 @@ include "mexpr/symbolize.mc"
 include "mexpr/mexpr.mc"
 include "mexpr/builtin.mc"
 include "mexpr/eval.mc"
+include "mexpr/eval-fast.mc"
 include "mexpr/type-check.mc"
 include "mexpr/remove-ascription.mc"
 include "mexpr/type-lift.mc"
@@ -30,7 +31,7 @@ include "peval/ast.mc"
 lang ExtMCore =
   BootParser + MExpr + MExprTypeCheck + MExprRemoveTypeAscription +
   MExprTypeCheck + MExprTypeLift + MExprUtestGenerate +
-  MExprProfileInstrument + MExprEval + SpecializeAst
+  MExprProfileInstrument + MExprEval + MExprEvalF + SpecializeAst
 
   sem updateArgv : [String] -> Expr -> Expr
   sem updateArgv args =
@@ -86,6 +87,8 @@ let eval = lam files. lam options : Options. lam args.
     let ast = generateUtest options.runTests ast in
     if options.exitBefore then exit 0
     else
-      eval (evalCtxEmpty ()) (updateArgv args ast); ()
+      if options.fastEval then
+        let eval = mkEvalF ast in eval (Nil ()); ()
+      else eval (evalCtxEmpty ()) (updateArgv args ast); ()
   in
   iter evalFile files
