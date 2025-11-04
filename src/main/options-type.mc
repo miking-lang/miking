@@ -1,3 +1,4 @@
+include "docgen/options/docgen-options.mc"
 include "tuning/tune-options.mc"
 include "set.mc"
 
@@ -24,10 +25,6 @@ type Options = {
   enableConstructorTypes : Bool,
   useTuned : Bool,
   compileAfterTune : Bool,
-  accelerate : Bool,
-  accelerateTensorMaxRank : Int,
-  debugAccelerate : Bool,
-  cpuOnly : Bool,
   use32BitIntegers : Bool,
   use32BitFloats : Bool,
   keepDeadCode : Bool,
@@ -38,6 +35,7 @@ type Options = {
   disableJsTCO : Bool,
   output : Option String,
   tuneOptions : TuneOptions,
+  docgenOptions : DocGenOptions,
   mlangPipeline : Bool,
   experimentalRecords : Bool,
   disableStrictSumExtension : Bool

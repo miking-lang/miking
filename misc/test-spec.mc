@@ -17,7 +17,6 @@ include "map.mc"
 include "set.mc"
 include "common.mc"
 include "tuple.mc"
-include "cuda/sys.mc"
 
 -- A path representing some file in the repository, either source or
 -- generated through some command.
@@ -753,31 +752,7 @@ let testMain : [TestCollection] -> () = lam colls.
 mexpr
 
 testMain
-  [ { testColl "accelerate"
-    with checkCondition = lam.
-      if scallb [
-        lam. sysCommandExists "nvcc",
-        lam. sysCommandExists "futhark",
-        -- NOTE(johnwikman, 2025-03-28): Checking 0 < n_devices and that we can
-        -- run CUDA programs
-        lam. optionMapOr false (lti 0) (cudaGetDeviceCount ())
-      ]
-      then ConditionsMet ()
-      else ConditionsImpossible ()
-    , exclusions = lam api.
-      -- NOTE(vipa, 2023-04-25): Accelerate isn't supported in
-      -- interpreted mode, and compiled mode is already tested via the
-      -- new tests below.
-      api.mark noTasks (api.glob ["test", "accelerate"] (IncludeSubs ()) (SuffixFile ".mc"))
-    , newTests = lam api.
-      for_ (api.glob ["test", "accelerate"] (IncludeSubs ()) (SuffixFile ".mc")) (lam mc.
-        let exe = api.mid {input = mc, cmd = "%m compile --accelerate %i --output %o", tag = "exe"} in
-        api.success {input = exe, cmd = "%i", tag = "run"};
-        let exe = api.mid {input = mc, cmd = "%m compile --debug-accelerate %i --output %o", tag = "debug-exe"} in
-        api.success {input = exe, cmd = "%i", tag = "debug-run"})
-    }
-
-  , { testColl "exceptions"
+  [ { testColl "exceptions"
     with exclusions = lam api.
       let runFail = {defaultTasks with interpret = Fail (), run = Fail ()} in
       let interpretFail = {defaultTasks with interpret = Fail ()} in
@@ -832,8 +807,17 @@ testMain
         , "stdlib/multicore/cond.mc"
         , "stdlib/multicore/mutex.mc"
         , "stdlib/multicore/pseq.mc"
-        , "stdlib/stats.mc"
+        , "stdlib/stats.mc"     
         , "stdlib/math.mc"
+        , "main/docgen.mc"
+        , "stdlib/docgen/execution-context.mc"
+        , "stdlib/docgen/docgen.mc"
+        , "stdlib/docgen/rendering/files-opener.mc"
+        , "stdlib/docgen/rendering/renderer.mc"
+        , "stdlib/docgen/mast-gen/file-opener.mc"
+        , "stdlib/docgen/mast-gen/mast-generator.mc"
+        , "stdlib/docgen/server/server.mc"
+        , "stdlib/docgen/server/python-server.mc"
         ]);
 
       -- Files that *should* fail to compile

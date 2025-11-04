@@ -1,7 +1,6 @@
 -- Miking is licensed under the MIT license.
 -- Copyright (C) David Broman. See file LICENSE.txt
 
-include "accelerate.mc"
 include "mi-lite.mc"
 include "options.mc"
 include "parse.mc"
@@ -20,7 +19,6 @@ include "ocaml/ast.mc"
 include "ocaml/external-includes.mc"
 include "ocaml/mcore.mc"
 include "ocaml/wrap-in-try-with.mc"
-include "pmexpr/demote.mc"
 include "tuning/context-expansion.mc"
 include "tuning/tune-file.mc"
 include "jvm/compile.mc"
@@ -32,7 +30,6 @@ include "extrec/main.mc"
 
 lang MCoreCompile =
   BootParser +
-  PMExprDemote +
   MExprHoles +
   MExprCmp +
   MExprSym + MExprRemoveTypeAscription + MExprTypeCheck +
@@ -176,21 +173,6 @@ let compile = lam files. lam options : Options. lam args.
       let ast = makeKeywords ast in
       endPhaseStatsExpr log "make-keywords" ast;
 
-      -- Applies static and dynamic checks on the accelerated expressions, to
-      -- verify that the code within them are supported by the accelerate
-      -- backends.
-      -- TODO(larshum, 2022-06-29): Rewrite compilation so that we don't
-      -- duplicate symbolization and type-checking when compiling in debug mode.
-      let ast =
-        if options.debugAccelerate then
-          let ast = symbolizeExpr keywordsSymEnv ast in
-          let ast = typeCheck ast in
-          let ast = removeTypeAscription ast in
-          match checkWellFormedness options ast with (ast, _, _) in
-          demoteParallel ast
-        else demoteParallel ast in
-      endPhaseStatsExpr log "accelerate" ast;
-
       -- Insert tuned values, or use default values if no .tune file present
       let ast = insertTunedOrDefaults options ast file in
       endPhaseStatsExpr log "tuning" ast;
@@ -200,5 +182,4 @@ let compile = lam files. lam options : Options. lam args.
 
       compileWithUtests options file ast; ()
     in
-    if options.accelerate then compileAccelerate files options args
-    else iter compileFile files
+    iter compileFile files

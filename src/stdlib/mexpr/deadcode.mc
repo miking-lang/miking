@@ -1,6 +1,7 @@
 include "mexpr/ast-builder.mc"
 include "mexpr/builtin.mc"
 include "mexpr/eq.mc"
+include "mexpr/pprint.mc"
 include "mexpr/side-effect.mc"
 include "mexpr/symbolize.mc"
 include "name.mc"
@@ -327,12 +328,23 @@ lang MExprDeadcodeElimination =
     removeLets nmap t
 end
 
-lang TestLang = MExprDeadcodeElimination + MExprEq
+lang TestLang = MExprDeadcodeElimination + MExprEq + MExprPrettyPrint
 end
 
 mexpr
 
 use TestLang in
+
+let pprintExprs = lam l. lam r.
+  join ["LHS:\n", expr2str l, "\n\nRHS:\n", expr2str r]
+in
+
+let e =
+  bind_
+    (ulet_ "x" (int_ 2))
+    (var_ "x")
+in
+utest deadcodeElimination e with e using eqExpr else pprintExprs in
 
 let e =
   bindall_
@@ -341,6 +353,61 @@ let e =
     (var_ "y")
 in
 let expected = bind_ (ulet_ "y" (int_ 3)) (var_ "y") in
-utest deadcodeElimination e with expected using eqExpr in
+utest deadcodeElimination e with expected using eqExpr else pprintExprs in
+
+let e =
+  bind_
+    (ureclets_ [
+      ("x", (ulam_ "a" (app_ (var_ "y") (var_ "a")))),
+      ("y", (ulam_ "b" (int_ 0)))
+    ])
+    (var_ "x")
+in
+utest deadcodeElimination e with e using eqExpr else pprintExprs in
+
+let e =
+  bind_
+    (ureclets_ [
+      ("x", (ulam_ "a" (app_ (var_ "y") (var_ "a")))),
+      ("y", (ulam_ "b" (app_ (var_ "x") (var_ "b")))),
+      ("z", (ulam_ "c" (int_ 0)))
+    ])
+    (var_ "y")
+in
+let expected =
+  bind_
+    (ureclets_
+      [ ("x", (ulam_ "a" (app_ (var_ "y") (var_ "a"))))
+      , ("y", (ulam_ "b" (app_ (var_ "x") (var_ "b")))) ])
+    (var_ "y")
+in
+utest deadcodeElimination e with expected using eqExpr else pprintExprs in
+
+let e =
+  bindall_
+    [ ulet_ "z" (int_ 0)
+    , ureclets_
+      [ ("x", (ulam_ "a" (app_ (var_ "y") (var_ "a"))))
+      , ("y", (ulam_ "b" (app_ (var_ "x") (var_ "b")))) ] ]
+    (var_ "z")
+in
+let expected = bind_ (ulet_ "z" (int_ 0)) (var_ "z") in
+utest deadcodeElimination e with expected using eqExpr else pprintExprs in
+
+let e =
+  bindall_
+    [ ext_ "abs_int" true (tyarrow_ tyint_ tyint_)
+    , ulet_ "" (app_ (var_ "abs_int") (int_ -3)) ]
+    (int_ 0)
+in
+utest deadcodeElimination e with e using eqExpr else pprintExprs in
+
+let e =
+  bindall_
+    [ ext_ "abs_int" false (tyarrow_ tyint_ tyint_)
+    , ulet_ "" (app_ (var_ "abs_int") (int_ -3)) ]
+    (int_ 0)
+in
+utest deadcodeElimination e with int_ 0 using eqExpr else pprintExprs in
 
 ()

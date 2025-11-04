@@ -1,7 +1,6 @@
 -- Defines a language fragment to extract all dependencies for the specialize
--- terms. Uses the functions defined in pmexpr/extract.mc and mexpr/extract.mc
+-- terms. Uses functions defined in mexpr/extract.mc
 
-include "pmexpr/extract.mc"
 include "peval/ast.mc"
 
 include "mexpr/eq.mc"
@@ -15,11 +14,85 @@ include "name.mc"
 include "map.mc"
 
 
-lang SpecializeExtract = PMExprExtractAccelerate + SpecializeAst
+lang SpecializeExtract = MExprExtract + SpecializeAst
 
-  type SpecializeData = AccelerateData
+  type SpecializeData = {
+    identifier : Name,
+    bytecodeWrapperId : Name,
+    params : [(Name, Type)],
+    returnType : Type,
+    info : Info
+  }
 
-  type AddIdentifierSpecializeEnv = AddIdentifierAccelerateEnv
+  type AddIdentifierSpecializeEnv = {
+    functions : Map Name SpecializeData,
+    programIdentifiers : Set SID
+  }
+
+  sem collectProgramIdentifiers : AddIdentifierSpecializeEnv -> Expr
+                               -> AddIdentifierSpecializeEnv
+  sem collectProgramIdentifiers env =
+  | TmVar t ->
+    let sid = stringToSid (nameGetStr t.ident) in
+    {env with programIdentifiers = setInsert sid env.programIdentifiers}
+  | t -> sfold_Expr_Expr collectProgramIdentifiers env t
+
+  sem getUniqueIdentifier : Set SID -> Name
+  sem getUniqueIdentifier =
+  | programIdentifiers ->
+    recursive let genstr = lam acc. lam n.
+      if eqi n 0 then acc
+      else
+        let nextchr = randAlphanum () in
+        genstr (snoc acc nextchr) (subi n 1)
+    in
+    let str = genstr "v" 10 in
+    if setMem (stringToSid str) programIdentifiers then
+      getUniqueIdentifier programIdentifiers
+    else nameSym str
+
+  sem replaceTermWithLet (env: AddIdentifierSpecializeEnv) =
+  | t ->
+    let specializeIdent = getUniqueIdentifier env.programIdentifiers in
+    let bytecodeIdent = getUniqueIdentifier env.programIdentifiers in
+    let retType = t.ty in
+    let info = mergeInfo t.info (infoTm t.e) in
+    let paramId = nameSym "x" in
+    let paramTy = TyInt {info = info} in
+    let functionData = {
+      identifier = specializeIdent,
+      bytecodeWrapperId = bytecodeIdent,
+      params = [(paramId, paramTy)],
+      returnType = retType,
+      info = info
+    } in
+    let env = {env with functions = mapInsert specializeIdent functionData env.functions} in
+    let funcType = TyArrow {from = paramTy, to = retType, info = info} in
+    let specializeLet = TmDecl {
+      decl = DeclLet {
+        ident = specializeIdent,
+        tyAnnot = funcType,
+        tyBody = funcType,
+        body = TmLam {
+          ident = paramId,
+          tyAnnot = paramTy,
+          tyParam = paramTy,
+          body = t.e,
+          ty = TyArrow {from = paramTy, to = retType, info = info},
+          info = info
+        },
+        info = info
+      },
+      inexpr = TmApp {
+        lhs = TmVar {ident = specializeIdent, ty = funcType, info = info, frozen = false},
+        rhs = TmConst {val = CInt {val = 0}, ty = paramTy, info = info},
+        ty = retType,
+        info = info
+      },
+      ty = retType,
+      info = info
+    } in
+    (env, specializeLet)
 
   sem addIdentifierToSpecializeTerms =
   | t ->
@@ -57,9 +130,6 @@ end
 
 mexpr
 
--- The below tests are essentially identical to the ones in stdlib/pmexpr/extract.mc
--- But adapted to use 'specialize' instead
-
 use TestLang in
 
 let preprocess = lam t.
@@ -70,7 +140,7 @@ let extractSpecialize = lam t.
   match addIdentifierToSpecializeTerms t with (specialized, t) in
   let ids = mapMap (lam. ()) specialized in
   let t = liftLambdas t in
-  (specialized, extractAccelerateTerms ids t)
+  (specialized, extractSpecializeTerms ids t)
 in
 
 let noSpecializeCalls = preprocess (bindall_ [
