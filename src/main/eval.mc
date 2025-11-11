@@ -95,7 +95,7 @@ let eval = lam files. lam options : Options. lam args.
 
     let ast =
       removeMetaVarExpr
-        (typeCheckExpr
+        (typeInferExpr
            {typcheckEnvDefault with
             disableConstructorTypes = not options.enableConstructorTypes}
            ast) in

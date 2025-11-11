@@ -176,6 +176,23 @@ lang AVLTreeImpl
     else avlRotateRightLeft k v l r
   | Leaf _ -> error "avlBalanceRight: empty tree"
 
+  sem avlSplitLast : all k. all v. AVL k v -> (k, v, AVL k v)
+  sem avlSplitLast =
+  | Node (t & {r = Leaf _}) -> (t.key, t.value, t.l)
+  | Node t ->
+    match avlSplitLast t.r with (k, v, r) in
+    let hd = subi (avlHeight r) (avlHeight t.l) in
+    if lti hd (negi 1) then (k, v, avlBalanceLeft t.key t.value r t.l)
+    else (k, v, avlCreate t.key t.value t.l r)
+  | Leaf _ -> error "avlSplitLast: empty tree"
+
+  sem avlBalanceLeft : all k. all v. k -> v -> AVL k v -> AVL k v -> AVL k v
+  sem avlBalanceLeft k v r =
+  | l & (Node lt) ->
+    if geqi (avlHeight lt.l) (avlHeight lt.r) then avlRotateRight k v r l
+    else avlRotateLeftRight k v r l
+  | Leaf _ -> error "avlBalanceLeft: empty tree"
+
   -- NOTE(larshum, 2023-03-04): We use a join-based implementation, where the
   -- insertion and deletion operations are defined in terms of the join
   -- function above.
@@ -591,6 +608,20 @@ utest rest with mknode 1 (avlEmpty ()) (mkleaf 2) using eqset subi in
 match avlSplitFirst joined with (k, _, rest2) in
 utest k with 0 in
 utest rest2 with mknode 4 rest (mknode 5 (avlEmpty ()) (mkleaf 6)) using eqset subi in
+
+match avlSplitLast r with (k, _, rest) in
+utest k with 6 in
+utest rest with mknode 5 (mkleaf 4) (avlEmpty ()) using eqset subi in
+match avlSplitLast joined with (k, _, rest2) in
+utest k with 6 in
+utest rest2 with mknode 4 l (mkleaf 5) using eqset subi in
+
+let big = foldl (lam t. lam i. avlInsert subi i () t) (avlEmpty ()) (range 0 20 1) in
+recursive let drainLast = lam acc. lam t.
+  match t with Leaf _ then (acc, true) else
+  match avlSplitLast t with (k, _, t) in
+  if avlValidate subi t then drainLast (snoc acc k) t else (acc, false) in
+utest drainLast [] big with (reverse (range 0 20 1), true) in
 
 let t1 = avlInsert subi 0 '0' (avlEmpty ()) in
 utest avlSize t1 with 1 in

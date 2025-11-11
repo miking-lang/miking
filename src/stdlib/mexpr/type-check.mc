@@ -776,16 +776,30 @@ lang TypeCheck = TCUnify + Generalize + RemoveMetaVar
 
   sem typeCheckLeaveMeta : Expr -> Expr
   sem typeCheckLeaveMeta =
-  | tm -> typeCheckExpr typcheckEnvDefault tm
+  | tm -> typeInferExpr typcheckEnvDefault tm
 
-  -- Type check `expr' under the type environment `env'. The resulting
-  -- type may contain unification variables and links.
-  sem typeCheckExpr : TCEnv -> Expr -> Expr
-  sem typeCheckExpr env =
+  -- Type check `expr' under the type environment `env', against the
+  -- expected type `ty', which may be a unification variable. The
+  -- resulting type may contain unification variables and links.
+  sem typeCheckExpr : TCEnv -> Type -> Expr -> Expr
+  sem typeCheckExpr env ty =
   | tm ->
     dprint tm;
     print "\n";
     errorSingle [infoTm tm] "Unmatched term expression in 'typeCheckExpr'"
+
+  -- Infer the type of `expr' under the type environment `env'.
+  sem typeInferExpr : TCEnv -> Expr -> Expr
+  sem typeInferExpr env =
+  | tm -> typeCheckExpr env (newpolyvar env.currentLvl (infoTm tm)) tm
+
+  -- Helper for cases whose type is naturally inferred rather than
+  -- checked: unify the expected type `ty' with the type of `tm'.
+  sem _checkInferred : TCEnv -> Type -> Expr -> Expr
+  sem _checkInferred env ty =
+  | tm ->
+    unify env [infoTm tm] ty (tyTm tm);
+    tm
 
   sem typeCheckDecl : TCEnv -> Decl -> (TCEnv, Decl)
 end
@@ -1010,21 +1024,20 @@ lang IsEmpty =
 end
 
 lang OpaqueTypeCheck = TypeCheck + OpaqueAst
-  sem typeCheckExpr env +=
+  sem typeCheckExpr env ty +=
   | TmOpaque x ->
-    let body = typeCheckExpr env x.body in
+    let body = typeCheckExpr env ty x.body in
     TmOpaque {x with ty = tyTm body, body = body}
 end
 
 lang VarTypeCheck = TypeCheck + VarAst
-  sem typeCheckExpr env +=
+  sem typeCheckExpr env ty +=
   | TmVar t ->
-    match mapLookup t.ident env.varEnv with Some ty then
-      let ty =
-        if t.frozen then ty
-        else inst t.info env.currentLvl ty
-      in
-      TmVar {t with ty = ty}
+    match mapLookup t.ident env.varEnv with Some varTy then
+      let varTy =
+        if t.frozen then varTy
+        else inst t.info env.currentLvl varTy in
+      _checkInferred env ty (TmVar {t with ty = varTy})
     else
       let msg = join [
         "* Encountered an unbound variable: ",
@@ -1035,9 +1048,9 @@ lang VarTypeCheck = TypeCheck + VarAst
 end
 
 lang OpVarTypeCheck = TypeCheck + OpVarAst + RepTypesHelpers + SubstituteNewReprs + NeverAst + NamedPat + RecordPat + VarAst + MatchAst
-  sem typeCheckExpr env +=
+  sem typeCheckExpr env ty +=
   | TmOpVar x ->
-    match mapLookup x.ident env.varEnv with Some ty then
+    match mapLookup x.ident env.varEnv with Some varTy then
       switch mapLookup x.ident env.reptypes.opNamesInScope
       case Some (Some (rName, label)) then
         -- NOTE(vipa, 2023-06-16): "Desugar" the variable to an access
@@ -1059,11 +1072,11 @@ lang OpVarTypeCheck = TypeCheck + OpVarAst + RepTypesHelpers + SubstituteNewRepr
           , ty = tyunknown_
           , info = x.info
           } in
-        typeCheckExpr env newTm
+        typeCheckExpr env ty newTm
       case Some _ then
-        let ty = if x.frozen then ty else inst x.info env.currentLvl ty in
-        let ty = substituteNewReprs env ty in
-        TmOpVar {x with ty = ty}
+        let varTy = if x.frozen then varTy else inst x.info env.currentLvl varTy in
+        let varTy = substituteNewReprs env varTy in
+        _checkInferred env ty (TmOpVar {x with ty = varTy})
       case None _ then
         let msg = join [
           "* Encountered scaled application of a non-operation: ",
@@ -1081,35 +1094,51 @@ lang OpVarTypeCheck = TypeCheck + OpVarAst + RepTypesHelpers + SubstituteNewRepr
       errorSingle [x.info] msg
 end
 
-lang LamTypeCheck = TypeCheck + LamAst + ResolveType + SubstituteUnknown + SubstituteNewReprs
-  sem typeCheckExpr env +=
+lang LamTypeCheck = TypeCheck + LamAst + ResolveType + SubstituteUnknown + SubstituteNewReprs +
+  MetaVarDisableGeneralize + UnknownTypeAst
+  sem typeCheckExpr env ty +=
   | TmLam t ->
     let tyAnnot = resolveType t.info env false t.tyAnnot in
     let tyAnnot = substituteNewReprs env tyAnnot in
-    let tyParam = substituteUnknown t.info env (Mono ()) tyAnnot in
-    let body = typeCheckExpr (_insertVar t.ident tyParam env) t.body in
+    match
+      match unwrapType ty with TyArrow {from = from, to = to} then
+        match tyAnnot with TyUnknown _ then
+          -- NOTE: An unannotated parameter takes the expected type,
+          -- but any unification variables in it must be
+          -- monomorphic, as they would be if we inferred the type of
+          -- the parameter and unified.
+          weakenMetaVars env.currentLvl from;
+          (from, to)
+        else
+          let tyParam = substituteUnknown t.info env (Mono ()) tyAnnot in
+          unify env [infoTy tyAnnot] from tyParam;
+          (tyParam, to)
+      else
+        let tyParam = substituteUnknown t.info env (Mono ()) tyAnnot in
+        let tyBody = newpolyvar env.currentLvl (infoTm t.body) in
+        unify env [t.info] ty (ityarrow_ t.info tyParam tyBody);
+        (tyParam, tyBody)
+    with (tyParam, tyBody) in
+    let body = typeCheckExpr (_insertVar t.ident tyParam env) tyBody t.body in
     let tyLam = ityarrow_ t.info tyParam (tyTm body) in
     TmLam {t with body = body, tyAnnot = tyAnnot, tyParam = tyParam, ty = tyLam}
 end
 
 lang AppTypeCheck = TypeCheck + AppAst
-  sem typeCheckExpr env +=
+  sem typeCheckExpr env ty +=
   | TmApp t ->
-    let lhs = typeCheckExpr env t.lhs in
-    let rhs = typeCheckExpr env t.rhs in
     let tyRhs = newpolyvar env.currentLvl t.info in
-    let tyRes = newpolyvar env.currentLvl t.info in
-    unify env [infoTm t.lhs] (ityarrow_ (infoTm lhs) tyRhs tyRes) (tyTm lhs);
-    unify env [infoTm t.rhs] tyRhs (tyTm rhs);
-    TmApp {t with lhs = lhs, rhs = rhs, ty = tyRes}
+    let lhs = typeCheckExpr env (ityarrow_ (infoTm t.lhs) tyRhs ty) t.lhs in
+    let rhs = typeCheckExpr env tyRhs t.rhs in
+    TmApp {t with lhs = lhs, rhs = rhs, ty = ty}
 end
 
 lang DeclTypeCheck = TypeCheck + DeclAst
-  sem typeCheckExpr env +=
+  sem typeCheckExpr env ty +=
   | TmDecl x ->
     let preLvl = env.currentLvl in
     match typeCheckDecl env x.decl with (env, decl) in
-    let inexpr = typeCheckExpr env x.inexpr in
+    let inexpr = typeCheckExpr env ty x.inexpr in
     (if gti env.currentLvl preLvl then
       unify env [infoDecl x.decl, infoTm inexpr] (newpolyvar preLvl x.info) (tyTm inexpr)
      else ());
@@ -1144,19 +1173,9 @@ lang ReprDeclTypeCheck = ReprDeclAst + TypeCheck + ResolveType + WildToMeta
     )
 end
 
-lang PropagateTypeAnnot = FunTypeAst + LamAst + UnknownTypeAst + AllTypeAst
-  sem propagateTyAnnot =
-  | (tm, TyAll a) -> propagateTyAnnot (tm, a.ty)
-  | (TmLam l, TyArrow a) ->
-    let body = propagateTyAnnot (l.body, a.to) in
-    let ty = optionGetOr a.from (sremoveUnknown l.tyAnnot) in
-    TmLam {l with body = body, tyAnnot = ty}
-  | (tm, ty) -> tm
-end
-
 lang LetTypeCheck =
   TypeCheck + LetDeclAst + LamAst + FunTypeAst + ResolveType + SubstituteUnknown +
-  NonExpansive + MetaVarDisableGeneralize + PropagateTypeAnnot + SubstituteNewReprs
+  NonExpansive + MetaVarDisableGeneralize + SubstituteNewReprs
   sem typeCheckDecl env +=
   | DeclLet t ->
     let newLvl = addi 1 env.currentLvl in
@@ -1169,16 +1188,14 @@ lang LetTypeCheck =
         let newTyVarEnv =
           foldr (lam v. mapInsert v.0 (newLvl, v.1)) env.tyVarEnv vars in
         let newEnv = {env with currentLvl = newLvl, tyVarEnv = newTyVarEnv} in
-        let body = typeCheckExpr newEnv (propagateTyAnnot (t.body, tyAnnot)) in
-        -- Unify the annotated type with the inferred one and generalize
-        unify newEnv [infoTy t.tyAnnot, infoTm body] stripped (tyTm body);
+        -- Check the body against the annotated type, then generalize
+        let body = typeCheckExpr newEnv stripped t.body in
         (if env.disableRecordPolymorphism then
            disableRecordGeneralize env.currentLvl tyBody else ());
         match gen env.currentLvl (mapEmpty nameCmp) tyBody with (tyBody, _) in
         (body, tyBody)
       else
-        let body = typeCheckExpr {env with currentLvl = newLvl} t.body in
-        unify env [infoTy t.tyAnnot, infoTm body] tyBody (tyTm body);
+        let body = typeCheckExpr {env with currentLvl = newLvl} tyBody t.body in
         -- TODO(aathn, 2023-05-07): Relax value restriction
         weakenMetaVars env.currentLvl tyBody;
         (body, tyBody)
@@ -1226,7 +1243,7 @@ lang ApplyReprSubsts = TypeCheck + WildToMeta + ReprSubstAst
   | ty -> smap_Type_Type (applyReprSubsts env) ty
 end
 
-lang OpImplTypeCheck = OpImplAst + TypeCheck + ResolveType + PropagateTypeAnnot + SubstituteNewReprs + WildToMeta + ApplyReprSubsts + SubstituteUnknown
+lang OpImplTypeCheck = OpImplAst + TypeCheck + ResolveType + SubstituteNewReprs + WildToMeta + ApplyReprSubsts + SubstituteUnknown
   sem typeCheckDecl env +=
   | DeclOpImpl x ->
     match mapLookup x.ident env.varEnv with Some ty then
@@ -1262,9 +1279,8 @@ lang OpImplTypeCheck = OpImplAst + TypeCheck + ResolveType + PropagateTypeAnnot 
           let newTyVars = foldr (lam v. mapInsert v.0 (newLvl, v.1)) env.tyVarEnv vars in
           let newEnv = {env with currentLvl = newLvl, tyVarEnv = newTyVars} in
           match captureDelayedReprUnifications env
-            (lam. typeCheckExpr newEnv (propagateTyAnnot (x.body, reprType)))
+            (lam. typeCheckExpr newEnv reprType x.body)
             with (body, delayedReprUnifications) in
-          unify newEnv [specTypeInfo, infoTm body] reprType (tyTm body);
 
           -- NOTE(vipa, 2023-08-15): Later analysis requires that
           -- `specType` references the reprs that exist in the alt-body,
@@ -1295,7 +1311,7 @@ lang OpImplTypeCheck = OpImplAst + TypeCheck + ResolveType + PropagateTypeAnnot 
       errorSingle [x.info] msg
 end
 
-lang RecLetsTypeCheck = TypeCheck + RecLetsDeclAst + MetaVarDisableGeneralize + PropagateTypeAnnot + SubstituteUnknown + ResolveType + SubstituteNewReprs
+lang RecLetsTypeCheck = TypeCheck + RecLetsDeclAst + MetaVarDisableGeneralize + SubstituteUnknown + ResolveType + SubstituteNewReprs
   sem typeCheckDecl env +=
   | DeclRecLets t ->
     -- NOTE(aathn, 2024-05-24): This code assumes that each recursive let-binding
@@ -1319,10 +1335,8 @@ lang RecLetsTypeCheck = TypeCheck + RecLetsDeclAst + MetaVarDisableGeneralize + 
     -- Second: Type check the body of each binding in the new environment
     let typeCheckBinding = lam b: DeclLetRecord.
       let body =
-        let body = typeCheckExpr newEnv (propagateTyAnnot (b.body, b.tyAnnot)) in
-        -- Unify the inferred type of the body with the annotated one
-        unify newEnv [infoTy b.tyAnnot, infoTm body] (stripTyAll b.tyBody).1 (tyTm body);
-        body
+        -- Check the body against the annotated type
+        typeCheckExpr newEnv (stripTyAll b.tyBody).1 b.body
       in
       {b with body = body}
     in
@@ -1365,9 +1379,9 @@ lang RecLetsTypeCheck = TypeCheck + RecLetsDeclAst + MetaVarDisableGeneralize + 
 end
 
 lang MatchTypeCheck = TypeCheck + PatTypeCheck + MatchAst + NormPatMatch
-  sem typeCheckExpr env +=
+  sem typeCheckExpr env ty +=
   | TmMatch t ->
-    let target = typeCheckExpr env t.target in
+    let target = typeInferExpr env t.target in
     match typeCheckPat env (mapEmpty nameCmp) t.pat with (patEnv, pat) in
     unify env [infoTm target, infoPat pat] (tyPat pat) (tyTm target);
 
@@ -1404,49 +1418,66 @@ lang MatchTypeCheck = TypeCheck + PatTypeCheck + MatchAst + NormPatMatch
     let elsEnv = if env.disableConstructorTypes then baseEnv
                  else {baseEnv with matches = mkMatches negMatches,
                                     matchVars = mkMatchVars negMatches} in
-    let thn = typeCheckExpr thnEnv t.thn in
-    let els = typeCheckExpr elsEnv t.els in
-    unify env [infoTm thn, infoTm els] (tyTm thn) (tyTm els);
+    let thn = typeCheckExpr thnEnv ty t.thn in
+    let els = typeCheckExpr elsEnv ty t.els in
     TmMatch {t with target = target
             , thn = thn
             , els = els
-            , ty = tyTm thn
+            , ty = ty
             , pat = pat}
 end
 
 lang ConstTypeCheck = TypeCheck + MExprConstType
-  sem typeCheckExpr env +=
+  sem typeCheckExpr env ty +=
   | TmConst t ->
     let constTy = tyConstBase env.disableConstructorTypes t.val in
     recursive let f = lam ty. smap_Type_Type f (tyWithInfo t.info ty) in
-    TmConst {t with ty = inst t.info env.currentLvl (f constTy)}
+    _checkInferred env ty (TmConst {t with ty = inst t.info env.currentLvl (f constTy)})
 end
 
-lang SeqTypeCheck = TypeCheck + SeqAst
-  sem typeCheckExpr env +=
+lang SeqTypeCheck = TypeCheck + SeqAst + SeqTypeAst
+  sem typeCheckExpr env ty +=
   | TmSeq t ->
-    let elemTy = newpolyvar env.currentLvl t.info in
-    let tms = map (typeCheckExpr env) t.tms in
-    iter (lam tm. unify env [infoTm tm] elemTy (tyTm tm)) tms;
-    TmSeq {t with tms = tms, ty = ityseq_ t.info elemTy}
+    match unwrapType ty with TySeq {ty = elemTy} then
+      let tms = map (typeCheckExpr env elemTy) t.tms in
+      TmSeq {t with tms = tms, ty = ty}
+    else
+      let elemTy = newpolyvar env.currentLvl t.info in
+      let seqTy = ityseq_ t.info elemTy in
+      unify env [t.info] ty seqTy;
+      let tms = map (typeCheckExpr env elemTy) t.tms in
+      TmSeq {t with tms = tms, ty = seqTy}
 end
 
 lang RecordTypeCheck = TypeCheck + RecordAst + RecordTypeAst
-  sem typeCheckExpr env +=
+  sem typeCheckExpr env ty +=
   | TmRecord t ->
-    let bindings = mapMap (typeCheckExpr env) t.bindings in
-    let bindingTypes = mapMap tyTm bindings in
-    let ty = TyRecord {fields = bindingTypes, info = t.info} in
-    TmRecord {t with bindings = bindings, ty = ty}
+    let expectedFields =
+      match unwrapType ty with TyRecord r then
+        if mapEq (lam. lam. true) r.fields t.bindings
+        then Some r.fields
+        else None ()
+      else None () in
+    match expectedFields with Some fields then
+      let bindings = mapIntersectWith
+        (typeCheckExpr env)
+        fields
+        t.bindings in
+      TmRecord {t with bindings = bindings, ty = ty}
+    else
+      let bindings = mapMap (typeInferExpr env) t.bindings in
+      let recTy = TyRecord {fields = mapMap tyTm bindings, info = t.info} in
+      _checkInferred env ty (TmRecord {t with bindings = bindings, ty = recTy})
 end
 
 lang RecordUpdateTypeCheck = TypeCheck + RecordAst + RecordTypeAst
-  sem typeCheckExpr env +=
+  sem typeCheckExpr env ty +=
   | TmRecordUpdate t ->
-    let rec = typeCheckExpr env t.rec in
-    let value = typeCheckExpr env t.value in
-    let fields = mapInsert t.key (tyTm value) (mapEmpty cmpSID) in
+    let rec = typeCheckExpr env ty t.rec in
+    let valueTy = newpolyvar env.currentLvl (infoTm t.value) in
+    let fields = mapInsert t.key valueTy (mapEmpty cmpSID) in
     unify env [infoTm rec] (newrecvar fields env.currentLvl (infoTm rec)) (tyTm rec);
+    let value = typeCheckExpr env valueTy t.value in
     TmRecordUpdate {t with rec = rec, value = value, ty = tyTm rec}
 end
 
@@ -1526,9 +1557,8 @@ lang DataTypeCheck = TypeCheck + DataAst + FunTypeAst + ResolveType + Substitute
       }
     , DeclConDef {t with tyIdent = tyIdent}
     )
-  sem typeCheckExpr env +=
+  sem typeCheckExpr env ty +=
   | TmConApp t ->
-    let body = typeCheckExpr env t.body in
     match mapLookup t.ident env.conEnv with Some (_, lty) then
       let lty =
         if env.disableConstructorTypes then
@@ -1541,7 +1571,8 @@ lang DataTypeCheck = TypeCheck + DataAst + FunTypeAst + ResolveType + Substitute
             errorSingle [t.info] "Invalid constructor type in typeCheckExpr!"
       in
       match inst t.info env.currentLvl lty with TyArrow {from = from, to = to} then
-        unify env [infoTm body] from (tyTm body);
+        unify env [t.info] ty to;
+        let body = typeCheckExpr env from t.body in
         TmConApp {t with body = body, ty = to}
       else
         errorSingle [t.info] "Invalid constructor type in typeCheckExpr!"
@@ -1557,19 +1588,14 @@ end
 lang UtestTypeCheck = TypeCheck + UtestDeclAst
   sem typeCheckDecl env +=
   | DeclUtest t ->
-    let test = typeCheckExpr env t.test in
-    let expected = typeCheckExpr env t.expected in
-    let tusing = optionMap (typeCheckExpr env) t.tusing in
-    let tonfail = optionMap (typeCheckExpr env) t.tonfail in
-    (match tusing with Some tu then
-       unify env [infoTm tu]
-         (tyarrows_ [tyTm test, tyTm expected, tybool_]) (tyTm tu)
-     else
-       unify env [infoTm test, infoTm expected] (tyTm test) (tyTm expected));
-    (match tonfail with Some to then
-       unify env [infoTm to]
-         (tyarrows_ [tyTm test, tyTm expected, tystr_]) (tyTm to)
-     else ());
+    let test = typeInferExpr env t.test in
+    let expected =
+      match t.tusing with Some _ then typeInferExpr env t.expected
+      else typeCheckExpr env (tyTm test) t.expected in
+    let tusing = optionMap
+      (typeCheckExpr env (tyarrows_ [tyTm test, tyTm expected, tybool_])) t.tusing in
+    let tonfail = optionMap
+      (typeCheckExpr env (tyarrows_ [tyTm test, tyTm expected, tystr_])) t.tonfail in
     ( env
     , DeclUtest
       {t with test = test
@@ -1581,10 +1607,10 @@ lang UtestTypeCheck = TypeCheck + UtestDeclAst
 end
 
 lang NeverTypeCheck = TypeCheck + NeverAst + IsEmpty
-  sem typeCheckExpr env +=
+  sem typeCheckExpr env ty +=
   | TmNever t ->
     if env.disableConstructorTypes then
-      TmNever {t with ty = newpolyvar env.currentLvl t.info}
+      TmNever {t with ty = ty}
     else
       switch matchesPossible env
       case Left ms then
@@ -1598,7 +1624,7 @@ lang NeverTypeCheck = TypeCheck + NeverAst + IsEmpty
               unify env [t.info]
                 (newmetavar data env.currentLvl (infoTy x.0)) x.0)
             (mapBindings m);
-          TmNever {t with ty = newpolyvar env.currentLvl t.info}
+          TmNever {t with ty = ty}
         else
           let altstr =
             strJoin "* or\n"
@@ -1658,9 +1684,9 @@ lang NeverTypeCheck = TypeCheck + NeverAst + IsEmpty
 end
 
 lang PlaceholderTypeCheck = TypeCheck + PlaceholderAst
-  sem typeCheckExpr env +=
+  sem typeCheckExpr env ty +=
   | TmPlaceholder t ->
-    TmPlaceholder {t with ty = newpolyvar env.currentLvl t.info}
+    TmPlaceholder {t with ty = ty}
 end
 
 lang ExtTypeCheck = TypeCheck + ExtDeclAst + ResolveType
@@ -2081,7 +2107,7 @@ let typeOf = lam test : TypeTest.
   let tyEnv = mapFromSeq nameCmp bindings in
   unwrapTypes
     (tyTm
-       (typeCheckExpr {typcheckEnvDefault with varEnv = tyEnv}
+       (typeInferExpr {typcheckEnvDefault with varEnv = tyEnv}
           (symbolizeExpr (symbolizeUpdateVarEnv symEnvDefault symEnv) test.tm)))
           -- (symbolizeExpr {symEnvDefault with varEnv = symEnv} test.tm)))
 in
@@ -2399,6 +2425,41 @@ let tests = [
              (ulam_ "x" (var_ "x")))
           (freeze_ (var_ "f")),
    ty = tyarrow_ tyint_ tyint_,
+   env = []},
+
+  -- The annotation is propagated into the branches of the match, thus
+  -- the (unannotated) parameter `g' can be polymorphic.
+  {name = "Check1",
+   tm = bind_
+          (let_ "f" (tyarrows_ [tybool_, tyid_, tytuple_ [tyint_, tybool_]])
+             (ulam_ "b"
+                (if_ (var_ "b")
+                   (ulam_ "g" (utuple_ [app_ (var_ "g") (int_ 1), app_ (var_ "g") true_]))
+                   (ulam_ "g" (utuple_ [app_ (var_ "g") (int_ 2), app_ (var_ "g") false_])))))
+          (freeze_ (var_ "f")),
+   ty = tyarrows_ [tybool_, tyid_, tytuple_ [tyint_, tybool_]],
+   env = []},
+
+  -- The annotation is propagated through a let-expression.
+  {name = "Check2",
+   tm = bind_
+          (let_ "f" (tyarrow_ tyid_ tyint_)
+             (bind_ (ulet_ "k" (int_ 1))
+                (ulam_ "g" (app_ (var_ "g") (var_ "k")))))
+          (freeze_ (var_ "f")),
+   ty = tyarrow_ tyid_ tyint_,
+   env = []},
+
+  -- Unknown parts of the annotation are still inferred.
+  {name = "Check3",
+   tm = bind_
+          (let_ "f" (tyarrows_ [tybool_, tyunknown_, tyint_])
+             (ulam_ "b"
+                (if_ (var_ "b")
+                   (ulam_ "g" (app_ (var_ "g") (int_ 1)))
+                   (ulam_ "g" (app_ (var_ "g") (int_ 2))))))
+          (freeze_ (var_ "f")),
+   ty = tyarrows_ [tybool_, tyarrow_ tyint_ tyint_, tyint_],
    env = []}
 
 ]
