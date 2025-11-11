@@ -379,6 +379,11 @@ lang UnknownTypeCmp = Cmp + UnknownTypeAst
   | (TyUnknown _, TyUnknown _) -> 0
 end
 
+lang SharedTypeCmp = Cmp + SharedTypeAst
+  sem cmpTypeH +=
+  | (TySharedUnknown _, TySharedUnknown _) -> 0
+end
+
 lang BoolTypeCmp = Cmp + BoolTypeAst
   sem cmpTypeH +=
   | (TyBool _, TyBool _) -> 0
@@ -549,7 +554,7 @@ lang MExprCmp =
   IntPatCmp + CharPatCmp + BoolPatCmp + AndPatCmp + OrPatCmp + NotPatCmp +
 
   -- Types
-  UnknownTypeCmp + BoolTypeCmp + IntTypeCmp + FloatTypeCmp + CharTypeCmp +
+  UnknownTypeCmp + SharedTypeCmp + BoolTypeCmp + IntTypeCmp + FloatTypeCmp + CharTypeCmp +
   FunTypeCmp + SeqTypeCmp + TensorTypeCmp + RecordTypeCmp + VariantTypeCmp +
   ConTypeCmp + DataTypeCmp + VarTypeCmp + AppTypeCmp + AllTypeCmp + AliasTypeCmp +
 
