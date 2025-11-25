@@ -582,17 +582,28 @@ let record_ = tmRecord (NoInfo ())
 
 let urecord_ = record_ tyunknown_
 
-let autoty_record_ = lam bindings.
-  use MExprAst in
-  let bindings = mapFromSeq cmpSID (map (lam x. (stringToSid x.0, x.1)) bindings) in
-  TmRecord {
-    bindings = bindings,
-    ty = TyRecord {
-      fields = mapMap tyTm bindings,
+lang AutoTyRecord = RecordAst + RecordTypeAst
+  sem autoty_record_ : [(String, Expr)] -> Expr
+  sem autoty_record_ = | bindings ->
+    let bindings = mapFromSeq cmpSID (map (lam x. (stringToSid x.0, x.1)) bindings) in
+    TmRecord {
+      bindings = bindings,
+      ty = TyRecord {
+        fields = mapMap tyTm bindings,
+        info = NoInfo ()
+      },
       info = NoInfo ()
-    },
-    info = NoInfo ()
-  }
+    }
+
+  sem autoty_tuple_ : [Expr] -> Expr
+  sem autoty_tuple_ = | tms ->
+    autoty_record_ (mapi (lam i. lam t. (int2string i, t)) tms)
+end
+
+lang DefaultAutoTyRecord = AutoTyRecord + MExprAst
+end
+
+let autoty_record_ = use DefaultAutoTyRecord in autoty_record_
 
 let tmTuple = use MExprAst in
   lam info : Info. lam ty : Type. lam tms : [Expr].
@@ -602,7 +613,7 @@ let tuple_ = tmTuple (NoInfo ())
 
 let utuple_ = tuple_ tyunknown_
 
-let autoty_tuple_ = lam tms. autoty_record_ (mapi (lam i. lam t. (int2string i, t)) tms)
+let autoty_tuple_ = use DefaultAutoTyRecord in autoty_tuple_
 
 let urecord_empty = uunit_
 let record_empty = unit_
