@@ -37,6 +37,31 @@ utest eitherEq eqi eqi (Right 4321) (Right 1) with false
 utest eitherEq eqi eqi (Right 4321) (Left 4321) with false
 
 --  *-
+--  * .brief Compares two either values
+--  *
+--  * .lam[cmpl] Function that compares `Left`s
+--  * .lam[cmpr] Function that compares `Left`s
+--  * .lam[l] Either value to be compared
+--  * .lam[r] The other Either value to be compared
+--  *
+--  * .return An ordering between two `Either` values.
+-- -*
+let eitherCmp : all a. all b. all c. all d.
+  (a -> c -> Int) -> (b -> d -> Int) -> Either a b -> Either c d -> Int =
+  lam cmpl. lam cmpr. lam l. lam r.
+  switch (l, r)
+  case (Left _, Right _) then negi 1
+  case (Right _, Left _) then 1
+  case (Left l, Left r) then cmpl l r
+  case (Right l, Right r) then cmpr l r
+  end
+
+utest eitherCmp subi subi (Left 0) (Left 1) with negi 1
+utest eitherCmp subi subi (Left 0) (Right 0) with negi 1
+utest eitherCmp subi subi (Right 0) (Left 0) with 1
+utest eitherCmp subi subi (Right 0) (Right 1) with negi 1
+
+--  *-
 --  * .brief Case analysis of an Either type to extract its value.
 --  *
 --  * .lam[lf] How a Left value should be extracted
