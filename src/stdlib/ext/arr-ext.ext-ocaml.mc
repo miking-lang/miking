@@ -55,6 +55,12 @@ let arrExtMap =
         ty = otyopaque_
       }
     ]),
+    ("extArrKindInt", [
+      impl {
+        expr = "Bigarray.int",
+        ty = otyopaque_
+      }
+    ]),
     ("externalExtArrKind", [
       impl {
         expr = "Bigarray.Array1.kind",
@@ -95,6 +101,12 @@ let arrExtMap =
       impl {
         expr = "Bigarray.Array1.fill",
         ty = tyall_ "a" (tyarrows_ [otyopaque_, tyvar_ "a", otyunit_])
+      }
+    ]),
+    ("externalExtArrOf", [
+      impl {
+        expr = "(fun kind a -> Bigarray.Array1.of_array kind Bigarray.c_layout a)",
+        ty = (tyarrows_ [otyopaque_, otyopaque_, otyopaque_])
       }
     ])
   ]

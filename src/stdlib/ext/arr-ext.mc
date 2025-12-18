@@ -135,6 +135,7 @@ external externalExtArrGet : all a. ExtArr a -> Int -> a
 external externalExtArrSet ! : all a. ExtArr a -> Int -> a -> ()
 external externalExtArrCopy : all a. ExtArr a -> ExtArr a
 external externalExtArrFill : all a. ExtArr a -> a -> ()
+external externalExtArrOf : all a. ExtArrKind a -> Arr a -> ExtArr a
 
 --------------------------------------------------------------------------------
 -- ExtArr interface
@@ -146,12 +147,15 @@ external extArrKindFloat32 : ExtArrKind Float
 -- Double precision float kind.
 external extArrKindFloat64 : ExtArrKind Float
 
+-- Integer kind
+external extArrKindInt : ExtArrKind Int
 
 -- Creates an external array of size `n` with uninitialized values.
 let extArrMakeUninit : all a. ExtArrKind a -> Int -> ExtArr a
   = lam kind. lam n. externalExtArrMakeUninit kind n
 
 utest extArrMakeUninit extArrKindFloat64 3; () with ()
+utest extArrMakeUninit extArrKindInt 3; () with ()
 
 
 -- Returns the array kind.
@@ -205,7 +209,7 @@ let extArrToSeq : all a. ExtArr a -> [a]
   = lam a. create (externalExtArrLength a) (externalExtArrGet a)
 
 utest extArrToSeq (extArrOfSeq extArrKindFloat64 [1., 2., 3.]) with [1., 2., 3.]
-
+utest extArrToSeq (extArrOfSeq extArrKindInt [1, 2, 3]) with [1, 2, 3]
 
 -- Copies external array.
 let extArrCopy : all a. ExtArr a -> ExtArr a
@@ -243,3 +247,23 @@ utest
   utest extArrGetExn a 2 with 1. in
   ()
   with ()
+
+-- Build a one-dimensional Bigarray from a given array
+let extArrOf : all a. ExtArrKind a -> Arr a -> ExtArr a
+  = lam k. lam a. externalExtArrOf k a
+
+utest
+  let a = arrMakeUninitFloat 3 in
+  arrSetExn a 0 1.0;
+  arrSetExn a 1 2.0;
+  arrSetExn a 2 3.0;
+  let bA = extArrOf extArrKindFloat64 a in
+  utest extArrLength bA with 3 in
+  utest extArrGetExn bA 0 with 1. in
+  utest extArrGetExn bA 1 with 2. in
+  utest extArrGetExn bA 2 with 3. in
+  () with ()
+
+
+
+
