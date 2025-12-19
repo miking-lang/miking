@@ -103,7 +103,7 @@ let arrExtMap =
         ty = tyall_ "a" (tyarrows_ [otyopaque_, tyvar_ "a", otyunit_])
       }
     ]),
-    ("externalExtArrOf", [
+    ("externalExtArrOfArr", [
       impl {
         expr = "(fun kind a -> Bigarray.Array1.of_array kind Bigarray.c_layout a)",
         ty = (tyarrows_ [otyopaque_, otyopaque_, otyopaque_])

@@ -135,7 +135,7 @@ external externalExtArrGet : all a. ExtArr a -> Int -> a
 external externalExtArrSet ! : all a. ExtArr a -> Int -> a -> ()
 external externalExtArrCopy : all a. ExtArr a -> ExtArr a
 external externalExtArrFill : all a. ExtArr a -> a -> ()
-external externalExtArrOf : all a. ExtArrKind a -> Arr a -> ExtArr a
+external externalExtArrOfArr : all a. ExtArrKind a -> Arr a -> ExtArr a
 
 --------------------------------------------------------------------------------
 -- ExtArr interface
@@ -248,16 +248,16 @@ utest
   ()
   with ()
 
--- Build a one-dimensional Bigarray from a given array
-let extArrOf : all a. ExtArrKind a -> Arr a -> ExtArr a
-  = lam k. lam a. externalExtArrOf k a
+-- Build a one-dimensional external array from a given array
+let extArrOfArr : all a. ExtArrKind a -> Arr a -> ExtArr a
+  = lam k. lam a. externalExtArrOfArr k a
 
 utest
   let a = arrMakeUninitFloat 3 in
   arrSetExn a 0 1.0;
   arrSetExn a 1 2.0;
   arrSetExn a 2 3.0;
-  let bA = extArrOf extArrKindFloat64 a in
+  let bA = extArrOfArr extArrKindFloat64 a in
   utest extArrLength bA with 3 in
   utest extArrGetExn bA 0 with 1. in
   utest extArrGetExn bA 1 with 2. in
