@@ -144,17 +144,18 @@ utest range 5 3 1 with [] using eqSeq eqi
 -- `foldl2 f acc seq1 seq2` left folds `f` over the first
 -- min(`length seq1`, `length seq2`) elements in `seq1` and `seq2`, accumuating
 -- on `acc`.
-recursive
 let foldl2 : all a. all b. all c. (a -> b -> c -> a) -> a -> [b] -> [c] -> a =
   lam f. lam acc. lam seq1. lam seq2.
-    let g = lam acc : (a, [b]). lam x2.
-      match acc with (acc, [x1] ++ xs1) then (f acc x1 x2, xs1)
-      else error "foldl2: Cannot happen!"
-    in
     if geqi (length seq1) (length seq2) then
+      let g = lam acc : (a, [b]). lam x2.
+        match acc with (acc, [x1] ++ xs1) then (f acc x1 x2, xs1)
+        else error "foldl2: Cannot happen!" in
       match foldl g (acc, seq1) seq2 with (acc, _) in acc
-    else foldl2 (lam acc. lam x1. lam x2. f acc x2 x1) acc seq2 seq1
-end
+    else
+      let g = lam acc : (a, [c]). lam x1.
+        match acc with (acc, [x2] ++ xs2) then (f acc x1 x2, xs2)
+        else error "foldl2: Cannot happen!" in
+      match foldl g (acc, seq2) seq1 with (acc, _) in acc
 
 utest foldl2 (lam a. lam x1. lam x2. snoc a (x1, x2)) [] [1, 2, 3] [4, 5, 6]
 with [(1, 4), (2, 5), (3, 6)]
