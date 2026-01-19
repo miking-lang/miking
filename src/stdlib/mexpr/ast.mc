@@ -313,6 +313,48 @@ lang Ast
     count
 end
 
+-- TmOpaque
+lang OpaqueAst = Ast
+  -- NOTE(vipa, 2026-02-05): TmOpaque is special, in the sense that
+  -- its body should never be transformed by the compiler, with a
+  -- small set of exceptions. This means that whatever code is put in
+  -- an opaque block must already be transformed to a sufficiently
+  -- low-level form that whatever backend is in use can compile
+  -- it. Analysis is allowed however, which means that `sfold` works
+  -- as expected, but `smap` and `smapAccumL` will explicitly crash.
+  --
+  -- Transformations that are allowed:
+  -- * Renaming to something alpha-equivalent
+  -- * Attaching results of type inference
+  syn Expr =
+  | TmOpaque
+    { body : Expr
+    , info : Info
+    , ty : Type
+    }
+
+  sem infoTm =
+  | TmOpaque x -> x.info
+
+  sem withInfo info =
+  | TmOpaque x -> TmOpaque {x with info = info}
+
+  sem tyTm =
+  | TmOpaque x -> x.ty
+
+  sem withType ty =
+  | TmOpaque x -> TmOpaque {x with ty = ty}
+
+  sem sfold_Expr_Expr f acc =
+  | TmOpaque x -> f acc x.body
+
+  sem smapAccumL_Expr_Expr f acc =
+  | TmOpaque x ->
+    printError "Compiler error: called `smap` or `smapAccumL` on a `TmOpaque`, but it must be special-cased since transformation isn't allowed.\n";
+    flushStderr ();
+    never
+end
+
 -- TmVar --
 lang VarAst = Ast
   syn Expr =
@@ -1632,7 +1674,7 @@ lang MExprAst =
 
   -- Terms
   VarAst + AppAst + LamAst + RecordAst + ConstAst + DataAst + MatchAst +
-  SeqAst + NeverAst + PlaceholderAst +
+  SeqAst + NeverAst + PlaceholderAst + OpaqueAst +
 
   -- Decls
   LetDeclAst + TypeDeclAst + RecLetsDeclAst + DataDeclAst + UtestDeclAst +
