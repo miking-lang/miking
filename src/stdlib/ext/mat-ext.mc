@@ -105,8 +105,10 @@ utest
 let matCopy : all a. Mat a -> Mat a
   = lam a.
     let mn = muli a.m a.n in
-    let b = extArrMakeUninit (externalExtArrKind a.arr) mn in
-    externalCblasCopy mn a.arr 1 b 1;
+    let b = tmOpaque
+      (let b = extArrMakeUninit (externalExtArrKind a.arr) mn in
+      externalCblasCopy mn a.arr 1 b 1;
+      b) in
     { a with arr = b }
 
 utest
@@ -263,10 +265,10 @@ utest
 
 -- Returns the transpose of a matrix as a fresh matrix.
 let matTranspose : Mat Float -> Mat Float
-  = lam a.
+  = lam a. tmOpaque (
     let b = matMakeUninit (externalExtArrKind a.arr) a.n a.m in
     matTranposeNoAlloc a b;
-    b
+    b)
 
 utest
   let test = lam kind.
@@ -287,9 +289,10 @@ utest
 let matElemMul : Mat Float -> Mat Float -> Either MatError (Mat Float)
   = lam a. lam b.
     if matHasSameShape2 a b then
-      let c = matMakeUninit (externalExtArrKind a.arr) a.m a.n in
-      matElemMulNoAlloc a b c;
-      Right c
+      Right (tmOpaque (
+        let c = matMakeUninit (externalExtArrKind a.arr) a.m a.n in
+        matElemMulNoAlloc a b c;
+        c))
     else Left (DimensionMismatch ())
 
 let matElemMulExn : Mat Float -> Mat Float -> Mat Float
@@ -317,10 +320,10 @@ utest
 
 -- General matrix element-wise exp. Returns a fresh matrix.
 let matElemExp : Mat Float -> Mat Float
-  = lam a.
+  = lam a. tmOpaque (
     let b = matMakeUninit (externalExtArrKind a.arr) a.m a.n in
     matElemExpInplace a b;
-    b
+    b)
 
 utest
   let test = lam kind.
@@ -339,10 +342,10 @@ utest
 
 -- General matrix element-wise log. Returns a fresh matrix.
 let matElemLog : Mat Float -> Mat Float
-  = lam a.
+  = lam a. tmOpaque (
     let b = matMakeUninit (externalExtArrKind a.arr) a.m a.n in
     matElemLogInplace a b;
-    b
+    b)
 
 utest
   let test = lam kind.
@@ -365,11 +368,12 @@ let matAdd : Mat Float -> Mat Float -> Either MatError (Mat Float)
     if matHasSameShape2 a b then
       let m = a.m in
       let n = a.n in
-      let c = matMakeUninit (externalExtArrKind b.arr) m n in
-      let mn = muli m n in
-      externalCblasCopy mn b.arr 1 c.arr 1;
-      externalCblasAxpy mn 1. a.arr 1 c.arr 1;
-      Right c
+      Right (tmOpaque (
+        let c = matMakeUninit (externalExtArrKind b.arr) m n in
+        let mn = muli m n in
+        externalCblasCopy mn b.arr 1 c.arr 1;
+        externalCblasAxpy mn 1. a.arr 1 c.arr 1;
+        c))
     else Left (DimensionMismatch ())
 
 let matAddExn : Mat Float -> Mat Float -> Mat Float
@@ -400,11 +404,12 @@ let matScale : Float -> Mat Float -> Mat Float
   = lam s. lam a.
     let m = a.m in
     let n = a.n in
-    let b = matMakeUninit (externalExtArrKind a.arr) m n in
     let mn = muli m n in
-    externalCblasCopy mn a.arr 1 b.arr 1;
-    externalCblasScal mn s b.arr 1;
-    b
+    tmOpaque
+      (let b = matMakeUninit (externalExtArrKind a.arr) m n in
+      externalCblasCopy mn a.arr 1 b.arr 1;
+      externalCblasScal mn s b.arr 1;
+      b)
 
 utest
   let test = lam kind.
@@ -428,16 +433,17 @@ let matMul : Mat Float -> Mat Float -> Either MatError (Mat Float)
     let n = b.n in
     let k = a.n in
     if eqi k b.m then
-      let c = matMakeUninit (externalExtArrKind b.arr) m n in
-      externalCblasGemm
-        cblasRowMajor cblasNoTrans cblasNoTrans
-        m n k
-        1.
-        a.arr k
-        b.arr n
-        0.
-        c.arr n;
-      Right c
+      Right (tmOpaque (
+        let c = matMakeUninit (externalExtArrKind b.arr) m n in
+        externalCblasGemm
+          cblasRowMajor cblasNoTrans cblasNoTrans
+          m n k
+          1.
+          a.arr k
+          b.arr n
+          0.
+          c.arr n;
+        c))
     else Left (DimensionMismatch ())
 
 let matMulExn : Mat Float -> Mat Float -> Mat Float

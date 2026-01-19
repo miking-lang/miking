@@ -199,10 +199,15 @@ utest
 
 -- Creates an external array from a sequence.
 let extArrOfSeq : all a. ExtArrKind a -> [a] -> ExtArr a
-  = lam kind. lam seq.
-    let a = externalExtArrMakeUninit kind (length seq) in
-    iteri (externalExtArrSet a) seq;
-    a
+  = lam kind. lam seq. tmOpaque
+    (let len = length seq in
+    let a = externalExtArrMakeUninit kind len in
+    recursive let work = lam i.
+      if eqi i len
+      then ()
+      else externalExtArrSet a i (get seq i); work (addi i 1) in
+    work 0;
+    a)
 
 -- Creates a sequence from an external array.
 let extArrToSeq : all a. ExtArr a -> [a]
@@ -235,10 +240,10 @@ utest
 
 -- Creates an external array.
 let extArrMake : all a . ExtArrKind a -> Int -> a -> ExtArr a
-  = lam kind. lam n. lam v.
-    let a = externalExtArrMakeUninit kind n in
+  = lam kind. lam n. lam v. tmOpaque
+    (let a = externalExtArrMakeUninit kind n in
     externalExtArrFill a v;
-    a
+    a)
 
 utest
   let a  = extArrMake extArrKindFloat64 3 1. in
@@ -263,7 +268,3 @@ utest
   utest extArrGetExn bA 1 with 2. in
   utest extArrGetExn bA 2 with 3. in
   () with ()
-
-
-
-
