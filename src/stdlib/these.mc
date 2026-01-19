@@ -317,14 +317,14 @@ utest theseHasHere (These (1, 1)) with true
 
 
 -- Returns true iff `t` has a there-value.
-let theseHasHere : all a. all b. These a b -> Bool
+let theseHasThere : all a. all b. These a b -> Bool
   = lam t. match t with That _ | These _ then true else false
 
-utest theseHasHere (This 0) with false
-utest theseHasHere (That 0) with true
-utest theseHasHere (These (1, 1)) with true
+utest theseHasThere (This 0) with false
+utest theseHasThere (That 0) with true
+utest theseHasThere (These (1, 1)) with true
 
--- Extract the `This` case value as an Option.
+-- Extract the `This` value as an Option (see also `theseGetHere`).
 let theseGetThis : all a. all b. These a b -> Option a
   = lam t. match t with This a then Some a else None ()
 
@@ -336,7 +336,7 @@ utest
   ()
 with ()
 
--- Extract the `That` case value as an Option.
+-- Extract the `That` value as an Option (see also `theseGetThere`).
 let theseGetThat : all a. all b. These a b -> Option b
   = lam t. match t with That b then Some b else None ()
 
