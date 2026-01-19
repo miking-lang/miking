@@ -83,6 +83,7 @@ lang LambdaLiftNameAnonymous = MExprAst
   sem nameAnonymousLambdasWork : Bool -> Expr -> Expr
   sem nameAnonymousLambdasWork named =
   | tm -> smap_Expr_Expr (nameAnonymousLambdasWork false) tm
+  | tm & TmOpaque _ -> tm
   | tm & TmLam t ->
     let tm = smap_Expr_Expr (nameAnonymousLambdasWork true) tm in
     if named then tm else
@@ -311,6 +312,25 @@ lang LambdaLiftInsertFreeVariables = MExprAst + UpdateDefinitionsAndUses
   sem insertFreeVariablesH solutions subMap =
   | tm & TmVar t ->
     optionMapOr tm (lam f. f t) (mapLookup t.ident subMap)
+  | TmOpaque x ->
+    recursive let updateFree : Map Name (Name, Expr) -> Expr -> (Map Name (Name, Expr), Expr) = lam acc. lam tm.
+      switch tm
+      case TmOpaque x then
+        match updateFree acc x.body with (acc, body) in
+        (acc, TmOpaque {x with body = body})
+      case TmVar x then
+        match mapLookup x.ident acc with Some (n, _) then
+          (acc, TmVar {x with ident = n})
+        else match mapLookup x.ident subMap with Some f then
+          let n = nameSetNewSym x.ident in
+          let acc = mapInsert x.ident (n, f x) acc in
+          (acc, TmVar {x with ident = n})
+        else (acc, tm)
+      case tm then
+        smapAccumL_Expr_Expr updateFree acc tm
+      end in
+    match updateFree (mapEmpty nameCmp) x.body with (acc, body) in
+    mapFoldWithKey (lam tm. lam. lam pair. bind_ (nulet_ pair.0 pair.1) tm) (TmOpaque {x with body = body}) acc
   | TmDecl (x & {decl = DeclLet (t & {body = TmLam _})}) ->
     match mapLookup t.ident solutions with Some sol then
       let sol = _orderSolution sol in
@@ -387,6 +407,7 @@ lang LambdaLiftLiftGlobal = MExprAst
   sem liftGlobalH : [Decl] -> Expr -> ([Decl], Expr)
   sem liftGlobalH lifted =
   | t -> smapAccumL_Expr_Expr liftGlobalH lifted t
+  | t & TmOpaque _ -> (lifted, t)
   | TmDecl (x & {decl = DeclType _ | DeclConDef _ | DeclExt _}) ->
     liftGlobalH (snoc lifted x.decl) x.inexpr
   | TmDecl (x & {decl = DeclLet t}) ->
@@ -451,6 +472,12 @@ lang LambdaLiftReplaceCapturedParameters = MExprAst + MExprSubstitute
     {x with decl = DeclRecLets {t with bindings = bindings}
     , inexpr = replaceCapturedParametersH subMap x.inexpr
     }
+  | TmOpaque x ->
+    -- NOTE(vipa, 2026-04-28): This will make sure we actually refer
+    -- to the parameters standing in for captured variables, rather
+    -- than the variables themselves, which notably should be a
+    -- semantics preserving rename, which is allowed under TmOpaque
+    TmOpaque {x with body = replaceCapturedParametersH subMap x.body}
   | t -> smap_Expr_Expr (replaceCapturedParametersH subMap) t
 end
 
@@ -1028,4 +1055,36 @@ let nestedUtest = preprocess (bindall_ [
     (addi_ (var_ "x") (int_ 1))))
 ] unit_) in
 utest liftLambdas nestedUtest with nestedUtest using eqExpr in
+
+
+let lhs = preprocess
+  (bindall_
+    [ ulet_ "x" (int_ 1)
+    , ulet_ "foo" (ulam_ "y" (addi_ (var_ "x") (var_ "y")))
+    ]
+    (TmOpaque {info = NoInfo (), ty = tyunknown_, body = app_ (var_ "foo") (int_ 2)})) in
+let rhs = preprocess
+  (bindall_
+    [ ulet_ "x" (int_ 1)
+    , ulet_ "foo" (ulam_ "x1" (ulam_ "y" (addi_ (var_ "x1") (var_ "y"))))
+    , ulet_ "foo1" (app_ (var_ "foo") (var_ "x"))
+    ]
+    (TmOpaque {info = NoInfo (), ty = tyunknown_, body = app_ (var_ "foo1") (int_ 2)})) in
+utest liftLambdas lhs with rhs using eqExpr in
+
+let lhs = preprocess
+  (bindall_
+    [ ulet_ "x" (int_ 1)
+    , ulet_ "foo" (ulam_ "y" (TmOpaque {body = addi_ (var_ "x") (var_ "y"), ty = tyunknown_, info = NoInfo ()}))
+    ]
+    (app_ (var_ "foo") (int_ 2))) in
+let rhs = preprocess
+  (bindall_
+    [ ulet_ "x" (int_ 1)
+    , ulet_ "foo" (ulam_ "x1" (ulam_ "y" (TmOpaque {body = addi_ (var_ "x1") (var_ "y"), ty = tyunknown_, info = NoInfo ()})))
+    ]
+    (appf2_ (var_ "foo") (var_ "x") (int_ 2))) in
+utest liftLambdas lhs with rhs using eqExpr in
+
+
 ()

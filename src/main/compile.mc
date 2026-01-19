@@ -36,6 +36,7 @@ lang MCoreCompile =
   BootParser +
   MExprHoles +
   MExprCmp +
+  KeywordMakerOpaque +
   MExprSym + MExprRemoveTypeAscription + MExprTypeCheck +
   MExprUtestGenerate + MExprRuntimeCheck + MExprProfileInstrument + MExprTypeAnnot +
   MExprPrettyPrint +

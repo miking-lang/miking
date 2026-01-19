@@ -23,7 +23,7 @@
 include "mexpr/ast.mc"
 include "mexpr/pprint.mc"
 
-lang TempLamAst = Ast + PrettyPrint
+lang TempLamAst = Ast + PrettyPrint + OpaqueAst
   type TempFixRec =
     { canMakeProgress : Expr -> Bool
     , f : (Expr -> Expr) -> Expr -> Expr
@@ -115,6 +115,7 @@ lang TempLamAst = Ast + PrettyPrint
     let decl = smap_Decl_Expr stripTempLam x.decl in
     let inexpr = _stripTempLam (args, x.inexpr) in
     TmDecl {x with decl = decl, inexpr = inexpr}
+  | (args, tm & TmOpaque _) -> appSeq_ tm args
   | (args, tm) -> appSeq_ (smap_Expr_Expr stripTempLam tm) args
 
   sem maybeEtaExpand : Expr -> {ident : Name, tyAnnot : Type, tyParam : Type, body : Expr, ty : Type, info : Info}

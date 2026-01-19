@@ -415,7 +415,12 @@ lang AttributeGrammar = Ast + DeclAst + PrettyPrint
       ( snoc toCall (lam. processExpr (deref localEnv) x)
       , TmWithEnv {label = lazy (lam. expr2str x), env = localEnv}
       ) in
-    match smapAccumL_Expr_Expr prepareExpr toCall tm with (toCall, tm) in
+    match
+      match tm with TmOpaque x then
+        match prepareExpr toCall x.body with (toCall, body) in
+        (toCall, TmOpaque {x with body = body})
+      else smapAccumL_Expr_Expr prepareExpr toCall tm
+    with (toCall, tm) in
 
     let prepareType = lam toCall. lam x.
       let localEnv = ref (mapEmpty subi) in

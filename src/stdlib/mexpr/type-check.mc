@@ -721,7 +721,7 @@ lang SubstituteNewReprs = ReprTypeAst + RepTypesHelpers
   | ty -> smap_Type_Type (substituteNewReprs env) ty
 end
 
-lang RemoveMetaVar = MetaVarTypeAst + UnknownTypeAst + RecordTypeAst + RecordKindAst
+lang RemoveMetaVar = MetaVarTypeAst + UnknownTypeAst + RecordTypeAst + RecordKindAst + OpaqueAst
   sem removeMetaVarType =
   | TyMetaVar t ->
     switch deref t.contents
@@ -734,6 +734,10 @@ lang RemoveMetaVar = MetaVarTypeAst + UnknownTypeAst + RecordTypeAst + RecordKin
     smap_Type_Type removeMetaVarType ty
 
   sem removeMetaVarExpr =
+  | TmOpaque x ->
+    let body = removeMetaVarExpr x.body in
+    let ty = removeMetaVarType x.ty in
+    TmOpaque {x with body = body, ty = ty}
   | tm ->
     let tm = smap_Expr_TypeLabel removeMetaVarType tm in
     let tm = smap_Expr_Type removeMetaVarType tm in
@@ -999,6 +1003,13 @@ lang IsEmpty =
     in
     match foldl merge (0, []) ms with (_, [m]) then Some m
     else None ()
+end
+
+lang OpaqueTypeCheck = TypeCheck + OpaqueAst
+  sem typeCheckExpr env =
+  | TmOpaque x ->
+    let body = typeCheckExpr env x.body in
+    TmOpaque {x with ty = tyTm body, body = body}
 end
 
 lang VarTypeCheck = TypeCheck + VarAst
@@ -1797,6 +1808,7 @@ lang MExprTypeCheckMost =
   AppTypeCheck + MatchTypeCheck + ConstTypeCheck + SeqTypeCheck +
   RecordTypeCheck + TypeTypeCheck + DataTypeCheck + UtestTypeCheck +
   NeverTypeCheck + ExtTypeCheck + PlaceholderTypeCheck + DeclTypeCheck +
+  OpaqueTypeCheck +
 
   -- Patterns
   NamedPatTypeCheck + SeqTotPatTypeCheck + SeqEdgePatTypeCheck +

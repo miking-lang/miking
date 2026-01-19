@@ -147,6 +147,14 @@ lang Eq = ConstAst
   sem eqDeclH env free lhs =
 end
 
+lang OpaqueEq = Eq + OpaqueAst
+  sem eqExprH env free lhs =
+  | TmOpaque l ->
+    match lhs with TmOpaque r then
+      eqExprH env free l.body r.body
+    else None ()
+end
+
 lang VarEq = Eq + VarAst
   sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
   | TmVar r ->
@@ -744,7 +752,8 @@ lang MExprEq =
 
   -- Terms
   + VarEq + AppEq + LamEq + RecordEq + LetEq + RecLetsEq + ConstEq + DataEq +
-  TypeEq + MatchEq + UtestEq + SeqEq + NeverEq + ExtEq + DeclAst + DeclEq
+  TypeEq + MatchEq + UtestEq + SeqEq + NeverEq + ExtEq + DeclAst + DeclEq +
+  OpaqueEq
 
   -- Constants
   + IntEq + FloatEq + BoolEq + CharEq + SymbEq

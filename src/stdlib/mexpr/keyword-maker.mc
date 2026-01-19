@@ -40,11 +40,11 @@ lang KeywordMakerBase = VarAst + AppAst + ConTypeAst + AppTypeAst
   sem makeKeywords : Expr -> Expr
   sem makeKeywords =
   | expr ->
-    let expr = makeExprKeywords [] expr in
     let expr = mapPre_Expr_Expr (lam expr.
         smap_Expr_Type (makeTypeKeywords []) expr
-      ) expr
-    in expr
+      ) expr in
+    let expr = makeExprKeywords [] expr in
+    expr
 
   sem makeExprKeywords (args: [Expr]) =
   | TmApp r ->
@@ -162,6 +162,14 @@ end
 -- The keyword maker fragment, that includes all checks
 lang KeywordMaker = KeywordMakerBase + KeywordMakerLam + KeywordMakerLet +
                     KeywordMakerMatch + KeywordMakerData + KeywordMakerType
+end
+
+lang KeywordMakerOpaque = KeywordMakerBase + OpaqueAst + UnknownTypeAst
+  sem matchKeywordString info =
+  | "tmOpaque" -> Some (1, lam args. TmOpaque {body = head args, info = mergeInfo info (infoTm (head args)), ty = TyUnknown {info = NoInfo ()}})
+
+  sem isKeyword =
+  | TmOpaque _ -> true
 end
 
 -- A test fragment that is used to test the approach. This

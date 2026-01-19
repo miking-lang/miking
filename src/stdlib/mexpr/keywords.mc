@@ -4,6 +4,8 @@ let mexprBuiltInKeywords = [
   "mexpr", "include", "never", "using", "external", "switch", "case", "all"
 ]
 
+let opaqueKeywords = ["tmOpaque"]
+
 let holeKeywords = ["hole", "Boolean", "IntRange", "independent"]
 
 let accelerateKeywords = [
@@ -12,5 +14,4 @@ let accelerateKeywords = [
 
 let specializeKeywords = ["specialize"]
 
-let mexprExtendedKeywords = concat specializeKeywords (
-                              concat holeKeywords accelerateKeywords)
+let mexprExtendedKeywords = foldl concat [] [opaqueKeywords, specializeKeywords, holeKeywords, accelerateKeywords]

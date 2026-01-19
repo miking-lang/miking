@@ -158,6 +158,16 @@ lang MatchToJson = AstToJson + MatchAst
     ] )
 end
 
+lang OpaqueToJson = AstToJson + OpaqueAst
+  sem exprToJson =
+  | TmOpaque x -> JsonObject (mapFromSeq cmpString
+    [ ("con", JsonString "TmOpaque")
+    , ("body", exprToJson x.body)
+    , ("ty", typeToJson x.ty)
+    , ("info", infoToJson x.info)
+    ] )
+end
+
 lang NeverToJson = AstToJson + NeverAst
   sem exprToJson =
   | TmNever x -> JsonObject (mapFromSeq cmpString
@@ -642,6 +652,7 @@ lang MExprToJson
   + UtestToJson
   + ExtToJson
   + MetaVarToJson
+  + OpaqueToJson
 end
 
 mexpr

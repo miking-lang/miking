@@ -8,6 +8,7 @@ include "pprint.mc"
 include "symbolize.mc"
 include "type-check.mc"
 include "ast-builder.mc"
+include "free-vars.mc"
 
 /-
   This file implements constant folding and constant propagation
@@ -50,6 +51,15 @@ lang ConstantFold = Eval + Ast
   sem countNodesH : Int -> Expr -> Int
   sem countNodesH n =| t ->
     let n = addi n 1 in sfold_Expr_Expr countNodesH n t
+end
+
+lang OpaqueConstantFold = ConstantFold + OpaqueAst + FreeVars
+  sem readback =
+  | tm & TmOpaque _ -> tm
+  sem constantFoldExpr ctx =
+  | tm & TmOpaque x ->
+    let referenced = freeVars x.body in
+    listFoldl (lam tm. lam pair. if setMem pair.0 referenced then bind_ (nulet_ pair.0 pair.1) tm else tm) tm ctx.env
 end
 
 lang VarConstantFold = ConstantFold + VarAst
@@ -314,6 +324,7 @@ lang MExprConstantFold = MExprAst +
   -- Terms
   VarConstantFold + AppConstantFold + LamAppConstantFold + LetConstantFold +
   RecordConstantFold + ConstConstantFold + MatchConstantFold + SeqConstantFold +
+  OpaqueConstantFold +
 
   -- Constant operations
   ArithIntConstantFold + ArithFloatConstantFold + SeqOpConstantFoldFirstOrder +

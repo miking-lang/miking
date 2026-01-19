@@ -353,6 +353,12 @@ lang OpaqueAst = Ast
     printError "Compiler error: called `smap` or `smapAccumL` on a `TmOpaque`, but it must be special-cased since transformation isn't allowed.\n";
     flushStderr ();
     never
+
+  sem mapPre_Expr_Expr f =
+  | tm & TmOpaque _ -> tm
+
+  sem mapPost_Expr_Expr f =
+  | tm & TmOpaque _ -> tm
 end
 
 -- TmVar --

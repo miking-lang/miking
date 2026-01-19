@@ -22,6 +22,7 @@ include "symbolize.mc"
 include "type-check.mc"
 include "pprint.mc"
 include "mexpr/json-debug.mc"
+include "mexpr/keyword-maker.mc"
 
 lang SymGetters = Sym
   -- Helpers for looking up names from known symbolization
@@ -140,6 +141,9 @@ lang MCorePathResolution = MCoreLoader
     ({path = resolved, env = env}, loader)
 end
 
+lang MCoreKeywordMaker = KeywordMaker + KeywordMakerOpaque
+end
+
 lang BootParserLoader = MCorePathResolution + DeclAst + BootParser
   + LetDeclAst + RecLetsDeclAst + TypeDeclAst + DataDeclAst + ExtDeclAst
   + MLangPrettyPrint + AstToJson
@@ -213,6 +217,7 @@ lang BootParserLoader = MCorePathResolution + DeclAst + BootParser
       , allowFree = true
       } in
     let ast = parseMCoreFile args path in
+    let ast = use MCoreKeywordMaker in makeKeywords ast in
     recursive let f = lam decls. lam ast.
       match ast with TmDecl {decl = decl, inexpr = ast}
       then f (snoc decls decl) ast

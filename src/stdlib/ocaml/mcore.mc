@@ -44,6 +44,11 @@ lang MCoreCompileLang =
   sem compileMCore : all a. Expr -> Hooks a -> a
   sem compileMCore ast =
   | hooks ->
+    recursive let removeOpaque = lam tm.
+      match tm with TmOpaque x
+      then removeOpaque x.body
+      else smap_Expr_Expr removeOpaque tm in
+    let ast = removeOpaque ast in
     let ast = removeTypeAscription ast in
 
     match typeLift ast with (env, ast) in

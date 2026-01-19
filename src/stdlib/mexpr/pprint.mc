@@ -308,6 +308,16 @@ lang PrettyPrint = IdentifierPrettyPrint + MExprAst
     else (env, join ["(", str, ")"])
 end
 
+lang OpaquePrettyPrint = PrettyPrint + OpaqueAst
+  sem isAtomic =
+  | TmOpaque _ -> false
+
+  sem pprintCode indent env =
+  | TmOpaque x ->
+    match printParen indent env x.body with (env, body) in
+    (env, join ["tmOpaque ", body])
+end
+
 lang VarPrettyPrint = PrettyPrint + MExprIdentifierPrettyPrint + VarAst
   sem isAtomic =
   | TmVar _ -> true
@@ -1433,7 +1443,7 @@ lang MExprPrettyPrint =
   -- Terms
   VarPrettyPrint + AppPrettyPrint + LamPrettyPrint + RecordPrettyPrint +
   DeclPrettyPrint + ConstPrettyPrint + DataPrettyPrint + MatchPrettyPrint +
-  SeqPrettyPrint + NeverPrettyPrint +
+  SeqPrettyPrint + NeverPrettyPrint + OpaquePrettyPrint +
 
   -- Decls
   LetPrettyPrint + TypePrettyPrint + RecLetsPrettyPrint + DataDeclPrettyPrint +

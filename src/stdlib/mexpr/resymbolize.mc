@@ -20,6 +20,14 @@ lang Resymbolize = Ast
   sem resymbolizeType : Map Name Name -> Type -> Type
 end
 
+lang ResymbolizeOpaque = Resymbolize + OpaqueAst
+  sem resymbolizeExpr nameMap =
+  | TmOpaque x -> TmOpaque
+    { x with body = resymbolizeExpr nameMap x.body
+    , ty = resymbolizeType nameMap x.ty
+    }
+end
+
 lang ResymbolizeVar = Resymbolize + VarAst
   sem resymbolizeExpr : Map Name Name -> Expr -> Expr
   sem resymbolizeExpr nameMap =
@@ -192,6 +200,7 @@ end
 lang MExprResymbolize =
   -- Expr
   ResymbolizeVar + ResymbolizeLam + ResymbolizeConApp + ResymbolizeMatch + ResymbolizeDecl +
+  ResymbolizeOpaque +
 
   -- Decl
   ResymbolizeLetDecl + ResymbolizeRecLetsDecl + ResymbolizeTypeDecl + ResymbolizeConDefDecl +

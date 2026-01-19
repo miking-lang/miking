@@ -257,6 +257,12 @@ lang Sym = Ast + SymLookup
   | _ -> env
 end
 
+lang OpaqueSym = Sym + OpaqueAst
+  sem symbolizeExpr env =
+  | TmOpaque x ->
+    TmOpaque {x with body = symbolizeExpr env x.body}
+end
+
 lang VarSym = Sym + VarAst
   sem symbolizeExpr (env : SymEnv) =
   | TmVar t ->
@@ -671,7 +677,7 @@ lang MExprSym =
   SeqTotPat + RecordPat + IntPat + CharPat + BoolPat + AndPat + OrPat +
 
   -- Non-default implementations (Terms)
-  VarSym + LamSym + DataSym + MatchSym + DeclSym +
+  VarSym + LamSym + DataSym + MatchSym + DeclSym + OpaqueSym +
 
   -- Non-default implementations (Decls)
   LetSym + ExtSym + TypeSym + RecLetsSym +

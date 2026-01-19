@@ -40,27 +40,34 @@ lang MExprSubstitute = MExprAst
     let ast = smap_Expr_Type (substituteIdentifiersType replacements) ast in
     let ast = smap_Expr_TypeLabel (substituteIdentifiersType replacements) ast in
     let ast = smap_Expr_Pat (substituteIdentifiersPat replacements) ast in
-    withType (substituteIdentifiersType replacements (tyTm ast)) ast
+    ast
   | TmLam t ->
     let ast = TmLam {t with ident = subIdent replacements t.ident} in
     let ast = smap_Expr_Expr (substituteIdentifiersExpr replacements) ast in
     let ast = smap_Expr_Type (substituteIdentifiersType replacements) ast in
     let ast = smap_Expr_TypeLabel (substituteIdentifiersType replacements) ast in
     let ast = smap_Expr_Pat (substituteIdentifiersPat replacements) ast in
-    withType (substituteIdentifiersType replacements (tyTm ast)) ast
+    ast
   | TmDecl x ->
     let ast = TmDecl {x with decl = substituteIdentifiersSDecl replacements x.decl} in
     let ast = smap_Expr_Expr (substituteIdentifiersExpr replacements) ast in
     let ast = smap_Expr_Type (substituteIdentifiersType replacements) ast in
     let ast = smap_Expr_TypeLabel (substituteIdentifiersType replacements) ast in
     let ast = smap_Expr_Pat (substituteIdentifiersPat replacements) ast in
-    withType (substituteIdentifiersType replacements (tyTm ast)) ast
+    ast
+  | TmOpaque x ->
+    let ast = TmOpaque {x with body = substituteIdentifiersExpr replacements x.body} in
+    let ast = smap_Expr_Pat (substituteIdentifiersPat replacements) ast in
+    let ast = smap_Expr_Type (substituteIdentifiersType replacements) ast in
+    let ast = smap_Expr_TypeLabel (substituteIdentifiersType replacements) ast in
+    let ast = smap_Expr_Pat (substituteIdentifiersPat replacements) ast in
+    ast
   | ast ->
     let ast = smap_Expr_Expr (substituteIdentifiersExpr replacements) ast in
     let ast = smap_Expr_Type (substituteIdentifiersType replacements) ast in
     let ast = smap_Expr_TypeLabel (substituteIdentifiersType replacements) ast in
     let ast = smap_Expr_Pat (substituteIdentifiersPat replacements) ast in
-    withType (substituteIdentifiersType replacements (tyTm ast)) ast
+    ast
 
   sem substituteIdentifiersType : Map Name Name -> Type -> Type
   sem substituteIdentifiersType replacements =
