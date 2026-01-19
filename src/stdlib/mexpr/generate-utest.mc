@@ -3,13 +3,14 @@ include "generate-eq.mc"
 
 include "mlang/loader.mc"
 
-lang StripUtestLoader = MCoreLoader + UtestDeclAst
+lang StripUtestLoader = MCoreLoader + UtestDeclAst + OpaqueAst
   syn Hook =
   | StripUtestHook ()
 
   sem stripUtests : Expr -> Expr
   sem stripUtests =
   | TmDecl (t & {decl = DeclUtest _}) -> stripUtests t.inexpr
+  | t & TmOpaque _ -> t
   | t -> smap_Expr_Expr stripUtests t
 
   sem _postTypecheck loader decl = | StripUtestHook _ ->
@@ -94,6 +95,7 @@ lang UtestLoader = MCoreLoader + GenerateEqLoader + GeneratePprintLoader + Strip
 
   sem replaceUtests hook static loader =
   | tm & TmLam _ -> smapAccumL_Expr_Expr (replaceUtests hook false) loader tm
+  | tm & TmOpaque _ -> (loader, tm)
   | tm -> smapAccumL_Expr_Expr (replaceUtests hook static) loader tm
   | TmDecl (x & {decl = DeclUtest t}) ->
     if hook.includeUtestIf {static = static, info = t.info} then

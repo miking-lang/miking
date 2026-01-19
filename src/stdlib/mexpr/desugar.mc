@@ -1,13 +1,14 @@
 include "mexpr/ast.mc"
 include "mlang/loader.mc"
 
-lang Desugar = Ast
+lang Desugar = Ast + OpaqueAst
   sem desugarExpr: Expr -> Expr
   sem desugarExpr =
+  | tm & TmOpaque _ -> tm
   | tm -> smap_Expr_Expr desugarExpr tm
 end
 
-lang DesugarLoader = Ast + MCoreLoader
+lang DesugarLoader = Ast + MCoreLoader + OpaqueAst
   syn Hook =
   | DesugarHook ()
 
@@ -16,7 +17,9 @@ lang DesugarLoader = Ast + MCoreLoader
     smapAccumL_Decl_Expr desugarExpr loader decl
 
   sem desugarExpr : Loader -> Expr -> (Loader, Expr)
-  sem desugarExpr loader = | expr ->
+  sem desugarExpr loader =
+  | expr & TmOpaque _ -> (loader, expr)
+  | expr ->
     smapAccumL_Expr_Expr desugarExpr loader expr
 
   sem enableDesugar : Loader -> Loader

@@ -228,6 +228,11 @@ lang TypeAnnot = CompatibleType
     typeAnnotExpr env expr
 end
 
+lang OpaqueTypeAnnot = TypeAnnot + OpaqueAst
+  sem typeAnnotExpr env =
+  | tm & TmOpaque _ -> tm
+end
+
 lang VarTypeAnnot = TypeAnnot + VarAst
   sem typeAnnotExpr (env : TypeEnv) =
   | TmVar t ->
@@ -773,7 +778,7 @@ lang MExprTypeAnnot =
   VarTypeAnnot + AppTypeAnnot + LamTypeAnnot + RecordTypeAnnot + LetTypeAnnot +
   TypeTypeAnnot + RecLetsTypeAnnot + ConstTypeAnnot + DataTypeAnnot +
   MatchTypeAnnot + UtestTypeAnnot + SeqTypeAnnot + NeverTypeAnnot +
-  ExpTypeAnnot + PlaceHolderTypeAnnotation +
+  ExpTypeAnnot + PlaceHolderTypeAnnotation + OpaqueTypeAnnot +
 
   -- Patterns
   NamedPatTypeAnnot + SeqTotPatTypeAnnot + SeqEdgePatTypeAnnot +

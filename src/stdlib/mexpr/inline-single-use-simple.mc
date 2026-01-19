@@ -66,6 +66,14 @@ lang InlineSingleUse = DeclAst + LetDeclAst + RecLetsDeclAst + VarAst + TempLamA
     match filterOption bindings with bindings & ![]
     then (st, TmDecl {x with decl = DeclRecLets {l with bindings = bindings}, inexpr = inexpr})
     else (st, inexpr)
+  | tm & TmOpaque x ->
+    -- NOTE(vipa, 2026-02-06): We may not modify the contents of a
+    -- TmOpaque, nor may we remove definitions it uses. This branch
+    -- thus only finds uses, ensures that any use counts as more than
+    -- 1, then returns the same TmOpaque unchanged.
+    let used = (collectSingleUses {useCounts = mapEmpty nameCmp, toInline = mapEmpty nameCmp} x.body).0 in
+    let st = {st with useCounts = mapUnionWith addi st.useCounts (mapMap (muli 2) used.useCounts)} in
+    (st, tm)
   | tm & TmVar x ->
     ({st with useCounts = mapInsertWith addi x.ident 1 st.useCounts}, tm)
   | tm -> smapAccumL_Expr_Expr collectSingleUses st tm
@@ -122,5 +130,15 @@ lang InlineSingleUse = DeclAst + LetDeclAst + RecLetsDeclAst + VarAst + TempLamA
   | tm & TmVar x ->
     match st with InlineMap toInline in
     optionGetOr tm (optionMap (lam f. f st) (mapLookup x.ident toInline))
+  | TmOpaque x ->
+    -- NOTE(vipa, 2026-02-06): We may need to rename variables inside
+    -- a `TmOpaque` because some surrounding variable has been
+    -- renamed, and that's done via `insertSingleUses`. Because of
+    -- what `collectSingleUses` does for `TmOpaque` we know that
+    -- nothing inside is counted as single use, thus the only thing
+    -- being inserted is what's considered as "simple" by `isSimple`
+    -- above. That's _technically_ not just `TmVar`s, it could also be
+    -- constants or literals, but I'm counting it good enough for now.
+    TmOpaque {x with body = insertSingleUses st x.body}
   | tm -> smap_Expr_Expr (insertSingleUses st) tm
 end

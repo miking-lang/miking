@@ -9,6 +9,7 @@ lang MExprRemoveTypeAscription = MExprAst
     if nameEq idLet idExpr then
       removeTypeAscription body
     else smap_Expr_Expr removeTypeAscription letexpr
+  | expr & TmOpaque _ -> expr
   | expr -> smap_Expr_Expr removeTypeAscription expr
 end
 

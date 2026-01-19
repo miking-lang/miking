@@ -40,6 +40,7 @@ lang HoleAstBase = IntAst + ANF + KeywordMaker + TypeCheck + Sym
 
   sem default =
   | TmHole {default = default} -> default
+  | t & TmOpaque _ -> t
   | t -> smap_Expr_Expr default t
 
   sem isAtomic =
@@ -275,8 +276,9 @@ lang HoleIntRangeAst = IntAst + HoleAstBase + IntTypeAst
 
 end
 
-lang HoleAnnotation = Ast
+lang HoleAnnotation = Ast + OpaqueAst
   sem stripTuneAnnotations =
+  | t & TmOpaque _ -> t
   | t -> smap_Expr_Expr stripTuneAnnotations t
 end
 

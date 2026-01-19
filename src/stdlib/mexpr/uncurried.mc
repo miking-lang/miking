@@ -84,9 +84,10 @@ lang UncurriedAst = Ast
     (acc, TyUncurriedArrow {x with positional = positional, ret = ret})
 end
 
-lang LowerUncurried = UncurriedAst + LamAst
+lang LowerUncurried = UncurriedAst + LamAst + OpaqueAst
   sem lowerUncurried : Expr -> Expr
   sem lowerUncurried =
+  | tm & TmOpaque _ -> tm
   | tm ->
     let tm = smap_Expr_Expr lowerUncurried tm in
     let tm = smap_Expr_Type lowerUncurriedType tm in

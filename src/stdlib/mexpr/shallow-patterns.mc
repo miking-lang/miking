@@ -774,9 +774,11 @@ lang CollectBranches = MatchAst + VarAst + NamedPat + AndPat + OrPat + NotPat
   | _ -> None ()
 end
 
-lang LowerNestedPatterns = CollectBranches + ShallowBase
+lang LowerNestedPatterns = CollectBranches + ShallowBase + OpaqueAst
   sem lowerAll : Expr -> Expr
-  sem lowerAll = | t ->
+  sem lowerAll =
+  | t & TmOpaque _ -> t
+  | t ->
     let f = lam pair. (pair.0, lowerAll pair.1) in
     match collectBranches t with Some (target, branches, fallthrough)
     then

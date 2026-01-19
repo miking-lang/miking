@@ -100,6 +100,11 @@ lang MExprDeadcodeEliminationVar = DeadcodeElimination + VarAst
     (nmap, setInsert t.ident free)
 end
 
+lang MExprDeadcodeEliminationOpaque = DeadcodeElimination + OpaqueAst
+  sem removeLets nmap =
+  | tm & TmOpaque _ -> tm
+end
+
 lang MExprDeadcodeEliminationApp = DeadcodeElimination + AppAst
   sem lambdasLeft : NMap -> Int -> Bool -> Expr -> (Int, Bool)
   sem lambdasLeft nmap n se =
@@ -117,7 +122,7 @@ end
 
 lang MExprDeadcodeEliminationLam = DeadcodeElimination + LamAst
   sem lamCounts : Int -> NMap -> Expr -> Int
-  sem lamCounts n nmap = 
+  sem lamCounts n nmap =
   | TmLam t ->
     lamCounts (addi n 1) nmap t.body
 
@@ -236,7 +241,7 @@ lang MExprDeadcodeElimination =
   MExprDeadcodeEliminationConst + MExprDeadcodeEliminationLam +
   MExprDeadcodeEliminationDecl + MExprDeadcodeEliminationLetDecl +
   MExprDeadcodeEliminationRecLetsDecl + MExprDeadcodeEliminationExtDecl +
-  MExprDeadcodeEliminationFunType
+  MExprDeadcodeEliminationFunType + MExprDeadcodeEliminationOpaque
 
   sem tmHasSideEffect : NMap -> Bool -> Expr -> Bool
   sem tmHasSideEffect nmap acc =

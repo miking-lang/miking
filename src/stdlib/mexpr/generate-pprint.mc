@@ -277,8 +277,8 @@ lang DPrintViaPprintLoader = GeneratePprintLoader + IOAst
     loader
 
   sem _postTypecheck loader decl = | DPrintViaPprintHook _ ->
-    recursive let work = lam loader. lam tm.
-      match tm with TmConst {val = CDPrint _, ty = ty} then
+    recursive let work = lam loader. lam tm. switch tm
+      case TmConst {val = CDPrint _, ty = ty} then
         match unwrapType ty with TyArrow {from = from} in
         match pprintFunctionsFor [from] loader with (loader, [pprint]) in
         let x = nameSym "x" in
@@ -286,7 +286,9 @@ lang DPrintViaPprintLoader = GeneratePprintLoader + IOAst
           (printError_ (app_ pprint (nvar_ x)))
           (flushStderr_ unit_)) in
         (loader, pprint)
-      else smapAccumL_Expr_Expr work loader tm
+      case TmOpaque _ then (loader, tm)
+      case tm then smapAccumL_Expr_Expr work loader tm
+      end
     in smapAccumL_Decl_Expr work loader decl
 end
 

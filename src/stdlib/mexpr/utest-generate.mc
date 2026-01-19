@@ -1013,6 +1013,7 @@ lang MExprUtestGenerate =
     match mapAccumL replaceBinding env t.bindings with (_, bindings) in
     match replaceUtests env x.inexpr with (env, inexpr) in
     (env, TmDecl {x with decl = DeclRecLets {t with bindings = bindings}, inexpr = inexpr})
+  | t & TmOpaque _ -> (env, t)
   | t -> smapAccumL_Expr_Expr replaceUtests env t
 
   -- Inserts utest runtime code at the tail of the program. In case any test
@@ -1033,6 +1034,7 @@ lang MExprUtestGenerate =
   sem stripUtests : Expr -> Expr
   sem stripUtests =
   | TmDecl (x & {decl = DeclUtest _}) -> stripUtests x.inexpr
+  | t & TmOpaque _ -> t
   | t -> smap_Expr_Expr stripUtests t
 
   sem generateUtest : Bool -> Expr -> Expr

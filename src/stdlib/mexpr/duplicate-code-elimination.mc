@@ -159,6 +159,7 @@ lang MExprEliminateDuplicateCode = MExprAst
     match eliminateDuplicateCodeType env replaced x.ty with (replaced, ty) in
     ( replaced
     , TmDecl {x with decl = DeclRecLets {t with bindings = reverse bindings}, inexpr = inexpr, ty = ty} )
+  | t & TmOpaque _ -> (replaced, t)
   | t ->
     match smapAccumL_Expr_Expr (eliminateDuplicateCodeExpr env) replaced t with (replaced, t) in
     match smapAccumL_Expr_Type (eliminateDuplicateCodeType env) replaced t with (replaced, t) in

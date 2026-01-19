@@ -14,6 +14,7 @@ include "digraph.mc"
 lang MExprDemoteRecursive = MExprAst + MExprFreeVars
   sem demoteRecursive : Expr -> Expr
   sem demoteRecursive =
+  | tm & TmOpaque _ -> tm
   | tm -> smap_Expr_Expr demoteRecursive tm
   | TmDecl (x & {decl = DeclRecLets t}) ->
     let f = lam acc. lam binding.
