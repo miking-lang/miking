@@ -86,13 +86,14 @@ lang KeywordMakerData = KeywordMakerBase + DataAst + DataDeclAst
   sem makeExprKeywords (args: [Expr]) =
   | TmConApp r ->
      let ident = nameGetStr r.ident in
+     let body = makeExprKeywords [] r.body in
      match matchKeywordString r.info ident with Some n then
        match n with (noArgs, f) then
-         let args = cons r.body args in
+         let args = cons body args in
          if eqi noArgs (length args) then f args
          else makeKeywordError r.info noArgs (length args) ident
        else never
-     else TmConApp r
+     else TmConApp {r with body = body}
   | TmDecl (x & {decl = DeclConDef r}) ->
      let ident = nameGetStr r.ident in
      match matchKeywordString r.info ident with Some _ then
