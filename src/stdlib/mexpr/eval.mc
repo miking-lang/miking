@@ -6,6 +6,7 @@ include "name.mc"
 include "list.mc"
 include "tensor.mc"
 include "map.mc"
+include "lazy.mc"
 
 include "info.mc"
 include "error.mc"
@@ -99,8 +100,6 @@ lang AppEval = Eval + AppAst
 end
 
 lang ClosAst = Ast + Eval + PrettyPrint + Eq
-  type Lazy a = () -> a
-
   syn Expr =
   | TmClos {ident : Name, body : Expr, env : Lazy EvalEnv, info : Info}
 
@@ -131,11 +130,11 @@ end
 lang LamEval = Eval + LamAst + ClosAst + AppEval
   sem apply ctx info =
   | (TmClos t, arg) ->
-    eval {ctx with env = evalEnvInsert t.ident arg (t.env ())} t.body
+    eval {ctx with env = evalEnvInsert t.ident arg (lazyForce t.env)} t.body
 
   sem eval ctx =
   | TmLam t ->
-    TmClos {ident = t.ident, body = t.body, env = lam. ctx.env, info = t.info}
+    TmClos {ident = t.ident, body = t.body, env = lazy (lam. ctx.env), info = t.info}
   | TmClos t -> TmClos t
 end
 
@@ -172,10 +171,10 @@ lang RecLetsEval =
 
   sem evalDecl ctx =
   | DeclRecLets t ->
-    recursive let envPrime : Lazy EvalEnv = lam.
+    recursive let envPrime : () -> EvalEnv = lam.
       let wraplambda = lam v.
         match v with TmLam t then
-          TmClos {ident = t.ident, body = t.body, env = envPrime, info = t.info}
+          TmClos {ident = t.ident, body = t.body, env = lazy envPrime, info = t.info}
         else
           errorSingle [infoTm v]
             "Right-hand side of recursive let must be a lambda"

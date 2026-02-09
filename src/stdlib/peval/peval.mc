@@ -177,13 +177,13 @@ lang LamPEval = PEval + PEvalApply + VarAst + LamAst + ClosPAst + AppEval
       let ident = optionGetOrElse (lam. error "impossible") r.ident in
       let b = astBuilder r.cls.info in k (b.app (b.var ident) arg)
     else
-      let env = evalEnvInsert r.cls.ident arg (r.cls.env ()) in
+      let env = evalEnvInsert r.cls.ident arg (lazyForce r.cls.env) in
       pevalEval { ctx with env = env } k r.cls.body
 
   sem pevalEval ctx k =
   | TmLam r ->
     let cls =
-      { ident = r.ident, body = r.body, env = lam. ctx.env, info = r.info }
+      { ident = r.ident, body = r.body, env = lazy (lam. ctx.env), info = r.info }
     in
     k (TmClosP {
       cls = cls, ident = None (), isRecursive = false
@@ -197,7 +197,7 @@ lang LamPEval = PEval + PEvalApply + VarAst + LamAst + ClosPAst + AppEval
       ({ ctx with freeVar = setInsert ident ctx.freeVar }, b.var ident)
     else
       let newident = nameSetNewSym r.cls.ident in
-      let env = evalEnvInsert r.cls.ident (b.var newident) (r.cls.env ()) in
+      let env = evalEnvInsert r.cls.ident (b.var newident) (lazyForce r.cls.env) in
       match
         pevalReadbackH ctx
           (pevalBind { ctx with env = env } (lam x. x) r.cls.body)
@@ -259,7 +259,7 @@ lang RecLetsPEval = PEval + RecLetsDeclAst + ClosPAst + LamAst
 
   sem pevalBindTop ctx k =
   | TmDecl (x & {decl = DeclRecLets r}) ->
-    recursive let envPrime : Int -> Lazy EvalEnv = lam n. lam.
+    recursive let envPrime : Int -> () -> EvalEnv = lam n. lam.
       let wraplambda = lam bind.
         if geqi n ctx.maxRecDepth then TmVar {
           ident = bind.ident,
@@ -272,7 +272,7 @@ lang RecLetsPEval = PEval + RecLetsDeclAst + ClosPAst + LamAst
             cls = {
               ident = r.ident,
               body = r.body,
-              env = envPrime (succ n),
+              env = lazy (envPrime (succ n)),
               info = r.info
             },
             ident = Some bind.ident,

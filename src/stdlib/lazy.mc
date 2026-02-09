@@ -9,6 +9,9 @@ type Lazy a = Ref (LazyContainer a)
 let lazy : all a. (() -> a) -> Lazy a
   = lam f. ref (LazyFunc f)
 
+let lazyPure : all a. a -> Lazy a
+  = lam a. ref (LazyVal a)
+
 let lazyForce : all a. Lazy a -> a
   = lam l.
     switch deref l
