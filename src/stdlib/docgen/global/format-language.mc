@@ -1,5 +1,3 @@
--- # FormatLanguages Module
---
 -- Miking-doc-gen can generate MDX code. MDX is written in React, and React
 -- supports both TypeScript and JavaScript. This module defines a small language
 -- to indicate in which format the output should be produced.
@@ -15,8 +13,8 @@ lang FormatLanguages
     -- Converts a `FormatLanguage` into its string representation.
     sem formatLanguageToStr : FormatLanguage -> String
     sem formatLanguageToStr =
-    | Js {} -> "Js"
-    | Ts {} -> "Ts"
+    | Js {} -> "javascript"
+    | Ts {} -> "typescript"
 
     -- Returns the default output language.
     sem defaultFormatLanguage : () -> FormatLanguage
@@ -28,5 +26,10 @@ lang FormatLanguages
     sem formatLanguageGetExt =
     | Ts {} -> "tsx"
     | Js {} -> "jsx"
+
+    sem formatLanguageGetExtWithDot : FormatLanguage -> String
+    sem formatLanguageGetExtWithDot =
+    | fmt -> cons '.' (formatLanguageGetExt fmt)
+
 
 end

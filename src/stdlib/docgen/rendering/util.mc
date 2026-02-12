@@ -1,17 +1,13 @@
--- # util.mc
---
 -- This module defines primitives used by the renderer to handle objects
 -- during the documentation generation process.
 
-include "./rendering-types.mc"
-include "../extracting/objects.mc"
+include "./rendering-data.mc"
+include "../global/objects.mc"
 include "../global/util.mc"
 
--- ## removeDoubleNames
---
 -- During rendering, we generate one page and one documentation block per child.
--- But what if two children have the same name and the same kind?
--- Since they share the same name, namespace and kind, they will end up with the same URL.
+-- But what if two children have the same name and the same form?
+-- Since they share the same name, namespace and form, they will end up with the same URL.
 -- However, two documentation blocks will still be generated, both pointing
 -- toward the last child’s page.
 --
@@ -25,20 +21,27 @@ include "../global/util.mc"
 -- sem semX = | x -> addi x 1
 --
 -- Since only the last sem remains, the previous documentation would be lost.
-let removeDoubleNames : [RenderingData] -> [RenderingData] = lam children.
+let removeDoubleNames : RenderingOptions -> [RenderingData] -> [RenderingData] = lam opt. lam children.
+    use ObjectsRenderer in
+
     type MergeFoldArg = { doc: String, prev: String, children: [RenderingData] } in
     -- Merging the documentations of consecutive same elements.
     let merged = foldl
     (
         lam arg. lam child.
         match arg with { doc = doc, prev = prev, children = children } in
-        let namespace = objNamespace child.obj in
-        if eqString namespace prev then
-           let doc = concat doc (objDoc child.obj) in
+        let obj = child.obj in
+        let url = objGetMyLink obj opt in
+        if not (objHasName obj) then
+           { arg with doc = "", children = cons child children, prev = "" }
+        else if eqString url prev then
+           let doc = if eqString (objDefaultDoc ()) doc then "" else doc in
+           let newDoc = objTryGetDoc child.obj in
+           let doc = concat doc newDoc in
            let child = { child with obj = objWithDoc child.obj doc } in
            { arg with doc = doc, children = cons child children }
         else
-           { arg with doc = objDoc child.obj, children = cons child children, prev = namespace }
+           { arg with doc = objDoc child.obj, children = cons child children, prev = url }
         
     ) { doc = "", prev = "", children = [] } children in
 
@@ -48,89 +51,19 @@ let removeDoubleNames : [RenderingData] -> [RenderingData] = lam children.
     (
         lam arg. lam child.
         match arg with { saw = saw, children = children } in
-        let namespace = objNamespace child.obj in
-        match hmLookup namespace saw with Some _ then arg
-        else { children = cons child children, saw = hmInsert namespace () saw }
+        let url = objGetMyLink child.obj opt in
+        
+        if objHasName child.obj then
+           match hmLookup url saw with Some _ then arg
+           else { children = cons child children, saw = hmInsert url () saw }
+        else { arg with children = cons child children }
     ) { children = [], saw = hashmapEmpty () } merged.children in
     sanitized.children
         
 
-
-
--- ## injectTests
---
--- Post-processes a list of `RenderingData` nodes to attach unit tests to their parent
--- documentation blocks.
--- - Iterates through children (`children`).
--- - Buffers any `RenderingData` elements that correspond to test code.
--- - When a new non-test block (`current`) is encountered, merges the buffered tests
---   into that block by:
---   * Concatenating the test code (`tests`) into the `tests` field
---   * Concatenating their raw rows (`row`) into the `rowTests` field
--- - Clears the buffer after attaching tests.
---
--- Returns: the transformed list of `RenderingData`, where test blocks are folded into
--- the corresponding parent documentation block.
-let injectTests : [RenderingData] -> [RenderingData] = use ObjectKinds in lam children.
-    type Arg = { current: Option RenderingData, acc: [RenderingData], tests: [RenderingData] } in
-
-    -- - Takes the accumulated list, the current block, and buffered tests.
-    -- - Extracts the "lastRow" of the last test, trimming trailing comments and empty lines.
-    -- - Builds the final `tests` and `rowTests` strings by concatenating buffered test code.
-    -- - Produces a new `RenderingData` with its tests attached, then pushes it into the accumulator.
-    let pushChildInAcc: [RenderingData] -> RenderingData -> [RenderingData] -> [RenderingData] = lam acc. lam current. lam tests.
-        let testsStr: (String, String) =
-            match tests with [last] ++ tests then
-                let lastRow = last.row in
-                recursive let trimRow = lam row.
-                  match row with [h] ++ t then
-                        let l = strTrim h in
-                        if strStartsWith "--" l then
-                           trimRow t
-                        else if eqString l "" then
-                           trimRow t
-                        else strJoin "\n" (reverse row)
-                  else []
-                in
-                let lastRow = trimRow (reverse (strSplit "\n" lastRow)) in
-                
-                let row: String = join (map (lam t. t.row) (reverse tests)) in                            
-                let tests: String = join (map (lam t. join [t.left, t.right, t.trimmed]) (reverse tests)) in
-                (join [tests, last.left, last.right], concat row lastRow)
-            else ("", "")
-        in
-        let current: RenderingData = { current with tests = testsStr.0, rowTests = testsStr.1 } in
-        join [tests, [current], acc]
-    in
-                    
-    let foldRes: Arg = foldl (lam arg. lam child.
-        match arg with { current = current, acc = acc, tests = tests } in
-        let isUtest = match objKind child.obj with ObjUtest {} then true else false in
-        switch current
-        case Some current then
-             if isUtest then { arg with tests = cons child tests }
-             else { arg with current = Some child, tests = [], acc = pushChildInAcc acc current tests }
-        case None {} then
-             if isUtest then { arg with acc = cons child acc }
-             else { arg with current =  Some child }
-        end
-    ) { current = None {}, acc = [], tests = [] } children
-    in
-    
-    let children = switch foldRes.current
-        case Some current then pushChildInAcc foldRes.acc current foldRes.tests
-        case None {} then foldRes.acc
-        end
-    in
-    
-    reverse children
-
--- ## RenderingDataSet
---
--- Groups `RenderingData` nodes into categories by their kind.
+-- Groups `RenderingData` nodes into categories by their form.
 -- This structure is useful for organizing sections in the documentation.
-type RenderingDataSet = {
-    sUse: [Object],
+type RenderingDataSet = use Objects in {
     sLet: [RenderingData],
     sLang: [RenderingData],
     sSem: [RenderingData],
@@ -142,36 +75,67 @@ type RenderingDataSet = {
     sType: [RenderingData],
     sUtest: [RenderingData]
 }
-
+    
 -- Constructs a `RenderingDataSet` from:
 -- - A list of rendered children (`children`).
 -- - Recursive block data (`recDatas`), extracted earlier.
-let buildSet: [RenderingData] -> [[RenderingData]] -> RenderingDataSet = use ObjectKinds in lam children. lam recDatas.
+let buildSet: [RenderingData] -> RenderingDataSet =
+    use Objects in
+    lam children.
     recursive
-    let buildSet = lam set. lam children. lam recDatas.
+    let buildSet = lam set. lam children.
         switch children
         case [child] ++ children then
-            let switchRes = switch child.obj.kind
-            case ObjUse {} then ({ set with sUse = cons child.obj set.sUse }, recDatas)
-            case ObjLet {} then ({ set with sLet = cons child set.sLet }, recDatas)
-            case ObjLang {} then ({ set with sLang = cons child set.sLang }, recDatas)
-            case ObjSem {} then ({ set with sSem = cons child set.sSem }, recDatas)
-            case ObjSyn {} then ({ set with sSyn = cons child set.sSyn }, recDatas)
-            case ObjCon {} then ({ set with sCon = cons child set.sCon }, recDatas)
-            case ObjMexpr {} then ({ set with sMexpr = cons child set.sMexpr }, recDatas)
-            case ObjType {} then ({ set with sType = cons child set.sType }, recDatas)
-            case ObjUtest {} then ({ set with sUtest = cons child set.sUtest }, recDatas)
+            let switchRes = switch child.obj
+            case ObjLet {} then { set with sLet = cons child set.sLet }
+            case ObjLang {} then { set with sLang = cons child set.sLang }
+            case ObjSem {} then { set with sSem = cons child set.sSem }
+            case ObjSyn {} then { set with sSyn = cons child set.sSyn }
+            case ObjCon {} then { set with sCon = cons child set.sCon }
+            case ObjMexpr {} then { set with sMexpr = cons child set.sMexpr }
+            case ObjType {} then { set with sType = cons child set.sType }
+            case ObjUtest {} then { set with sUtest = cons child set.sUtest }
             case ObjInclude {} then
-                (if objIsStdlib child.obj then { set with sLibInclude = cons child.obj set.sLibInclude } else { set with sInclude = cons child.obj set.sInclude }, recDatas)
-            case ObjRecursiveBloc {} then
-                match recDatas with [children] ++ recDatas then
-                    ({ set with sLet = concat children set.sLet }, recDatas)
-                else
-                   renderingWarn "Running out of recursive datas.";
-                   (set, recDatas)
+                let set = if objIsStdlib child.obj then
+                    { set with sLibInclude = cons child.obj set.sLibInclude }
+                  else
+                    { set with sInclude = cons child.obj set.sInclude }
+                in
+                set
             end in
-            match switchRes with (set, recDatas) in
-            buildSet set children recDatas
+            match switchRes with set in
+            buildSet set children
         case [] then set
         end
-    in buildSet { sUse = [], sLet = [], sLang = [],  sSem = [], sSyn = [], sCon = [], sMexpr = [], sInclude = [], sLibInclude = [], sType = [], sUtest = [] } (reverse children) (reverse recDatas)
+    in buildSet { sLet = [], sLang = [],  sSem = [], sSyn = [], sCon = [], sMexpr = [], sInclude = [], sLibInclude = [], sType = [], sUtest = [] } (reverse children)
+
+
+let renderFileOrWarn : String -> String -> () = lam path. lam content.
+    match fileWriteOpen path with Some wc then
+          fileWriteString wc content;
+          fileWriteClose wc
+    else
+          renderingWarn (join ["Failed to create search file: ", path, "."])
+
+-- Attempts to open the output file for a given object.
+let openIfShouldBeRendered : use Objects in Object -> RenderingOptions -> Option { wc: Option WriteChannel, write: String -> (), path: String } =
+    use ObjectsRenderer in lam obj. lam opt.
+    
+    if objHasUrl obj then
+        
+        let path = concat opt.outputFolder (objGetMyLocation obj opt) in
+        match fileWriteOpen path with Some wc then
+            Some {
+                wc = Some wc,
+                write = fileWriteString wc,
+                path = path
+            }
+        else
+            renderingWarn (join ["Failed to open output file ", path, " (openIfShouldBeRendered)."]); None {}
+
+    else
+        Some {
+             wc = None {},
+             write = lam. (),
+             path = ""
+         } 

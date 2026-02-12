@@ -1,8 +1,6 @@
--- # Format Module
---
 -- This module defines supported output formats for rendering and provides
 -- utility functions for converting to/from strings. It is used primarily by the
--- CLI or renderer to determine the output mode.
+-- renderer to determine the output mode.
 --
 -- We have 3 formats: mdx, md, and html. The Raw format is a generic wrapper
 -- around another format. Its purpose is to preserve the real format while
@@ -47,12 +45,16 @@ lang Formats
     sem formatGetExtension : Format -> String
     sem formatGetExtension =
     | Html {} -> "html"
-    | Md {} | Mdx {} -> "md"
+    | Md {} | Mdx {} -> "md" -- Mdx maps to md, this is the Docusaurus convention.
     | Raw { fmt = fmt } -> formatGetExtension fmt
 
+    sem formatGetExtensionWithDot : Format -> String
+    sem formatGetExtensionWithDot =
+    | fmt -> cons '.' (formatGetExtension fmt)
 
     -- Returns the default rendering format to use when none is specified.    
-    sem defaultFormat /- () -> Format -/ =
+    sem defaultFormat : () -> Format
+    sem defaultFormat =
     | _ -> Html {}
 
     

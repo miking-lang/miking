@@ -18,6 +18,7 @@
 include "sys.mc"
 include "ext/file-ext.mc"
 include "./server-options.mc"
+include "../global/util.mc"
 
 let pythonScript = lam servesMd. join ["
 import os
@@ -91,7 +92,7 @@ server_address = ('127.0.0.1', 3000)
 httpd = HTTPServer(server_address, Handler)
 print(\"Server started on http://127.0.0.1:3000\")
 def open_url():
-    webbrowser.open('127.0.0.1:3000/' + sys.argv[2])
+    webbrowser.open('127.0.0.1:3000' + sys.argv[2])
 
 t = threading.Thread(target=open_url)
 t.start()
@@ -112,7 +113,7 @@ let pythonServerStart : Bool -> ServerOptions -> () = lam servesMd. lam opt.
         fileWriteFlush wc;
         fileWriteClose wc;
         let pwd = sysGetCwd () in
-        let path = join [pwd, "/", opt.folder] in
+        let path = normalizePath (join [pwd, "/", opt.folder]) in
         let res = sysRunCommand ["python3", file, path, opt.link] "" "/" in ()
         
     else error "Failed to open temporary file. The browser failed to start but the files have been generated."

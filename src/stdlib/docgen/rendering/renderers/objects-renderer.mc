@@ -1,64 +1,88 @@
--- # ObjectsRenderer utilities
---
 -- Helpers to compute rendering-related data derived from extracted objects.
 -- Provides link building, display titles, and optional name handling.
 
-include "../../extracting/objects.mc"
+include "../../global/objects.mc"
 include "../rendering-options.mc"
 include "./headers/search.mc"
 include "string.mc"
 
-lang ObjectsRenderer = ObjectKinds + Formats
+lang ObjectsRenderer = Objects + Formats
 
-    -- Resolve a language name to a link using the nameContext map; fallback to the name.
-    sem objLangLink : String -> RenderingOptions -> String
-    sem objLangLink =
-    | name -> lam opt. match hmLookup name opt.nameContext with Some link then link
-                       else name
-    
-    -- Return the object name only for named kinds (let/type/sem/syn/lang/con).
-    sem objNameIfHas : Object -> Option String
-    sem objNameIfHas =
-    | { kind = ObjLet {} | ObjType {} | ObjSem {} | ObjSyn {} | ObjLang {} | ObjCon {} } & obj -> Some (objName obj)
-    | _ -> None {}
+    sem objUrlFetchFailed =
+    | obj -> lam name. lam my.
+      renderingWarn (join [
+          "Failed to resolve ", if my then "my" else "the", " url for name ", name, ".\n",
+          "Object details:\n",
+          "    namespace: ", objNamespace obj, "\n",
+          "    name: ", objName obj, "\n",
+          "    id: ", int2string (objId obj), "\n"
+      ])
 
-    -- Preserve the current name context only for Lang and Program roots.
-    sem objPreserveNameCtx : Object -> Bool
-    sem objPreserveNameCtx =
-    | { kind = ObjLang {} | ObjProgram {} } -> true
-    | _ -> false
-    -- Build the canonical link for an object (prefix + namespace + extension).
 
-    -- Uses "Stdlib" for stdlib objects, "Files" for user sources.
-    sem objGetPureLink : Object -> RenderingOptions -> String
-    sem objGetPureLink =
+    sem objBuildUrl : Object -> RenderingOptions -> String
+    sem objBuildUrl =
     | obj -> lam opt.
-        let namespace = objNamespace obj in
-        let ext = concat "." (formatGetExtension opt.fmt) in
-        let prefix = if objIsStdlib obj then "Stdlib" else "Files" in
-        let link =  join [prefix, namespace, ext] in
-        if strStartsWith "/" link then link else cons '/' link     
+      buildUrl opt.stdlibFolder opt.urlPrefix opt.fmt (objHasChildren obj) (objIsStdlib obj) (objNamespace obj) (objGetFirstWord obj)
 
-    -- Compute the URL for an object; Lang/Use use name-based mapping, others use file path.
-    sem objLink : Object -> RenderingOptions -> String
-    sem objLink =
+    -- Edge case for the mdx renderer, bad practice, feel free to make it better.
+    sem objPreprocessLink : String -> Format -> String
+    sem objPreprocessLink (link: String) =
+    | Mdx {} ->
+      let index = "/index.md" in
+      if strEndsWith index link then
+          subsequence link 0 (subi (length link) (length index))
+      else link
+    | _ -> link
+
+    sem objGetMyLink : Object -> RenderingOptions -> String
+    sem objGetMyLink =
     | obj -> lam opt.
-        let link = switch (objKind obj)
-            case ObjLang {} | ObjUse {} then
-                objLangLink (objName obj) opt   
-            case _ then
-                 objGetPureLink obj opt
-            end
-        in
-        if strStartsWith "/" link then link else cons '/' link
+      let url =
+          buildUrl
+              opt.stdlibFolder
+              opt.urlPrefix
+              opt.fmt
+              (objHasChildren obj)
+              (objIsStdlib obj)
+              (objNamespace obj)
+              (objGetFirstWord obj)
+      in
+      objPreprocessLink url opt.fmt
+
+    sem objGetLink : Object -> RenderingOptions -> String -> String
+    sem objGetLink =
+    | obj -> lam opt. lam name.
+      let link =
+          if not (objHasLink obj) then ""
+          else match nameContextFetch opt.nameContext obj name with Some res then res.url
+          else objUrlFetchFailed obj name false; ""
+      in
+      objPreprocessLink link opt.fmt
+
+    sem objTryFetch : Object -> RenderingOptions -> String -> Option NameMapValue
+    sem objTryFetch =
+    | obj -> lam opt. lam name.
+      let link =
+          if not (objHasLink obj) then None {}
+          else nameContextFetch opt.nameContext obj name
+      in
+      optionMap (lam v. { v with url = objPreprocessLink v.url opt.fmt }) link
+
+    sem objGetMyLocation : Object -> RenderingOptions -> String
+    sem objGetMyLocation =
+    | obj -> lam opt.
+      let name = objName obj in
+      let link = objBuildUrl obj opt in
+      let prefixLength = length opt.urlPrefix in
+      let link = subsequence link prefixLength (length link) in
+      pathConcat "/" link
             
     -- Human-friendly display title; special-cases include/utest.
     sem objTitle : Object -> String
     sem objTitle =    
     | obj ->
         let name = head (reverse (strSplit "/" (objName obj))) in
-        let kind = objKind obj in
-        switch kind
+        switch obj
         case ObjInclude { pathInFile = pathInFile } then pathInFile
         case ObjUtest {} then "utest"
         case _ then name
@@ -69,38 +93,27 @@ lang ObjectsRenderer = ObjectKinds + Formats
     sem objLog =
     | obj -> lam opt. opt.log (join [
         "Object ", objName obj, ":\n",
-        "   kind: ", objKindToString (objKind obj), "\n",
+        "   form: ", objToString obj, "\n",
         "   namespace: ", objNamespace obj, "\n",
-        "   prefix: ", objPrefix obj, "\n",
-        "   link: ", objLink obj opt, "\n",
+        "   link: ", objGetMyLink obj opt, "\n",
         "   isStdlib: ", bool2string (objIsStdlib obj), "\n"
     ])
 
-    sem objToJsDict : RenderingOptions -> ObjectTree -> [SearchDictObj]
+    sem objToJsDict : RenderingOptions -> Object -> [SearchDictObj]
     sem objToJsDict opt = 
-    | tree ->
-      recursive let objToJsDict = lam opt. lam tree. 
-          let obj = objTreeObj tree in
+    | obj ->
+      recursive let objToJsDict = lam obj.
           -- Recursive calls: render all children and transmit the name-context through the fold.
-          let res =  foldl (lam arg. lam child.
-              let obj = objTreeObj child in
-              match (objTreeChildren child, obj.kind) with ([], ObjInclude {}) then arg else
-              let nameContext =
-                  match objNameIfHas obj with Some name then
-                   hmInsert name (objGetPureLink obj arg.opt) arg.opt.nameContext
-                  else arg.opt.nameContext
-              in
-              let opt = { arg.opt with nameContext = nameContext } in
-              match objToJsDict opt child with { dicts = dicts, opt = opt } in
-              { opt = opt, dicts = concat dicts arg.dicts }
-              ) { dicts = [], opt = opt } (objTreeChildren tree)
+          let dicts =  foldl (lam dicts. lam child.
+              match (objChildren child, child) with ([], ObjInclude {}) then dicts else
+              let newDicts = objToJsDict child in
+              concat newDicts dicts
+              ) [] (objChildren obj)
           in
-          let link = concat opt.urlPrefix (objLink obj opt) in
+          let link = objGetMyLink obj opt in
           let link = if strEndsWith ".md" link then subsequence link 0 (subi (length link) 3) else link in 
-          {
-             opt = if objPreserveNameCtx obj then res.opt else opt,
-             dicts = if objRenderIt obj then cons { name = objNamespace obj, link = link } res.dicts else res.dicts
-          }
-      in (objToJsDict opt tree).dicts 
-
+          if objHasUrl obj then
+             cons { name = objNamespace obj, link = link } dicts
+          else dicts
+      in objToJsDict obj
 end

@@ -3,7 +3,7 @@ include "string.mc"
 
 let searchHtml: String = 
 "<div id=\"search-container\">
-  <input id=\"search-bar\" type=\"text\" placeholder=\"Type to search\" />
+  <input id=\"search-bar\" type=\"text\" placeholder=\"Type to search [r]\" />
   <div id=\"search-results\"></div>
 </div>"
 
@@ -135,7 +135,7 @@ import React, { useState, useEffect, useRef } from 'react';
 const results = [", dict, "];
 
 const searchCss = `
-", themeVariables, "
+", mdxSearchVariables, "
 ", searchCss, "
 `;
 
@@ -143,12 +143,14 @@ export default function Search() {
   const [query, setQuery] = useState(\"\");
   const [open, setOpen] = useState(false);
   const containerRef = useRef(null);
+  const inputRef = useRef(null);
 
   useEffect(() => {
     // inject CSS
     const style = document.createElement(\"style\");
     style.textContent = searchCss;
     document.head.appendChild(style);
+
     // force light theme
     document.documentElement.setAttribute(\"data-theme\", \"htmlLight\");
 
@@ -168,6 +170,24 @@ export default function Search() {
     return () => document.removeEventListener(\"mousedown\", handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    // global keybinding: 'r' focuses search
+    function handleKeyPress(event) {
+      if (event.key === 'r') {
+        inputRef.current?.focus();
+      }
+    }
+    document.addEventListener(\"keypress\", handleKeyPress);
+    return () => document.removeEventListener(\"keypress\", handleKeyPress);
+  }, []);
+
+  const processInput = (value) => {
+    const q = value.trim();
+    setQuery(value);
+    setOpen(q.length > 0);
+    return filterResults(results, q);
+  };
+
   const candidates = filterResults(results, query);
 
   return (
@@ -178,15 +198,21 @@ export default function Search() {
     >
       <input
         id=\"search-bar\"
+        ref={inputRef}
         type=\"text\"
         value={query}
-        onChange={(e) => {
-          setQuery(e.target.value);
-          setOpen(true);
-        }}
-        onFocus={() => setOpen(true)}
-        placeholder=\"Type to search...\"
+        placeholder=\"Type to search [r]\"
         className=\"w-full rounded-2xl border border-gray-300 bg-white px-4 py-2 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-400 focus:outline-none\"
+        onChange={(e) => processInput(e.target.value)}
+        onFocus={(e) => processInput(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === \"Enter\") {
+            e.preventDefault();
+            if (candidates.length > 0) {
+              window.location.href = candidates[0].link;
+            }
+          }
+        }}
       />
       {open && candidates.length > 0 && (
         <div
@@ -215,7 +241,7 @@ let searchJs: [SearchDictObj] -> String = lam objects.
 let dict = buildDict objects in
 join [
 "
-const results = [", dict, "];
+const results = [", dict, "];   
 
 const searchBar = document.getElementById(\"search-bar\");
 const resultsDiv = document.getElementById(\"search-results\");
@@ -243,13 +269,30 @@ let inputProcess = () => {
     }
 
     resultsDiv.appendChild(frag);
+
+    return candidates;
 };
 
+
+document.addEventListener(\"keypress\", (event) => {
+    if (event.key === 'r') {
+        searchBar.focus();
+    }
+});
+
+searchBar.addEventListener(\"keydown\", (event) => {
+    if (event.key === \"Enter\") {
+        event.preventDefault();
+        const candidates = inputProcess() || [];
+        if (candidates.length > 0) {
+            window.location.href = candidates[0].link;
+        }
+    }
+});
 searchBar.addEventListener(\"input\", inputProcess);
 searchBar.addEventListener(\"focus\", inputProcess);
-searchBar.addEventListener(\"focusout\", (event) => {
-  const newTarget = event.relatedTarget;
-  if (!resultsDiv.contains(newTarget)) {
+document.addEventListener(\"mousedown\", (event) => {
+  if (!searchBar.contains(event.target) && !resultsDiv.contains(event.target)) {
     resultsDiv.innerHTML = \"\";
   }
 });

@@ -30,8 +30,8 @@ include "mexpr/info.mc"
 include "sys.mc"
 include "ext/file-ext.mc"
 
-include "./include-set.mc"
-include "./file-opener.mc"
+include "../parsing/include-set.mc"
+include "../global/file-opener.mc"
 include "./mast.mc"
 
 include "../global/util.mc"
@@ -56,13 +56,10 @@ let buildMAstFromFile: Logger -> String -> MAst = lam log. lam file.
           with eliminateDeadCode = false }
           with keywords = mexprExtendedKeywords } in
     
-    let pos0 = { x = 0, y = 0 } in
-
     type Arg = { acc: [String], includeSet: IncludeSet ParsingFile } in
 
     recursive let work : Arg -> String -> Arg = lam arg. lam file.
         log (join ["Assembling ast for the file ", file, "."]);
-
         match arg with { acc = acc, includeSet = includeSet } in
 
         let removeMexpr : String -> String = lam s.
@@ -96,15 +93,9 @@ let buildMAstFromFile: Logger -> String -> MAst = lam log. lam file.
 
     in
 
-    let includeSet = includeSetNew (dirname file) in
+    let includeSet = includeSetNew () in
 
-    let unit = TmSeq {
-      tms = [],
-      ty = TyUnknown { info = NoInfo () },
-      info = NoInfo ()
-    } in
-
-    match work { acc = [], includeSet = includeSet } file with { acc = code, includeSet = includeSet } in
+    match work { acc = [], includeSet = includeSet } file with { acc = code } in
 
     let code = reverse (strJoin "\n" code) in
     let tmpFile = sysTempFileMake () in
@@ -119,6 +110,5 @@ let buildMAstFromFile: Logger -> String -> MAst = lam log. lam file.
 
         log "Type checking final ast";
         let ast = typeCheckExpr { typcheckEnvDefault with disableConstructorTypes = true} ast in
-
-        { expr = ast, includeSet = includeSet }
+        ast
     else error "Failed to create temporary file."

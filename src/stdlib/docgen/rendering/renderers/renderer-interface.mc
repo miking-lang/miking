@@ -1,13 +1,5 @@
--- # Renderer Interface
---
 -- This file defines the interface for a renderer.
--- 
--- ## General Overview
--- - At startup, the application reads the format option (see ../../global/format.mc).
--- - Based on this format, the renderer dispatches function calls to the correct implementation.
--- - All functions return `String`, which will be written to the output file.
 --
--- ## Adding a New Format
 -- To add a new format:
 -- 1. Implement this interface for your format.
 -- 2. Add the new format in ../../global/format.mc.
@@ -16,16 +8,13 @@
 -- 
 -- It is strongly recommended to inspect `raw-renderer.mc` first.
 -- The default implementation is well-structured, so you rarely need to redefine everything.
---
--- ## Dispatch
--- Functions here are called by ../renderer.mc. They form the contract for rendering
--- headers, footers, documentation, code, links, and text formatting.
 
-include "../../extracting/objects.mc"
+include "../../global/objects.mc"
 include "../../global/format.mc"
 include "../../global/format-language.mc"
-include "../../extracting/source-code-word.mc"
-include "../rendering-types.mc"
+include "../../global/source-code.mc"
+
+include "../rendering-data.mc"
 include "../rendering-options.mc"
 
 include "./objects-renderer.mc"
@@ -37,12 +26,11 @@ lang RendererInterface =
     Formats + ObjectsRenderer + TokenReader + SourceCodeWordKinds + 
     MExprPrettyPrint + MetaVarTypePrettyPrint + FormatLanguages
 
-    -- ## Setup and File Wrappers
+    -------------------- Setup --------------------
 
     -- Called before rendering starts for all files.
     -- Typically used to generate global headers.
-    -- Returns a list of file paths with associated content.
-    sem renderSetup : ObjectTree -> RenderingOptions -> [{ file: String, content: String }]
+    sem renderSetup : RenderingOptions -> ()
 
     -- Called before rendering each file.
     -- Typically used to push file headers or includes.
@@ -53,7 +41,17 @@ lang RendererInterface =
     sem renderFooter : Object -> RenderingOptions -> String
 
 
-    -- ## Documentation Blocks
+    -------------------- Search File --------------------
+
+    -- Build the path to the search file.
+    -- The first parameter is the path to the search file folder.
+    sem renderSearchPath : String -> RenderingOptions -> String
+
+    -- Write the final version of the search engine.
+    sem renderSearchFile : [SearchDictObj] -> RenderingOptions -> ()
+
+
+    ----------------- Page Items -----------------
 
     -- Renders the top section of a page.
     -- Includes code toggle, and top documentation.
@@ -61,62 +59,104 @@ lang RendererInterface =
 
     -- Renders a documentation block for an object.
     -- Includes title, goto link, code toggle, top doc, and signature.
-    sem renderDocBloc : RenderingData -> RenderingOptions -> String
+    sem renderDocBloc : RenderingData -> Bool -> RenderingOptions -> String
+
+    -- Renders the raw string of the signature without colorising it
+    sem renderPureDocSignature : Object -> RenderingOptions -> String
 
     -- Renders the signature of an object.
     sem renderDocSignature : Object -> RenderingOptions -> String
 
+    sem renderVariants : Object -> RenderingOptions -> String
+
+    sem renderOneVariant : Object -> SynVariant -> RenderingOptions -> String
+
     -- Renders the documentation string of an object (from its `doc` field).
-    sem renderDocDescription : Object -> RenderingOptions -> String
+    sem renderDocDescription : String -> RenderingOptions -> String
 
     -- Renders the unit tests associated with an object.
-    sem renderDocTests : RenderingData -> RenderingOptions -> String
+    sem renderDocTests : RenderingData -> Bool -> RenderingOptions -> String
 
+    syn DocObjectParsed =
 
-    -- ## Navigation / Linking
+    -- Parses a documentation block.
+    sem renderDocObjectParse : String -> RenderingOptions -> DocObjectParsed
+
+    -- Render the output of renderDocObjectParse into a string well formatted.
+    sem renderFormattedDoc : Object -> DocObjectParsed -> Bool -> RenderingOptions -> String
+
+    -- Render a tooltip, which is a popup containing text,
+    -- activated on mouseover.
+    sem renderTooltip : String -> String -> RenderingOptions -> String 
+
+    sem renderTooltipSign : Object -> RenderingOptions -> String
+
+    ----------------- Linking -----------------
 
     -- Renders a list of links for a list of objects.
     sem renderLinkList : [Object] -> RenderingOptions -> String
 
     -- Renders a single "goto" link to another documentation page.
-    -- Takes the raw link, then calls renderLink internally.
     sem renderGotoLink : String -> RenderingOptions -> String
+
+    -- Renders a link toward a page indicated in the title.
+    -- Used for the include and use links.
+    sem renderPageLink : String -> String -> RenderingOptions -> String
+
+    -- Render a hook link.
+    sem renderHookLink : String -> String -> Bool -> RenderingOptions -> String
+
+    -- Renders the "parent" link to another documentation page.
+    sem renderParentLink : Object -> RenderingOptions -> String
 
     -- Renders a single link: first argument is title, second is raw link.
     sem renderLink : String -> String -> RenderingOptions -> String
 
+    -- Render a link toward another object page.
+    sem renderHook : Object -> String -> Bool -> RenderingOptions -> String 
 
-    -- ## Code Rendering
+    sem renderStdlibConstLink : String -> RenderingOptions -> String
+
+    ----------------- Code Rendering -----------------
 
     -- Renders a block of code wrapped in a toggleable hidden section.
     -- Bool argument decides whether it starts hidden.
-    sem renderHidenCode : String -> String -> Bool -> RenderingOptions -> String
+    sem renderHidenCode : String -> String -> String -> Bool -> RenderingOptions -> String
 
-    -- Renders code with preview:
-    -- - Left part (raw code)
-    -- - Right part (hidden code via renderHidenCode)
-    -- - Trimmed part (raw, always visible)
-    -- If the right part is empty, no toggle is shown.
+
     sem renderCodeWithPreview : RenderingData -> RenderingOptions -> String
 
     -- Renders code directly, without preview/toggling.
     sem renderCodeWithoutPreview : RenderingData -> RenderingOptions -> String
 
     -- Renders a source code string with syntax highlighting.
-    sem renderSourceCodeStr : String -> RenderingOptions -> String
+    -- If an object is provided, the types will be clickable
+    sem renderSourceCodeStr : String -> Option Object -> RenderingOptions -> String
 
     -- Renders structured source code (tokenized/colored).
-    sem renderSourceCode : SourceCode -> RenderingOptions -> String
+    -- If an object is provided, the types will be clickable    
+    sem renderSourceCode : SourceCode -> Option Object -> RenderingOptions -> String
 
     -- Renders a single token word.
-    sem renderWord : SourceCodeWord -> RenderingOptions -> String
-
-    -- Renders top-level source code for an object.
-    -- Takes children TreeSourceCode and produces RenderingData.
-    sem renderTreeSourceCode : [TreeSourceCode] -> Object -> RenderingOptions -> RenderingData
+    -- If an object is provided, the types will be clickable
+    sem renderWord : SourceCodeWord -> Option Object -> RenderingOptions -> String
 
 
-    -- ## Formatting Helpers
+    ----------------- Rendering Objects Creation -----------------
+
+    sem renderCreateTests : [RenderingData] -> RenderingOptions -> String
+
+    -- Create The rendering data for the given object.
+    -- The list of rendering data are supposed to be the associated tests.
+    sem renderCreateRenderingData : Object -> [RenderingData] -> RenderingOptions -> RenderingData
+
+    -- Render the variants from list of a syn.
+    sem renderSynVariants : Object -> [SynVariant] -> RenderingOptions -> String
+
+    -- Render the constructors of a given type (using the name context API)
+    sem renderTypeConstructors : Object -> RenderingOptions -> String
+
+    ----------------- Basic Formatting Helpers -----------------
 
     -- Renders a section title (e.g., "Variables", "Types").
     sem renderSectionTitle : String -> RenderingOptions -> String
@@ -124,11 +164,8 @@ lang RendererInterface =
     -- Renders a string in bold.
     sem renderBold : String -> RenderingOptions -> String
 
-    -- Sanitizes a string for safe inclusion in documentation.
-    sem renderRemoveDocForbidenChars : String -> RenderingOptions -> String
-
-    -- Sanitizes a string for safe inclusion in code.
-    sem renderRemoveCodeForbidenChars : String -> RenderingOptions -> String    
+    -- Renders a string in italic.
+    sem renderItalic : String -> RenderingOptions -> String
 
     -- Renders a page title, size determines heading level
     -- (larger size -> smaller title).
@@ -140,8 +177,18 @@ lang RendererInterface =
     -- Renders a block of text.
     sem renderText : String -> RenderingOptions -> String
 
+    sem renderNewLine : RenderingOptions -> String
 
-    -- ## Syntax Coloring
+    ----------------- Escaping -----------------
+
+    -- Sanitizes a string for safe inclusion in documentation.
+    sem renderRemoveDocForbidenChars : String -> RenderingOptions -> String
+
+    -- Sanitizes a string for safe inclusion in code.
+    sem renderRemoveCodeForbidenChars : String -> RenderingOptions -> String    
+
+
+    ----------------- Syntax Coloring -----------------
 
     -- Renders a type word.
     sem renderType : String -> RenderingOptions -> String
@@ -167,7 +214,15 @@ lang RendererInterface =
     -- Renders a multi-line comment.
     sem renderMultiLineComment : String -> RenderingOptions -> String
 
-    -- Renders a single newline.
-    sem renderNewLine : RenderingOptions -> String
+
+    ----------------- Shared helpers -----------------
+
+    -- Wrapper that renders inner content via raw renderer, then wraps it with HTML
+    sem renderWithRaw : all a. RenderingOptions -> String -> (a -> RenderingOptions -> String) -> a -> String -> String
+    sem renderWithRaw =
+    | opt -> lam left. lam f. lam arg. lam right.
+        let inner = f arg { opt with fmt = Raw { fmt = opt.fmt } } in
+        match inner with "" then "" else join [left, inner, right]
+
 
 end

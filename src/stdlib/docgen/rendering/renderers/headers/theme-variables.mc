@@ -45,6 +45,8 @@ let themeVariables = "
   --searchResultItemBorderColor: rgba(0,0,0,0.08);
   --searchHighlightColor: #0066cc;
   --searchResultBGColor: #ffffff;
+  --hookLinkHighlightBG: rgba(59, 130, 246, 0.12);
+  --hookLinkHighlightBGHover: rgba(59, 130, 246, 0.22);
 }
 
 /* htmlLight */
@@ -102,6 +104,8 @@ let themeVariables = "
   --searchResultItemBorderColor: rgba(0,0,0,0.08);
   --searchHighlightColor: #0066cc;
   --searchResultBGColor: #ffffff;
+  --hookLinkHighlightBG: rgba(59, 130, 246, 0.12);
+  --hookLinkHighlightBGHover: rgba(59, 130, 246, 0.22);  
 }
 
 /* htmlDark */
@@ -147,6 +151,8 @@ let themeVariables = "
   --searchResultItemBorderColor: rgba(255,255,255,0.08);
   --searchHighlightColor: #4da6ff;
   --searchResultBGColor: transparent;
+  --hookLinkHighlightBG: rgba(180, 180, 180, 0.12);
+  --hookLinkHighlightBGHover: rgba(200, 200, 200, 0.20); 
 }
 
 /* htmlWarm */
@@ -192,6 +198,8 @@ let themeVariables = "
   --searchResultItemBorderColor: #f5deb0;
   --searchHighlightColor: #e09b00;
   --searchResultBGColor: transparent;
+  --hookLinkHighlightBG: rgba(224, 155, 0, 0.18);
+  --hookLinkHighlightBGHover: rgba(224, 155, 0, 0.30);  
 }
 
 /* htmlWarmDark */
@@ -237,6 +245,30 @@ let themeVariables = "
   --searchResultItemBorderColor: #3f3f3f;
   --searchHighlightColor: #facc15;
   --searchResultBGColor: transparent;
+  --hookLinkHighlightBG: rgba(250, 204, 21, 0.20);
+  --hookLinkHighlightBGHover: rgba(250, 204, 21, 0.32);  
 }
 
+"
+
+-- Used in the react search engine.
+let mdxSearchVariables =
+"
+:root {
+  --searchBarBGColor: #f2f2f2;
+  --searchBarTextColor: #1a1a1a;
+  --searchBarPlaceholderColor: #777777;
+  --searchBarShadowColor: rgba(0,0,0,0.1);
+  --searchResultsBGColor: #ffffff;
+  --searchResultsShadowColor: rgba(0,0,0,0.15);
+  --searchResultItemBGColor: #fafafa;
+  --searchResultItemTextColor: #333333;
+  --searchResultItemHoverBGColor: #f0f0f0;
+  --searchResultItemActiveBGColor: #d9d9d9;
+  --searchResultItemBorderColor: rgba(0,0,0,0.08);
+  --searchHighlightColor: #0066cc;
+  --searchResultBGColor: #ffffff;
+  --hookLinkHighlightBG: rgba(59, 130, 246, 0.12);
+  --hookLinkHighlightBGHover: rgba(59, 130, 246, 0.22);
+}
 "

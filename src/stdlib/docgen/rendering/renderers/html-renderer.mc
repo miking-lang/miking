@@ -1,48 +1,38 @@
--- # HTML Renderer for mi-doc-gen
---
--- This module implements the **HtmlRenderer**, an instance of `RendererInterface`.
--- It generates HTML pages from the extracted ObjectTree.
---
--- ## Design
--- - The HTML renderer wraps the **raw** renderer: whenever we need to render inner
---   parts (titles, doc strings, code, …) as plain text, we temporarily switch
---   the format to `Raw { fmt = Html {} }` and call the corresponding raw function.
---   This ensures consistent escaping and avoids recursion issues.
--- - `htmlRenderWrapper` centralizes this pattern: it calls a raw-rendered function
---   and, if the result is non-empty, wraps it with provided HTML tags.
--- - Syntax coloring is implemented with `<span class="...">` using short CSS class
---   names: `tp`, `var`, `kw`, `comment`, `string`, `multi`, `number`.
--- - Newlines in HTML are rendered as `<br>` (see `renderNewLine`), whereas blocks
---   such as documentation and code are wrapped in `<pre>` for whitespace fidelity.
--- - `renderHidenCode` (sic) provides a simple toggle button + collapsible container.
---   The actual JS/CSS hooks are assumed to be present in the page header.
-
 include "./renderer-interface.mc"
 include "./headers/html-header.mc"
+include "../util.mc"
 
 -- The HTML renderer implementation 
 lang HtmlRenderer = RendererInterface
 
-    -- Create the scripts and stylesheet in the output folder.
-    sem renderSetup obj =
+    sem renderSetup =
     | { fmt = Html {} } & opt ->
-        let srcPath = normalizePath (join [opt.outputFolder, "/", opt.srcFolder]) in
-        let format = lam content. lam path.
-            {
-                file = normalizePath (join [srcPath, "/", path]),
-                content = content
-            }
-        in
-        [format (searchJs (objToJsDict opt obj)) (searchPath ".js"),
-        format htmlStyle htmlStylePath,
-        format htmlScript htmlScriptPath]
-        
+        let srcPath = renderingOptionsSrcPath opt in
+        renderFileOrWarn htmlStyle (pathConcat srcPath htmlStylePath);
+        renderFileOrWarn htmlScript (pathConcat srcPath htmlScriptPath)
 
-    -- Page/file header: injects theme header and object name into the HTML head/body.
     sem renderHeader obj =
-    | { fmt = Html {} } & opt -> getHeader (objName obj) opt.srcFolder
+    | { fmt = Html {} } & opt ->
+      let header = getHeader (objName obj) (renderingOptionsSrcPath opt) in
+      let rawHeader = renderWithRaw opt "" renderHeader obj "" in -- Render the parent link
+      join [header, "\n", rawHeader]
 
-    -- HTML heading: delegates inner text to raw title rendering, then wraps as <hN>.
+    sem renderFooter obj =
+    | { fmt = Html {} } & opt -> "</div></body>\n</html>"   
+
+    sem renderSearchPath (path: String) =
+    | { fmt = Html {} } & opt ->
+       pathConcat path (searchPath ".js")
+
+    sem renderSearchFile (searchDatas: [SearchDictObj]) =
+    | { fmt = Html {} } & opt ->
+      let path = pathConcat (renderingOptionsSrcPath opt) (searchPath ".js") in
+      let content = searchJs searchDatas in
+      renderFileOrWarn path content
+
+    sem renderTopPageDoc (data: RenderingData) =
+    | { fmt = Html {} } & opt -> renderWithRaw opt "<div class=\"top-doc\">\n<pre>" renderTopPageDoc data "</pre>\n</div>"
+
     sem renderTitle size s =
     | { fmt = Html {} } & opt ->
         let sizeStr = int2string (if gti size 6 then 6 else size) in
@@ -52,9 +42,9 @@ lang HtmlRenderer = RendererInterface
     sem renderBold (text : String) =
     | { fmt = Html {} } & opt -> join ["<strong>", text, "</strong>"]
 
-    -- Page/file footer
-    sem renderFooter obj =
-    | { fmt = Html {} } & opt -> "</div></body>\n</html>"   
+    -- Italic text
+    sem renderItalic (text : String) =
+    | { fmt = Html {} } & opt -> join ["<em>", text, "</em>"]
 
     -- New line for inline contexts
     sem renderNewLine =
@@ -79,7 +69,7 @@ lang HtmlRenderer = RendererInterface
     -- Small helper to wrap inner content with an HTML span and a CSS class
     sem htmlRenderSpan : String -> String -> String
     sem htmlRenderSpan =
-    | content -> lam kind. join ["<span class=\"", kind, "\">", content, "</span>"]
+    | content -> lam form. join ["<span class=\"", form, "\">", content, "</span>"]
 
     -- Syntax coloring: types, vars, keywords, comments, strings, multi-line comments, numbers
     sem renderType (content : String) = 
@@ -103,46 +93,56 @@ lang HtmlRenderer = RendererInterface
     sem renderNumber (content : String) =
     | { fmt = Html {} } & opt -> htmlRenderSpan content "number"
 
-    -- Wrapper that renders inner content via raw renderer, then wraps it with HTML
-    sem htmlRenderWrapper : all a. RenderingOptions -> String -> (a -> RenderingOptions -> String) -> a -> String -> String
-    sem htmlRenderWrapper =
-    | opt -> lam left. lam f. lam arg. lam right.
-        let inner = f arg { opt with fmt = Raw { fmt = Html {} } } in
-        match inner with "" then "" else join [left, inner, right]
 
-    -- Top-of-page documentation wrapper
-    sem renderTopPageDoc (data: RenderingData) =
-    | { fmt = Html {} } & opt -> htmlRenderWrapper opt "<div class=\"top-doc\">\n<pre>" renderTopPageDoc data "</pre>\n</div>"    
+    sem renderSynVariants (obj: Object) (variants: [SynVariant]) =
+    | { fmt = Html {} } & opt -> renderWithRaw opt "<div class=\"syn-variants\">" (renderSynVariants obj) variants "</div>"
     
     -- Doc block wrapper; the Bool controls the goto-link inclusion
-    sem renderDocBloc (data : RenderingData) =
-    | { fmt = Html {} } & opt -> htmlRenderWrapper opt "<div class=\"doc-block\">\n<pre>" renderDocBloc data "</pre>\n</div>"
+    sem renderDocBloc (data : RenderingData) (asChildren: Bool) =
+    | { fmt = Html {} } & opt -> renderWithRaw opt "<div class=\"doc-block\">\n<pre>" (renderDocBloc data) asChildren "</pre>\n</div>"
 
     -- Object description wrapper
-    sem renderDocDescription (obj: Object) =
-    | { fmt = Html {} } & opt -> htmlRenderWrapper opt "<div class = \"doc-description\"><pre>" renderDocDescription obj "</pre></div>"
-
+    sem renderDocDescription (desc: String) =
+    | { fmt = Html {} } & opt -> renderWithRaw opt "<div class = \"doc-description\"><pre>" renderDocDescription desc "</pre></div>"
     -- Object signature wrapper
     sem renderDocSignature (obj: Object) =
-    | { fmt = Html {} } & opt -> htmlRenderWrapper opt "<div class=\"doc-signature\">" renderDocSignature obj "</div>"
+    | { fmt = Html {} } & opt -> renderWithRaw opt "<div class=\"doc-signature\">" renderDocSignature obj "</div>"
     
     -- Code block wrapper (without preview toggle)
     sem renderCodeWithoutPreview (data: RenderingData) =
-    | { fmt = Html {} } & opt -> htmlRenderWrapper opt "<div class=\"code-block\"><pre>" renderCodeWithoutPreview data "</pre></div>"
+    | { fmt = Html {} } & opt -> renderWithRaw opt "<div class=\"code-block\"><pre>" renderCodeWithoutPreview data "</pre></div>"
+
+    -- Tests block wrapper (without preview toggle)
+    sem renderDocTests (data: RenderingData) (hide: Bool) =
+    | { fmt = Html {} } & opt -> renderWithRaw opt "<div class=\"code-block\"><pre>" (renderDocTests data) hide "</pre></div>"
 
     -- Plain anchor for “goto” links
     sem renderGotoLink (link: String) =
     | { fmt = Html {} } & opt -> join ["<a class=\"gotoLink\" href=\"", link, "\">[→]</a>"]
     
+    sem renderHookLink (title: String) (link: String) (highlight: Bool) =
+    | { fmt = Html {} } & opt -> join ["<a class=\"hookLink", if highlight then " hookLink--highlight" else "", "\" href=\"", link, "\">", title,"</a>"]
+
+    sem renderPageLink (title: String) (link: String) =
+    | { fmt = Html {} } & opt -> join ["<a class=\"pageLink\" href=\"", link, "\">", title, "</a>"]
+
+    sem renderParentLink (obj: Object) =
+    | { fmt = Html {} } & opt -> renderWithRaw opt "<div class=\"parent-link\">" renderParentLink obj "</div>"
+
     -- Toggleable hidden code block; uses a button and a collapsible div
-    sem renderHidenCode (buttonText: String) (code: String) (jumpLine: Bool) =
+    sem renderHidenCode (hidden: String) (shown: String) (code: String) (jumpLine: Bool) =
     | { fmt = Html {} } & opt ->
-        let jsDisplay = join ["<button class=\"toggle-btn\" onclick=\"toggle(this)\">", buttonText, "</button><div class=\"hiden-code\" style=\"display: none;\">"] in
+        let jsDisplay = join ["<button class=\"toggle-btn\" data-hidden=\"", hidden, "\" data-shown=\"", shown, "\" onclick=\"toggle(this)\">",
+                      hidden, "</button><div class=\"hiden-code\" style=\"display: none;\">"] in
         join [jsDisplay, if jumpLine then "\n" else "", code, "</div>"]
     
     -- Generic link with optional URL prefix
     sem renderLink (title : String) (link : String) =
-    | { fmt = Html {}, urlPrefix = urlPrefix } & opt -> join ["<a href=\"", concat urlPrefix link, "\">", title, "</a>"]
+    | { fmt = Html {}, urlPrefix = urlPrefix } & opt -> join ["<a href=\"", link, "\">", title, "</a>"]
+
+    sem renderTooltip (title : String) (content : String) =
+    | { fmt = Html {}, urlPrefix = urlPrefix } & opt ->
+      join ["<div class=\"tooltip\">", title, "<span class=\"tooltip-text\">", content, "</span></div>"]
 
     
 end

@@ -1,18 +1,16 @@
--- # Token Readers Library
---
 -- All token readers implement a common interface: `TokenReaderInterface`.
 -- The module ends by composing all token readers into one combined `TokenReader`.
 
-include "../../global/util.mc"
-include "../../global/logger.mc"
-include "../../mast-gen/include-set.mc"
+include "../global/util.mc"
+include "../global/logger.mc"
+include "./include-set.mc"
+include "./pos.mc"
     
 include "hashmap.mc"
 
 -- Interface definition for a generic TokenReader
 lang TokenReaderInterface
     
-    type Pos = { x: Int, y: Int }
     type NextResult = { token : Token, stream : String, pos: Pos }
     
     -- Abstract token type to be implemented by concrete readers
@@ -25,8 +23,7 @@ lang TokenReaderInterface
         recursive let work : String -> Pos -> Pos = lam s. lam pos.
             switch s 
             case "" then pos
-            case ['\n'] ++ s then work s { x = 1, y = addi pos.y 1 }
-            case ['\t'] ++ s then work s { pos with x = addi pos.x 4 }
+            case ['\n'] ++ s then work s { pos0 with y = addi pos.y 1 }
             case [_] ++ s then work s { pos with x = addi pos.x 1 }
             end
         in work (lit token) pos
@@ -39,13 +36,12 @@ lang TokenReaderInterface
     sem content : Token -> String
     sem content =
     | t -> lit t
-
     
     -- Produces the next token from the input stream
     sem next : String -> Pos -> NextResult
 
     -- Utility function to build a NextResult
-    sem buildResult : Token -> Pos -> String -> NextResult 
+    sem buildResult : Token -> Pos -> String -> NextResult
     sem buildResult token pos = | stream ->  { token = token, pos = actualisePos pos token, stream = stream }
     
     -- Converts the token to a human-readable string
@@ -59,7 +55,10 @@ lang MultiLineCommentTokenReader = TokenReaderInterface
       | TokenMultiLineComment { content: String, lit: String }
 
     sem lit =
-        | TokenMultiLineComment { content = content, lit = lit } -> lit
+        | TokenMultiLineComment { lit = lit } -> lit
+
+    sem content =
+        | TokenMultiLineComment { content = content } -> content
 
     sem tokenToString =
         | TokenMultiLineComment {} -> "MultiLineComment"
@@ -99,6 +98,9 @@ lang CommentTokenReader = TokenReaderInterface
     sem lit =
         | TokenComment { lit = lit } -> lit        
 
+    sem content =
+        | TokenComment { content = content } -> content
+
     sem tokenToString =
         | TokenComment {} -> "Comment"
     
@@ -108,7 +110,7 @@ lang CommentTokenReader = TokenReaderInterface
             let extract =
             lam str.
                 match str with "\n" ++ xs then
-                    ("", str)                    
+                    ("\n", xs)
                 else match str with [x] ++ xs then
                     let extracted = extract xs in
                     (cons x extracted.0, extracted.1)
@@ -159,7 +161,7 @@ let separatorMap =
     foldl
         (lam m. lam k. hmInsert k () m)
         (hashmapEmpty ())
-        ["=", "++", "|", "{", "}", "[", "]", ":", ";", ".", ",", "(", ")", "->", " ", "\n", "\t"] 
+        ["=", "++", "+", "|", "{", "}", "[", "]", ":", ";", ".", ",", "(", ")", "->", " ", "\n", "\t", "\\", "&"]
 
 -- Predicate to check if a string is a separator
 let isSep = lam s. hmMem s separatorMap
@@ -179,8 +181,8 @@ lang WordTokenReader = TokenReaderInterface
          | str -> lam pos.
             match str with [x] then
                 let token = TokenWord { content = [x] } in
-                { token = token, stream = "", pos = actualisePos pos token } else
-            if isSep [head str] then
+                { token = token, stream = "", pos = actualisePos pos token }
+            else if and (not (eqChar '\\' (head str))) (isSep [head str]) then
                 let token = TokenWord { content = [head str] } in
                 { token = token, stream = tail str, pos = actualisePos pos token }
             else let arr = [head str, head (tail str)] in if isSep arr then
@@ -189,22 +191,20 @@ lang WordTokenReader = TokenReaderInterface
             else
                 recursive
                 let extract =
-                lam str. lam previous.
+                lam str. lam previous. lam first.
                     switch str 
                     case (("--" ++ x) | ("++" ++ x))
                         then ("", str)
                     case [x] ++ xs then
-                        if isSep [x] then
-                            ("", str)
-                        else if and (eqc x '\"') (not (eqc previous '\\')) then
+                        if and (not (and first (eqChar '\\' x))) (isSep [x]) then
                             ("", str)
                         else
-                            let extracted = extract xs x in
+                            let extracted = extract xs x false in
                             (cons x extracted.0, extracted.1)
                     case _ then ("", "")
                     end
                 in
-                let extracted =  extract str '-' in
+                let extracted =  extract str '-' true in
                 buildResult (TokenWord { content = extracted.0 }) pos extracted.1
 end
 
@@ -262,7 +262,7 @@ lang CommAndSepSkiper = SimpleWordTokenReader
     sem skip : String -> String -> { skiped: [Token], stream: String, newToken: Token }
     sem skip =
     | str -> lam first.
-        let pos = { x = 1, y = 1 } in
+        let pos = pos0 in
         let firstSkiped = match first with "" then [] else [TokenSeparator { content = first }] in
         switch next str pos 
             case { token = (TokenSeparator {} | TokenComment {} | TokenMultiLineComment {}) & token, stream = stream } then
@@ -290,7 +290,7 @@ lang IncludeTokenReader = CommAndSepSkiper
                 let token = TokenInclude { content = subsequence str 1 (subi (length str) 2), lit = join ["include", join (map lit skiped), str], skiped = skiped } in
                 buildResult token pos stream
             else
-                parsingWarn "During lexing, was waiting for an Str after `include `.";
+                parsingWarn "Expected a string literal after `include` directive during lexing.";
                 buildResult (TokenWord { content = concat "include" firstSep }) pos str
 
     sem next =
@@ -305,7 +305,7 @@ end
 -- This token is not readable but is at the root of a DocTree, the content is the name of the file and the includeSet a set will all the files.
 lang ProgramTokenReader = TokenReaderInterface
     syn Token =
-        | TokenProgram { content: String, includeSet: IncludeSet () }
+        | TokenProgram { content: String }
 
     sem lit =
         | TokenProgram {} -> ""
@@ -314,26 +314,6 @@ lang ProgramTokenReader = TokenReaderInterface
         | TokenProgram {} -> "Program"
 end
 
-let pos0 = { x = 0, y = 0 }
-
 -- Reader combining recursive, include, and program tokens
-lang ComposedWordTokenReader = IncludeTokenReader + ProgramTokenReader end
-
--- Reader for synthetic tokens marking the end of recursive blocks
-lang RecursiveEnderReader = TokenReaderInterface
-     syn Token =
-        | TokenRecursiveEnder { ender: String }
-
-     sem content =
-        | TokenRecursiveEnder { ender = ender } -> cons '#' ender
-
-     sem lit =
-        | TokenRecursiveEnder { ender = ender } -> ender
-
-    sem tokenToString =
-        | TokenRecursiveEnder {} -> "RecursiveEnder"
-end
-
--- Combine all token readers into a single TokenReader
-lang TokenReader = ComposedWordTokenReader + RecursiveEnderReader end
+lang TokenReader = IncludeTokenReader + ProgramTokenReader end
 

@@ -1,21 +1,3 @@
--- # Markdown Renderer for mi-doc-gen
---
--- This module implements the **MarkdownRenderer**, an instance of `RendererInterface`.
--- It generates Markdown (`.md`) documentation files from the extracted ObjectTree.
---
--- ## Design
--- - Titles are rendered as Markdown headings (`#`, `##`, … up to 6 levels).
--- - Bold text is wrapped in `**`.
--- - Newlines use the Markdown convention `"  \n"` (two spaces + newline).
--- - Documentation and code require escaping of Markdown special characters
---   (done in `renderRemoveDocForbidenChars` and `renderRemoveCodeForbidenChars`).
--- - Signatures are wrapped in fenced code blocks ```mc.
--- - Links and goto links are rendered as `[title](url)`.
--- - `renderLinkList` generates a comma-separated list of object links.
---
--- Like other renderers, it sometimes delegates to the **RawRenderer**
--- to ensure base rendering logic is reused consistently.
-
 include "./renderer-interface.mc"
 
 lang MarkdownRenderer = RendererInterface
@@ -27,9 +9,22 @@ lang MarkdownRenderer = RendererInterface
         let nl = renderNewLine opt in    
         join [make size '#', " ", s, nl, nl]
 
+
+    sem mdRenderItem : String -> String -> String
+    sem mdRenderItem =
+    | guard -> lam s.
+        -- We avoid putting the ending guards on the newline
+        match splitOnR (neqChar '\n') (reverse s) with (newlines, content) in
+        let content = reverse content in
+        join [guard, content, guard, newlines]
+
     -- Bold text
     sem renderBold (text : String) =
-    | { fmt = Md {} } & opt -> join ["**", text, "**"]
+    | { fmt = Md {} } & opt -> mdRenderItem "**" text
+    
+    -- Italic text
+    sem renderItalic (text : String) =
+    | { fmt = Md {} } & opt -> mdRenderItem "*" text
 
     -- New line (Markdown convention: 2 spaces before newline)
     sem renderNewLine =
@@ -49,22 +44,15 @@ lang MarkdownRenderer = RendererInterface
     sem renderRemoveCodeForbidenChars (s: String) =
     | { fmt = Md {} } & opt ->
         switch s
-        case "`" ++ r then
-             concat ['\\', head s] (renderRemoveCodeForbidenChars r opt)
+        case "```" ++ r then
+             concat "'''" (renderRemoveCodeForbidenChars r opt)
         case [x] ++ r then cons x (renderRemoveCodeForbidenChars r opt)
         case "" then ""
         end
 
     -- Render documentation text (cleans spaces and escapes forbidden chars)
-    sem renderDocDescription : Object -> Format -> String
-    sem renderDocDescription obj =
-    | { fmt = Md {} } & opt ->
-        let nl = renderNewLine opt in
-        let doc = objDoc obj in
-        match splitOnR (lam c. match c with ' ' | '\n' then false else true) doc with { right = doc } in
-        let doc = strReplace "\n " "\n" doc in
-        renderRemoveDocForbidenChars doc opt
-    
+    sem renderDocDescription desc =
+    | { fmt = Md {} } & opt -> desc
 
     -- Render object signature inside a fenced code block
     sem renderDocSignature (obj: Object) =
@@ -83,7 +71,7 @@ lang MarkdownRenderer = RendererInterface
     
     -- Render a single link
     sem renderLink (title : String) (link : String) =
-    | { fmt = Md {}, urlPrefix = urlPrefix } & opt -> join ["[", title, "](", concat urlPrefix link, ")"]
+    | { fmt = Md {}, urlPrefix = urlPrefix } & opt -> join ["[", title, "](", link, ")"]
 
     -- Render list of links (comma separated)
     sem renderLinkList (objects: [Object]) =

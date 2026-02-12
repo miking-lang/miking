@@ -6,8 +6,10 @@ function toggle(btn) {
     const scrollY = window.scrollY;
     const div = btn.nextElementSibling; 
     if (div.style.display === 'none') {
+        btn.textContent = btn.dataset.shown;
         div.style.display = 'inline';
     } else {
+        btn.textContent = btn.dataset.hidden;    
         div.style.display = 'none';
     }
     window.scrollTo({ top: scrollY });

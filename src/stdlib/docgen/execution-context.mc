@@ -1,100 +1,177 @@
--- # Execution Context
---
--- This module defines the `ExecutionContext`, the central state threaded through all
--- stages of the documentation generation pipeline.
---
--- ## ExecutionContext fields
--- - `opt`      : Parsed CLI options.
--- - `mainFile` : Path of the main input file.
--- - `tokens`   : Tokens from the lexer (not always used directly).
--- - `docTree`  : Parsed documentation tree, if available.
--- - `ast`      : The Miking AST, if generated.
--- - `object`   : The extracted object tree, if built.
---
--- ## Step functions
--- Each stage of the pipeline is a `Step = ExecutionContext -> ExecutionContext`.
--- - `gen`     : Build MAst from the main file.
--- - `parse`   : Build DocTree from MAst.
--- - `extract` : Extract ObjectTree from DocTree.
--- - `label`   : Label ObjectTree with semantic metadata.
--- - `render`  : Generate documentation files.
--- - `serve`   : Start preview server.
---
--- If a step is called out of order, the `crash` function raises an error with details.
---
--- The ExecutionContext also provides a logger for each steps.
-
 include "./options/docgen-options.mc"
 include "./options/cast-options.mc"
+include "./scanning/scanner.mc"
 include "./mast-gen/mast-generator.mc"
 include "./parsing/parser.mc"
-include "./extracting/extracter.mc"
-include "./labeling/labeler.mc"
+include "./naming/namer.mc"
 include "./rendering/renderer.mc"
 include "./server/server.mc"
 
-type ExecutionContext =  use TokenReader in {    
+-- ExecutionContext is a mutable pipeline context.
+-- Fields are progressively filled in the following order:
+-- ast -> object -> nameContext -> renderedMap/searchDatas
+-- Missing fields indicate that the corresponding pipeline step
+-- has not been executed yet.
+type ExecutionContext =
+    use TokenReader in
+    use Objects in {
     opt: DocGenOptions,
-    mainFile: String,
-    tokens: [Token],
-    docTree : Option DocTree,
+    userOutputFolder: String,
+    currentFile: String,
+    files: [FileToProcess],
+    longestPrefix: String,
+
     ast: Option MAst,
-    object: Option ObjectTree
+    object: Option Object,
+    nameContext: Option NameContext,
+
+    renderedMap: RenderedMap,
+    searchDatas: HashMap String String
 }
 
-let execContextNew : DocGenOptions -> ExecutionContext = lam opt.
-    if sysFileExists opt.file then
-    {
+let buildLogger : ExecutionContext -> String -> Logger =
+    lam ctx. lam step.
+    if ctx.opt.debug then message "[INFO]" step else lam. ()
+
+-- Finalization step executed once after all files are processed.
+let finalizeSearchIndex : ExecutionContext -> () =
+    lam ctx.
+    use Renderer in 
+    let log = buildLogger ctx "Rendering" in 
+    let ropt = getRenderingOption ctx.opt log (nameContextEmpty ()) (hashmapEmpty ()) in
+    let ropt = { ropt with outputFolder = ctx.userOutputFolder } in
+    let searchDatas = map (lam entry. { name = entry.0, link = entry.1 })
+                      (hashmap2seq ctx.searchDatas) in
+    renderSearchFile searchDatas ropt
+
+let execCtxNext : ExecutionContext -> Option ExecutionContext =
+    lam ctx.
+    match ctx.files with [{ path = path, outputFolder = outputFolder }] ++ files then
+          printLn (join ["Processing file ", path, "..."]);
+          Some { ctx with
+              ast = None {},
+              object = None {},
+              nameContext = None {},
+
+              opt = { ctx.opt with outputFolder = outputFolder },
+              currentFile = path,
+              files = files
+          }
+    else
+        finalizeSearchIndex ctx;
+        printLn "Done!";
+        None {}
+        
+let execContextNew : DocGenOptions -> Option ExecutionContext = lam opt.
+    let scanningOptions = getScanningOptions opt in
+
+    if opt.scanOnly then
+        let scanRes = scan scanningOptions in -- Side effect only
+        None {}
+    else
+
+    match scan scanningOptions with {
+        inputs = files,
+        longestPrefix = longestPrefix,
+        onlyStdlib = onlyStdlib
+    } in
+    
+
+    let lengthFile = length files in
+    printLn (join ["About to process ", int2string lengthFile, " file", if eqi lengthFile 1 then "" else "s", "."]);
+    let opt = if onlyStdlib then { opt with stdlibFolder = "" } else opt in
+
+    let ctx = {
         opt = opt,
-        mainFile = opt.file,
-        tokens = [],
-        docTree = None {},
+        currentFile = "",
+        userOutputFolder = opt.outputFolder,
+        longestPrefix = longestPrefix,
+        files = files,
+        renderedMap = renderedMapEmpty (),
+
         object = None {},
-        ast = None {}
-    }
-    else error (join ["The file ", opt.file, "doesn't exist."])
+        ast = None {},
+        nameContext = None {},
+        searchDatas = hashmapEmpty ()
+    } in
+    execCtxNext ctx
 
+-- Pipeline steps must be executed in the following order:
+-- gen -> parse -> name -> render -> serve
 let crash = lam miss. lam func. lam should.
-    error (join ["Execution context: ", miss, " is missing in the exection context, ", func, " function should be called after having call the ", should, " function."])
-
-let buildLogger : ExecutionContext -> String -> Logger = lam ctx. lam step. if ctx.opt.debug then message "INFO" step else lam. ()
+    error (join [
+        "Internal error: missing `", miss, "` in execution context.\n",
+        "`", func, "` must be called after `", should, "`."
+    ])
     
 type Step = ExecutionContext -> ExecutionContext
 
 let gen : Step = lam ctx.
     let log = buildLogger ctx "MExpr Generation" in
-    { ctx with ast = Some (buildMAstFromFile log ctx.mainFile) }
+    let mast = buildMAstFromFile log ctx.currentFile in
+    { ctx with ast = Some mast }
 
-let parse : Step =  lam ctx.
+let parse : Step = lam ctx.
     match ctx.ast with Some ast then
     let log = buildLogger ctx "Parsing" in
-    { ctx with docTree = Some (parse log ctx.mainFile ast ) }
+    let opt = getParsingOptions log ctx.currentFile ctx.longestPrefix in
+    let obj = parse opt ast in
+    { ctx with object = Some obj }
     else crash "ast" "parse" "gen"
-    
-let extract : Step =  lam ctx.
-    match ctx.docTree with Some docTree then
-    let log = buildLogger ctx "Extracting" in 
-    { ctx with object = Some (extract log docTree ctx.opt.letDepth ) }
-    else crash "doc tree" "extract" "parse"
 
-let label : Step =  lam ctx.
-    match (ctx.object, ctx.ast) with (Some object, Some ast) then
-    let log = buildLogger ctx "Labeling" in    
-    { ctx with object = Some (label log object ast) }
-    else crash "object" "label" "extract"
+let name : Step =  lam ctx.
+    match ctx.object with Some object then
+    let log = buildLogger ctx "Naming" in
+    let opt = getNamingOption ctx.opt in
+    match name log opt object with {
+        annotatedObj = annotatedObj,
+        nameContext = nameContext
+    } in
+    { ctx with nameContext = Some nameContext, object = Some annotatedObj }
+    else crash "object" "name" "extract"
 
+-- After rendering a file, we may need to:
+-- 1. Clean temporary source outputs
+-- 2. Relocate stdlib files when rendering outside the user output folder
+-- This is intentionally handled here to keep rendering side effects localized.
 let render : Step =  lam ctx.
     match ctx.object with Some obj then
+    match ctx.nameContext with Some nameContext then
+    
     let log = buildLogger ctx "Rendering" in 
-    let opt = getRenderingOption ctx.opt log in
-    render opt obj; ctx
-    else crash "object" "render" "label (or extract)"
+    let ropt = getRenderingOption { ctx.opt with outputFolder = ctx.userOutputFolder } log nameContext ctx.renderedMap in
+    let renderingRes = render ropt obj in
+
+    let searchDatas = foldl (lam acc. lam arg.
+        hmInsert arg.name arg.link acc
+    ) ctx.searchDatas renderingRes.searchDatas in
+    
+    (if neqString ctx.opt.outputFolder ctx.userOutputFolder then    
+        let code = sysRemoveSrcFiles ctx.opt.outputFolder in
+        (if neqi code 0 then renderingWarn "Failed to clean temporary source files." else ());
+
+        if pathIsInStdlib ctx.longestPrefix then () else
+        let newStdlibPath = normalizePath (join [ctx.opt.outputFolder, "/", ctx.opt.stdlibFolder]) in
+        let actualStdlibPath = normalizePath (join [ctx.userOutputFolder, "/", ctx.opt.stdlibFolder]) in
+
+        if isFolder newStdlibPath then
+            let code = sysMoveDirContents actualStdlibPath newStdlibPath in
+            if neqi code 0 then renderingWarn "Failed to move standard library contents." else ()
+        else ()
+    else ());
+
+    { ctx with searchDatas = searchDatas, renderedMap = renderingRes.renderedMap }
+    else crash "object" "render" "naming"
+    else crash "name context" "render" "naming"
 
 let serve : Step = use ObjectsRenderer in lam ctx.
     match ctx.object with Some obj then
+    match ctx.nameContext with Some nameContext then
     let log = buildLogger ctx "Serving" in
-    let opt = getRenderingOption ctx.opt log in
-    let link = objLink (objTreeObj obj) opt in
-    let opt = getServeOption ctx.opt link in    
+    let opt = getRenderingOption ctx.opt log nameContext (hashmapEmpty ()) in -- Serving does not reuse renderedMap, so we give an empty one
+    let link = objGetMyLink obj opt in
+
+    let opt = getServeOption { ctx.opt with outputFolder = ctx.userOutputFolder } link in    
     startServer opt; ctx
     else crash "object" "serve" "render"
+    else crash "name context" "serve" "name"    

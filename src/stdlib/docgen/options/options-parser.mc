@@ -1,6 +1,5 @@
 include "./docgen-options.mc"
 
--- ## parseDocGenOptions
 -- Parse the list of command-line arguments into an `DocGenOptions` record.
 -- Exits with an error if the arguments are invalid.
 let parseDocGenOptions : [String] -> DocGenOptions = lam argv.
@@ -9,7 +8,7 @@ let parseDocGenOptions : [String] -> DocGenOptions = lam argv.
         case ["--help" | "--h"] then usage ()
 
         case ["--debug"] ++ rest then parse rest { opts with debug = true } 
-        case ["--no-warn"] ++ rest then parse rest { opts with noWarn = true }
+        case ["--scan-only"] ++ rest then parse rest { opts with scanOnly = true }
 
         case ["--javascript"] ++ rest then parse rest { opts with fmtLang = Js {} }
         case ["--typescript"] ++ rest then parse rest { opts with fmtLang = Ts {} }
@@ -18,6 +17,8 @@ let parseDocGenOptions : [String] -> DocGenOptions = lam argv.
         case ["--src-folder", srcFolder] ++ rest then parse rest { opts with srcFolder = srcFolder }
         case ["--url-prefix", urlPrefix] ++ rest then parse rest { opts with urlPrefix = urlPrefix }
         case ["--no-open"] ++ rest then parse rest { opts with noOpen = true }
+        case ["--no-code"] ++ rest then parse rest { opts with noCode = true }
+        case ["--stdlib-loc", loc] ++ rest then parse rest { opts with stdlibFolder = loc }
  
         case ["--depth", letDepth] ++ rest then
             match letDepth with "none" then
@@ -32,13 +33,10 @@ let parseDocGenOptions : [String] -> DocGenOptions = lam argv.
             else usage ()
 
         case [s] ++ rest then
-            if eqString opts.file "" then
-               if sysFileExists s then
-                  parse rest { opts with file = s }
-               else
-                  error (join ["While parsing options: file", s, " does not exist."])
-            else usage ()
-
+           if sysFileExists s then
+              parse rest { opts with files = cons s opts.files }
+           else
+              error (join ["File not found: ", s, "."])
         case [] then opts
         end
     in

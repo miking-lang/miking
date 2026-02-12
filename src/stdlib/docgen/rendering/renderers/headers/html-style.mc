@@ -6,10 +6,6 @@ let htmlStylePath = "styles.css"
 let htmlStyle: String = 
 join [
 themeVariables, "
-/* =========================
-   GENERIC STYLES (use vars)
-   ========================= */
-
 body {
   font-family: 'Segoe UI', Roboto, sans-serif;
   background-color: var(--bodyBGColor);
@@ -57,13 +53,7 @@ pre {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
 }
 
-.top-doc pre {
-  margin-top: 0.5em;
-  margin-bottom: 0.5em;
-}
-
 .top-doc code {
-  padding: 0.2em 0.4em;
   border-radius: 3px;
   font-family: monospace;
   font-size: 0.95em;
@@ -90,7 +80,6 @@ pre {
 }
 
 .doc-description {
-  background-color: var(--docDescriptionBGColor);
   padding: 0.5em 1em;
   color: var(--docDescriptionTextColor);
   font-style: italic;
@@ -106,7 +95,7 @@ pre {
   border: 1px solid var(--codeBlockBorderColor);
   border-radius: 4px;
   padding: 0.5em 0.8em;
-  margin-top: 0.5em;
+  margin-top: 1.05em;
   font-family: monospace;
   font-size: 0.9em;
 }
@@ -127,33 +116,83 @@ pre {
 
 .hiden-code {}
 
-.gotoLink {
-  font-size: 1.1em;
-  color: var(--gotoLinkColor);
-  text-decoration: none;
-  position: absolute;
-  top: 0.6em;
-  right: 1em;
-  opacity: 0.7;
-  font-weight: 500;
-  transition: opacity 0.2s ease, transform 0.2s ease;
-}
-
 a {
-  color: var(--aColor);
   text-decoration: none;
   font-size: 1.05em;
   font-weight: 500;
   transition: color 0.2s ease, text-decoration 0.2s ease;
 }
 
-a:hover {
-  text-decoration: underline;
+a:visited {
+  color: inherit;
+}
+
+.gotoLink {
+  font-size: 1.1em;
+  color: var(--gotoLinkColor);
+  text-decoration: none;
+  position: absolute;
+  top: 0.3em;
+  right: 1em;
+  opacity: 0.7;
+  font-weight: 500;
+  transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
 .gotoLink:hover {
+  text-decoration: underline;
   opacity: 1;
   transform: scale(1.1);
+}
+
+.gotoLink:visited {
+  color: var(--gotoLinkColor);
+}
+
+.pageLink {
+  text-decoration: none;
+  font-size: 1.05em;
+  font-weight: 500;z    
+  transition: color 0.2s ease, text-decoration 0.2s ease;
+  color: var(--gotoLinkColor);  
+}
+
+.pageLink:visited {
+  color: var(--gotoLinkColor);
+}
+
+.pageLink:hover {
+  text-decoration: underline;
+}
+
+.hookLink {
+  text-decoration: none;
+  font-size: 1.05em;
+  font-weight: 500;z    
+  transition: color 0.2s ease, text-decoration 0.2s ease;
+  color: inherit;
+}
+
+.hookLink:visited {
+  color: inherit;
+}
+
+.hookLink:hover {
+  text-decoration: underline;
+}
+
+.hookLink:active {
+  opacity: 0.85;
+}
+
+.hookLink--highlight {
+  background-color: var(--hookLinkHighlightBG);
+  padding: 0.12em 0.3em 0.05em 0.3em;
+  border-radius: 0.25em;
+}
+
+.hookLink--highlight:hover {
+  background-color: var(--hookLinkHighlightBGHover);
 }
 
 ", searchCss, "
@@ -180,6 +219,10 @@ a:hover {
   cursor: pointer;
   transition: background-color 0.2s ease, opacity 0.2s ease;
   z-index: 1100;
+}
+
+.syn-variants {
+  font-size: 15px;  
 }
 
 .theme-toggle:hover {
@@ -219,5 +262,31 @@ a:hover {
 
 #themeMenu button:hover {
   background: var(--toggleHoverBGColor);
+}
+
+.tooltip {
+  position: relative;
+  display: inline-block;
+  cursor: pointer;
+}
+
+.tooltip-text {
+  visibility: hidden;
+  background: black;
+  color: white;
+  padding: 5px 8px;
+  border-radius: 4px;
+
+  position: absolute;
+  bottom: 120%;
+  left: 50%;
+  transform: translateX(-50%);
+
+  white-space: pre;
+  display: inline-block;
+}
+
+.tooltip:hover .tooltip-text {
+  visibility: visible;
 }
 "]
