@@ -238,6 +238,24 @@ let reciprocalLogPdf : Float -> Float -> Float -> Float = lam a. lam b. lam x.
     else negf inf 
   else negf inf 
 
+-- Pair distribution
+let indexOfUnion = lam pairSets. lam u.
+  recursive let helper = lam i.
+    if eqi i (length pairSets) then negi 1
+    else let v = get pairSets i in
+      if eqSeq eqi v u then i else helper (addi i 1)
+  in helper 0
+
+let treeInferenceCategoricalPmf = lam p. lam pairSets. lam x.
+  let idx = indexOfUnion pairSets x in
+  if lti idx 0 then 0.0 else get p idx
+
+let treeInferenceCategoricalLogPmf = lam p. lam pairSets. lam x. log (treeInferenceCategoricalPmf p pairSets x)
+let treeInferenceCategoricalSample = lam p. lam pairSets.
+  let index = categoricalSample p in
+  let pair = get pairSets index in
+  pair
+
 -- Seed
 external externalSetSeed ! : Int -> ()
 let setSeed : Int -> () = lam seed.
@@ -371,6 +389,24 @@ utest reciprocalLogPdf 1. 2. 2.5 with negf inf using leqf in
 utest exp (reciprocalLogPdf 4. 6. 5.) with 0.493260692475 using _eqf in
 utest reciprocalPdf 4. 6. 5. with 0.493260692475 using _eqf in
 utest reciprocalSample 0.5 0.7 with 0.5 using floatRange 0.5 0.7 in
+
+-- Testing treeInferenceCategorical
+let pairSetsTest = [[0,1],[1,2],[2,3]] in
+let pTest = [0.2, 0.5, 0.3] in
+-- indexOfUnion
+utest indexOfUnion pairSetsTest [0,1] with 0 using eqi in
+utest indexOfUnion pairSetsTest [1,2] with 1 using eqi in
+utest indexOfUnion pairSetsTest [2,3] with 2 using eqi in
+utest indexOfUnion pairSetsTest [9,9] with negi 1 using eqi in
+-- 
+utest treeInferenceCategoricalPmf pTest pairSetsTest [2,3] with 0.3 using _eqf in
+utest treeInferenceCategoricalPmf pTest pairSetsTest [9,9] with 0.0 using _eqf in
+utest treeInferenceCategoricalLogPmf pTest pairSetsTest [0,1] with log 0.2 using _eqf in
+utest treeInferenceCategoricalLogPmf pTest pairSetsTest [9,9] with negf inf using eqf in
+-- pairSample: result is one of the support pairs
+utest let s = treeInferenceCategoricalSample pTest pairSetsTest in
+  any (lam x. eqSeq eqi x s) pairSetsTest
+with true in
 
 -- Testing seed
 utest setSeed 0; uniformSample (); uniformSample ()

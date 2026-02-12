@@ -503,7 +503,7 @@ lang TypePrettyPrint = PrettyPrint + TypeDeclAst + UnknownTypeAst + VariantTypeA
   sem pprintDeclCode indent env =
   | DeclType x ->
     match pprintTypeName env x.ident with (env,identStr) in
-    match mapAccumL pprintEnvGetStr env x.params with (env, paramsStr) in
+    match mapAccumL pprintVarName env x.params with (env, paramsStr) in
     let paramStr = strJoin " " (cons "" paramsStr) in
     match x.tyIdent with TyVariant _ then
       (env, join ["type ", identStr, paramStr])
@@ -583,8 +583,13 @@ lang MatchPrettyPrint = PrettyPrint + MatchAst
     let ii = pprintIncr indent in
     match pprintCode ii env t.target with (env,target) in
     match getPatStringCode ii env t.pat with (env,pat) in
-    (env,join ["match", pprintNewline ii, target, pprintNewline i,
-               "with", pprintNewline ii, pat, pprintNewline i])
+    match
+      if gti (addi (length target) (length pat)) env.optSingleLineLimit
+      then (pprintNewline i, pprintNewline ii)
+      else (" ", " ")
+    with (sep1, sep2) in
+    (env,join ["match", sep2, target, sep1,
+               "with", sep2, pat, pprintNewline i])
 
   sem pprintTmMatchNormally (indent : Int) (env: PprintEnv) =
   | t ->
@@ -605,7 +610,7 @@ lang MatchPrettyPrint = PrettyPrint + MatchAst
     let i = indent in
     let ii = pprintIncr indent in
     match pprintTmMatchBegin i env t with (env,begin) in
-    match pprintCode ii env t.thn with (env,thn) in
+    match pprintCode i env t.thn with (env,thn) in
     (env,join [begin, "in", pprintNewline i, thn])
 end
 
@@ -1485,10 +1490,7 @@ use MExprPrettyPrint in
 
 let pchar = match_ (var_ "x") (pchar_ '\n') (true_) (false_) in
 utest expr2str pchar with
-"match
-  x
-with
-  '\\n'
+"match x with '\\n'
 then
   true
 else

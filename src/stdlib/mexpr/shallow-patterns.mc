@@ -281,7 +281,6 @@ lang ShallowBase = Ast + NamedPat
     -> Expr
     -> Expr
   sem lowerToExpr scrutinee branches = | fallthrough ->
-    -- TODO(vipa, 2022-08-12): Deduplicate the branches, put them in let-expressions before
     match
       mapAccumL
         (lam acc. lam branch. match branch with (pat, expr) in
@@ -292,12 +291,13 @@ lang ShallowBase = Ast + NamedPat
             errorSingle [info] (join ["Inconsistent pattern; '", nameGetStr name, "' is not always bound."]) in
           let callF = lam nameMap.
             let lookup = lam n. mapLookupOrElse (lam. inconsistentError (infoPat pat) n) n nameMap in
-            app_
-              (appSeq_
-                (nvar_ fName)
-                (map
-                  (lam n. nvar_ (lookup n)) names))
-              unit_ in
+            withType (tyTm expr)
+              (app_
+                (appSeq_
+                  (nvar_ fName)
+                  (map
+                    (lam n. nvar_ (lookup n)) names))
+                unit_) in
           (acc, (pat, callF)))
         []
         branches
@@ -443,7 +443,8 @@ lang ShallowInt = ShallowBase + IntPat
   | PatInt x -> _ssingleton (SPatInt {val = x.val, info = x.info})
 
   sem mkMatch scrutinee t e =
-  | SPatInt i -> match_ (nvar_ scrutinee) (withTypePat tyint_ (withInfoPat i.info (pint_ i.val))) t e
+  | SPatInt i ->
+    withType (tyTm t) (match_ (nvar_ scrutinee) (withTypePat tyint_ (withInfoPat i.info (pint_ i.val))) t e)
 
   sem shallowCmp =
   | (SPatInt l, SPatInt r) -> subi l.val r.val
@@ -464,7 +465,8 @@ lang ShallowChar = ShallowBase + CharPat
   | PatChar x -> _ssingleton (SPatChar {val = x.val, info = x.info})
 
   sem mkMatch scrutinee t e =
-  | SPatChar v -> match_ (nvar_ scrutinee) (withTypePat tychar_ (withInfoPat v.info (pchar_ v.val))) t e
+  | SPatChar v ->
+    withType (tyTm t) (match_ (nvar_ scrutinee) (withTypePat tychar_ (withInfoPat v.info (pchar_ v.val))) t e)
 
   sem shallowCmp =
   | (SPatChar l, SPatChar r) -> cmpChar l.val r.val
@@ -485,7 +487,8 @@ lang ShallowBool = ShallowBase + BoolPat
   | PatBool x -> _ssingleton (SPatBool {val = x.val, info = x.info})
 
   sem mkMatch scrutinee t e =
-  | SPatBool v -> match_ (nvar_ scrutinee) (withTypePat tybool_ (withInfoPat v.info (pbool_ v.val))) t e
+  | SPatBool v ->
+    withType (tyTm t) (match_ (nvar_ scrutinee) (withTypePat tybool_ (withInfoPat v.info (pbool_ v.val))) t e)
 
   sem shallowCmp =
   | (SPatBool {val = true}, SPatBool {val = true}) -> 0
@@ -520,7 +523,7 @@ lang ShallowRecord = ShallowBase + RecordPat + RecordTypeAst + PrettyPrint
       , ty = x.ty
       , info = x.info
       } in
-    withInfo x.info (match_ (nvar_ scrutinee) pat t never_)
+    withInfo x.info (withType (tyTm t) (match_ (nvar_ scrutinee) pat t (withType (tyTm t) never_)))
 
   sem shallowIsInfallible =
   | SPatRecord _ -> true
@@ -539,7 +542,7 @@ let _getSliceName
     modref slices (mapInsert margins name (deref slices));
     name
 
-lang ShallowSeq = ShallowBase + SeqTotPat + SeqEdgePat
+lang ShallowSeq = ShallowBase + SeqTotPat + SeqEdgePat + SeqTypeAst
   syn SPat =
   | SPatSeqTot {elements : [Name], slices : Ref (Map (Int, Int) Name), ty : Type, info : Info}
   -- NOTE(vipa, 2022-05-26): The translation strategy used matches
@@ -667,12 +670,14 @@ lang ShallowSeq = ShallowBase + SeqTotPat + SeqEdgePat
             subsequence_ (nvar_ scrutinee) (int_ n) (int_ (subi (length x.elements) (addi n m)))
           end
         in nulet_ name expr) in
-    match_ (nvar_ scrutinee)
-      (withInfoPat x.info (withTypePat x.ty (pseqtot_ (map npvar_ x.elements))))
-      (bindall_ slices t)
-      e
+    withType (tyTm t)
+      (match_ (nvar_ scrutinee)
+        (withInfoPat x.info (withTypePat x.ty (pseqtot_ (map npvar_ x.elements))))
+        (bindall_ slices t)
+        e)
   | SPatSeqGE x ->
-    let letFrom_ = lam n. lam i. nulet_ n (get_ (nvar_ scrutinee) i) in
+    match unwrapType x.ty with TySeq {ty = elemTy} in
+    let letFrom_ = lam n. lam i. nulet_ n (withType elemTy (get_ (nvar_ scrutinee) i)) in
     let pres = mapi
       (lam i. lam n. letFrom_ n (int_ i))
       (deref x.prefix) in
@@ -703,9 +708,10 @@ lang ShallowSeq = ShallowBase + SeqTotPat + SeqEdgePat
           end
         in nulet_ name expr) in
     let len = if deref needLen then [nulet_ lenName (length_ (nvar_ scrutinee))] else [] in
-    match_ (nvar_ scrutinee) (withInfoPat x.info (withTypePat x.ty (pseqedgew_ (make x.minLength pvarw_) [])))
-      (bindall_ (join [pres, len, slices, posts]) t)
-      e
+    withType (tyTm t)
+      (match_ (nvar_ scrutinee) (withInfoPat x.info (withTypePat x.ty (pseqedgew_ (make x.minLength pvarw_) [])))
+        (bindall_ (join [pres, len, slices, posts]) t)
+        e)
 
   sem shallowIsInfallible =
   | SPatSeqGE x -> eqi x.minLength 0
@@ -729,9 +735,10 @@ lang ShallowCon = ShallowBase + DataPat
   | PatCon x -> _ssingleton (SPatCon {conName = x.ident, subName = nameSym "carried", ty = x.ty, info = x.info})
 
   sem mkMatch scrutinee t e =
-  | SPatCon x -> match_ (nvar_ scrutinee)
-    (withTypePat x.ty (withInfoPat x.info (npcon_ x.conName (npvar_ x.subName))))
-    t e
+  | SPatCon x -> withType (tyTm t)
+    (match_ (nvar_ scrutinee)
+      (withTypePat x.ty (withInfoPat x.info (npcon_ x.conName (npvar_ x.subName))))
+      t e)
 
   sem shallowCmp =
   | (SPatCon l, SPatCon r) -> nameCmp l.conName r.conName

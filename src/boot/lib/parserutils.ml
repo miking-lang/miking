@@ -196,7 +196,7 @@ let namespaces : string NamespaceMap.t =
     | Some path ->
         path
         |> Str.split (Str.regexp ":")
-        |> List.to_seq
+        |> List.rev |> List.to_seq
         |> Seq.filter_map process_binding
     | None ->
         Seq.empty
