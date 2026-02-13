@@ -115,7 +115,7 @@ let renderFileOrWarn : String -> String -> () = lam path. lam content.
           fileWriteString wc content;
           fileWriteClose wc
     else
-          renderingWarn (join ["Failed to create search file: ", path, "."])
+          renderingWarn (join ["Failed to create file: ", path, "."])
 
 -- Attempts to open the output file for a given object.
 let openIfShouldBeRendered : use Objects in Object -> RenderingOptions -> Option { wc: Option WriteChannel, write: String -> (), path: String } =
