@@ -5,7 +5,7 @@ include "./rendering-options.mc"
 include "./util.mc"
 
 include "../global/objects.mc"
-
+include "../global/ext-utils.mc"
 include "../global/util.mc"
 include "../global/logger.mc"
 include "../global/format.mc"
@@ -53,7 +53,26 @@ let render : use Objects in RenderingOptions -> Object -> RenderingResult = use 
                 { datas = renderCreateRenderingData obj tests opt, renderedMap = renderedMap }
             else
 
-            match openIfShouldBeRendered obj opt with Some { wc = wc, write = write, path = path } then
+            let f =
+                if objHasUrl obj then
+                    let path = concat opt.outDir (objGetMyLocation obj opt) in
+                    match docgenFileWriteOpen path with Some wc then
+                        Some {
+                            wc = Some wc,
+                            write = docgenFileWriteString wc,
+                            path = path
+                        }
+                    else
+                        renderingWarn (join ["Failed to open output file ", path, " during rendering"]); None {}
+                else
+                    Some {
+                         wc = None {},
+                         write = lam. (),
+                         path = ""
+                     } 
+            in
+
+            match f with Some { wc = wc, write = write, path = path } then
                 (match path with "" then () else log (concat "Rendering file " path));
 
                 type Acc = { tests: [RenderingData], children: [RenderingData], renderedMap: RenderedMap } in

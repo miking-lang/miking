@@ -12,13 +12,13 @@
 -- - `startServer` writes the Python script to a temporary file
 -- - launches it with:
 --   ```bash
---   python3 script.py <output-folder dir> <initial object>
+--   python3 script.py <out-dir dir> <initial object>
 --   ```
 
 include "sys.mc"
-include "ext/file-ext.mc"
 include "./server-options.mc"
 include "../global/util.mc"
+include "../global/ext-utils.mc"
 
 let pythonScript = lam servesMd. join ["
 import os
@@ -107,8 +107,8 @@ finally:
 
 let pythonServerStart : Bool -> ServerOptions -> () = lam servesMd. lam opt.
     let file = sysTempFileMake () in
-    match fileWriteOpen file with Some wc then
-        let write = fileWriteString wc in
+    match docgenFileWriteOpen file with Some wc then
+        let write = docgenFileWriteString wc in
         write (pythonScript servesMd);
         fileWriteFlush wc;
         fileWriteClose wc;

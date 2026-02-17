@@ -14,11 +14,10 @@
 -- General DocGenOptions:
 --   --no-open                              Do not open the result in a web browser.
 --   --no-code                              If true, implementations will not appears on the output
---   --output-folder <name>                 Set the output folder (default: doc-gen-output).
---   --src-folder <name>                    Destination folder for src files relative to outputFolder
+--   --out-dir <name>                 Set the output folder (default: doc-gen-output).
+--   --src-folder <name>                    Destination folder for src files relative to outDir
 --   --format <html|md|mdx>                 Choose output format (default: html).
 --   --url-prefix <prefix>                  Prefix for all generated URLs.
---   --depth <n|none>                       Limit nesting depth of `let` bindings.
 --   --stdlib-loc <loc>                     Name of the folder in which we should store stdlib files.
 --
 -- language Formatting:
@@ -46,10 +45,9 @@ type DocGenOptions = use Formats in use FormatLanguages in {
     fmtLang: FormatLanguage,   -- Output language for generated React components (JS/TS).
     files: [String],           -- Path to the input files.
     debug: Bool,               -- Enable debug mode.
-    outputFolder: String,      -- Destination folder for generated output.
-    srcFolder: String,         -- Destination folder for src files relative to outputFolder.
+    outDir: String,            -- Destination folder for generated output.
+    srcFolder: String,         -- Destination folder for src files relative to outDir.
     urlPrefix: String,         -- Prefix for generated URLs.
-    letDepth: Option Int,      -- Maximum nesting depth of let-bindings.
     stdlibFolder: String,      -- Name of the folder in which we should store stdlib files.
     noCode: Bool,              -- If true, implementations will not appears on the output.
     scanOnly: Bool             -- If true, we only do a scan and pretty print it.
@@ -62,10 +60,9 @@ let docGenOptionsDefault : DocGenOptions = use Formats in use FormatLanguages in
     fmtLang = defaultFormatLanguage (),
     files = [],
     debug = false,
-    outputFolder = "doc-gen-output",
+    outDir = "doc-gen-output",
     srcFolder = "/",
     urlPrefix = "",
-    letDepth = Some 1,
     stdlibFolder = "Stdlib",
     noCode = false,
     scanOnly = false
@@ -82,8 +79,8 @@ let usage = lam.
 
     "General DocGenOptions:\n",
     "  --no-open                              Do not open the result in a web browser.\n",
-    "  --output-folder <name>                 Set the output folder (default: doc-gen-output).\n",
-    "  --src-folder <name>                    Destination folder for src files relative to outputFolder.\n",
+    "  --out-dir <name>                 Set the output folder (default: doc-gen-output).\n",
+    "  --src-folder <name>                    Destination folder for src files relative to outDir.\n",
     "  --format <html|md|mdx>                 Choose output format (default: html).\n",
     "  --url-prefix <prefix>                  Prefix for all generated URLs.\n",
     "  --no-code                              If true, implementations will not appears on the output\n",

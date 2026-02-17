@@ -5,6 +5,7 @@
 -- structure representing the file and its includes.
 
 include "../parsing/token-readers.mc"
+include "../global/ext-utils.mc"
 include "sys.mc"
 
 -- Represents a parsed file header, including its includes, header tokens, and full text.
@@ -34,9 +35,9 @@ let parsingOpenFile : String -> Option ParsingFile = use TokenReader in lam file
         end
     in
     
-    match fileReadOpen file with Some rc then
-        let s = fileReadString rc in
-        fileReadClose rc;
+    match docgenFileReadOpen file with Some rc then
+        let s = docgenFileReadString rc in
+        docgenFileReadClose rc;
         Some (work s pos0 { includes = [], headerTokens = [], fileText = "" })
     else
         None {}

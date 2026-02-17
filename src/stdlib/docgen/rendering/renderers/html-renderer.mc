@@ -1,5 +1,6 @@
 include "./renderer-interface.mc"
 include "./headers/html-header.mc"
+include "../../global/ext-utils.mc"
 include "../util.mc"
 
 -- The HTML renderer implementation 

@@ -1,4 +1,7 @@
 include "../global/objects.mc"
+include "../global/namespace-utils.mc"
+include "./utils.mc"
+include "./doc-parser.mc"
 include "./ast-stream.mc"
 include "./syn-variants.mc"
 

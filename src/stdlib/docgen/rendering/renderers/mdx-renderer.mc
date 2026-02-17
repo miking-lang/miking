@@ -5,6 +5,7 @@
 include "./renderer-interface.mc"
 include "./headers/mdx-components.mc"
 include "../util.mc"
+include "../../global/ext-utils.mc"
 
 include "sys.mc"
 
@@ -27,7 +28,7 @@ lang MdxRenderer = RendererInterface
     sem mdxCreateCategoryFile =
     | opt -> lam dir. lam name.
         let path = pathConcat dir "_category_.yaml" in
-        let path = pathConcat opt.outputFolder path in
+        let path = pathConcat opt.outDir path in
         let content = concat "label: " name in
         renderFileOrWarn path content
 

@@ -51,6 +51,7 @@ let mdxCss =
   color: var(--docgen-muted, #6b7280);
   white-space: pre-wrap;
   line-height: 1.65;
+  overflow: auto;
 }
 
 .spacer {
@@ -143,6 +144,7 @@ let mdxCss =
 
 .variants {
   display: block;
+  overflow: auto;
   width: 100%;
   margin-top: 0.4rem;
 }

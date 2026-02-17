@@ -2,6 +2,7 @@
 -- during the documentation generation process.
 
 include "./rendering-data.mc"
+include "./renderers/objects-renderer.mc"
 include "../global/objects.mc"
 include "../global/util.mc"
 
@@ -108,34 +109,3 @@ let buildSet: [RenderingData] -> RenderingDataSet =
         case [] then set
         end
     in buildSet { sLet = [], sLang = [],  sSem = [], sSyn = [], sCon = [], sMexpr = [], sInclude = [], sLibInclude = [], sType = [], sUtest = [] } (reverse children)
-
-
-let renderFileOrWarn : String -> String -> () = lam path. lam content.
-    match fileWriteOpen path with Some wc then
-          fileWriteString wc content;
-          fileWriteClose wc
-    else
-          renderingWarn (join ["Failed to create file: ", path, "."])
-
--- Attempts to open the output file for a given object.
-let openIfShouldBeRendered : use Objects in Object -> RenderingOptions -> Option { wc: Option WriteChannel, write: String -> (), path: String } =
-    use ObjectsRenderer in lam obj. lam opt.
-    
-    if objHasUrl obj then
-        
-        let path = concat opt.outputFolder (objGetMyLocation obj opt) in
-        match fileWriteOpen path with Some wc then
-            Some {
-                wc = Some wc,
-                write = fileWriteString wc,
-                path = path
-            }
-        else
-            renderingWarn (join ["Failed to open output file ", path, " (openIfShouldBeRendered)."]); None {}
-
-    else
-        Some {
-             wc = None {},
-             write = lam. (),
-             path = ""
-         } 

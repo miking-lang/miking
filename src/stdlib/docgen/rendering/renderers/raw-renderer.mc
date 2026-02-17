@@ -9,6 +9,7 @@
 
 include "../source-code-spliter.mc"
 include "./renderer-interface.mc"
+include "../../global/ext-utils.mc"
 
 lang RawRenderer = RendererInterface
 
@@ -29,9 +30,9 @@ lang RawRenderer = RendererInterface
     sem renderSearchFile (searchDatas: [SearchDictObj]) =
     | opt -> let opt = fixOptFormat opt in
         let path = renderGetSearchPath opt in
-        match fileWriteOpen path with Some wc then
-              fileWriteString wc (searchReact searchDatas);
-              fileWriteClose wc
+        match docgenFileWriteOpen path with Some wc then
+              docgenFileWriteString wc (searchReact searchDatas);
+              docgenFileWriteClose wc
         else
               renderingWarn (join ["Failed to write file: ", path, "."])
 

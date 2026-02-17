@@ -18,7 +18,7 @@ include "../naming/naming-options.mc"
 let getScanningOptions : DocGenOptions -> ScanningOptions = lam opt.
     {
        files = opt.files,
-       outputFolder = opt.outputFolder,
+       outDir = opt.outDir,
        stdlibFolder = opt.stdlibFolder,
        scanOnly = opt.scanOnly
     }
@@ -46,11 +46,10 @@ let getRenderingOption : DocGenOptions -> Logger -> NameContext -> RenderedMap -
     {
         fmt = opt.fmt,
         stdlibFolder = opt.stdlibFolder,
-        outputFolder = opt.outputFolder,
+        outDir = opt.outDir,
         srcFolder = opt.srcFolder,
         urlPrefix = opt.urlPrefix,
         fmtLang = opt.fmtLang,
-        letDepth = opt.letDepth,
         nameContext = nameContext,
         log = log,
         noCode = opt.noCode,
@@ -62,7 +61,7 @@ let getRenderingOption : DocGenOptions -> Logger -> NameContext -> RenderedMap -
 let getServeOption : DocGenOptions -> String -> ServerOptions  = lam opt. lam link.
     {
         fmt = opt.fmt,
-        folder = opt.outputFolder,
+        folder = opt.outDir,
         noOpen = opt.noOpen,
         link = link
     }

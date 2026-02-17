@@ -28,12 +28,12 @@ include "mexpr/type-check.mc"
 include "mexpr/ast.mc"
 include "mexpr/info.mc"
 include "sys.mc"
-include "ext/file-ext.mc"
 
 include "../parsing/include-set.mc"
 include "../global/file-opener.mc"
 include "./mast.mc"
 
+include "../global/ext-utils.mc"
 include "../global/util.mc"
 include "../global/logger.mc"
 
@@ -99,9 +99,9 @@ let buildMAstFromFile: Logger -> String -> MAst = lam log. lam file.
 
     let code = reverse (strJoin "\n" code) in
     let tmpFile = sysTempFileMake () in
-    match fileWriteOpen tmpFile with Some wc then
-        fileWriteString wc code;
-        fileWriteFlush wc;
+    match docgenFileWriteOpen tmpFile with Some wc then
+        docgenFileWriteString wc code;
+        docgenFileWriteFlush wc;
 
         log "Parsing final ast";
         let ast = parseMCoreFile parseOpt tmpFile in

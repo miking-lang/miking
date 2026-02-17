@@ -47,12 +47,12 @@ let docGenOptionsConfig : ParseConfig Options = concat optionsConfig [
       let d: DocGenOptions = o.docgenOptions in
       {o with docgenOptions = {d with fmtLang = use FormatLanguages in Ts {}}}),
 
-  ([("--output-folder", " ", "<name>")],
+  ([("--out-dir", " ", "<name>")],
     "Set the output folder",
     lam p: ArgPart Options.
       let o: Options = p.options in
       let d: DocGenOptions = o.docgenOptions in
-      {o with docgenOptions = {d with outputFolder = p.str}}),
+      {o with docgenOptions = {d with outDir = p.str}}),
 
   ([("--src-folder", " ", "<name>")],
     "Destination folder for src files relative to outputFolder",
@@ -74,20 +74,6 @@ let docGenOptionsConfig : ParseConfig Options = concat optionsConfig [
       let o: Options = p.options in
       let d: DocGenOptions = o.docgenOptions in
       {o with docgenOptions = {d with stdlibFolder = p.str}}),
-
-  ([("--depth", " ", "<n|none>")],
-    "Limit nesting depth of `let` bindings",
-    lam p: ArgPart Options.
-      let o: Options = p.options in
-      let d: DocGenOptions = o.docgenOptions in
-      if eqString p.str "none" then
-        {o with docgenOptions = {d with letDepth = None {}}}
-      else if stringIsInt p.str then
-        {o with docgenOptions = {d with letDepth = Some (string2int p.str)}}
-      else (
-        modref p.fail (Some (ParseTypeGeneric ("Invalid depth", p.str)));
-        o
-      )),
 
   ([("--format", " ", "<html|md|mdx>")],
     "Choose output format",

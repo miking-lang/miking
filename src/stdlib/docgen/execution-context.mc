@@ -39,21 +39,21 @@ let finalizeSearchIndex : ExecutionContext -> () =
     use Renderer in 
     let log = buildLogger ctx "Rendering" in 
     let ropt = getRenderingOption ctx.opt log (nameContextEmpty ()) (hashmapEmpty ()) in
-    let ropt = { ropt with outputFolder = ctx.userOutputFolder } in
+    let ropt = { ropt with outDir = ctx.userOutputFolder } in
     let searchDatas = map (lam entry. { name = entry.0, link = entry.1 })
                       (hashmap2seq ctx.searchDatas) in
     renderSearchFile searchDatas ropt
 
 let execCtxNext : ExecutionContext -> Option ExecutionContext =
     lam ctx.
-    match ctx.files with [{ path = path, outputFolder = outputFolder }] ++ files then
+    match ctx.files with [{ path = path, outDir = outDir }] ++ files then
           printLn (join ["Processing file ", path, "..."]);
           Some { ctx with
               ast = None {},
               object = None {},
               nameContext = None {},
 
-              opt = { ctx.opt with outputFolder = outputFolder },
+              opt = { ctx.opt with outDir = outDir },
               currentFile = path,
               files = files
           }
@@ -84,7 +84,7 @@ let execContextNew : DocGenOptions -> Option ExecutionContext = lam opt.
     let ctx = {
         opt = opt,
         currentFile = "",
-        userOutputFolder = opt.outputFolder,
+        userOutputFolder = opt.outDir,
         longestPrefix = longestPrefix,
         files = files,
         renderedMap = renderedMapEmpty (),
@@ -139,19 +139,19 @@ let render : Step =  lam ctx.
     match ctx.nameContext with Some nameContext then
     
     let log = buildLogger ctx "Rendering" in 
-    let ropt = getRenderingOption { ctx.opt with outputFolder = ctx.userOutputFolder } log nameContext ctx.renderedMap in
+    let ropt = getRenderingOption { ctx.opt with outDir = ctx.userOutputFolder } log nameContext ctx.renderedMap in
     let renderingRes = render ropt obj in
 
     let searchDatas = foldl (lam acc. lam arg.
         hmInsert arg.name arg.link acc
     ) ctx.searchDatas renderingRes.searchDatas in
     
-    (if neqString ctx.opt.outputFolder ctx.userOutputFolder then    
-        let code = sysRemoveSrcFiles ctx.opt.outputFolder in
+    (if neqString ctx.opt.outDir ctx.userOutputFolder then    
+        let code = sysRemoveSrcFiles ctx.opt.outDir in
         (if neqi code 0 then renderingWarn "Failed to clean temporary source files." else ());
 
         if pathIsInStdlib ctx.longestPrefix then () else
-        let newStdlibPath = normalizePath (join [ctx.opt.outputFolder, "/", ctx.opt.stdlibFolder]) in
+        let newStdlibPath = normalizePath (join [ctx.opt.outDir, "/", ctx.opt.stdlibFolder]) in
         let actualStdlibPath = normalizePath (join [ctx.userOutputFolder, "/", ctx.opt.stdlibFolder]) in
 
         if isFolder newStdlibPath then
@@ -171,7 +171,7 @@ let serve : Step = use ObjectsRenderer in lam ctx.
     let opt = getRenderingOption ctx.opt log nameContext (hashmapEmpty ()) in -- Serving does not reuse renderedMap, so we give an empty one
     let link = objGetMyLink obj opt in
 
-    let opt = getServeOption { ctx.opt with outputFolder = ctx.userOutputFolder } link in    
+    let opt = getServeOption { ctx.opt with outDir = ctx.userOutputFolder } link in    
     startServer opt; ctx
     else crash "object" "serve" "render"
     else crash "name context" "serve" "name"    

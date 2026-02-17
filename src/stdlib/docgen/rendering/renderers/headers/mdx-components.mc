@@ -1,3 +1,4 @@
+include "string.mc"
 include "./mdx-style.mc"
 
 let mdxJsComponents =

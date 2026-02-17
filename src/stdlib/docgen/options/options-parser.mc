@@ -13,20 +13,13 @@ let parseDocGenOptions : [String] -> DocGenOptions = lam argv.
         case ["--javascript"] ++ rest then parse rest { opts with fmtLang = Js {} }
         case ["--typescript"] ++ rest then parse rest { opts with fmtLang = Ts {} }
 
-        case ["--output-folder", outputFolder] ++ rest then parse rest { opts with outputFolder = outputFolder }
+        case ["--out-dir", outDir] ++ rest then parse rest { opts with outDir = outDir }
         case ["--src-folder", srcFolder] ++ rest then parse rest { opts with srcFolder = srcFolder }
         case ["--url-prefix", urlPrefix] ++ rest then parse rest { opts with urlPrefix = urlPrefix }
         case ["--no-open"] ++ rest then parse rest { opts with noOpen = true }
         case ["--no-code"] ++ rest then parse rest { opts with noCode = true }
         case ["--stdlib-loc", loc] ++ rest then parse rest { opts with stdlibFolder = loc }
  
-        case ["--depth", letDepth] ++ rest then
-            match letDepth with "none" then
-                parse rest { opts with letDepth = None {} }
-            else if stringIsInt letDepth then
-                parse rest { opts with letDepth = Some (string2int letDepth) }
-            else usage ()
-
         case ["--format", fmt] ++ rest then
             match formatFromStr fmt with Some fmt then
                 parse rest { opts with fmt = fmt }

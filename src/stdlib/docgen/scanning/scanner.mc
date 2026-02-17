@@ -81,8 +81,8 @@ let scan : ScanningOptions -> ScanningOutput =
     let commonPrefixLength = length commonPrefix in
     let stdlibLocLength = length stdlibLoc in
     let stdlibOutputFolder =
-        if onlyStdlib then opt.outputFolder
-        else join [opt.outputFolder, "/", opt.stdlibFolder]
+        if onlyStdlib then opt.outDir
+        else join [opt.outDir, "/", opt.stdlibFolder]
     in
 
     let originalLength = length files in
@@ -93,20 +93,20 @@ let scan : ScanningOptions -> ScanningOutput =
         map (
             lam path.
             let getRelativeOutputFolder =
-                lam outputFolder. lam commonPrefixLength.
+                lam outDir. lam commonPrefixLength.
                 let f = subsequence path commonPrefixLength (length path) in
-                let outputFolder = normalizePath (join [outputFolder, "/", f]) in
-                let outputFolder = dirname outputFolder in
-                concat outputFolder "/"
+                let outDir = normalizePath (join [outDir, "/", f]) in
+                let outDir = dirname outDir in
+                concat outDir "/"
              in
 
-            let outputFolder = if pathIsInStdlib path then               
+            let outDir = if pathIsInStdlib path then               
                getRelativeOutputFolder stdlibOutputFolder stdlibLocLength
             else
-               getRelativeOutputFolder opt.outputFolder commonPrefixLength
+               getRelativeOutputFolder opt.outDir commonPrefixLength
             in
 
-            { path = path, outputFolder = dirname outputFolder }
+            { path = path, outDir = dirname outDir }
         ) files
     in
 

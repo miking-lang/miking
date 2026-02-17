@@ -11,7 +11,7 @@
 -- assuming you want all the files in miking-lang.github.io/docs/stdlib/ and
 -- that entry.mc is the entry point of the stdlib.
 -- ```
--- ./mi-doc-gen entry.mc --format mdx --output-folder miking-lang.github.io/docs/stdlib --url-prefix "/docs/stdlib" --depth 0
+-- mi docgen ~/.local/lib/mcore/stdlib/ --format mdx --out-dir miking-lang.github.io/docs/stdlib --url-prefix "/docs/stdlib/"
 -- ```
 -- For more details about each option, see options/options.mc
 

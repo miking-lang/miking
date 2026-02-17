@@ -1,14 +1,15 @@
 include "./scanning-output.mc"
 include "../global/logger.mc"
 include "../global/util.mc"
+include "../global/ext-utils.mc"
 
 let docgenIgnorePath = ".docgen-ignore"
 
 let ignoreFilesToIgnore : ScanningOutput -> ScanningOutput =
     lam output.
-    match fileReadOpen docgenIgnorePath with Some rc then
-        let s = fileReadString rc in
-        fileReadClose rc;
+    match docgenFileReadOpen docgenIgnorePath with Some rc then
+        let s = docgenFileReadString rc in
+        docgenFileReadClose rc;
         let toIgnore = strSplit "\n" s in
         let toIgnore = map strFullTrim toIgnore in
         let toIgnore = filter (lam f. not (null f)) toIgnore in

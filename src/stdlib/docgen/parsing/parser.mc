@@ -4,10 +4,11 @@ include "./doc-parser.mc"
 include "./lang-parser.mc"
 
 include "../global/util.mc"
+include "../global/file-opener.mc"
 include "../global/namespace-utils.mc"
+include "../global/source-code.mc"
 include "../options/docgen-options.mc"
 include "../global/objects.mc"
-include "../global/source-code.mc"
 
 include "seq.mc"
 include "hashmap.mc"
@@ -125,9 +126,9 @@ let parse : use Objects in ParsingOptions -> MAst -> Object =
         match parsingOpenFile loc with
         Some { headerTokens = headerTokens } then
 
-        let fileContent = match fileReadOpen loc with Some rc then
-            let s = fileReadString rc in
-            fileReadClose rc;
+        let fileContent = match docgenFileReadOpen loc with Some rc then
+            let s = docgenFileReadString rc in
+            docgenFileReadClose rc;
             s
         else
             parsingWarn (join ["Failed to open file: ", loc, "."]);

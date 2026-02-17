@@ -1,3 +1,4 @@
+include "./generic-namespace-set.mc"
 include "../global/util.mc"
 include "../global/objects.mc"
 

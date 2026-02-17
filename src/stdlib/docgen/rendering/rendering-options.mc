@@ -9,11 +9,10 @@ type RenderingOptions = use Formats in use FormatLanguages in
     {
         fmt: Format,
         stdlibFolder: String,
-        outputFolder: String,
+        outDir: String,
         srcFolder: String,
         urlPrefix: String, 
         fmtLang: FormatLanguage, 
-        letDepth: Option Int, 
         nameContext: NameContext,
         noCode: Bool,
         renderedMap: RenderedMap,
@@ -21,7 +20,7 @@ type RenderingOptions = use Formats in use FormatLanguages in
     }
 
 let renderingOptionsSrcPath : RenderingOptions -> String =
-    lam opt. pathConcat opt.outputFolder opt.srcFolder
+    lam opt. pathConcat opt.outDir opt.srcFolder
 
 
 -- Ensure RenderingOptions uses the wrapped (non-raw) format.
