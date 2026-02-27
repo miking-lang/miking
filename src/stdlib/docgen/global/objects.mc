@@ -15,7 +15,8 @@ lang ObjectInterface = MExprAst
         namespace: String, 
         sourceCode: SourceCode,
         isStdlib: Bool,
-        id: Int
+        id: Int,
+        isArtificial: Bool -- If true, it means the node have been added by docgen.
     }
 
     -- By default, objects are leaf nodes.
@@ -105,6 +106,7 @@ lang ObjectInterface = MExprAst
     sem objNamespace = | obj -> (objDatas obj).namespace
     sem objIsStdlib = | obj -> (objDatas obj).isStdlib
     sem objId = | obj -> (objDatas obj).id
+    sem objIsArtificial = | obj -> (objDatas obj).isArtificial
 
     sem objWithName =
     | obj -> lam name. objSetField obj (lam d. { d with name = name })
@@ -158,6 +160,11 @@ lang ObjectInterface = MExprAst
     | obj -> lam namespace.
         objSetField obj (lam d. { d with namespace = namespace })
 
+    -- Replaces namespace; strips stdlib prefix if present; re-applies stored `prefix`.
+    sem objWithIsArtificial =
+    | obj -> lam isArtificial.
+        objSetField obj (lam d. { d with isArtificial = isArtificial })
+
     -- Returns true if the object has a meaningful id.
     sem objHasId =
     | obj -> neqi (objId obj) 0
@@ -184,7 +191,8 @@ lang ObjectInterface = MExprAst
         namespace = "",
         isStdlib = false,
         sourceCode = sourceCodeEmpty (),
-        id = 0
+        id = 0,
+        isArtificial = false
     }
 
     sem objTryGetDoc : Object -> String
@@ -208,7 +216,15 @@ lang ObjectInterface = MExprAst
     sem objCountChildren =
     | obj -> foldl addi 0 (map (lam obj. if objHasChildren obj then objCountChildren obj else 1) (objChildren obj))
     
-    
+    sem objMergeIsRelevant : (Object, Object) -> Bool
+    sem objMergeIsRelevant =
+    | _ -> false
+
+    sem objVariantsAreCoveredBy : (Object, Object) -> Bool
+    sem objVariantsAreCoveredBy =
+    | _ -> false
+
+
 end
 
 ----------------------------------------------------------------------
@@ -400,8 +416,23 @@ end
 ----------------------------------------------------------------------
 lang ObjSem = ObjectInterface
 
+    -- This is the string of the expression of the pattern.
+    type SemVariant = String 
+
     syn Object =
-    | ObjSem { langName: String, ty: Option Type, datas: ObjectDatas }
+    | ObjSem { langName: String, ty: Option Type, variants: [SemVariant], datas: ObjectDatas }
+
+    sem objMergeIsRelevant =
+    | (ObjSem { variants = v1 } & o1, ObjSem { variants = v2 } & o2) ->
+        let v = if lti (length v1) (length v2) then v2 else v1 in
+        match objMerge o1 o2 with ObjSem { variants = v3 } in
+        gti (length v3) (length v)
+
+    sem objVariantsAreCoveredBy =
+    | (ObjSem { variants = v1 } & o1, ObjSem { variants = v2 } & o2) ->
+        if lti (length v2) (length v1) then false else
+        match objMerge o1 o2 with ObjSem { variants = v3 } in
+        lti (length v3) (length v2)
 
     sem objToString =
     | ObjSem { langName = langName } ->
@@ -429,7 +460,15 @@ lang ObjSem = ObjectInterface
     | ObjSem d -> lam ty. ObjSem { d with ty = ty }    
 
     sem objMerge =
-    | (ObjSem d1) & obj1 -> lam. obj1
+    | (ObjSem d1) & obj1 -> lam obj2.
+            match obj2 with ObjSem d2 then
+                let variants = foldl
+                    (lam acc. lam v. hmInsert v () acc)
+                    (hashmapEmpty ())
+                    (concat d1.variants d2.variants)
+                in
+                ObjSem { d1 with variants = hmKeys variants }
+            else objMergeFailed obj1 obj2
 
 end
 
@@ -446,6 +485,19 @@ lang ObjSyn = ObjectInterface
 
     syn Object =
     | ObjSyn { langName: String, variants: [SynVariant], datas: ObjectDatas }    
+
+    sem objMergeIsRelevant =
+    | (ObjSyn { variants = v1 } & o1, ObjSyn { variants = v2 } & o2) ->
+        let v = if lti (length v1) (length v2) then v2 else v1 in
+        match objMerge o1 o2 with ObjSyn { variants = v3 } in
+        gti (length v3) (length v)
+
+    sem objVariantsAreCoveredBy =
+    | (ObjSyn { variants = v1 } & o1, ObjSyn { variants = v2 } & o2) ->
+        if lti (length v2) (length v1) then false else
+        match objMerge o1 o2 with ObjSyn { variants = v3 } in
+        lti (length v3) (length v2)
+
 
     sem objDatas =
     | ObjSyn { datas = datas } -> datas
@@ -472,7 +524,12 @@ lang ObjSyn = ObjectInterface
     sem objMerge =
     | (ObjSyn d1) & obj1 -> lam obj2.
             match obj2 with ObjSyn d2 then
-                ObjSyn { d1 with variants = concat d1.variants d2.variants }
+                let variants = foldl
+                    (lam acc. lam v. hmInsert v.name v acc)
+                    (hashmapEmpty ())
+                    (concat d1.variants d2.variants)
+                in
+                ObjSyn { d1 with variants = hmValues variants }
             else objMergeFailed obj1 obj2
 
 end

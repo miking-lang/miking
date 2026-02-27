@@ -2,12 +2,13 @@ include "map.mc"
 include "mexpr/pprint.mc"
 
 include "./utils.mc"
+include "./sem-variants.mc"
 
 include "../global/logger.mc"
 include "../global/util.mc"
 include "../global/objects.mc"
 
-lang AstStreamInterface = MExprPrettyPrint  + Objects
+lang AstStreamInterface = Objects + MExprPrettyPrint
 
     type AstStreamContext = Expr 
     type LangDatabase = HashMap String Object
@@ -151,7 +152,8 @@ lang RecursiveAstStream = AstStreamInterface
              let ident = binding.ident.0 in
              match extractItemName langName (tail ident)
              with Some itemName then
-                 let obj = ObjSem { langName = langName, ty = Some binding.tyBody, datas = objDefaultDatas () } in
+                 let variants = semVariantParse binding.body in
+                 let obj = ObjSem { langName = langName, ty = Some binding.tyBody, datas = objDefaultDatas (), variants = variants } in
                  hmInsert itemName obj acc
              else
                  extractItemFailed ident langName;

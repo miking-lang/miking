@@ -44,6 +44,7 @@ let render : use Objects in RenderingOptions -> Object -> RenderingResult = use 
             { emptyPreview obj with renderedMap = res.renderedMap }
         case ObjInclude { child = None {} } then emptyPreview obj
         case _ then
+            if objIsArtificial obj then emptyPreview obj else
 
             let loc = objGetMyLocation obj opt in
             match renderedMapInsert renderedMap obj loc with

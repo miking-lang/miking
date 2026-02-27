@@ -51,13 +51,14 @@ let sourceCodeWordFormat : use TokenReader in Token -> SourceCodeWord =
     let build = buildCodeWord token in
     switch token
     case TokenWord { content = content } then
+         
         let kind = match content with "" then
             warn "Encountered empty token content during source code formatting.";
             CodeDefault {}
         else match content with "mexpr" | "utest" | "with" | "recursive" | "match" | "end" |
              "switch" | "in" | "include" | "case" | "if" | "else" | "type" | "con" |
              "lang" | "syn" | "use" | "let" | "lam" | "sem" | "then" then CodeKeyword {}
-        else if stringIsInt content then CodeNumber {}
+        else if stringIsInt content then  CodeNumber {}
         else if isUpperAlpha (head content) then CodeType {}
         else if isAlphaOrUnderscore (head content) then CodeName {}
         else CodeDefault {}

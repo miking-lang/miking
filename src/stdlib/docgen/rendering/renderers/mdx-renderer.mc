@@ -121,7 +121,7 @@ lang MdxRenderer = RendererInterface
       let desc = if eqString desc "No documentation available here." then "" else desc in
       if eqString "" desc then "" else join ["\n<Description>\n", desc, "\n</Description>\n"]
         
-    -- The goto link is directly handled in mdx component, so we always return empty string.
+    -- The goto link is directly handled in mdx component, so we always return empty string.    
     sem renderGotoLink (link: String) =
     | { fmt = Mdx {} } & opt -> ""
     
@@ -210,7 +210,7 @@ lang MdxRenderer = RendererInterface
         let link = objGetMyLink data.obj opt in
         let linkLength = length link in
         let link = if strEndsWith ".md" link then subsequence link 0 (subi linkLength 3) else link in -- remove extension for Docusaurus
-        let link = if objHasUrl data.obj then join [" link=\"", link, "\""] else "" in 
+        let link = if and (not (objIsArtificial data.obj)) (objHasUrl data.obj) then join [" link=\"", link, "\""] else "" in 
         
         let title = objTitle data.obj in
         let form  = objGetFirstWord data.obj in

@@ -109,15 +109,22 @@ let name : use Objects in Logger -> NamingOptions -> Object -> NamingRes =
                 ) originalChildren
             in
 
+            let syns = filterIt (lam k. match k with ObjSyn {} then true else false) in
+            let sems = filterIt (lam k. match k with ObjSem {} then true else false) in
+            let types = filterIt (lam k. match k with ObjType {} then true else false) in
+
             let langNamespace = {
                 objNamespace = objNamespace obj,
                 objIsStdlib = objIsStdlib obj,
 
                 parents = [], -- Will be filled in langNamespaceSetBuildNamespace
 
-                syns = filterIt (lam k. match k with ObjSyn {} then true else false),
-                sems = filterIt (lam k. match k with ObjSem {} then true else false),
-                types = filterIt (lam k. match k with ObjType {} then true else false)
+                types = types,
+                syns = syns,
+                sems = sems,
+
+                fullSyns = syns,
+                fullSems = sems
            } in
 
            let name = objName obj in
@@ -202,7 +209,12 @@ let name : use Objects in Logger -> NamingOptions -> Object -> NamingRes =
 
            -- Not really necessary by the way
            let children = updateChildren children (lam obj. [objWithoutChildren obj] ) implicit in
-           
+           let children = map (lam child.
+               if strStartsWith namespace (objNamespace child) then child
+               else objWithIsArtificial child true
+               ) children -- Updating namespaces
+           in
+
            let obj = objSetChildren obj children in
 
            nameDirectChildrenAndProcess obj ctx nextId

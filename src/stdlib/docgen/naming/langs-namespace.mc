@@ -14,7 +14,10 @@ type LangNamespace = use Objects in {
 
      syns: [Object],
      sems: [Object],
-     types: [Object]
+     types: [Object],
+
+     fullSyns: [Object],
+     fullSems: [Object]
 }
 
 
@@ -26,7 +29,10 @@ let langNamespaceDefault : LangNamespace = {
 
     syns = [],
     sems = [],
-    types = []
+    types = [],
+
+    fullSyns = [],
+    fullSems = []
 }
 
 type LangNamespaceDatas = {
@@ -59,6 +65,10 @@ let langNamespaceSetInsert : LangNamespaceSet -> String -> LangNamespace -> Lang
     let semGetter = (lam namespace. namespace.sems) in
     let typeGetter = (lam namespace. namespace.types) in
 
+    let fullSynGetter = (lam namespace. namespace.fullSyns) in
+    let fullSemGetter = (lam namespace. namespace.fullSems) in
+    let fullTypeGetter = (lam namespace. namespace.types) in
+
     -- Contains all the parents items.
     let rawParents = map
         (lam parent.
@@ -69,7 +79,7 @@ let langNamespaceSetInsert : LangNamespaceSet -> String -> LangNamespace -> Lang
                  langNamespaceDefault
         ) namespace.parents in
 
-    -- We prune the items only appearing in a single parent but not in the current object.
+    -- We prune items from parents when no informations are added.
     -- Such an item is generally irelevant to document.
     let parents = map
         (lam parent.
@@ -79,28 +89,35 @@ let langNamespaceSetInsert : LangNamespaceSet -> String -> LangNamespace -> Lang
          in
          
          let prune =
-             lam getter.
+             lam getter. lam fullGetter.
                filter
                (lam item.
-                    let shareWith =
-                      lam namespace.
+                    let testIf =
+                      lam f. lam namespace.
                       any
                         (lam candidate.
-                           eqString
-                             (objName candidate)
-                             (objName item))
-                        (getter namespace)
+                           and
+                               (eqString (objName candidate) (objName item))
+                               (f (item, candidate))
+                           )
+                        (fullGetter namespace)
                     in
-                    or
-                      (shareWith namespace)
-                      (any shareWith otherParents)
-                 )
-                 (getter parent)
+
+                    let mergeIsRelevant = testIf objMergeIsRelevant in
+                    let variantsAreCoveredBy = testIf objVariantsAreCoveredBy in
+
+                    and
+                      (not (any variantsAreCoveredBy otherParents)) -- If true, we don't keep because another parent already covers this one.
+                      (or
+                        (mergeIsRelevant namespace)
+                        (any mergeIsRelevant otherParents))
+               )
+               (getter parent)
            in
              
-         let syns = prune synGetter in
-         let sems = prune semGetter in
-         let types = prune typeGetter in
+         let syns = prune synGetter fullSynGetter in
+         let sems = prune semGetter fullSemGetter in
+         let types = prune typeGetter fullTypeGetter in
          
          { parent with syns = syns, sems = sems, types = types }
         ) rawParents
@@ -160,19 +177,28 @@ let langNamespaceSetInsert : LangNamespaceSet -> String -> LangNamespace -> Lang
     let full = { namespace with 
          syns = unite synGetter,
          sems = unite semGetter,
-         types = unite typeGetter
+         types = unite typeGetter,
+         
+         fullSyns = unite fullSynGetter,
+         fullSems = unite fullSemGetter
     } in
 
     let explicit = { namespace with 
          syns = intersect synGetter,
          sems = intersect semGetter,
-         types = intersect typeGetter
+         types = intersect typeGetter,
+
+         fullSyns = unite fullSynGetter,
+         fullSems = unite fullSemGetter
     } in
 
     let implicit = { namespace with 
          syns = diff synGetter,
          sems = diff semGetter,
-         types = diff typeGetter
+         types = diff typeGetter,
+
+         fullSyns = unite fullSynGetter,
+         fullSems = unite fullSemGetter
     } in
 
     let datas = {

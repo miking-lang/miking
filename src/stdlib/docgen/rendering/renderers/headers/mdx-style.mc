@@ -134,6 +134,7 @@ let mdxCss =
   border-radius: 3px;
   box-sizing: border-box;
   margin-bottom: 0.6em;
+  overflow: auto;
 
   width: 100%;
 }

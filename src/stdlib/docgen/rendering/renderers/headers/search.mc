@@ -85,14 +85,18 @@ let searchCss: String =
     transform: translateX(2px);
 }
 
-#search-results:empty {
-    display: none;
+#search-results a {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .highlight {
     font-weight: bold;
     color: var(--searchHighlightColor);
+    white-space: nowrap;
 }
+
 "
 
 let searchCore: String =

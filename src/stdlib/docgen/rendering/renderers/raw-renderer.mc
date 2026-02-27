@@ -91,7 +91,7 @@ lang RawRenderer = RendererInterface
     | opt -> let opt = fixOptFormat opt in
         let obj = data.obj in
         let link =
-            if objHasUrl obj then
+            if and (not (objIsArtificial obj)) (objHasUrl obj) then
                 let link = objGetMyLink obj opt in
                 let link = concat (if strStartsWith "/" link then "" else "/") link in
                 renderGotoLink link opt
