@@ -3,14 +3,16 @@ include "ast.mc"
 include "basic-types.mc"
 include "either.mc"
 include "json-debug.mc"
+include "invariants.mc"
 
 include "mlang/ast.mc"
 
-lang PhaseStats = Ast + MLangTopLevel + AstToJson + MLangProgramToJson
+lang PhaseStats = Ast + MLangTopLevel + AstToJson + MLangProgramToJson + Invariant
   type StatState =
     { lastPhaseEnd : Ref Float
     , log : Bool
     , jsonDumpPhases : Set String
+    , mkAttrs : () -> [Attr Loc]
     }
 
   sem endPhaseStatsExpr : StatState -> String -> Expr -> ()
@@ -35,7 +37,12 @@ lang PhaseStats = Ast + MLangTopLevel + AstToJson + MLangProgramToJson
         case Right prog then countProgNodes prog
       end) in
       let postTraverse = wallTimeMs () in
-      printLn (join ["  Ast size: ", int2string size, " (Traversal takes ~", float2string (subf postTraverse preTraverse), "ms)"])
+      printLn (join ["  Ast size: ", int2string size, " (Traversal takes ~", float2string (subf postTraverse preTraverse), "ms)"]);
+      match e with Left e then
+        match state.mkAttrs () with attrs & ![] then
+          checkInvariants attrs e
+        else ()
+      else ()
      else ());
 
     (if setMem phaseLabel state.jsonDumpPhases then
@@ -48,10 +55,11 @@ lang PhaseStats = Ast + MLangTopLevel + AstToJson + MLangProgramToJson
     let newNow = wallTimeMs () in
     modref state.lastPhaseEnd newNow
 
-  sem mkPhaseLogState : Set String -> Bool -> StatState
-  sem mkPhaseLogState jsonDumpPhases = | log ->
+  sem mkPhaseLogState : Set String -> Bool -> (() -> [Attr Loc]) -> StatState
+  sem mkPhaseLogState jsonDumpPhases log = | mkAttrs ->
     { lastPhaseEnd = ref (wallTimeMs ())
     , jsonDumpPhases = jsonDumpPhases
     , log = log
+    , mkAttrs = mkAttrs
     }
 end

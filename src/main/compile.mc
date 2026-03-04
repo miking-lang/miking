@@ -26,6 +26,10 @@ include "mlang/main.mc"
 include "peval/compile.mc"
 include "mexpr/generate-pprint.mc"
 
+include "mexpr/invariants/in-scope.mc"
+include "mexpr/invariants/definitions.mc"
+include "mexpr/invariants/info.mc"
+
 include "extrec/main.mc"
 
 lang MCoreCompile =
@@ -41,7 +45,18 @@ lang MCoreCompile =
   SpecializeCompile +
   OldDPrintViaPprint + MExprGeneratePprint + GeneratePprintMissingCase +
   PprintTyAnnot + HtmlAnnotator +
-  MExprToJson
+  MExprToJson +
+
+  UnboundErrorAttr + DefinedAttr + WithoutInfoAttr
+  sem mkInvariantAttrs : () -> [Attr Loc]
+  sem mkInvariantAttrs = | _ ->
+    let scope =
+      {_scopeEmpty () with tyConstructors = setOfSeq nameCmp (mapValues builtinTypeNames)} in
+    [ InScopeAttr (filledThunk scope)
+    , UnboundErrorAttr (mkThunk (lazyPure "UnboundErrorAttr#root"))
+    , WithoutInfoAttr (mkThunk (lazyPure "WithoutInfoAttr#root"))
+    , DefinedAttr (mkThunk (lazyPure "DefinedAttr#root"))
+    ]
 end
 
 lang TyAnnotFull = MExprPrettyPrint + TyAnnot + HtmlAnnotator + MetaVarTypePrettyPrint
@@ -63,7 +78,7 @@ let insertTunedOrDefaults = lam options : Options. lam ast. lam file.
 
 let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
   use MCoreCompile in
-    let log = mkPhaseLogState options.debugDumpPhases options.debugPhases in
+    let log = mkPhaseLogState options.debugDumpPhases options.debugPhases mkInvariantAttrs in
 
     -- If option --debug-profile, insert instrumented profiling expressions
     -- in AST
@@ -160,7 +175,7 @@ let compile = lam files. lam options : Options. lam args.
     iter (compileExtendedMLangToOcaml options compileWithUtests) files
   else
     let compileFile = lam file.
-      let log = mkPhaseLogState options.debugDumpPhases options.debugPhases in
+      let log = mkPhaseLogState options.debugDumpPhases options.debugPhases mkInvariantAttrs in
       let ast = parseParseMCoreFile {
         keepUtests = options.runTests,
         pruneExternalUtests = not options.disablePruneExternalUtests,

@@ -185,7 +185,7 @@ lang BigPipeline = BigIncludeHandler +
     smap_Expr_Expr stripTypes e
 
   sem compileExtendedMLangToOcaml options runner =| filepath ->
-    let log = mkPhaseLogState options.debugDumpPhases options.debugPhases in
+    let log = mkPhaseLogState options.debugDumpPhases options.debugPhases (lam. []) in
 
     let p = parseAndHandleIncludes filepath in
     endPhaseStatsProg log "parsing-include-handling" p;
