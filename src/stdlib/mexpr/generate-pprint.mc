@@ -28,6 +28,9 @@ lang GeneratePprint = Ast + PrettyPrint
   sem _getPprintFunction : GPprintEnv -> Type -> (GPprintEnv, Expr)
   sem _getPprintFunction env = | ty ->
     errorSingle [infoTy ty] (concat "Missing case for _getPprintFunction " (type2str ty))
+
+  sem _getSeqPprintFunction : GPprintEnv -> Type -> (GPprintEnv, Expr)
+  sem _getSeqPprintFunction env =
 end
 
 lang GeneratePprintInt = GeneratePprint + IntTypeAst
@@ -48,22 +51,26 @@ end
 lang GeneratePprintSeq = GeneratePprint + SeqTypeAst
   sem _getPprintFunction env =
   | TySeq x ->
-    match getPprintFunction env x.ty with (env, elemF) in
+    _getSeqPprintFunction env (unwrapType x.ty)
+
+  sem _getSeqPprintFunction env =
+  | ty ->
+    match getPprintFunction env ty with (env, elemF) in
     (env, app_ (nvar_ env.seq2string) elemF)
 end
 
 lang GeneratePprintString = GeneratePprint + SeqTypeAst + CharTypeAst
-  sem _getPprintFunction env =
-  | ty & TySeq {ty = TyChar _} ->
+  sem _getSeqPprintFunction env =
+  | ty & TyChar _ ->
     let n = nameSym "x" in
-    (env, nlam_ n ty (cons_ (char_ '"') (snoc_ (app_ (nvar_ env.escapeString) (nvar_ n)) (char_ '"'))))
+    (env, nlam_ n (tyseq_ ty) (cons_ (char_ '"') (snoc_ (app_ (nvar_ env.escapeString) (nvar_ n)) (char_ '"'))))
 end
 
 lang GeneratePprintChar = GeneratePprint + CharTypeAst
   sem _getPprintFunction env =
   | ty & TyChar _ ->
     let n = nameSym "c" in
-    (env, nlam_ n ty (seq_ [char_ '\'', app_ (nvar_ env.escapeChar) (nvar_ n), char_ '\'']))
+    (env, nlam_ n ty (snoc_ (cons_ (char_ '\'') (app_ (nvar_ env.escapeChar) (nvar_ n))) (char_ '\'')))
 end
 
 lang GeneratePprintRecord = GeneratePprint + RecordTypeAst + MExprIdentifierPrettyPrint
