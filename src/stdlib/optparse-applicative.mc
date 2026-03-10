@@ -24,6 +24,7 @@ include "option.mc"
 include "either.mc"
 include "seq.mc"
 include "string.mc"
+include "map.mc"
 
 type OptName
 con OptShort : Char -> OptName
@@ -62,6 +63,7 @@ type OptItem a =
   { reader : OptReader a
   , shortForm : String
   , description : String
+  , category : String
   }
 
 type OptParser a
@@ -101,6 +103,7 @@ let _optItemMap : all a. all b. (a -> b) -> OptItem a -> OptItem b
       end
     , shortForm = o.shortForm
     , description = o.description
+    , category = o.category
     }
 
 recursive let optMap
@@ -150,12 +153,13 @@ let optApply5
   : all a. all b. all c. all d. all e. all f. OptParser (a -> b -> c -> d -> e -> f) -> OptParser a -> OptParser b -> OptParser c -> OptParser d -> OptParser e -> OptParser f
   = lam f. lam a. lam b. lam c. lam d. lam e. optApply (optApply (optApply (optApply (optApply f a) b) c) d) e
 
-let optArgDef : all x. {long : String, short : String, parse : String -> x, arg : String, description : String} =
+let optArgDef : all x. {long : String, short : String, parse : String -> x, arg : String, description : String, category : String} =
   { long = ""
   , short = ""
   , parse = lam. error "No parser specified for optArgDef"
   , arg = "ARG"
   , description = ""
+  , category = ""
   }
 let optArgDefString =
   { optArgDef with parse = lam str.
@@ -172,7 +176,7 @@ let optArgDefFloat =
     if stringIsFloat str then Right (string2float str) else Left "not a float"
   , arg = "FLOAT"
   }
-let optArg : all a. {long : String, short : String, parse : String -> Either String a, arg : String, description : String} -> OptParser a = lam conf.
+let optArg : all a. {long : String, short : String, parse : String -> Either String a, arg : String, description : String, category : String} -> OptParser a = lam conf.
   let names = map (lam c. OptShort c) conf.short in
   let names = if null conf.long
     then names
@@ -187,13 +191,14 @@ let optArg : all a. {long : String, short : String, parse : String -> Either Str
     }
   , shortForm = shortForm
   , description = conf.description
+  , category = conf.category
   }
 let optExactArg = lam str.
   { optArgDef with arg = str
   , parse = lam other.
     if eqString str other then Some () else None ()
   }
-let optSpecificArg : all a. {long : String, short : String, parse : String -> Option a, arg : String, description : String} -> OptParser a = lam conf.
+let optSpecificArg : all a. {long : String, short : String, parse : String -> Option a, arg : String, description : String, category : String} -> OptParser a = lam conf.
   let names = map (lam c. OptShort c) conf.short in
   let names = if null conf.long
     then names
@@ -208,15 +213,17 @@ let optSpecificArg : all a. {long : String, short : String, parse : String -> Op
     }
   , shortForm = shortForm
   , description = conf.description
+  , category = conf.category
   }
 
-let optNoArgDef : all a. a -> {long : String, short : String, value : a, description : String} = lam value.
+let optNoArgDef : all a. a -> {long : String, short : String, value : a, description : String, category : String} = lam value.
   { long = ""
   , short = ""
   , value = value
   , description = ""
+  , category = ""
   }
-let optNoArg : all a. {long : String, short : String, value : a, description : String} -> OptParser a = lam conf.
+let optNoArg : all a. {long : String, short : String, value : a, description : String, category : String} -> OptParser a = lam conf.
   let names = map (lam c. OptShort c) conf.short in
   let names = if null conf.long
     then names
@@ -231,6 +238,7 @@ let optNoArg : all a. {long : String, short : String, value : a, description : S
     }
   , shortForm = shortForm
   , description = conf.description
+  , category = conf.category
   }
 
 let optOptional : all a. OptParser a -> OptParser (Option a)
@@ -240,6 +248,7 @@ let optFlagDef =
   { long = ""
   , short = ""
   , description = ""
+  , category = ""
   }
 let optFlag = lam conf.
   let names = map (lam c. OptShort c) conf.short in
@@ -256,22 +265,25 @@ let optFlag = lam conf.
       }
     , shortForm = shortForm
     , description = conf.description
+    , category = conf.category
     } in
   optOr present (optPure false)
 
-let optPosDef : all a. {parse : String -> Either String a, arg : String, description : String} =
+let optPosDef : all a. {parse : String -> Either String a, arg : String, description : String, category : String} =
   { parse = lam. error "No parse function given to optPosDef"
   , arg = "ARG"
   , description = ""
+  , category = ""
   }
 let optPosDefString =
   { optPosDef with parse = lam str. Right str
   }
-let optPos : all a. {parse : String -> Either String a, arg : String, description : String} -> OptParser a
+let optPos : all a. {parse : String -> Either String a, arg : String, description : String, category : String} -> OptParser a
   = lam conf. OptP
     { reader = OptPositional {parse = conf.parse}
     , shortForm = conf.arg
     , description = conf.description
+    , category = conf.category
     }
 
 type ParserSearchRet r
@@ -475,7 +487,7 @@ let optParse
     in work (OPMBoth ()) args p
 
 type DescTree
-type OptDesc = {shortForm : String, description : String}
+type OptDesc = {shortForm : String, description : String, category : String}
 con DescTreeOpt : OptDesc -> DescTree
 con DescTreeMult : [DescTree] -> DescTree
 con DescTreeAlt : {alts : [DescTree], optional : Bool} -> DescTree
@@ -569,7 +581,7 @@ recursive let _describeTree : all a. OptParser a -> DescTree
   = lam p. switch p
     case NilP _ then DescTreeAlt {alts = [], optional = true}
     case OptP x then
-      DescTreeOpt {shortForm = x.shortForm, description = x.description}
+      DescTreeOpt {shortForm = x.shortForm, description = x.description, category = x.category}
     case AltP (a, b) then
       let aDesc = _describeTree a in
       let bDesc = _describeTree b in
@@ -597,17 +609,36 @@ let optParserHelpText : all a. String -> String -> OptParser a -> String
 
     let options = _optDescGetDescs dt in
     -- OPT(vipa, 2025-03-26): `distinct` is quadratic, could reduce to n log n
-    let options = distinct (lam a. lam b. if eqString a.shortForm b.shortForm then eqString a.description b.description else false) options in
-    let longest = foldl (lam acc. lam pair. maxi acc (length pair.shortForm)) 0 options in
-    let padToLength = lam l. lam str. concat str (make (subi l (length str)) ' ') in
-    let optToStr = lam pair. join ["  ", padToLength longest pair.shortForm, " ", pair.description] in
-    let options = strJoin "\n" (map optToStr options) in
+    let options = distinct
+      (lam a. lam b.
+        if eqString a.shortForm b.shortForm
+        then if eqString a.description b.description
+          then eqString a.category b.category
+          else false
+        else false)
+      options in
+    let optsToStr = lam options.
+      let longest = foldl (lam acc. lam pair. maxi acc (length pair.shortForm)) 0 options in
+      let padToLength = lam l. lam str. concat str (make (subi l (length str)) ' ') in
+      let optToStr = lam opt. join ["  ", padToLength longest opt.shortForm, " ", opt.description] in
+      strJoin "\n" (map optToStr options) in
+
+    let options = foldl (lam m. lam o. mapInsertWith concat o.category [o] m) (mapEmpty cmpString) options in
+    let otherOptions = mapLookup "" options in
+    let options = mapRemove "" options in
+    let options = map (lam pair. join [pair.0, "\n", optsToStr pair.1]) (mapBindings options) in
+    let options = switch (options, otherOptions)
+      case ([], Some others) then [concat "Options:\n" (optsToStr others)]
+      case (opts, Some others) then snoc opts (concat "Other options:\n" (optsToStr others))
+      case (opts, None _) then opts
+      end in
+    let options = strJoin "\n\n" options in
 
     let dt = _optDescTreeRemoveUnconditionalOptional dt in
     let dts = optionMapOr [] _optDescSplitOnce dt in
     let shortUsage = strJoin "\n" (map (lam dt. join [appName, " ", _optDescTreeToString dt]) dts) in
 
-    join [shortUsage, "\n\n", bigDescription, "Options:\n", options]
+    join [shortUsage, "\n\n", bigDescription, options]
 
 let optParserWithHelp : all a. String -> String -> OptParser a -> OptParser (Either String a)
   = lam appName. lam bigDescription. lam p.
@@ -677,6 +708,13 @@ let thing : OptParser Float = optArg
     if stringIsFloat s then Right (string2float s) else Left "not an float"
   , arg = "FLOAT"
   , description = "thing is a thing"
+  } in
+
+let withCategory : OptParser Bool = optFlag
+  { optFlagDef with
+    long = "with-category"
+  , description = "This flag has a category"
+  , category = "Weird flags:"
   } in
 
 let filename : OptParser String = optPos {optPosDefString with arg = "FILENAME", description = "file and stuff"} in
@@ -749,5 +787,25 @@ let helpText = strJoin "\n"
   , "  FILENAME      file and stuff"
   ] in
 utest optParserHelpText "test" "" parser with helpText using eqString else lam l. lam. l in
+
+let helpText = strJoin "\n"
+  [ "test --shared INT [--opt1] [--extra] --thing FLOAT"
+  , "test --shared INT (--yes | --no) --thing FLOAT"
+  , ""
+  , "Stuff"
+  , ""
+  , "Weird flags:"
+  , "  --with-category This flag has a category"
+  , ""
+  , "Other options:"
+  , "  --shared INT  shared is a thing"
+  , "  --opt1        opt1 is here"
+  , "  --extra       extra extra"
+  , "  --yes         yes yes"
+  , "  --no          no no"
+  , "  --thing FLOAT thing is a thing"
+  , "  FILENAME      file and stuff"
+  ] in
+utest optParserHelpText "test" "Stuff" (optMap2 (lam a. lam b. (a, b)) parser withCategory) with helpText using eqString else lam l. lam. l in
 
 ()
