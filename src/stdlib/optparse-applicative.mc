@@ -134,6 +134,22 @@ let optMap5
   : all a. all b. all c. all d. all e. all f. (a -> b -> c -> d -> e -> f) -> OptParser a -> OptParser b -> OptParser c -> OptParser d -> OptParser e -> OptParser f
   = lam f. lam a. lam b. lam c. lam d. lam e. optApply (optApply (optApply (optApply (optMap f a) b) c) d) e
 
+let optApply2
+  : all a. all b. all c. OptParser (a -> b -> c) -> OptParser a -> OptParser b -> OptParser c
+  = lam f. lam a. lam b. optApply (optApply f a) b
+
+let optApply3
+  : all a. all b. all c. all d. OptParser (a -> b -> c -> d) -> OptParser a -> OptParser b -> OptParser c -> OptParser d
+  = lam f. lam a. lam b. lam c. optApply (optApply (optApply f a) b) c
+
+let optApply4
+  : all a. all b. all c. all d. all e. OptParser (a -> b -> c -> d -> e) -> OptParser a -> OptParser b -> OptParser c -> OptParser d -> OptParser e
+  = lam f. lam a. lam b. lam c. lam d. optApply (optApply (optApply (optApply f a) b) c) d
+
+let optApply5
+  : all a. all b. all c. all d. all e. all f. OptParser (a -> b -> c -> d -> e -> f) -> OptParser a -> OptParser b -> OptParser c -> OptParser d -> OptParser e -> OptParser f
+  = lam f. lam a. lam b. lam c. lam d. lam e. optApply (optApply (optApply (optApply (optApply f a) b) c) d) e
+
 let optArgDef : all x. {long : String, short : String, parse : String -> x, arg : String, description : String} =
   { long = ""
   , short = ""
