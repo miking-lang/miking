@@ -15,8 +15,6 @@
 -- that are present in the Haskell package seem particularly
 -- interesting to port:
 -- * Subcommands (e.g., `eval` and `compile` for `mi`).
--- * The ability to specify repeatable flags (`some` and `many` in
---   Haskell)
 -- * Automatic generation of auto-complete interfaces.
 
 include "common.mc"
@@ -71,23 +69,15 @@ con NilP : all a. a -> OptParser a
 con OptP : all a. OptItem a -> OptParser a
 con AltP : all a. (OptParser a, OptParser a) -> OptParser a
 -- NOTE(vipa, 2025-03-26): We don't actually handle existentials
--- properly, when we pattern match on `MultP` the `x` will be
--- instantiated to *anything*, instead of some unknowable type. Be
+-- properly, when we pattern match on `MultP` or `BindP` the `x` will
+-- be instantiated to *anything*, instead of some unknowable type. Be
 -- *very* cautious when unwrapping it.
 con MultP : all x. all a. (OptParser (x -> a), OptParser x) -> OptParser a
+con BindP : all x. all a. (OptParser x, x -> OptParser a) -> OptParser a
 
 let optPure
   : all a. a -> OptParser a
   = lam a. NilP a
-
-let optApply
-  : all a. all b. OptParser (a -> b) -> OptParser a -> OptParser b
-  = lam f. lam a.
-    MultP (f, a)
-
-let optOr
-  : all a. OptParser a -> OptParser a -> OptParser a
-  = lam a. lam b. AltP (a, b)
 
 let _optItemMap : all a. all b. (a -> b) -> OptItem a -> OptItem b
   = lam f. lam o.
@@ -118,8 +108,66 @@ recursive let optMap
       type Never in
       let a : OptParser (Never -> a) = a in
       MultP (optMap (lam f2. lam x. f (f2 x)) a, b)
+    case BindP (a, b) then
+      -- NOTE(vipa, 2025-03-26): Emulate an existential type by
+      -- creating a new empty type
+      type Never in
+      let a : OptParser Never = a in
+      BindP (a, lam x. optMap f (b x))
     end
 end
+
+let optApply
+  : all a. all b. OptParser (a -> b) -> OptParser a -> OptParser b
+  = lam f. lam a.
+    MultP (f, a)
+
+let optOr
+  : all a. OptParser a -> OptParser a -> OptParser a
+  = lam a. lam b. AltP (a, b)
+
+let optOptional : all a. OptParser a -> OptParser (Option a)
+  = lam o. optOr (optMap (lam x. Some x) o) (optPure (None ()))
+
+type OptParserM a = all x. (a -> OptParser x) -> OptParser x
+
+let _optPureM : all a. a -> OptParserM a
+  = lam x.
+    let f : all x. (a -> OptParser x) -> OptParser x = lam k. k x in
+    #frozen"f"
+
+let _optBindM : all a. all b. OptParserM a -> (a -> OptParserM b) -> OptParserM b
+  = lam f. lam g.
+    let ret = lam k. f (lam x. let g = g x in g k) in
+    #frozen"ret"
+
+let _optMapM : all a. all b. (a -> b) -> OptParserM a -> OptParserM b
+  = lam f. lam a.
+    _optBindM #frozen"a" (lam a. _optPureM (f a))
+
+let _optMap2M : all a. all b. all c. (a -> b -> c) -> OptParserM a -> OptParserM b -> OptParserM c
+  = lam f. lam a. lam b.
+    _optBindM #frozen"a" (lam a. _optBindM #frozen"b" (lam b. _optPureM (f a b)))
+
+let _optFromM : all a. OptParserM a -> OptParser a
+  = lam f. f optPure
+
+let _optOneM : all a. OptParser a -> OptParserM a
+  = lam a.
+    let f = lam k. BindP (a, k) in
+    #frozen"f"
+
+recursive let _optManyM : all a. OptParser a -> OptParserM [a]
+  = lam p. _optBindM (_optOneM (optOptional p))
+    (optionMapOrElse (lam. _optPureM [])
+      (lam x. _optMapM (cons x) (_optManyM p)))
+end
+
+let _optSomeM : all a. OptParser a -> OptParserM [a]
+  = lam p. _optMap2M cons (_optOneM p) (_optManyM p)
+
+let optMany : all a. OptParser a -> OptParser [a] = lam p. _optFromM (_optManyM p)
+let optSome : all a. OptParser a -> OptParser [a] = lam p. _optFromM (_optSomeM p)
 
 let optMap2
   : all a. all b. all c. (a -> b -> c) -> OptParser a -> OptParser b -> OptParser c
@@ -241,9 +289,6 @@ let optNoArg : all a. {long : String, short : String, value : a, description : S
   , category = conf.category
   }
 
-let optOptional : all a. OptParser a -> OptParser (Option a)
-  = lam o. optOr (optMap (lam x. Some x) o) (optPure (None ()))
-
 let optFlagDef =
   { long = ""
   , short = ""
@@ -286,6 +331,73 @@ let optPos : all a. {parse : String -> Either String a, arg : String, descriptio
     , category = conf.category
     }
 
+type OptMissing
+con OptMissingOpt : String -> OptMissing
+con OptMissingMult : [OptMissing] -> OptMissing
+con OptMissingAlt : [OptMissing] -> OptMissing
+
+let _optMissingMult : OptMissing -> OptMissing -> OptMissing
+  = lam a. lam b. switch (a, b)
+    case (OptMissingMult [], x) | (x, OptMissingMult []) then x
+    case (OptMissingMult as, OptMissingMult bs) then OptMissingMult (concat as bs)
+    case (OptMissingMult as, a) then OptMissingMult (snoc as a)
+    case (b, OptMissingMult bs) then OptMissingMult (cons b bs)
+    case (a, b) then OptMissingMult [a, b]
+    end
+
+let _optMissingAlt : OptMissing -> OptMissing -> OptMissing
+  = lam a. lam b. switch (a, b)
+    case (OptMissingAlt as, OptMissingAlt bs) then OptMissingAlt (concat as bs)
+    case (OptMissingAlt as, a) then OptMissingAlt (snoc as a)
+    case (b, OptMissingAlt bs) then OptMissingAlt (cons b bs)
+    case (a, b) then OptMissingAlt [a, b]
+    end
+
+recursive let _optMissingToString : OptMissing -> String
+  = lam o.
+    let mWithParens = lam o. match o with OptMissingAlt _
+      then snoc (cons '(' (_optMissingToString o)) ')'
+      else _optMissingToString o in
+    switch o
+    case OptMissingOpt str then str
+    case OptMissingMult ms then strJoin " " (map mWithParens ms)
+    case OptMissingAlt ms then strJoin " | " (map _optMissingToString ms)
+    end
+end
+
+recursive let optParserEval
+  : all w. all a. OptParser a -> Either OptMissing a
+  = lam p. switch p
+    case NilP a then Right a
+    case OptP x then
+      Left (OptMissingOpt x.shortForm)
+    case AltP (a, b) then
+      switch (optParserEval a, optParserEval b)
+      case (Right x, _) | (_, Right x) then Right x
+      case (Left a, Left b) then Left (_optMissingAlt a b)
+      end
+    case MultP (a, b) then
+      -- NOTE(vipa, 2025-03-26): Emulate an existential type by
+      -- creating a new empty type
+      type Never in
+      let a : OptParser (Never -> a) = a in
+      switch (optParserEval a, optParserEval b)
+      case (Right a, Right b) then Right (a b)
+      case (Left a, Left b) then Left (_optMissingMult a b)
+      case (Left x, _) | (_, Left x) then Left x
+      end
+    case BindP (a, b) then
+      -- NOTE(vipa, 2025-03-26): Emulate an existential type by
+      -- creating a new empty type
+      type Never in
+      let a : OptParser Never = a in
+      switch optParserEval a
+      case Right a then optParserEval (b a)
+      case Left x then Left x
+      end
+    end
+end
+
 type ParserSearchRet r
 con PSROk : all r. ([String], OptParser r) -> ParserSearchRet r
 con PSRNotFound : all r. () -> ParserSearchRet r
@@ -324,6 +436,21 @@ recursive let _searchParser
         case PSRError err then
           PSRError err
         end
+      case PSRError err then
+        PSRError err
+      end
+    case BindP (a, b) then
+      -- NOTE(vipa, 2025-03-26): Emulate an existential type by
+      -- creating a new empty type
+      type Never in
+      let a : OptParser Never = a in
+      switch _searchParser #frozen"f" a
+      case PSROk (args, a) then
+        PSROk (args, BindP (a, b))
+      case PSRNotFound _ then
+        match optParserEval a with Right a then
+          _searchParser #frozen"f" (b a)
+        else PSRNotFound ()
       case PSRError err then
         PSRError err
       end
@@ -402,68 +529,10 @@ let _optStepParser
       (mode, _searchParser #frozen"f" p)
     end
 
-type OptMissing
-con OptMissingOpt : String -> OptMissing
-con OptMissingMult : [OptMissing] -> OptMissing
-con OptMissingAlt : [OptMissing] -> OptMissing
-
-let _optMissingMult : OptMissing -> OptMissing -> OptMissing
-  = lam a. lam b. switch (a, b)
-    case (OptMissingMult [], x) | (x, OptMissingMult []) then x
-    case (OptMissingMult as, OptMissingMult bs) then OptMissingMult (concat as bs)
-    case (OptMissingMult as, a) then OptMissingMult (snoc as a)
-    case (b, OptMissingMult bs) then OptMissingMult (cons b bs)
-    case (a, b) then OptMissingMult [a, b]
-    end
-
-let _optMissingAlt : OptMissing -> OptMissing -> OptMissing
-  = lam a. lam b. switch (a, b)
-    case (OptMissingAlt as, OptMissingAlt bs) then OptMissingAlt (concat as bs)
-    case (OptMissingAlt as, a) then OptMissingAlt (snoc as a)
-    case (b, OptMissingAlt bs) then OptMissingAlt (cons b bs)
-    case (a, b) then OptMissingAlt [a, b]
-    end
-
-recursive let _optMissingToString : OptMissing -> String
-  = lam o.
-    let mWithParens = lam o. match o with OptMissingAlt _
-      then snoc (cons '(' (_optMissingToString o)) ')'
-      else _optMissingToString o in
-    switch o
-    case OptMissingOpt str then str
-    case OptMissingMult ms then strJoin " " (map mWithParens ms)
-    case OptMissingAlt ms then strJoin " | " (map _optMissingToString ms)
-    end
-end
-
 type OptParseResult a
 con OptParseOk : all a. a -> OptParseResult a
 con OptParseMissing : all a. OptMissing -> OptParseResult a
 con OptParseError : all a. String -> OptParseResult a
-
-recursive let optParserEval
-  : all w. all a. OptParser a -> Either OptMissing a
-  = lam p. switch p
-    case NilP a then Right a
-    case OptP x then
-      Left (OptMissingOpt x.shortForm)
-    case AltP (a, b) then
-      switch (optParserEval a, optParserEval b)
-      case (Right x, _) | (_, Right x) then Right x
-      case (Left a, Left b) then Left (_optMissingAlt a b)
-      end
-    case MultP (a, b) then
-      -- NOTE(vipa, 2025-03-26): Emulate an existential type by
-      -- creating a new empty type
-      type Never in
-      let a : OptParser (Never -> a) = a in
-      switch (optParserEval a, optParserEval b)
-      case (Right a, Right b) then Right (a b)
-      case (Left a, Left b) then Left (_optMissingMult a b)
-      case (Left x, _) | (_, Left x) then Left x
-      end
-    end
-end
 
 let optParse
   : all a. all w. OptParser a -> [String] -> Either String a
@@ -491,9 +560,11 @@ type OptDesc = {shortForm : String, description : String, category : String}
 con DescTreeOpt : OptDesc -> DescTree
 con DescTreeMult : [DescTree] -> DescTree
 con DescTreeAlt : {alts : [DescTree], optional : Bool} -> DescTree
+con DescTreeBind : DescTree -> DescTree
 
 let _optDescTreeMult : DescTree -> DescTree -> DescTree
   = lam a. lam b. switch (a, b)
+    case (DescTreeAlt {alts = []}, dt) | (dt, DescTreeAlt {alts = []}) then dt
     case (DescTreeMult [], dt) | (dt, DescTreeMult []) then dt
     case (DescTreeMult as, DescTreeMult bs) then DescTreeMult (concat as bs)
     case (DescTreeMult as, a) then DescTreeMult (snoc as a)
@@ -524,6 +595,10 @@ recursive let _optDescTreeToString : DescTree -> String
     case DescTreeAlt x then
       let res = strJoin " | " (map _optDescTreeToString x.alts) in
       if x.optional then snoc (cons '[' res) ']' else res
+    case DescTreeBind x then
+      match x with DescTreeMult _
+      then concat (cons '(' (_optDescTreeToString x)) ")..."
+      else concat (_optDescTreeToString x) "..."
     end
 end
 
@@ -537,7 +612,7 @@ recursive let _optDescTreeRemoveUnconditionalOptional : DescTree -> Option DescT
       case dts then Some (DescTreeMult dts)
       end
     case DescTreeAlt {alts = [] | [_], optional = true} then None ()
-    case DescTreeAlt _ then Some dt
+    case DescTreeAlt _ | DescTreeBind _ then Some dt
     end
 end
 
@@ -549,12 +624,14 @@ recursive let _optDescGetDescs : DescTree -> [OptDesc]
       foldl (lam acc. lam dt. concat acc (_optDescGetDescs dt)) [] dts
     case DescTreeAlt x then
       foldl (lam acc. lam dt. concat acc (_optDescGetDescs dt)) [] x.alts
+    case DescTreeBind x then
+      _optDescGetDescs x
     end
 end
 
 let _optDescSplitOnce : DescTree -> [DescTree]
   = lam dt. switch dt
-    case DescTreeOpt _ then [dt]
+    case DescTreeOpt _ | DescTreeBind _ then [dt]
     case DescTreeMult dts then
       let f : all a. ([a], [a]) -> Option (([a], a, [a]), ([a], [a])) = lam split.
         match split with (pre ++ [here], rest)
@@ -594,6 +671,15 @@ recursive let _describeTree : all a. OptParser a -> DescTree
       let aDesc = _describeTree a in
       let bDesc = _describeTree b in
       _optDescTreeMult aDesc bDesc
+    case BindP (a, b) then
+      -- NOTE(vipa, 2025-03-26): Emulate an existential type by
+      -- creating a new empty type
+      type Never in
+      let a : OptParser Never = a in
+      let aDesc = _describeTree a in
+      match optParserEval a with Right a
+      then DescTreeBind (_optDescTreeMult aDesc (_describeTree (b a)))
+      else DescTreeBind aDesc
     end
 end
 
@@ -717,10 +803,15 @@ let withCategory : OptParser Bool = optFlag
   , category = "Weird flags:"
   } in
 
-let filename : OptParser String = optPos {optPosDefString with arg = "FILENAME", description = "file and stuff"} in
-let parser = optMap3 (lam a. lam b. lam c. (a, b, c)) (optOr parseEx1 parseEx2) thing (optOr filename (optPure "")) in
+let verbose : OptParser Int = optMap length (optMany (optNoArg
+  { optNoArgDef () with long = "verbose"
+  , description = "verbosity or something"
+  })) in
 
-let test : [String] -> Either String (Example, Float, String)
+let filename : OptParser String = optPos {optPosDefString with arg = "FILENAME", description = "file and stuff"} in
+let parser = optMap4 (lam a. lam b. lam c. lam d. (a, b, c, d)) (optOr parseEx1 parseEx2) thing (optOr filename (optPure "")) verbose in
+
+let test : [String] -> Either String (Example, Float, String, Int)
   = lam args. optParse parser args in
 
 utest test []
@@ -733,32 +824,38 @@ utest test ["--shared", "blue"]
 with Left "Option '--shared' was given a malformed argument: not an integer" in
 
 utest test ["--shared", "7", "--thing", "30"]
-with Right ((Ex1 {opt1 = false, shared = 7, extra = false}), 30., "") in
+with Right ((Ex1 {opt1 = false, shared = 7, extra = false}), 30., "", 0) in
+
+utest test ["--shared", "7", "--verbose", "--thing", "30"]
+with Right ((Ex1 {opt1 = false, shared = 7, extra = false}), 30., "", 1) in
+
+utest test ["--shared", "7", "--verbose", "--thing", "30", "--verbose"]
+with Right ((Ex1 {opt1 = false, shared = 7, extra = false}), 30., "", 2) in
 
 utest test ["--shared", "7", "--opt1", "--thing", "30"]
-with Right ((Ex1 {opt1 = true, shared = 7, extra = false}), 30., "") in
+with Right ((Ex1 {opt1 = true, shared = 7, extra = false}), 30., "", 0) in
 
 utest test ["--shared", "7", "file", "--opt1", "--thing", "30"]
-with Right ((Ex1 {opt1 = true, shared = 7, extra = false}), 30., "file") in
+with Right ((Ex1 {opt1 = true, shared = 7, extra = false}), 30., "file", 0) in
 
 utest test ["--opt1", "--shared", "7", "--thing", "30"]
-with Right ((Ex1 {opt1 = true, shared = 7, extra = false}), 30., "") in
+with Right ((Ex1 {opt1 = true, shared = 7, extra = false}), 30., "", 0) in
 
 utest test ["--opt1"]
 with Left "Missing argument(s):\n--shared INT --thing FLOAT" in
 
 utest test ["--shared", "7", "--yes", "--thing", "30"]
-with Right ((Ex2 {opt2 = 0, shared = 7}), 30., "") in
+with Right ((Ex2 {opt2 = 0, shared = 7}), 30., "", 0) in
 
 utest test ["--thing", "42.7", "--shared", "7", "--no"]
-with Right ((Ex2 {opt2 = 1, shared = 7}), 42.7, "") in
+with Right ((Ex2 {opt2 = 1, shared = 7}), 42.7, "", 0) in
 
 utest test ["--shared", "7", "--no", "--opt1"]
 with Left "Unexpected argument '--opt1'" in
 
 let helpText = strJoin "\n"
-  [ "test --shared INT [--opt1] [--extra] --thing FLOAT"
-  , "test --shared INT (--yes | --no) --thing FLOAT"
+  [ "test --shared INT [--opt1] [--extra] --thing FLOAT [--verbose]..."
+  , "test --shared INT (--yes | --no) --thing FLOAT [--verbose]..."
   , ""
   , "This thing can do stuff."
   , ""
@@ -770,12 +867,13 @@ let helpText = strJoin "\n"
   , "  --no          no no"
   , "  --thing FLOAT thing is a thing"
   , "  FILENAME      file and stuff"
+  , "  --verbose     verbosity or something"
   ] in
 utest optParserHelpText "test" "This thing can do stuff." parser with helpText using eqString else lam l. lam. l in
 
 let helpText = strJoin "\n"
-  [ "test --shared INT [--opt1] [--extra] --thing FLOAT"
-  , "test --shared INT (--yes | --no) --thing FLOAT"
+  [ "test --shared INT [--opt1] [--extra] --thing FLOAT [--verbose]..."
+  , "test --shared INT (--yes | --no) --thing FLOAT [--verbose]..."
   , ""
   , "Options:"
   , "  --shared INT  shared is a thing"
@@ -785,12 +883,13 @@ let helpText = strJoin "\n"
   , "  --no          no no"
   , "  --thing FLOAT thing is a thing"
   , "  FILENAME      file and stuff"
+  , "  --verbose     verbosity or something"
   ] in
 utest optParserHelpText "test" "" parser with helpText using eqString else lam l. lam. l in
 
 let helpText = strJoin "\n"
-  [ "test --shared INT [--opt1] [--extra] --thing FLOAT"
-  , "test --shared INT (--yes | --no) --thing FLOAT"
+  [ "test --shared INT [--opt1] [--extra] --thing FLOAT [--verbose]..."
+  , "test --shared INT (--yes | --no) --thing FLOAT [--verbose]..."
   , ""
   , "Stuff"
   , ""
@@ -805,6 +904,7 @@ let helpText = strJoin "\n"
   , "  --no          no no"
   , "  --thing FLOAT thing is a thing"
   , "  FILENAME      file and stuff"
+  , "  --verbose     verbosity or something"
   ] in
 utest optParserHelpText "test" "Stuff" (optMap2 (lam a. lam b. (a, b)) parser withCategory) with helpText using eqString else lam l. lam. l in
 
