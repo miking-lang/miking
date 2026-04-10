@@ -7,6 +7,15 @@ let _pathSep = "/"
 let _tempBase = "/tmp"
 let _null = "/dev/null"
 
+-- Ensures the given string can be passed to a shell (e.g., `sh` or
+-- `bash`) as a single argument without being split by whitespace.
+let sysShellQuote : String -> String = lam str.
+  snoc (cons '\'' (strReplace "'" "'\"'\"'" str)) '\''
+
+utest sysShellQuote "foo" with "'foo'"
+utest sysShellQuote "foo bar" with "'foo bar'"
+utest sysShellQuote "foo 'and bar'" with "'foo '\"'\"'and bar'\"'\"''"
+
 let sysCommandExists : String -> Bool = lam cmd.
   eqi 0 (command (join ["command -v ", cmd, " >/dev/null 2>&1"]))
 
@@ -49,6 +58,9 @@ let sysDeleteDir = lam dir.
 
 let sysChmodWriteAccessFile = lam file.
   _commandList ["chmod", "+w", file]
+
+let sysChmodExecuteFile = lam file.
+  _commandList ["chmod", "+x", file]
 
 let sysJoinPath = lam p1. lam p2.
   strJoin _pathSep [p1, p2]

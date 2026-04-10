@@ -16,11 +16,38 @@ let dirname : String -> String = lam filepath.
   match findiLast (eqc '/') filepath with Some i then
     subsequence filepath 0 i
   else
-    ""
+    "."
 
-utest dirname "foo.mc" with ""
+utest dirname "foo.mc" with "."
 utest dirname "a/b/c/foo.mc" with "a/b/c"
 utest dirname "a/b/c/../foo.mc" with "a/b/c/.."
+
+let basename : String -> String = lam filepath.
+  match findiLast (eqc '/') filepath with Some i then
+    subsequence filepath (addi i 1) (subi (length filepath) (addi i 1))
+  else
+    filepath
+
+utest basename "foo.mc" with "foo.mc"
+utest basename "a/b/c/foo.mc" with "foo.mc"
+utest basename "a/b/c/../foo.mc" with "foo.mc"
+
+let withExtension : String -> String -> String = lam ext. lam path.
+  let path =
+    match findiLast (eqc '.') path with Some i then
+      let isExt = if eqi i 0
+        then false
+        else not (eqc '/' (get path (subi i 1))) in
+      if isExt
+      then subsequence path 0 i
+      else path
+    else path in
+  concat path ext
+
+utest withExtension ".test" "file.blub" with "file.test"
+utest withExtension ".test" "dir/file.blub" with "dir/file.test"
+utest withExtension ".test" ".blub" with ".blub.test"
+utest withExtension ".test" "dir/.blub" with "dir/.blub.test"
 
 let fileutilsNormalize : String -> String = lam path.
   recursive let recur = lam zipper : ([String], [String]).
