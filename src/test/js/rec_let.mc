@@ -9,9 +9,9 @@ mexpr
     else _fact (muli n acc) (subi n 1)
   in
   let fact = lam n. _fact 1 n in
-  dprintLn (fact 5);
-  dprintLn (fact 10);
-  dprintLn (fact 20);
+  printLn (int2string (fact 5));
+  printLn (int2string (fact 10));
+  printLn (int2string (fact 20));
   -- dprintLn (fact 40);
   recursive
       let isEven = lam n.
@@ -21,10 +21,10 @@ mexpr
         if eqi n 0 then false
         else isEven (subi n 1)
   in
-  dprintLn (isEven 10);
-  dprintLn (isOdd 10);
-  dprintLn (isEven 15);
-  dprintLn (isOdd 15);
+  printLn (bool2string (isEven 10));
+  printLn (bool2string (isOdd 10));
+  printLn (bool2string (isEven 15));
+  printLn (bool2string (isOdd 15));
 
   let wrapper = lam n.
     recursive let work = lam a. lam b.
@@ -34,7 +34,7 @@ mexpr
     in
     work
   in
-  dprintLn (wrapper 1 4 2);
-  dprintLn (wrapper 2 3 4);
-  dprintLn ((wrapper 10) 50 2);
+  printLn (int2string (wrapper 1 4 2));
+  printLn (int2string (wrapper 2 3 4));
+  printLn (int2string ((wrapper 10) 50 2));
   ()
