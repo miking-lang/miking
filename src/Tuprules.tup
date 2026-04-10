@@ -1,4 +1,5 @@
 ROOT := $(TUP_CWD)/..
+&genrules := ../misc/test
 VARIANT_SRC := $(TUP_VARIANTDIR)
 
 # MCore specific

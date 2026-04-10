@@ -143,7 +143,3 @@ preload boot
 : main/mi.mc | mi1 $(BOOT_LIB_FILES) |> ^ ./mi1 compile %f --output %o^ $(STDLIB) ./%1i compile %f --output %o |> mi <mi>
 
 : main/mi.mc | mi-boot $(BOOT_LIB_FILES) |> ^ mi compile %f --output %o^ $(STDLIB) mi compile %f --output %o |> mi-cheat <mi-cheat>
-
-# NOTE(vipa, 2025-02-18): This is here to make it possible to tell tup
-# to look at the 'build'-variant without building the entire world
-: |> touch %o |> marker

@@ -22,7 +22,7 @@ else
 SET_OCAMLPATH=OCAMLPATH=$(current_dir)/build/lib
 endif
 
-j_flag := $(filter -j%, $(MAKEFLAGS))
+j_flag := $(subst -j,-j ,$(filter -j%, $(MAKEFLAGS)))
 
 .PHONY: default
 default: bootstrap
@@ -74,9 +74,13 @@ bootstrap: $(if $(wildcard build/$(BOOT_NAME)),,boot)
 	$(SET_STDLIB) $(SET_OCAMLPATH) build/$(MI_LITE_NAME) 1 src/main/mi.mc build/$(MI_MID_NAME)
 	$(SET_STDLIB) $(SET_OCAMLPATH) build/$(MI_MID_NAME) compile src/main/mi.mc --output build/$(MI_NAME)
 
+build/$(MI_NAME): $(if $(wildcard build/$(MI_NAME)),,bootstrap)
+
 .PHONY: cheat
 cheat:
 	$(SET_STDLIB) $(SET_OCAMLPATH) mi compile src/main/mi.mc --output build/$(MI_CHEAT_NAME)
+
+build/$(MI_CHEAT_NAME): $(if $(wildcard build/$(MI_CHEAT_NAME)),,cheat)
 
 # Umbrella install/uninstall targets, for installing and uninstalling everything
 
@@ -107,27 +111,22 @@ uninstall-stdlib:
 uninstall-mi:
 	rm -f $(bindir)/$(MI_NAME)
 
-# Basic testing (for more granular control, use `misc/test` directly,
-# or `misc/watch` to autorun tests when files change)
+# Basic testing (for more granular control, use `misc/test` directly)
+
+misc/test: misc/test-spec.mc build/$(MI_NAME)
+	$(SET_STDLIB) $(SET_OCAMLPATH) build/$(MI_NAME) compile misc/test-spec.mc --output misc/test
 
 .PHONY: test test-all test-quick
-test test-all test-quick: lint
+test test-all test-quick: lint misc/test build/mi
 test:
-	+ exec misc/test $(j_flag) --bootstrapped smart
+	+ exec misc/test $(j_flag) --boot --smart-dep
 
 test-all:
-	+ exec misc/test $(j_flag) --bootstrapped --non-interactive all
+	+ exec misc/test $(j_flag) --boot --most-dep
 
 test-quick:
-	+ exec misc/test $(j_flag) --bootstrapped
+	+ exec misc/test $(j_flag) --boot --none-dep
 
-test-info:
+test-info: misc/test
 	@echo "Tasks run:" `find build/src/ -name '*.out' | wc -l`
-	@misc/test-spec --bootstrapped smart 2>&1 >/dev/null
-
-
-# Building and testing via tup
-
-.PHONY: setup-tup
-setup-tup:
-	misc/scripts/setup-tup
+	@misc/test --stats --boot --smart-dep
