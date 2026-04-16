@@ -281,34 +281,50 @@ lang ShallowBase = Ast + NamedPat
     -> Expr
     -> Expr
   sem lowerToExpr scrutinee branches = | fallthrough ->
-    match
-      mapAccumL
-        (lam acc. lam branch. match branch with (pat, expr) in
-          let names = setToSeq (collectNames pat) in
-          let fName = nameSym "matchBody" in
-          let acc = snoc acc (nulet_ fName (nulams_ names (ulam_ "" expr))) in
-          let inconsistentError = lam info. lam name.
-            errorSingle [info] (join ["Inconsistent pattern; '", nameGetStr name, "' is not always bound."]) in
-          let callF = lam nameMap.
-            let lookup = lam n. mapLookupOrElse (lam. inconsistentError (infoPat pat) n) n nameMap in
-            withType (tyTm expr)
-              (app_
-                (appSeq_
-                  (nvar_ fName)
-                  (map
-                    (lam n. nvar_ (lookup n)) names))
-                unit_) in
-          (acc, (pat, callF)))
-        []
-        branches
-    with (lets, branches) in
-    let lowered =
-      lower
-        scrutinee
-        branches
-        fallthrough
-        (lam name. lam spat. lam t. lam e. mkMatch name t e spat) in
-    bindall_ lets lowered
+    let inconsistentError = lam info. lam name.
+      errorSingle [info] (join ["Inconsistent pattern; '", nameGetStr name, "' is not always bound."]) in
+    type BranchLibrary = [(Info, [Name], Expr)] in
+    type CountingTree = {count : Map Int Int, create : [Map Name Name -> Expr] -> Expr} in
+    let addBranch : BranchLibrary -> (Pat, Expr) -> (BranchLibrary, (Pat, Map Name Name -> CountingTree))
+      = lam library. lam branch.
+        match branch with (pat, branch) in
+        let names = setToSeq (collectNames pat) in
+        let idx = length library in
+        let createTree = lam nameMap.
+          { count = mapSingleton subi idx 1
+          , create = lam library.
+            get library idx nameMap
+          } in
+        (snoc library (infoPat pat, names, branch), (pat, createTree)) in
+    let mkMatch = lam n. lam spat. lam thn. lam els.
+      { count = mapUnionWith addi thn.count els.count
+      , create = lam library.
+        mkMatch n (thn.create library) (els.create library) spat
+      } in
+    match mapAccumL addBranch [] branches with (library, branches) in
+    match addBranch library (pvarw_, fallthrough) with (library, (_, fallthrough)) in
+    let res = lower scrutinee branches (fallthrough (mapEmpty nameCmp)) mkMatch in
+    let updateBranch = lam acc : {idx : Int, lets : [Decl]}. lam branch.
+      match branch with (info, names, body) in
+      if gti (mapLookupOr 0 acc.idx res.count) 1 then
+        let fName = nameSym "matchBody" in
+        let body = if null names
+          then ulam_ "" body
+          else nulams_ names body in
+        let decl = nulet_ fName body in
+        let f = if null names
+          then lam. app_ (nvar_ fName) unit_
+          else lam nameMap.
+            let lookup = lam n. mapLookupOrElse (lam. inconsistentError info n) n nameMap in
+            appSeq_ (nvar_ fName) (map (lam n. nvar_ (lookup n)) names) in
+        ({idx = addi acc.idx 1, lets = snoc acc.lets decl}, f)
+      else
+        let f = lam nameMap.
+          let lookup = lam n. mapLookupOrElse (lam. inconsistentError info n) n nameMap in
+          bindall_ (map (lam n. nulet_ n (nvar_ (lookup n))) names) body in
+        ({acc with idx = addi acc.idx 1}, f) in
+    match mapAccumL updateBranch {idx = 0, lets = []} library with ({lets = lets}, library) in
+    bindall_ lets (res.create library)
 end
 
 lang ShallowAnd = ShallowBase + AndPat
@@ -782,12 +798,8 @@ lang LowerNestedPatterns = CollectBranches + ShallowBase
     then
       match target with Left expr then
         let targetId = nameSym "_target" in
-        let elseId = nameSym "_elsBranch" in
-        let els = lowerAll fallthrough in
-        bindall_ [
-          nulet_ elseId (ulam_ "" (lowerAll fallthrough)),
-          nulet_ targetId (lowerAll expr)]
-        (lowerToExpr targetId (map f branches) (app_ (nvar_ elseId) uunit_))
+        bind_ (nulet_ targetId (lowerAll expr))
+        (lowerToExpr targetId (map f branches) (lowerAll fallthrough))
       else match target with Right name then
         lowerToExpr name (map f branches) (lowerAll fallthrough)
       else never
