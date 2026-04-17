@@ -120,18 +120,22 @@ let prune_external_utests ?(enable = true) ?(warn = true)
         recur (sm, ntests, hasref') t2
         |> fun ((sm, ntests, hasref'), t2') ->
         ( match t3 with
-        | Some t3' ->
-            let (sm, ntests, hasref'), t3' = recur (sm, ntests, hasref') t3' in
-            ((sm, ntests, hasref'), Some t3')
-        | None ->
-            ((sm, ntests, hasref'), t3) )
+          | Some t3' ->
+              let (sm, ntests, hasref'), t3' =
+                recur (sm, ntests, hasref') t3'
+              in
+              ((sm, ntests, hasref'), Some t3')
+          | None ->
+              ((sm, ntests, hasref'), t3) )
         |> fun ((sm, ntests, hasref'), t3') ->
         ( match t4 with
-        | Some t4' ->
-            let (sm, ntests, hasref'), t4' = recur (sm, ntests, hasref') t4' in
-            ((sm, ntests, hasref'), Some t4')
-        | None ->
-            ((sm, ntests, hasref'), t4) )
+          | Some t4' ->
+              let (sm, ntests, hasref'), t4' =
+                recur (sm, ntests, hasref') t4'
+              in
+              ((sm, ntests, hasref'), Some t4')
+          | None ->
+              ((sm, ntests, hasref'), t4) )
         |> fun ((sm, ntests, hasref'), t4') ->
         recur (sm, ntests, false) t5
         |> fun ((sm, ntests, hasref''), t5') ->
@@ -339,7 +343,7 @@ let rec merge_includes root visited = function
       let included_tops =
         included
         |> List.map (function Program (_, tops, _) ->
-               List.filter not_test tops )
+            List.filter not_test tops )
         |> List.concat
       in
       Program (includes, included_tops @ tops, tm)

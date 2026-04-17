@@ -697,8 +697,7 @@ let getData = function
       let lst =
         List.map
           (fun x ->
-            match x with CDecl (fi, params, con, ty) -> (fi, params, con, ty)
-            )
+            match x with CDecl (fi, params, con, ty) -> (fi, params, con, ty) )
           decls
       in
       let allStr = List.map (fun (_, _, con, _) -> con) lst in
@@ -726,8 +725,7 @@ let getData = function
       let lst =
         List.map
           (fun x ->
-            match x with CDecl (fi, params, con, ty) -> (fi, params, con, ty)
-            )
+            match x with CDecl (fi, params, con, ty) -> (fi, params, con, ty) )
           decls
       in
       let allStr = List.map (fun (_, _, con, _) -> con) lst in
@@ -2242,7 +2240,10 @@ and delta (apply : info -> tm -> tm -> tm) fi c v =
         let tmseq = int_seq2int_tm_seq (tm_info tm) is in
         apply tm tmseq
         |> function
-        | TmConst (_, CInt n) -> n | _ -> raise_error fi "Expected integer"
+        | TmConst (_, CInt n) ->
+            n
+        | _ ->
+            raise_error fi "Expected integer"
       in
       T.create_int shape f |> fun t -> TmTensor (fi, T.TBootInt t)
   | CtensorCreateCArrayInt _, _ ->
@@ -2255,7 +2256,10 @@ and delta (apply : info -> tm -> tm -> tm) fi c v =
         let tmseq = int_seq2int_tm_seq (tm_info tm) is in
         apply tm tmseq
         |> function
-        | TmConst (_, CFloat r) -> r | _ -> raise_error fi "Expected float"
+        | TmConst (_, CFloat r) ->
+            r
+        | _ ->
+            raise_error fi "Expected float"
       in
       T.create_float shape f |> fun t -> TmTensor (fi, T.TBootFloat t)
   | CtensorCreateCArrayFloat _, _ ->
@@ -2546,16 +2550,16 @@ and delta (apply : info -> tm -> tm -> tm) fi c v =
       in
       let el2str x = apply el2str x |> to_ustring in
       ( match t with
-      | T.TBootInt t' ->
-          Tensor.Uop_barray.to_ustring
-            (fun x -> TmConst (fi, CInt x) |> el2str)
-            t'
-      | T.TBootFloat t' ->
-          Tensor.Uop_barray.to_ustring
-            (fun x -> TmConst (fi, CFloat x) |> el2str)
-            t'
-      | T.TBootGen t' ->
-          Tensor.Uop_generic.to_ustring el2str t' )
+        | T.TBootInt t' ->
+            Tensor.Uop_barray.to_ustring
+              (fun x -> TmConst (fi, CInt x) |> el2str)
+              t'
+        | T.TBootFloat t' ->
+            Tensor.Uop_barray.to_ustring
+              (fun x -> TmConst (fi, CFloat x) |> el2str)
+              t'
+        | T.TBootGen t' ->
+            Tensor.Uop_generic.to_ustring el2str t' )
       |> fun str -> TmSeq (fi, ustring2tmseq fi str)
   | Ctensor2string _, _ ->
       fail_constapp fi
@@ -2596,8 +2600,7 @@ and delta (apply : info -> tm -> tm -> tm) fi c v =
           let externals_exclude =
             Mseq.map
               (function
-                | TmSeq (_, s) -> tmseq2seq_of_int fi s | _ -> fail_constapp fi
-                )
+                | TmSeq (_, s) -> tmseq2seq_of_int fi s | _ -> fail_constapp fi )
               externals_exclude
           in
           TmConst
@@ -2964,11 +2967,11 @@ and eval (env : (Symb.t * tm) list) (pe : peval) (t : tm) =
   | TmConApp (fi, x, s, t) ->
       let rhs = eval env pe t in
       ( if !enable_debug_con_shape then
-        let shape = shape_str rhs in
-        let sym = ustring_of_var ~symbol:!enable_debug_symbol_print x s in
-        let info = info2str fi in
-        Printf.eprintf "%s:\t%s\t(%s)\n" (Ustring.to_utf8 sym)
-          (Ustring.to_utf8 shape) (Ustring.to_utf8 info) ) ;
+          let shape = shape_str rhs in
+          let sym = ustring_of_var ~symbol:!enable_debug_symbol_print x s in
+          let info = info2str fi in
+          Printf.eprintf "%s:\t%s\t(%s)\n" (Ustring.to_utf8 sym)
+            (Ustring.to_utf8 shape) (Ustring.to_utf8 info) ) ;
       TmConApp (fi, x, s, rhs)
   (* Match *)
   | TmMatch (fi, t1, p, t2, t3) -> (

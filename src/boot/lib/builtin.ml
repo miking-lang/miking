@@ -101,10 +101,10 @@ let builtin =
         ( NoInfo
         , argv_prog |> Mseq.Helpers.of_array
           |> Mseq.map (fun s ->
-                 TmSeq
-                   ( NoInfo
-                   , s |> us |> Mseq.Helpers.of_ustring
-                     |> Mseq.map (fun x -> TmConst (NoInfo, CChar x)) ) ) ) )
+              TmSeq
+                ( NoInfo
+                , s |> us |> Mseq.Helpers.of_ustring
+                  |> Mseq.map (fun x -> TmConst (NoInfo, CChar x)) ) ) ) )
   ; ("readFile", f CreadFile)
   ; ("writeFile", f (CwriteFile None))
   ; ("fileExists", f CfileExists)

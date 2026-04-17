@@ -143,7 +143,7 @@ let ustring_of_pat p =
         let ps =
           Record.bindings ps
           |> List.map (fun (label, p) ->
-                 pprint_label_str label ^. us " = " ^. ppp p )
+              pprint_label_str label ^. us " = " ^. ppp p )
           |> Ustring.concat (us ",")
         in
         us "{" ^. ps ^. us "}"

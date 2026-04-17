@@ -92,10 +92,12 @@ let set_array (s : 'a t) (idx : int) (v : 'a) : 'a t =
     match s with
     | Leaf a ->
         let a' = Array.copy a in
-        a'.(i) <- v ; Leaf a'
+        a'.(i) <- v ;
+        Leaf a'
     | Slice {v= value; off; len} ->
         let a' = Array.sub value off len in
-        a'.(i) <- v ; Leaf a'
+        a'.(i) <- v ;
+        Leaf a'
     | Concat {lhs; rhs; len} ->
         let n = _length_array lhs in
         if i < n then Concat {lhs= helper lhs i; rhs; len}

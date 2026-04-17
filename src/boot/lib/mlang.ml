@@ -945,7 +945,7 @@ let wrap_aliases : mlang_env -> lang_data -> tm -> tm =
   |> Seq.filter (fun (alias : alias_data) -> alias.def_here)
   |> List.of_seq
   |> List.sort (fun (a : alias_data) (b : alias_data) ->
-         Symb.compare a.id b.id )
+      Symb.compare a.id b.id )
   |> fun aliases -> List.fold_right wrap_alias aliases tm
 
 let wrap_cons : mlang_env -> lang_data -> tm -> tm =

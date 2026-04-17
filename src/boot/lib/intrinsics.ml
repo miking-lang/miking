@@ -514,12 +514,12 @@ module T = struct
       int Mseq.t =
     let el2str x = Mseq.Helpers.to_ustring (el2str x) in
     ( match t with
-    | TInt t' ->
-        Tensor.Uop_barray.to_ustring el2str t'
-    | TFloat t' ->
-        Tensor.Uop_barray.to_ustring el2str t'
-    | TGen t' ->
-        Tensor.Uop_generic.to_ustring el2str t' )
+      | TInt t' ->
+          Tensor.Uop_barray.to_ustring el2str t'
+      | TFloat t' ->
+          Tensor.Uop_barray.to_ustring el2str t'
+      | TGen t' ->
+          Tensor.Uop_generic.to_ustring el2str t' )
     |> Mseq.Helpers.of_ustring
 
   module Helpers = struct
@@ -704,7 +704,7 @@ module MSys = struct
   let argv =
     Sys.argv |> Mseq.Helpers.of_array
     |> Mseq.map (fun a ->
-           a |> Ustring.from_utf8 |> Ustring.to_uchars |> Mseq.Helpers.of_array )
+        a |> Ustring.from_utf8 |> Ustring.to_uchars |> Mseq.Helpers.of_array )
 
   let command s = Sys.command (s |> Mseq.Helpers.to_ustring |> Ustring.to_utf8)
 end

@@ -523,16 +523,16 @@ let smap_accum_left_tm_tm (f : 'a -> tm -> 'a * tm) (acc : 'a) : tm -> 'a * tm
       f acc t2
       |> fun (acc, t2') ->
       ( match tusing with
-      | Some tusing' ->
-          f acc tusing' |> fun (acc, tusing'') -> (acc, Some tusing'')
-      | None ->
-          (acc, tusing) )
+        | Some tusing' ->
+            f acc tusing' |> fun (acc, tusing'') -> (acc, Some tusing'')
+        | None ->
+            (acc, tusing) )
       |> fun (acc, tusing') ->
       ( match tonfail with
-      | Some tonfail' ->
-          f acc tonfail' |> fun (acc, tonfail'') -> (acc, Some tonfail'')
-      | None ->
-          (acc, tonfail) )
+        | Some tonfail' ->
+            f acc tonfail' |> fun (acc, tonfail'') -> (acc, Some tonfail'')
+        | None ->
+            (acc, tonfail) )
       |> fun (acc, onfail') ->
       f acc tnext
       |> fun (acc, tnext') ->
