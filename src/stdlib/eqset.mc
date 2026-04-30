@@ -1,83 +1,92 @@
--- A simple library that defines set operations over sequences.
+-- A simple library that defines set operations over sequences. Multiple
+-- occurances of an element, according to a provided equality function, in a
+-- sequence is considered a single element in the set. The time complexity of
+-- these operations are typically worse compared to `set.mc` so this library is
+-- mostly suitable for sets with small cardinality.
 
 include "seq.mc"
 
--- True if seq represents a set with equality defined by eq. Otherwise false.
-let eqsetIsSet = lam eq. lam seq.
-  eqi (length (distinct eq seq)) (length seq)
+-- `true` if `x` is a member of `xs`, where equality is defined by `eq`,
+-- otherwise `false`.
+let eqsetMem : all a. (a -> a -> Bool) -> a -> [a] -> Bool =
+  lam eq. lam x. lam xs.
+    any (eq x) xs
 
--- True if x is a member of seq, where equality is defined by eq. Otherwise
--- false.
-let eqsetMem = lam eq. lam x. lam seq.
-  any (eq x) seq
+utest eqsetMem eqi 1 [1,2,2] with true
+utest eqsetMem eqi 2 [1,2,2] with true
+utest eqsetMem eqi 3 [1,2,2] with false
 
--- True if seq1 is a subset or equal to seq2 as defined by eq. Otherwise false.
-let setIsSubsetEq = lam eq. lam seq1. lam seq2.
-  if gti (length seq1) (length seq1) then false
-  else forAll (lam x. eqsetMem eq x seq2) seq1
+-- The cardinality of the set `xs`, as defined by `eq`.
+let eqsetCardinality : all a. (a -> a -> Bool) -> [a] -> Int =
+  lam eq. lam xs.
+    length (distinct eq xs)
 
--- True if the seq1 and seq2 are of the same length and contains the same
--- elements as defined by eq. Otherwise false.
-let eqsetEqual = lam eq. lam seq1. lam seq2.
-  if neqi (length seq1) (length seq2) then false
-  else setIsSubsetEq eq seq1 seq2
+utest eqsetCardinality eqi [] with 0
+utest eqsetCardinality eqi [1,1,2] with 2
+utest eqsetCardinality eqi [1,1,3,2,1] with 3
 
--- The elements of seq1 that are not in seq2, where equality is defined by eq.
-let eqsetDiff = lam eq. lam seq1. lam seq2.
-  filter (lam x1. not (eqsetMem eq x1 seq2)) seq1
+-- `true` if `xs` is a subset of or equal to `ys` as defined by `eq`, otherwise
+-- `false`.
+let eqsetIsSubsetEq : all a. (a -> a -> Bool) -> [a] -> [a] -> Bool =
+  lam eq. lam xs. lam ys. forAll (lam x. eqsetMem eq x ys) xs
 
--- Inserts element x into seq if x not already in seq,
--- where equality is defined by eq.
-let eqsetInsert = lam eq. lam x. lam seq.
-  if eqsetMem eq x seq then seq else snoc seq x
+utest eqsetIsSubsetEq eqi [1,2] [1,2,1] with true
+utest eqsetIsSubsetEq eqi [2,1,2] [1,2] with true
+utest eqsetIsSubsetEq eqi [1,2] [1,2,3] with true
+utest eqsetIsSubsetEq eqi [1,2,3] [1,2] with false
+utest eqsetIsSubsetEq eqi [1,2] [1,3] with false
+utest eqsetIsSubsetEq eqi [1,3,1] [1,2,2] with false
 
--- The union of seq1 and seq2, where equality is defined by eq.
-let eqsetUnion = lam eq. lam seq1. lam seq2.
-  foldr (eqsetInsert eq) seq1 seq2
+-- `true` if `xs` and `ys` are of the same length and contains the same elements
+-- as defined by `eq`, otherwise `false`.
+let eqsetEqual : all a. (a -> a -> Bool) -> [a] -> [a] -> Bool =
+  lam eq. lam xs. lam ys.
+    and (eqsetIsSubsetEq eq xs ys) (eqsetIsSubsetEq eq ys xs)
 
-mexpr
+utest eqsetEqual eqi [1,2] [1,2] with true
+utest eqsetEqual eqi [2,1] [1,2,1] with true
+utest eqsetEqual eqi [1,2,2] [1,2,3] with false
+utest eqsetEqual eqi [1,2,3] [1,2] with false
+utest eqsetEqual eqi [1,2] [1,3] with false
+utest eqsetEqual eqi [1,3] [1,2] with false
 
-let equal = eqsetEqual eqi in
-let diff = eqsetDiff eqi in
-let add = eqsetInsert eqi in
-let union = eqsetUnion eqi in
-let mem = eqsetMem eqi in
-let isSubsetEq = setIsSubsetEq eqi in
+-- The elements of `xs` that are not in `ys`, where equality is defined by `eq`.
+let eqsetDiff : all a. (a -> a -> Bool) -> [a] -> [a] -> [a] =
+  lam eq. lam xs. lam ys.
+    filter (lam x. not (eqsetMem eq x ys)) xs
 
-utest eqsetIsSet eqi [1,2,3] with true in
-utest eqsetIsSet eqi [1,2,3,2] with false in
+utest eqsetEqual eqi (eqsetDiff eqi [1,2,2] [1,2]) [] with true
+utest eqsetEqual eqi (eqsetDiff eqi [1,1,2] [1,2,3,3]) [] with true
+utest eqsetEqual eqi (eqsetDiff eqi [1,2,3] [1,2]) [3] with true
+utest eqsetEqual eqi (eqsetDiff eqi [1,2,1] [3,1,3]) [2] with true
+utest eqsetEqual eqi (eqsetDiff eqi [1,3] [1,2]) [3] with true
 
-utest isSubsetEq [1,2] [1,2] with true in
-utest isSubsetEq [2,1] [1,2] with true in
-utest isSubsetEq [1,2] [1,2,3] with true in
-utest isSubsetEq [1,2,3] [1,2] with false in
-utest isSubsetEq [1,2] [1,3] with false in
-utest isSubsetEq [1,3] [1,2] with false in
+-- Inserts element `x` into `xs` if `x` not already in `xs`, where equality is
+-- defined by `eq`.
+let eqsetInsert : all a. (a -> a -> Bool) -> a -> [a] -> [a] =
+  lam eq. lam x. lam xs.
+    if eqsetMem eq x xs then xs else snoc xs x
 
-utest equal [1,2] [1,2] with true in
-utest equal [2,1] [1,2] with true in
-utest equal [1,2] [1,2,3] with false in
-utest equal [1,2,3] [1,2] with false in
-utest equal [1,2] [1,3] with false in
-utest equal [1,3] [1,2] with false in
+utest eqsetEqual eqi (eqsetInsert eqi 1 [1,2]) [1,2] with true
+utest eqsetEqual eqi (eqsetInsert eqi 2 [1,2]) [1,2] with true
+utest eqsetEqual eqi (eqsetInsert eqi 3 [1,2,2]) [1,2,3] with true
 
-utest equal (diff [1,2] [1,2]) [] with true in
-utest equal (diff [1,2] [1,2,3]) [] with true in
-utest equal (diff [1,2,3] [1,2]) [3] with true in
-utest equal (diff [1,2] [1,3]) [2] with true in
-utest equal (diff [1,3] [1,2]) [3] with true in
+-- The union of `xs` and `ys`, where equality is defined by `eq`.
+let eqsetUnion : all a. (a -> a -> Bool) -> [a] -> [a] -> [a] =
+  lam eq. lam xs. lam ys.
+    foldr (eqsetInsert eq) xs ys
 
-utest equal (add 1 [1,2]) [1,2] with true in
-utest equal (add 2 [1,2]) [1,2] with true in
-utest equal (add 3 [1,2]) [1,2,3] with true in
+utest eqsetEqual eqi (eqsetUnion eqi [1,2] [1,2]) [1,2] with true
+utest eqsetEqual eqi (eqsetUnion eqi [1,2,3] [1,2]) [1,2,3] with true
+utest eqsetEqual eqi (eqsetUnion eqi [1,2] [1,2,3]) [1,2,3] with true
+utest eqsetEqual eqi (eqsetUnion eqi [1,2,3] [1,2,2,4]) [1,2,3,4] with true
 
-utest equal (union [1,2] [1,2]) [1,2] with true in
-utest equal (union [1,2,3] [1,2]) [1,2,3] with true in
-utest equal (union [1,2] [1,2,3]) [1,2,3] with true in
-utest equal (union [1,2,3] [1,2,4]) [1,2,3,4] with true in
+-- The intersection of `xs` and `ys`, where equality is defined by `eq`.
+let eqsetIntersection : all a. (a -> a -> Bool) -> [a] -> [a] -> [a] =
+  lam eq. lam xs. lam ys.
+    filter (lam x. eqsetMem eq x ys) xs
 
-utest mem 1 [1,2] with true in
-utest mem 2 [1,2] with true in
-utest mem 3 [1,2] with false in
-
-()
+utest eqsetEqual eqi (eqsetIntersection eqi [1,2] [1,2]) [1,2] with true
+utest eqsetEqual eqi (eqsetIntersection eqi [1,2,3,3] [1,2,1]) [1,2] with true
+utest eqsetEqual eqi (eqsetIntersection eqi [1,2] [1,2,3]) [1,2] with true
+utest eqsetEqual eqi (eqsetIntersection eqi [1,2,3] [1,2,4,4]) [1,2] with true
