@@ -898,3 +898,28 @@ utest subseqReplace eqi [3,4,5] [42,42] [1,2,3,4,5,6,7] with [1,2,42,42,6,7]
 utest subseqReplace eqi [1,1] [100,101,100] [0,1,0,1,2,1,1,3,4,0,0,1,1,0,1,0] with [0,1,0,1,2,100,101,100,3,4,0,0,100,101,100,0,1,0]
 utest subseqReplace eqi [1,1] [2] [3,4,3] with [3,4,3]
 utest subseqReplace eqi [0,1,2] [88] [0,0,1,2,100,0,1] with [0,88,100,0,1]
+
+let subseqFindIdx : all a. (a -> a -> Bool) -> [a] -> [a] -> Option Int
+  = lam eq. lam check. lam seq.
+    if null check then Some 0 else
+    recursive let work = lam checkIdx. lam seqIdx.
+      if eqi checkIdx (length check) then
+        Some (subi seqIdx checkIdx)
+      else if eqi seqIdx (length seq) then
+        None ()
+      else
+        let eCheck = get check checkIdx in
+        let eSeq = get seq seqIdx in
+        if eq eCheck eSeq then
+          work (addi checkIdx 1) (addi seqIdx 1)
+        else
+          let seqIdx = subi seqIdx checkIdx in
+          work 0 (addi seqIdx 1)
+    in
+    work 0 0
+
+utest subseqFindIdx eqi [] [1,1] with Some 0
+utest subseqFindIdx eqi [1] [1,1] with Some 0
+utest subseqFindIdx eqi [2] [1,2] with Some 1
+utest subseqFindIdx eqi [1,2] [1,1,2] with Some 1
+utest subseqFindIdx eqi [1,2] [1,1] with None ()
