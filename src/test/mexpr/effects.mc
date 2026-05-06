@@ -3,6 +3,8 @@
 --
 -- Test different instrinsics with side effects
 
+include "sys.mc"
+
 mexpr
 
 
@@ -19,24 +21,25 @@ utest if false then dprint ["message\n","hi"] else () with () in
 -- 'writeFile fname s' writes a string 's' to a file named 'fname'.
 -- String -> String -> ()
 let str1 = "A unicode string.\n島" in
-let file = "_testfile" in
-writeFile file str1;
+sysWithTempDir (lam dir.
+  let file = concat dir "/_testfile" in
+  writeFile file str1;
 
 
--- 'readFile fname' reads a text file with filename 'fname' and returns a string
--- There is currently no error handling
-let str2 = readFile file in
-utest str1 with str2 in
+  -- 'readFile fname' reads a text file with filename 'fname' and returns a string
+  -- There is currently no error handling
+  let str2 = readFile file in
+  utest str1 with str2 in
 
 
--- 'fileExists fname' returns true if a file with name 'fname' exists, else false.
-utest fileExists file with true in
+  -- 'fileExists fname' returns true if a file with name 'fname' exists, else false.
+  utest fileExists file with true in
 
 
--- 'deleteFile fname' deletes a file with name 'fname'
-deleteFile file;
-utest fileExists file with false in
-
+  -- 'deleteFile fname' deletes a file with name 'fname'
+  deleteFile file;
+  utest fileExists file with false in
+  ());
 
 -- 'errors s' prints out an error and terminates the program.
 -- String -> ()
