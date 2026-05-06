@@ -473,7 +473,13 @@ lang TestSpec
     let keepGoing = if flags.keepGoing
       then " -k"
       else "" in
-    command (join ["exec tup", parallel, keepGoing, " ", formatTupFilter rules])
+    sysWithTempFile (lam file.
+      writeFile file (formatTupFilter rules);
+      -- NOTE(vipa, 2026-05-06): Something about the way OCaml's
+      -- Sys.command handles really, really long commands makes it
+      -- break to run `tup` directly. Putting the arguments in a file
+      -- and using xargs appears to work, however.
+      command (join ["xargs tup", parallel, keepGoing, " < ", file]))
 
   sem runStats : [Rule] -> [Rule] -> Int
   sem runStats selectedRules = | allRules ->
