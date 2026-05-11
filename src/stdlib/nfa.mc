@@ -63,7 +63,7 @@ let nfaOutStates : all v. all l. v -> NFA v l -> [v] = lam s. lam nfa.
 
 -- check that values are acceptable for the NFA
 let nfaCheckValues = lam trans. lam s. lam eqv. lam eql. lam accS. lam startS.
-  if not (setIsSubsetEq eqv accS s) then error "Some accepted states do not exist"
+  if not (eqsetIsSubsetEq eqv accS s) then error "Some accepted states do not exist"
   else if not (eqsetMem eqv startS s) then error "The start state does not exist"
   else ()
 
