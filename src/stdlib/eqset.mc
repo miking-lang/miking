@@ -4,11 +4,12 @@
 -- these operations are typically worse compared to `set.mc` so this library is
 -- mostly suitable for sets with small cardinality.
 
+include "common.mc"
 include "seq.mc"
 
 -- `true` if `x` is a member of `xs`, where equality is defined by `eq`,
 -- otherwise `false`.
-let eqsetMem : all a. (a -> a -> Bool) -> a -> [a] -> Bool =
+let eqsetMem : all a. all b. (a -> b -> Bool) -> a -> [b] -> Bool =
   lam eq. lam x. lam xs.
     any (eq x) xs
 
@@ -25,9 +26,9 @@ utest eqsetCardinality eqi [] with 0
 utest eqsetCardinality eqi [1,1,2] with 2
 utest eqsetCardinality eqi [1,1,3,2,1] with 3
 
--- `true` if `xs` is a subset of or equal to `ys` as defined by `eq`, otherwise
+-- `true` if the elements of `xs` are in `ys` as defined by `eq`, otherwise
 -- `false`.
-let eqsetIsSubsetEq : all a. (a -> a -> Bool) -> [a] -> [a] -> Bool =
+let eqsetIsSubsetEq : all a. all b. (a -> b -> Bool) -> [a] -> [b] -> Bool =
   lam eq. lam xs. lam ys. forAll (lam x. eqsetMem eq x ys) xs
 
 utest eqsetIsSubsetEq eqi [1,2] [1,2,1] with true
@@ -39,9 +40,9 @@ utest eqsetIsSubsetEq eqi [1,3,1] [1,2,2] with false
 
 -- `true` if `xs` and `ys` are of the same length and contains the same elements
 -- as defined by `eq`, otherwise `false`.
-let eqsetEqual : all a. (a -> a -> Bool) -> [a] -> [a] -> Bool =
+let eqsetEqual : all a. all b. (a -> b -> Bool) -> [a] -> [b] -> Bool =
   lam eq. lam xs. lam ys.
-    and (eqsetIsSubsetEq eq xs ys) (eqsetIsSubsetEq eq ys xs)
+    and (eqsetIsSubsetEq eq xs ys) (eqsetIsSubsetEq (flip eq) ys xs)
 
 utest eqsetEqual eqi [1,2] [1,2] with true
 utest eqsetEqual eqi [2,1] [1,2,1] with true
@@ -51,7 +52,7 @@ utest eqsetEqual eqi [1,2] [1,3] with false
 utest eqsetEqual eqi [1,3] [1,2] with false
 
 -- The elements of `xs` that are not in `ys`, where equality is defined by `eq`.
-let eqsetDiff : all a. (a -> a -> Bool) -> [a] -> [a] -> [a] =
+let eqsetDiff : all a. all b. (a -> b -> Bool) -> [a] -> [b] -> [a] =
   lam eq. lam xs. lam ys.
     filter (lam x. not (eqsetMem eq x ys)) xs
 
@@ -81,8 +82,8 @@ utest eqsetEqual eqi (eqsetUnion eqi [1,2,3] [1,2]) [1,2,3] with true
 utest eqsetEqual eqi (eqsetUnion eqi [1,2] [1,2,3]) [1,2,3] with true
 utest eqsetEqual eqi (eqsetUnion eqi [1,2,3] [1,2,2,4]) [1,2,3,4] with true
 
--- The intersection of `xs` and `ys`, where equality is defined by `eq`.
-let eqsetIntersection : all a. (a -> a -> Bool) -> [a] -> [a] -> [a] =
+-- The elements of `xs` that are in `ys`, where equality is defined by `eq`.
+let eqsetIntersection : all a. all b. (a -> b -> Bool) -> [a] -> [b] -> [a] =
   lam eq. lam xs. lam ys.
     filter (lam x. eqsetMem eq x ys) xs
 
