@@ -135,6 +135,14 @@ lang DataFreeNames = FreeNames + DataAst + DataDeclAst
     free
 end
 
+lang ExtFreeVars = FreeVars + ExtDeclAst
+  sem freeVarsExpr acc =
+  | TmDecl {decl = DeclExt x, inexpr = inexpr} ->
+    let free = freeVarsExpr acc inexpr in
+    let free = setRemove x.ident free in
+    free
+end
+
 lang ExtFreeNames = FreeNames + ExtDeclAst
   sem freeNamesExpr free =
   | TmDecl {decl = DeclExt x, inexpr = inexpr} ->
@@ -221,7 +229,7 @@ lang AllTypeFreeNames = FreeNames + AllTypeAst
 end
 
 lang MExprFreeVars =
-  VarFreeVars + LamFreeVars + LetFreeVars + RecLetsFreeVars + MatchFreeVars
+  VarFreeVars + LamFreeVars + LetFreeVars + RecLetsFreeVars + MatchFreeVars + ExtFreeVars
 end
 
 lang MExprFreeNames =
