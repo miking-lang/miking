@@ -3,8 +3,10 @@ include "mexpr/info.mc"
 include "mexpr/eq.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/boot-parser.mc"
+include "mexpr/json-debug.mc"
+include "json.mc"
 
-lang AstParser = Lexer
+lang AstParserBase = Lexer
   sem parseExpr: NextTokenResult -> (Expr, NextTokenResult)
   sem parseDecl: NextTokenResult -> (Decl, NextTokenResult)
   sem parseType: NextTokenResult -> (Type, NextTokenResult)
@@ -12,66 +14,131 @@ lang AstParser = Lexer
   sem parsePat:  NextTokenResult -> (Pat,  NextTokenResult)
 end
 
-lang IntParser = AstParser + IntAst
+lang IntParser = AstParserBase + IntAst
   sem parseExpr =
   | { token = IntTok { val = val, info = info }, stream = stream } ->
     let expr = TmConst {
       val = CInt { val = val },
-      ty = tyint_,
+      ty = ityunknown_ info,
       info = info
     } in
     (expr, nextToken stream)
 end
 
-lang BoolParser = AstParser + BoolAst
+lang FloatParser = AstParserBase + FloatAst
+  sem parseExpr =
+  | { token = FloatTok { val = val, info = info }, stream = stream } ->
+    let expr = TmConst {
+      val = CFloat { val = val },
+      ty = ityunknown_ info,
+      info = info
+    } in
+    (expr, nextToken stream)
+end
+
+lang NegParser = AstParserBase + IntAst + FloatAst
+  sem parseExpr =
+  | { token = OperatorTok { val = "-", info = info }, stream = stream } ->
+    match parseExpr (nextToken stream) with (expr, next) in
+    let val = switch expr
+      case TmConst { val = CInt { val = val } } then CInt { val = negi val }
+      case TmConst { val = CFloat { val = val } } then CFloat { val = negf val }
+    end in
+    let info = mergeInfo info (infoTm expr) in
+    let expr = TmConst {
+      val = val,
+      ty = ityunknown_ info,
+      info = info
+    } in
+    (expr, nextToken next.stream)
+end
+
+lang BoolParser = AstParserBase + BoolAst
   sem parseExpr =
   | { token = LIdentTok { val = "true", info = info}, stream = stream} ->
     let expr = TmConst {
       val = CBool { val = true },
-      ty = tybool_,
+      ty = ityunknown_ info,
       info = info
     } in
     (expr, nextToken stream)
   | { token = LIdentTok { val = "false", info = info}, stream = stream} ->
     let expr = TmConst {
       val = CBool { val = false },
-      ty = tybool_,
+      ty = ityunknown_ info,
       info = info
     } in
     (expr, nextToken stream)
 end
 
+lang CharParser = AstParserBase + CharAst
+  sem parseExpr =
+  | { token = CharTok { val = val, info = info }, stream = stream } ->
+    let expr = TmConst {
+      val = CChar { val = val },
+      ty = ityunknown_ info,
+      info = info
+    } in
+    (expr, nextToken stream)
+end
 
-lang TestParser = IntParser + BoolParser + MExprPrettyPrint + Eq end
+lang StringParser = AstParserBase + SeqAst + CharAst
+  sem parseExpr =
+  | { token = StringTok { val = val, info = info }, stream = stream } ->
+    let expr = TmSeq {
+      tms = [], -- TODO
+      ty = ityunknown_ info,
+      info = info
+    } in
+    (expr, nextToken stream)
+end
+
+lang NotImplementedParser = AstParserBase
+  sem parseExpr =
+  | { token = token } ->
+    let str = concat "Not implemented: " (tokToStr token) in
+    error str
+end
+
+lang AstParser = IntParser + FloatParser + BoolParser + CharParser + StringParser + NegParser end
+
+lang TestParser = AstParser + NotImplementedParser + MExprPrettyPrint + MExprEq + MExprToJson end
 
 mexpr
 
 use TestParser in
-
-let lex = lam str. nextToken {pos = initPos "test", str = str} in
-let parse = lam str. match parseExpr (lex str) with (expr, next) in expr in
-
-let expr = parse "5" in
-
-utest match expr with TmConst { val = CInt { val = val }} in val with 5 in
-utest match expr with TmConst { info = info} in info with infoVal "test" 1 0 1 1 in
-
-match parseExpr (lex "true") with (expr, next) in
-utest match expr with TmConst { val = CBool { val = val }} in val with true in
-
-match parseExpr (lex "false") with (expr, next) in
-utest match expr with TmConst { val = CBool { val = val }} in val with false in
-
-
 use BootParser in
+
+let lex = lam str. nextToken {pos = initPos "internal", str = str} in
+let parse = lam str. match parseExpr (lex str) with (expr, next) in expr in
 
 let bootArg = _defaultBootParserParseMExprStringArg () in
 let parseBoot = lam str.
   match parseMExprString bootArg str with (ResultOk { value = bootExpr}) in bootExpr in
 
-let expr = parse "5" in
-let bootExpr = parseBoot "5" in
+let jsonStr = lam expr. json2string (exprToJson expr) in
 
-utest expr with bootExpr using eqExpr in
+-- let compare = lam str. eqExpr (parse str) (parseBoot str) in
+let compare = lam str. eqString (jsonStr (parse str)) (jsonStr (parseBoot str)) in
+
+let printAst = lam expr. printLn (jsonStr expr) in
+
+-- printAst (parseBoot "\"test\"");
+
+utest compare "0" with true in
+utest compare "1" with true in
+utest compare "-1" with true in
+
+utest compare "0.0" with true in
+utest compare "1.0" with true in
+utest compare "-1.0" with true in
+
+utest compare "true" with true in
+utest compare "false" with true in
+
+utest compare "'a'" with true in
+utest compare "'😊'" with true in
+
+utest compare "\"test\"" with true in
 
 ()
