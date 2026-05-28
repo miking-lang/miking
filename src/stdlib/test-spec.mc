@@ -523,7 +523,7 @@ lang TestSpec
       else printWatchList in
     let runEntr =
       let args = filter (lam str. not (eqString "--watch" str)) (tail argv) in
-      join ["entr -rccdd ", sysShellQuote (head argv), " ", strJoin " " (map sysShellQuote args)] in
+      join ["entr -rccd ", sysShellQuote (head argv), " ", strJoin " " (map sysShellQuote args)] in
     let cmd = join ["set -o pipefail; { ", printWatchList, "; } | ", runEntr] in
     recursive let work = lam.
       -- NOTE(vipa, 2026-04-10): 'entr' will exit with '2' if a new
