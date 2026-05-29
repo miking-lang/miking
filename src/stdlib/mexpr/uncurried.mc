@@ -84,6 +84,39 @@ lang UncurriedAst = Ast
     (acc, TyUncurriedArrow {x with positional = positional, ret = ret})
 end
 
+lang UncurriedToJson = AstToJson + UncurriedAst
+  sem exprToJson =
+  | TmUncurriedApp x -> JsonObject (mapFromSeq cmpString
+    [ ("con", JsonString "TmUncurriedApp")
+    , ("positional", JsonArray (map exprToJson x.positional))
+    , ("ty", typeToJson x.ty)
+    , ("info", infoToJson x.info)
+    ] )
+  | TmUncurriedLam x -> JsonObject (mapFromSeq cmpString
+    [ ("con", JsonString "TmUncurriedLam")
+    , ( "positional"
+      , let f = lam x. JsonObject (mapFromSeq cmpString
+          [ ("ident", nameToJson x.ident)
+          , ("tyAnnot", typeToJson x.tyAnnot)
+          , ("tyParam", typeToJson x.tyParam)
+          , ("info", infoToJson x.info)
+          ] ) in
+        JsonArray (map f x.positional)
+      )
+    , ("body", exprToJson x.body)
+    , ("ty", typeToJson x.ty)
+    , ("info", infoToJson x.info)
+    ] )
+
+  sem typeToJson =
+  | TyUncurriedArrow x -> JsonObject (mapFromSeq cmpString
+    [ ("con", JsonString "TyUncurriedArrow")
+    , ("positional", JsonArray (map typeToJson x.positional))
+    , ("ret", typeToJson x.ret)
+    , ("info", infoToJson x.info)
+    ] )
+end
+
 lang LowerUncurried = UncurriedAst + LamAst + OpaqueAst
   sem lowerUncurried : Expr -> Expr
   sem lowerUncurried =

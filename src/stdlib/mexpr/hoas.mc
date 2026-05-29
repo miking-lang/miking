@@ -22,8 +22,9 @@
 
 include "mexpr/ast.mc"
 include "mexpr/pprint.mc"
+include "mexpr/json-debug.mc"
 
-lang TempLamAst = Ast + PrettyPrint + OpaqueAst
+lang TempLamAst = Ast + PrettyPrint + AstToJson + OpaqueAst
   type TempFixRec =
     { canMakeProgress : Expr -> Bool
     , f : (Expr -> Expr) -> Expr -> Expr
@@ -64,6 +65,28 @@ lang TempLamAst = Ast + PrettyPrint + OpaqueAst
     ( env
     , join ["/-temp-/recursive let ", fStr, " = lam ", xStr, ".", pprintNewline (pprintIncr indent), body, " in ", fStr]
     )
+
+  sem exprToJson =
+  | TempLam f ->
+    let x = nameSym "x" in
+    JsonObject (mapFromSeq cmpString
+    [ ("con", JsonString "TempLam")
+    , ("ident", nameToJson x)
+    , ("body", exprToJson (f.f (nvar_ x)))
+    , ("ty", typeToJson f.ty)
+    , ("info", infoToJson f.info)
+    ] )
+  | TempFix f ->
+    let x = nameSym "x" in
+    let fName = nameSym "f" in
+    JsonObject (mapFromSeq cmpString
+    [ ("con", JsonString "TempFix")
+    , ("recursionName", nameToJson fName)
+    , ("ident", nameToJson x)
+    , ("body", exprToJson (f.f (app_ (nvar_ fName)) (nvar_ x)))
+    , ("ty", typeToJson f.ty)
+    , ("info", infoToJson f.info)
+    ] )
 
   sem stripTempLam : Expr -> Expr
   sem stripTempLam = | tm -> _stripTempLam ([], tm)
