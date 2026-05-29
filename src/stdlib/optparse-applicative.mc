@@ -534,26 +534,65 @@ con OptParseOk : all a. a -> OptParseResult a
 con OptParseMissing : all a. OptMissing -> OptParseResult a
 con OptParseError : all a. String -> OptParseResult a
 
+let _optComputeError : all a. OptParseMode -> OptParser a -> {full : [String], preFailArg : String, preFailArgs : [String], preFailMode : OptParseMode} -> String
+  = lam initMode. lam p. lam input.
+    switch _optStepParser input.preFailMode input.preFailArg input.preFailArgs  p
+    case (_, PSRNotFound _) then join ["Unexpected argument '", input.preFailArg, "'"]
+    case (_, PSRError err) then err
+    case (_, PSROk (args, _)) then
+      recursive let tokenize = lam tokens. lam mode. lam rest.
+        match rest with [arg] ++ args then
+          match _optStepParser mode arg args p with (mode, PSROk (args, _))
+          then tokenize (snoc tokens (splitAt rest (subi (length rest) (length args))).0) mode args
+          else error "Compiler error: failed to parse option even though it worked before"
+        else tokens in
+      recursive let isFinalNotFound = lam mode. lam tokens. lam p.
+        match tokens with [[arg] ++ args] ++ tokens then
+          switch _optStepParser mode arg args p
+          case (mode, PSROk ([], p)) then isFinalNotFound mode tokens p
+          case (_, PSROk _) then error "Compiler error: _optStepParser didn't consume all args of token"
+          case (_, PSRNotFound _) then null tokens
+          case _ then false
+          end
+        else false in
+      recursive let shrink = lam prefix. lam postfix.
+        match prefix with prefix ++ [here] then
+          if isFinalNotFound initMode (concat prefix postfix) p
+          then shrink prefix postfix
+          else shrink prefix (cons here postfix)
+        else postfix in
+      let faultyPrefix = (splitAt input.full (subi (length input.full) (length args))).0 in
+      match tokenize [] initMode faultyPrefix with tokens ++ [failingToken] in
+      match shrink tokens [failingToken] with prefix ++ [failingToken] in
+      let tokToStr = lam token.
+        let argToStr = lam str.
+          let content = join (map escapeChar str) in
+          if any isWhitespace str
+          then cons '"' (snoc content '"')
+          else content in
+        strJoin " " (map argToStr token) in
+      let quote = lam str.
+        match str with ['"'] ++ _ ++ ['"']
+        then str
+        else snoc (cons '\'' str) '\'' in
+      join ["Unexpected argument: ", quote (tokToStr failingToken), " is not valid after ", quote (strJoin " " (map tokToStr prefix))]
+    end
+
 let optParse
   : all a. all w. OptParser a -> [String] -> Either String a
-  = lam p. lam args.
+  = lam initialP. lam initialArgs.
     recursive let work = lam mode. lam args. lam p.
       match args with [arg] ++ args then
-        switch _optStepParser mode arg args p
-        case (mode, PSROk (args, p)) then
-          work mode args p
-        case (_, PSRNotFound _) then
-          Left (join ["Unexpected argument '", arg, "'"])
-        case (_, PSRError err) then
-          Left err
-        end
+        match _optStepParser mode arg args p with (mode, PSROk (args, p))
+        then work mode args p
+        else Left (_optComputeError (OPMBoth ()) initialP {full = initialArgs, preFailArg = arg, preFailArgs = args, preFailMode = mode})
       else switch optParserEval p
         case Left missing then
           Left (concat "Missing argument(s):\n" (_optMissingToString missing))
         case Right a then
           Right a
         end
-    in work (OPMBoth ()) args p
+    in work (OPMBoth ()) initialArgs initialP
 
 type DescTree
 type OptDesc = {shortForm : String, description : String, category : String}
@@ -851,7 +890,7 @@ utest test ["--thing", "42.7", "--shared", "7", "--no"]
 with Right ((Ex2 {opt2 = 1, shared = 7}), 42.7, "", 0) in
 
 utest test ["--shared", "7", "--no", "--opt1"]
-with Left "Unexpected argument '--opt1'" in
+with Left "Unexpected argument: '--opt1' is not valid after '--no'" in
 
 let helpText = strJoin "\n"
   [ "test --shared INT [--opt1] [--extra] --thing FLOAT [--verbose]..."
