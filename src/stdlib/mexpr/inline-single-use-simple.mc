@@ -78,6 +78,12 @@ lang InlineSingleUse = DeclAst + LetDeclAst + RecLetsDeclAst + VarAst + TempLamA
     ({st with useCounts = mapInsertWith addi x.ident 1 st.useCounts}, tm)
   | tm -> smapAccumL_Expr_Expr collectSingleUses st tm
 
+  sem isSimpleInline : Expr -> Bool
+  sem isSimpleInline =
+  | TmConst _ -> true
+  | TmVar _ -> true
+  | _ -> false
+
   sem mkInlineable : Map Name Int -> Expr -> InlineMap -> Expr
   sem mkInlineable useCounts =
   | TmLam x ->
@@ -93,8 +99,7 @@ lang InlineSingleUse = DeclAst + LetDeclAst + RecLetsDeclAst + VarAst + TempLamA
       TempLam {f = f, info = x.info, ty = x.ty}
     case _ then lam st.
       let f = lam arg.
-        let isSimple = sfold_Expr_Expr (lam. lam. false) true arg in
-        if isSimple then
+        if isSimpleInline arg then
           match st with InlineMap toInline in
           let toInline = mapInsert x.ident (lam. arg) toInline in
           mkInlineable useCounts x.body (InlineMap toInline)
