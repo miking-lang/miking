@@ -433,11 +433,15 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst + OCamlTopGenerate
     -- lost at this stage, but the pattern contains the correct type
     -- information.
     let ty = unwrapType (tyPat t.pat) in
-    match ty with TyCon {ident = ident} then
+    switch ty
+    case TyCon {ident = ident} then
       match mapLookup ident env.variants with Some constrs then
         eqi (length arms) (mapSize constrs)
       else errorSingle [infoPat t.pat] "env.variants lookup failed"
-    else errorSingle [infoPat t.pat] "expected TyCon"
+    case TyUnknown _ then
+      warnSingle [infoPat t.pat] "Compiler warning: this pattern should have a TyCon attached, but had TyUnknown"; false
+    case _ then errorSingle [infoPat t.pat] "expected TyCon or TyUnknown"
+    end
 
   sem casesReferToDefault : GenerateEnv -> Name -> [(Pat, Expr)] -> Bool
   sem casesReferToDefault env id =
