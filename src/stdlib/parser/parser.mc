@@ -14,11 +14,14 @@ con OpNeg: all self. self -> BreakableOp LClosed ROpen
 
 lang AstParserBase = Lexer
   sem config: () -> Config BreakableOp
+
   sem topAllowed: TopAllowedFunc BreakableOp
   sem leftAllowed: LeftAllowedFunc BreakableOp
   sem rightAllowed: RightAllowedFunc BreakableOp
   sem parenAllowed: ParenAllowedFunc BreakableOp
   sem groupingsAllowed: GroupingsAllowedFunc BreakableOp
+
+  sem constructPrefix: BreakableOp LClosed ROpen -> Expr -> Expr
 
   sem parseExpr: NextTokenResult -> (Expr, NextTokenResult)
   sem parseExprRClosed : State BreakableOp RClosed -> NextTokenResult -> (Expr, NextTokenResult)
@@ -32,11 +35,12 @@ lang AstParserBase = Lexer
 
   sem config =
   | _ ->
-    { topAllowed = #frozen"topAllowed"
-    , leftAllowed = #frozen"leftAllowed"
-    , rightAllowed = #frozen"rightAllowed"
-    , parenAllowed = #frozen"parenAllowed"
-    , groupingsAllowed = #frozen"groupingsAllowed"
+    {
+      topAllowed = #frozen"topAllowed",
+      leftAllowed = #frozen"leftAllowed",
+      rightAllowed = #frozen"rightAllowed",
+      parenAllowed = #frozen"parenAllowed",
+      groupingsAllowed = #frozen"groupingsAllowed"
     }
 
   sem topAllowed =
@@ -70,7 +74,7 @@ lang AstParserBase = Lexer
       let expr = breakableConstructSimple {
         constructAtom = lam op. match op with OpAtom expr in expr,
         constructInfix = lam op. lam l. never,
-        constructPrefix = lam op. lam r. never,
+        constructPrefix = constructPrefix,
         constructPostfix = lam op. lam l. never
       } sppf in
       (expr, next)
@@ -101,32 +105,41 @@ lang FloatParser = AstParserBase + FloatAst
     parseExprRClosed state (nextToken stream)
 end
 
-lang NegParser = AstParserBase + IntAst + FloatAst
+lang NegParser = AstParserBase + ArithIntAst + ArithFloatAst + AppAst
   sem parseExprROpen state =
   | { token = OperatorTok { val = "-", info = info }, stream = stream } ->
-    match parseExpr (nextToken stream) with (expr, next) in
-    switch expr
-      case TmConst { val = CInt { val = val } } then
-        let info = mergeInfo info (infoTm expr) in
-        let expr = TmConst {
+    let state = breakableAddPrefix (config ()) (OpNeg info) state in
+    parseExprROpen state (nextToken stream)
+
+  sem constructPrefix =
+  | OpNeg info -> lam r.
+    switch r
+      case TmConst { val = CInt { val = val }, info = info2 } then
+        let info = mergeInfo info info2 in
+        TmConst {
           val = CInt { val = negi val },
           ty = ityunknown_ info,
           info = info
-        } in
-        let state = breakableAddAtom (config ()) (OpAtom expr) state in
-        parseExprRClosed state (nextToken stream)
-      case TmConst { val = CFloat { val = val } } then
-        let info = mergeInfo info (infoTm expr) in
-        let expr = TmConst {
+        }
+      case TmConst { val = CFloat { val = val }, info = info2 } then
+        let info = mergeInfo info info2 in
+        TmConst {
           val = CFloat { val = negf val },
           ty = ityunknown_ info,
           info = info
-        } in
-        let state = breakableAddAtom (config ()) (OpAtom expr) state in
-        parseExprRClosed state (nextToken stream)
-      case _ then
-        let state = breakableAddPrefix (config ()) (OpNeg info) state in
-        parseExprROpen state (nextToken stream)
+        }
+      case expr then
+        let info2 = mergeInfo info (infoTm expr) in
+        TmApp {
+          lhs = TmConst {
+            val = CNegi {},
+            ty = ityunknown_ info,
+            info = info
+          },
+          rhs = expr,
+          ty = ityunknown_ info2,
+          info = info2
+        }
     end
 end
 
