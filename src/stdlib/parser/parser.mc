@@ -7,10 +7,12 @@ include "mexpr/json-debug.mc"
 include "json.mc"
 include "seq.mc"
 include "parser/breakable.mc"
+include "name.mc"
 
 type BreakableOp lstyle rstyle
-con OpAtom: all self. self -> BreakableOp LClosed RClosed
-con OpNeg: all self. self -> BreakableOp LClosed ROpen
+con OpAtom: use Ast in Expr -> BreakableOp LClosed RClosed
+con OpNeg: Info -> BreakableOp LClosed ROpen
+con OpApp: Info -> BreakableOp LClosed ROpen
 
 lang AstParserBase = Lexer
   sem config: () -> Config BreakableOp
@@ -21,7 +23,7 @@ lang AstParserBase = Lexer
   sem parenAllowed: ParenAllowedFunc BreakableOp
   sem groupingsAllowed: GroupingsAllowedFunc BreakableOp
 
-  sem constructPrefix: BreakableOp LClosed ROpen -> Expr -> Expr
+  sem constructPrefix: (BreakableOp LClosed ROpen, Expr) -> Expr
 
   sem parseExpr: NextTokenResult -> (Expr, NextTokenResult)
   sem parseExprRClosed : State BreakableOp RClosed -> NextTokenResult -> (Expr, NextTokenResult)
@@ -74,7 +76,7 @@ lang AstParserBase = Lexer
       let expr = breakableConstructSimple {
         constructAtom = lam op. match op with OpAtom expr in expr,
         constructInfix = lam op. lam l. never,
-        constructPrefix = constructPrefix,
+        constructPrefix = lam op. lam rhs. constructPrefix (op, rhs),
         constructPostfix = lam op. lam l. never
       } sppf in
       (expr, next)
@@ -112,35 +114,47 @@ lang NegParser = AstParserBase + ArithIntAst + ArithFloatAst + AppAst
     parseExprROpen state (nextToken stream)
 
   sem constructPrefix =
-  | OpNeg info -> lam r.
-    switch r
-      case TmConst { val = CInt { val = val }, info = info2 } then
-        let info = mergeInfo info info2 in
-        TmConst {
-          val = CInt { val = negi val },
-          ty = ityunknown_ info,
-          info = info
-        }
-      case TmConst { val = CFloat { val = val }, info = info2 } then
-        let info = mergeInfo info info2 in
-        TmConst {
-          val = CFloat { val = negf val },
-          ty = ityunknown_ info,
-          info = info
-        }
-      case expr then
-        let info2 = mergeInfo info (infoTm expr) in
-        TmApp {
-          lhs = TmConst {
-            val = CNegi {},
-            ty = ityunknown_ info,
-            info = info
-          },
-          rhs = expr,
-          ty = ityunknown_ info2,
-          info = info2
-        }
-    end
+  | (OpNeg info, TmConst { val = CInt { val = val }, info = info2 }) ->
+    let info = mergeInfo info info2 in
+    TmConst {
+      val = CInt { val = negi val },
+      ty = ityunknown_ info,
+      info = info
+    }
+
+  | (OpNeg info, TmConst { val = CFloat { val = val }, info = info2 }) ->
+    let info = mergeInfo info info2 in
+    TmConst {
+      val = CFloat { val = negf val },
+      ty = ityunknown_ info,
+      info = info
+    }
+
+  | (OpNeg info, rhs) ->
+    let info2 = mergeInfo info (infoTm rhs) in
+    TmApp {
+      lhs = TmConst {
+        val = CNegi {},
+        ty = ityunknown_ info,
+        info = info
+      },
+      rhs = rhs,
+      ty = ityunknown_ info2,
+      info = info2
+    }
+end
+
+lang VarParser = AstParserBase + VarAst
+  sem parseExprROpen state =
+  | { token = LIdentTok { val = val, info = info }, stream = stream } ->
+    let expr = TmVar {
+      ident = nameNoSym val,
+      ty = ityunknown_ info,
+      info = info,
+      frozen = false -- TODO
+    } in
+    let state = breakableAddAtom (config ()) (OpAtom expr) state in
+    parseExprRClosed state (nextToken stream)
 end
 
 lang BoolParser = AstParserBase + BoolAst
@@ -205,6 +219,7 @@ lang AstParser =
   + CharParser
   + StringParser
   + NegParser
+  + VarParser
 end
 
 lang TestParser =
@@ -223,7 +238,7 @@ use BootParser in
 let lex = lam str. nextToken {pos = initPos "internal", str = str} in
 let parse = lam str. match parseExpr (lex str) with (expr, next) in expr in
 
-let bootArg = _defaultBootParserParseMExprStringArg () in
+let bootArg = { _defaultBootParserParseMExprStringArg () with builtin = [] } in
 let parseBoot = lam str.
   match parseMExprString bootArg str with (ResultOk { value = bootExpr}) in bootExpr in
 
@@ -234,7 +249,9 @@ let compare = lam str. eqString (jsonStr (parse str)) (jsonStr (parseBoot str)) 
 
 let printAst = lam expr. printLn (jsonStr expr) in
 
--- printAst (parseBoot "\"test\"");
+-- printLn "";
+-- printAst (parseBoot "addi 1 2");
+-- printAst (parse "addi 1 2");
 
 utest compare "0" with true in
 utest compare "1" with true in
@@ -251,5 +268,7 @@ utest compare "'a'" with true in
 utest compare "'😊'" with true in
 
 utest compare "\"test\"" with true in
+
+utest compare "addi 1 2" with true in
 
 ()
