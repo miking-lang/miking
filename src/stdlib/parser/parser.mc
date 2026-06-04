@@ -5,6 +5,7 @@ include "mexpr/ast-builder.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/json-debug.mc"
 include "json.mc"
+include "seq.mc"
 
 lang AstParserBase = Lexer
   sem parseExpr: NextTokenResult -> (Expr, NextTokenResult)
@@ -86,7 +87,11 @@ lang StringParser = AstParserBase + SeqAst + CharAst
   sem parseExpr =
   | { token = StringTok { val = val, info = info }, stream = stream } ->
     let expr = TmSeq {
-      tms = [], -- TODO
+      tms = map (lam ch. TmConst {
+        val = CChar { val = ch },
+        ty = ityunknown_ info,
+        info = info
+      }) val,
       ty = ityunknown_ info,
       info = info
     } in
