@@ -27,10 +27,10 @@ con OpAtom: use Ast in Expr -> BreakableOp LClosed RClosed
 con OpNeg: Info -> BreakableOp LClosed ROpen
 con OpApp: Info -> BreakableOp LOpen ROpen
 
-type ParseResult w a = Result w (Info, String) a
+type ParseResult w a = Result w [(Info, String)] a
 
 let parseOk:  all w. all a. a              -> ParseResult w a = lam a. result.ok a
-let parseErr: all w. all a. (Info, String) -> ParseResult w a = lam e. result.err e
+let parseErr: all w. all a. [(Info, String)] -> ParseResult w a = lam e. result.err e
 
 lang AstParserBase = Lexer + Ast
   -- breakable related stuff
@@ -118,7 +118,7 @@ lang AstParserBase = Lexer + Ast
       } in
       let errs = breakableDefaultHighlight config next.stream.str sppf in
       match errs with [first] ++ _ then
-        parseErr first -- TODO: Report all errs
+        parseErr errs -- TODO: Report all errs
       else
         let expr = breakableConstructSimple {
           constructAtom = lam op. match op with OpAtom expr in expr,
@@ -128,7 +128,7 @@ lang AstParserBase = Lexer + Ast
         } sppf in
         parseOk (expr, next)
     else
-      parseErr (next.info, "Breakable parse error")
+      parseErr [(next.info, "Breakable parse error")]
 end
 
 lang IntParser = AstParserBase + IntAst
@@ -215,7 +215,7 @@ lang AppParser = AstParserBase + AppAst
       match breakableAddInfix (config ()) (OpApp info) state with Some(state) then
         parseExprROpen state next
       else
-        parseErr (info, "Breakable add infix error")
+        parseErr [(info, "Breakable add infix error")]
     else
       finalizeParseExpr state next
 
@@ -244,7 +244,7 @@ lang ParenParser = AstParserBase
         let state = breakableAddAtom (config ()) (OpAtom expr) state in
         parseExprRClosed state (nextToken stream)
       else
-        parseErr (next.info, "Missing closing parenthesis")
+        parseErr [(next.info, "Missing closing parenthesis")]
     )
 end
 
@@ -300,7 +300,7 @@ lang NotImplementedParser = AstParserBase
   sem parseExprROpen state =
   | next ->
     let str = concat "Not implemented: " (tokToStr next.token) in
-    parseErr (next.info, str)
+    parseErr [(next.info, str)]
 end
 
 lang AstParser =
