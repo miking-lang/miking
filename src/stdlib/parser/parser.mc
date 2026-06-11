@@ -14,6 +14,11 @@ con OpAtom: use Ast in Expr -> BreakableOp LClosed RClosed
 con OpNeg: Info -> BreakableOp LClosed ROpen
 con OpApp: Info -> BreakableOp LOpen ROpen
 
+type ParseResult a = Result (Info, String) (Info, String) a
+
+let parseOk:  all a. a              -> ParseResult a = lam a. result.ok a
+let parseErr: all a. (Info, String) -> ParseResult a = lam e. result.err e
+
 lang AstParserBase = Lexer
   sem config: () -> Config BreakableOp
 
@@ -29,15 +34,15 @@ lang AstParserBase = Lexer
 
   sem canStartExpr: NextTokenResult -> Bool
 
-  sem parseExpr: NextTokenResult -> (Expr, NextTokenResult)
-  sem parseExprRClosed : State BreakableOp RClosed -> NextTokenResult -> (Expr, NextTokenResult)
-  sem parseExprROpen : State BreakableOp ROpen -> NextTokenResult -> (Expr, NextTokenResult)
-  sem finalizeParseExpr : State BreakableOp RClosed -> NextTokenResult -> (Expr, NextTokenResult)
+  sem parseExpr: NextTokenResult -> ParseResult (Expr, NextTokenResult)
+  sem parseExprRClosed:  State BreakableOp RClosed -> NextTokenResult -> ParseResult (Expr, NextTokenResult)
+  sem parseExprROpen:    State BreakableOp ROpen   -> NextTokenResult -> ParseResult (Expr, NextTokenResult)
+  sem finalizeParseExpr: State BreakableOp RClosed -> NextTokenResult -> ParseResult (Expr, NextTokenResult)
 
-  sem parseDecl: NextTokenResult -> (Decl, NextTokenResult)
-  sem parseType: NextTokenResult -> (Type, NextTokenResult)
-  sem parseKind: NextTokenResult -> (Kind, NextTokenResult)
-  sem parsePat:  NextTokenResult -> (Pat,  NextTokenResult)
+  sem parseDecl: NextTokenResult -> ParseResult (Decl, NextTokenResult)
+  sem parseType: NextTokenResult -> ParseResult (Type, NextTokenResult)
+  sem parseKind: NextTokenResult -> ParseResult (Kind, NextTokenResult)
+  sem parsePat:  NextTokenResult -> ParseResult (Pat,  NextTokenResult)
 
   sem config =
   | _ ->
@@ -87,8 +92,9 @@ lang AstParserBase = Lexer
         constructPrefix = lam op. lam rhs. constructPrefix (op, rhs),
         constructPostfix = lam op. lam lhs. constructPostfix (op, lhs)
       } sppf in
-      (expr, next)
-    else error "Breakable parse error"
+      parseOk (expr, next)
+    else
+      parseErr (next.info, "Breakable parse error")
 end
 
 lang IntParser = AstParserBase + IntAst
@@ -172,7 +178,7 @@ lang AppParser = AstParserBase + AppAst
       match breakableAddInfix (config ()) (OpApp info) state with Some(state) then
         parseExprROpen state next
       else
-        error "Breakable add infix error"
+        parseErr (info, "Breakable add infix error")
     else
       finalizeParseExpr state next
 
@@ -193,12 +199,14 @@ lang ParenParser = AstParserBase
 
   sem parseExprROpen state =
   | { token = LParenTok {}, stream = stream } ->
-    match parseExpr (nextToken stream) with (expr, next) in
-    match next with { token = RParenTok {}, stream = stream } then
-      let state = breakableAddAtom (config ()) (OpAtom expr) state in
-      parseExprRClosed state (nextToken stream)
-    else
-      error "Missing closing parenthesis"
+    result.bind (parseExpr (nextToken stream)) (lam a.
+      match a with (expr, next) in
+      match next with { token = RParenTok {}, stream = stream } then
+        let state = breakableAddAtom (config ()) (OpAtom expr) state in
+        parseExprRClosed state (nextToken stream)
+      else
+        parseErr (next.info, "Missing closing parenthesis")
+    )
 end
 
 lang BoolParser = AstParserBase + BoolAst
@@ -251,9 +259,9 @@ end
 
 lang NotImplementedParser = AstParserBase
   sem parseExprROpen state =
-  | { token = token } ->
-    let str = concat "Not implemented: " (tokToStr token) in
-    error str
+  | next ->
+    let str = concat "Not implemented: " (tokToStr next.token) in
+    parseErr (next.info, str)
 end
 
 lang AstParser =
@@ -282,16 +290,22 @@ use TestParser in
 use BootParser in
 
 let lex = lam str. nextToken {pos = initPos "internal", str = str} in
-let parse = lam str. match parseExpr (lex str) with (expr, next) in expr in
+let parse = lam str. result.map (lam a. a.0) (parseExpr (lex str)) in
 
 let bootArg = { _defaultBootParserParseMExprStringArg () with builtin = [] } in
-let parseBoot = lam str.
-  match parseMExprString bootArg str with (ResultOk { value = bootExpr}) in bootExpr in
+let parseBoot = lam str. parseMExprString bootArg str in
 
 let jsonStr = lam expr. json2string (exprToJson expr) in
 
--- let compare = lam str. eqExpr (parse str) (parseBoot str) in -- does not compare info
-let compare = lam str. eqString (jsonStr (parse str)) (jsonStr (parseBoot str)) in -- compares info
+let compare = lam str.
+  let a = parse str in
+  let b = parseBoot str in
+
+  match (result.toOption a, result.toOption b) with (Some a, Some b) then
+    eqString (jsonStr a) (jsonStr b)
+  else
+    false
+  in
 
 let printAst = lam expr. printLn (jsonStr expr) in
 
