@@ -12,7 +12,7 @@ include "name.mc"
 type BreakableOp lstyle rstyle
 con OpAtom: use Ast in Expr -> BreakableOp LClosed RClosed
 con OpNeg: Info -> BreakableOp LClosed ROpen
-con OpApp: Info -> BreakableOp LClosed ROpen
+con OpApp: Info -> BreakableOp LOpen ROpen
 
 lang AstParserBase = Lexer
   sem config: () -> Config BreakableOp
@@ -24,6 +24,10 @@ lang AstParserBase = Lexer
   sem groupingsAllowed: GroupingsAllowedFunc BreakableOp
 
   sem constructPrefix: (BreakableOp LClosed ROpen, Expr) -> Expr
+  sem constructInfix: (BreakableOp LOpen ROpen, Expr, Expr) -> Expr
+  sem constructPostfix: (BreakableOp LOpen RClosed, Expr) -> Expr
+
+  sem canStartExpr: NextTokenResult -> Bool
 
   sem parseExpr: NextTokenResult -> (Expr, NextTokenResult)
   sem parseExprRClosed : State BreakableOp RClosed -> NextTokenResult -> (Expr, NextTokenResult)
@@ -60,6 +64,10 @@ lang AstParserBase = Lexer
   sem groupingsAllowed =
   | _ -> GLeft ()
 
+  sem canStartExpr =
+  | { token = EOFTok {} } -> false
+  | _ -> true
+
   sem parseExpr =
   | next ->
     let state = breakableInitState () in
@@ -75,9 +83,9 @@ lang AstParserBase = Lexer
       -- breakableReportAmbiguities ?
       let expr = breakableConstructSimple {
         constructAtom = lam op. match op with OpAtom expr in expr,
-        constructInfix = lam op. lam l. never,
+        constructInfix = lam op. lam lhs. lam rhs. constructInfix (op, lhs, rhs),
         constructPrefix = lam op. lam rhs. constructPrefix (op, rhs),
-        constructPostfix = lam op. lam l. never
+        constructPostfix = lam op. lam lhs. constructPostfix (op, lhs)
       } sppf in
       (expr, next)
     else error "Breakable parse error"
@@ -157,6 +165,42 @@ lang VarParser = AstParserBase + VarAst
     parseExprRClosed state (nextToken stream)
 end
 
+lang AppParser = AstParserBase + AppAst
+  sem parseExprRClosed state =
+  | { token = token, info = info } & next ->
+    match canStartExpr next with true then
+      match breakableAddInfix (config ()) (OpApp info) state with Some(state) then
+        parseExprROpen state next
+      else
+        error "Breakable add infix error"
+    else
+      finalizeParseExpr state next
+
+  sem constructInfix =
+  | (OpApp info, lhs, rhs) ->
+    let info = mergeInfo (infoTm lhs) (infoTm rhs) in
+    TmApp {
+      lhs = lhs,
+      rhs = rhs,
+      ty = ityunknown_ info,
+      info = info
+    }
+end
+
+lang ParenParser = AstParserBase
+  sem canStartExpr =
+  | { token = RParenTok {} } -> false
+
+  sem parseExprROpen state =
+  | { token = LParenTok {}, stream = stream } ->
+    match parseExpr (nextToken stream) with (expr, next) in
+    match next with { token = RParenTok {}, stream = stream } then
+      let state = breakableAddAtom (config ()) (OpAtom expr) state in
+      parseExprRClosed state (nextToken stream)
+    else
+      error "Missing closing parenthesis"
+end
+
 lang BoolParser = AstParserBase + BoolAst
   sem parseExprROpen state =
   | { token = LIdentTok { val = "true", info = info}, stream = stream} ->
@@ -220,6 +264,8 @@ lang AstParser =
   + StringParser
   + NegParser
   + VarParser
+  + AppParser
+  + ParenParser
 end
 
 lang TestParser =
@@ -250,8 +296,8 @@ let compare = lam str. eqString (jsonStr (parse str)) (jsonStr (parseBoot str)) 
 let printAst = lam expr. printLn (jsonStr expr) in
 
 -- printLn "";
--- printAst (parseBoot "addi 1 2");
--- printAst (parse "addi 1 2");
+-- printAst (parseBoot "addi (addi 1 2) 3");
+-- printAst (parse "addi (addi 1 2) 3");
 
 utest compare "0" with true in
 utest compare "1" with true in
@@ -270,5 +316,9 @@ utest compare "'😊'" with true in
 utest compare "\"test\"" with true in
 
 utest compare "addi 1 2" with true in
+utest compare "addi 1 2 3" with true in
+utest compare "addi addi 1 2 3" with true in
+utest compare "addi (addi 1 2) 3" with true in
+utest compare "addi 1 (addi 2 3)" with true in
 
 ()
