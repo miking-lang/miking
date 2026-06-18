@@ -103,14 +103,6 @@ lang AstParserBase = Lexer + Ast
     let state = breakableInitState () in
     parseTypeROpen state cur
 
-  sem parseExprRClosed state =
-  | cur ->
-    finalizeParseExpr state cur
-
-  sem parseTypeRClosed state =
-  | cur ->
-    finalizeParseType state cur
-
   sem finalizeParseExpr state =
   | cur ->
     match breakableFinalizeParse (configExpr ()) state with Some sppf then
@@ -262,6 +254,12 @@ lang FloatParser = AstParserBase + FloatAst
     } in
     let state = breakableAddAtom (configExpr ()) (OpExprAtom expr) state in
     parseExprRClosed state (nextToken cur.stream)
+
+  sem parseTypeROpen state =
+  | { token = UIdentTok { val = "Float" } } & cur ->
+    let typ = ityfloat_ cur.info in
+    let state = breakableAddAtom (configType ()) (OpTypeAtom typ) state in
+    parseTypeRClosed state (nextToken cur.stream)
 end
 
 lang NegParser = AstParserBase + ArithIntAst + ArithFloatAst + AppAst
@@ -318,7 +316,7 @@ end
 
 lang AppParser = AstParserBase + AppAst + AppTypeAst
   sem parseExprRClosed state =
-  | { token = token } & cur ->
+  | cur ->
     -- check if the next token can be part of the current expression.
     match canAppExpr cur with true then
       match breakableAddInfix (configExpr ()) (OpExprApp cur.info) state with Some(state) then
@@ -329,7 +327,7 @@ lang AppParser = AstParserBase + AppAst + AppTypeAst
       finalizeParseExpr state cur
 
   sem parseTypeRClosed state =
-  | { token = token } & cur ->
+  | cur ->
     -- check if the next token can be part of the current type.
     match canAppType cur with true then
       match breakableAddInfix (configType ()) (OpTypeApp cur.info) state with Some(state) then
@@ -432,6 +430,12 @@ lang BoolParser = AstParserBase + BoolAst
     } in
     let state = breakableAddAtom (configExpr ()) (OpExprAtom expr) state in
     parseExprRClosed state (nextToken cur.stream)
+
+  sem parseTypeROpen state =
+  | { token = UIdentTok { val = "Bool" } } & cur ->
+    let typ = itybool_ cur.info in
+    let state = breakableAddAtom (configType ()) (OpTypeAtom typ) state in
+    parseTypeRClosed state (nextToken cur.stream)
 end
 
 lang CharParser = AstParserBase + CharAst
@@ -444,6 +448,12 @@ lang CharParser = AstParserBase + CharAst
     } in
     let state = breakableAddAtom (configExpr ()) (OpExprAtom expr) state in
     parseExprRClosed state (nextToken cur.stream)
+
+  sem parseTypeROpen state =
+  | { token = UIdentTok { val = "Char" } } & cur ->
+    let typ = itychar_ cur.info in
+    let state = breakableAddAtom (configType ()) (OpTypeAtom typ) state in
+    parseTypeRClosed state (nextToken cur.stream)
 end
 
 lang StringParser = AstParserBase + SeqAst + CharAst
@@ -460,6 +470,12 @@ lang StringParser = AstParserBase + SeqAst + CharAst
     } in
     let state = breakableAddAtom (configExpr ()) (OpExprAtom expr) state in
     parseExprRClosed state (nextToken cur.stream)
+
+  sem parseTypeROpen state =
+  | { token = UIdentTok { val = "String" } } & cur ->
+    let typ = itystr_ cur.info in
+    let state = breakableAddAtom (configType ()) (OpTypeAtom typ) state in
+    parseTypeRClosed state (nextToken cur.stream)
 end
 
 lang LetDeclParser = AstParserBase + LetDeclAst
@@ -538,6 +554,28 @@ lang LetDeclParser = AstParserBase + LetDeclAst
       parseErr (cur.info, "Missing identifier")
 end
 
+lang ArrowParser = AstParserBase + FunTypeAst
+  sem canAppType =
+  | { token = OperatorTok { val = "->" } } -> false
+
+  sem parseTypeRClosed state =
+  | { token = OperatorTok { val = "->" } } & cur ->
+    match breakableAddInfix (configType ()) (OpTypeArrow cur.info) state with Some(state) then
+      let cur = nextToken cur.stream in
+      parseTypeROpen state cur
+    else
+      parseErr (cur.info, "Breakable add infix error")
+
+  sem constructInfixType =
+  | (OpTypeArrow info, from, to) ->
+    let info = mergeInfo (infoTy from) (infoTy to) in
+    TyArrow {
+      from = from,
+      to = to,
+      info = info
+    }
+end
+
 lang UnexpectedTokenParser = AstParserBase
   sem parseExprROpen state =
   | cur ->
@@ -576,6 +614,7 @@ lang AstParser =
   + AppParser
   + ParenParser
   + LetDeclParser
+  + ArrowParser
   + UnexpectedTokenParser
 end
 
@@ -629,7 +668,7 @@ let printAst = lam expr.
   end
 in
 
--- let str = "let a: () () = 1 in a" in
+-- let str = "let a: Int -> Int = addi 1 in a" in
 -- printLn "";
 -- printAst (parseBoot str);
 -- printAst (parse str);
@@ -663,8 +702,16 @@ utest compareWithoutInfo "(addi ()) ()" with true in
 
 utest compareWithoutInfo "let a = 1 in a" with true in
 utest compareWithoutInfo "let a = 1 in let b = 2 in addi a b" with true in
+
 utest compareWithoutInfo "let a: Int = 1 in a" with true in
+utest compareWithoutInfo "let a: Float = 1.0 in a" with true in
+utest compareWithoutInfo "let a: Bool = true in a" with true in
+utest compareWithoutInfo "let a: Char = 'a' in a" with true in
+utest compareWithoutInfo "let a: String = \"test\" in a" with true in
 
 utest compareWithoutInfo "let a: Int Int = 1 1 in a" with true in
+
+utest compareWithoutInfo "let a: Int -> Int = addi 1 in a" with true in
+utest compareWithoutInfo "let a: Int Int -> Int = addi in a" with true in
 
 ()
