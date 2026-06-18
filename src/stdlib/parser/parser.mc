@@ -19,6 +19,7 @@ include "mexpr/boot-parser.mc"
 include "mexpr/json-debug.mc"
 include "json.mc"
 include "seq.mc"
+include "map.mc"
 include "parser/breakable.mc"
 include "name.mc"
 
@@ -27,10 +28,12 @@ con OpAtom: use Ast in Expr -> BreakableOp LClosed RClosed
 con OpNeg: Info -> BreakableOp LClosed ROpen
 con OpApp: Info -> BreakableOp LOpen ROpen
 
-type ParseResult w a = Result w [(Info, String)] a
+type ParseResult w a = Result w (Info, String) a
 
 let parseOk:  all w. all a. a              -> ParseResult w a = lam a. result.ok a
-let parseErr: all w. all a. [(Info, String)] -> ParseResult w a = lam e. result.err e
+let parseErr: all w. all a. (Info, String) -> ParseResult w a = lam e. result.err e
+let parseErrs: all w. all a. [(Info, String)] -> ParseResult w a = lam errs.
+  foldl1 result.withAnnotations (map result.err errs)
 
 lang AstParserBase = Lexer + Ast
   -- breakable related stuff
@@ -118,7 +121,7 @@ lang AstParserBase = Lexer + Ast
       } in
       let errs = breakableDefaultHighlight config next.stream.str sppf in
       match errs with [first] ++ _ then
-        parseErr errs -- TODO: Report all errs
+        parseErrs errs
       else
         let expr = breakableConstructSimple {
           constructAtom = lam op. match op with OpAtom expr in expr,
@@ -128,7 +131,7 @@ lang AstParserBase = Lexer + Ast
         } sppf in
         parseOk (expr, next)
     else
-      parseErr [(next.info, "Breakable parse error")]
+      parseErr (next.info, "Breakable parse error")
 end
 
 lang IntParser = AstParserBase + IntAst
@@ -215,7 +218,7 @@ lang AppParser = AstParserBase + AppAst
       match breakableAddInfix (config ()) (OpApp info) state with Some(state) then
         parseExprROpen state next
       else
-        parseErr [(info, "Breakable add infix error")]
+        parseErr (info, "Breakable add infix error")
     else
       finalizeParseExpr state next
 
@@ -230,22 +233,34 @@ lang AppParser = AstParserBase + AppAst
     }
 end
 
-lang ParenParser = AstParserBase
+lang ParenParser = AstParserBase + RecordAst
   sem canStartExpr =
   | { token = RParenTok {} } -> false
 
   sem parseExprROpen state =
-  | { token = LParenTok {}, stream = stream } ->
-    -- start parsing a new expression at (
-    result.bind (parseExpr (nextToken stream)) (lam a.
-      match a with (expr, next) in
-      -- and check for a following )
-      match next with { token = RParenTok {}, stream = stream } then
-        let state = breakableAddAtom (config ()) (OpAtom expr) state in
-        parseExprRClosed state (nextToken stream)
-      else
-        parseErr [(next.info, "Missing closing parenthesis")]
-    )
+  | { token = LParenTok {}, info = info, stream = stream } ->
+    let next = nextToken stream in
+    match next with { token = RParenTok {}, info = info2, stream = stream } then
+      -- this is a unit
+      let info = mergeInfo info info2 in
+      let expr = TmRecord {
+        bindings = mapEmpty cmpSID,
+        ty = ityunknown_ info,
+        info = info
+      } in
+      let state = breakableAddAtom (config ()) (OpAtom expr) state in
+      parseExprRClosed state (nextToken stream)
+    else
+      -- start parsing a new expression at (
+      result.bind (parseExpr (nextToken stream)) (lam a.
+        match a with (expr, next) in
+        -- and check for a following )
+        match next with { token = RParenTok {}, stream = stream } then
+          let state = breakableAddAtom (config ()) (OpAtom expr) state in
+          parseExprRClosed state (nextToken stream)
+        else
+          parseErr (next.info, "Missing closing parenthesis")
+      )
 end
 
 lang BoolParser = AstParserBase + BoolAst
@@ -300,7 +315,7 @@ lang NotImplementedParser = AstParserBase
   sem parseExprROpen state =
   | next ->
     let str = concat "Not implemented: " (tokToStr next.token) in
-    parseErr [(next.info, str)]
+    parseErr (next.info, str)
 end
 
 lang AstParser =
@@ -339,18 +354,36 @@ let jsonStr = lam expr. json2string (exprToJson expr) in
 let compare = lam str.
   let a = parse str in
   let b = parseBoot str in
-
   match (result.toOption a, result.toOption b) with (Some a, Some b) then
-    eqString (jsonStr a) (jsonStr b) -- By comparing strings we also take info filed into account.
+    eqString (jsonStr a) (jsonStr b) -- By comparing strings we also take info fieled into account.
   else
     false
   in
 
-let printAst = lam expr. printLn (jsonStr expr) in
+let compareWithoutInfo = lam str.
+  let a = parse str in
+  let b = parseBoot str in
+  match (result.toOption a, result.toOption b) with (Some a, Some b) then
+    eqExpr a b
+  else
+    false
+  in
+
+let printAst = lam expr.
+  switch result.consume expr
+  case (w, Left e) then
+    printLn "Parse error:";
+    iter (lam e.
+      match e with (info, msg) in printLn (infoErrorString info msg)
+    ) e
+  case (w, Right expr) then
+    printLn (jsonStr expr)
+  end
+in
 
 -- printLn "";
--- printAst (parseBoot "addi (addi 1 2) 3");
--- printAst (parse "addi (addi 1 2) 3");
+-- printAst (parseBoot "(())");
+-- printAst (parse "(())");
 
 utest compare "0" with true in
 utest compare "1" with true in
@@ -373,5 +406,10 @@ utest compare "addi 1 2 3" with true in
 utest compare "addi addi 1 2 3" with true in
 utest compare "addi (addi 1 2) 3" with true in
 utest compare "addi 1 (addi 2 3)" with true in
+
+utest compareWithoutInfo "()" with true in
+utest compareWithoutInfo "(())" with true in
+utest compareWithoutInfo "addi () ()" with true in
+utest compareWithoutInfo "(addi ()) ()" with true in
 
 ()
