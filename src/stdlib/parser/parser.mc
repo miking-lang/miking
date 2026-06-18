@@ -100,16 +100,16 @@ lang AstParserBase = Lexer + Ast
 
   -- The main entry point
   sem parseExpr =
-  | next ->
+  | cur ->
     let state = breakableInitState () in
-    parseExprROpen state next
+    parseExprROpen state cur
 
   sem parseExprRClosed state =
-  | next ->
-    finalizeParseExpr state next
+  | cur ->
+    finalizeParseExpr state cur
 
   sem finalizeParseExpr state =
-  | next ->
+  | cur ->
     match breakableFinalizeParse (config ()) state with Some sppf then
       let config: BreakableErrorHighlightConfig BreakableOp = {
         parenAllowed = #frozen"parenAllowed",
@@ -119,7 +119,7 @@ lang AstParserBase = Lexer + Ast
         lpar = "(",
         rpar = ")"
       } in
-      let errs = breakableDefaultHighlight config next.stream.str sppf in
+      let errs = breakableDefaultHighlight config cur.stream.str sppf in
       match errs with [first] ++ _ then
         parseErrs errs
       else
@@ -129,53 +129,58 @@ lang AstParserBase = Lexer + Ast
           constructPrefix = lam op. lam rhs. constructPrefix (op, rhs),
           constructPostfix = lam op. lam lhs. constructPostfix (op, lhs)
         } sppf in
-        parseOk (expr, next)
+        parseOk (expr, cur)
     else
-      parseErr (next.info, "Breakable parse error")
+      parseErr (cur.info, "Breakable parse error")
 end
 
 lang IntParser = AstParserBase + IntAst
   sem parseExprROpen state =
-  | { token = IntTok { val = val, info = info }, stream = stream } ->
+  | { token = IntTok { val = val } } & cur ->
     let expr = TmConst {
       val = CInt { val = val },
-      ty = ityunknown_ info,
-      info = info
+      ty = ityunknown_ cur.info,
+      info = cur.info
     } in
     let state = breakableAddAtom (config ()) (OpAtom expr) state in
-    parseExprRClosed state (nextToken stream)
+    parseExprRClosed state (nextToken cur.stream)
+
+  sem parseType =
+  | { token = UIdentTok { val = "Int" } } & cur ->
+    let typ = ityint_ cur.info in
+    parseOk (typ, nextToken cur.stream)
 end
 
 lang FloatParser = AstParserBase + FloatAst
   sem parseExprROpen state =
-  | { token = FloatTok { val = val, info = info }, stream = stream } ->
+  | { token = FloatTok { val = val } } & cur ->
     let expr = TmConst {
       val = CFloat { val = val },
-      ty = ityunknown_ info,
-      info = info
+      ty = ityunknown_ cur.info,
+      info = cur.info
     } in
     let state = breakableAddAtom (config ()) (OpAtom expr) state in
-    parseExprRClosed state (nextToken stream)
+    parseExprRClosed state (nextToken cur.stream)
 end
 
 lang NegParser = AstParserBase + ArithIntAst + ArithFloatAst + AppAst
   sem parseExprROpen state =
-  | { token = OperatorTok { val = "-", info = info }, stream = stream } ->
-    let state = breakableAddPrefix (config ()) (OpNeg info) state in
-    parseExprROpen state (nextToken stream)
+  | { token = OperatorTok { val = "-" } } & cur ->
+    let state = breakableAddPrefix (config ()) (OpNeg cur.info) state in
+    parseExprROpen state (nextToken cur.stream)
 
   -- Two special cases if the rhs is a constant int or float
   sem constructPrefix =
-  | (OpNeg info, TmConst { val = CInt { val = val }, info = info2 }) ->
-    let info = mergeInfo info info2 in
+  | (OpNeg info, TmConst { val = CInt { val = val } } & expr) ->
+    let info = mergeInfo info (infoTm expr) in
     TmConst {
       val = CInt { val = negi val },
       ty = ityunknown_ info,
       info = info
     }
 
-  | (OpNeg info, TmConst { val = CFloat { val = val }, info = info2 }) ->
-    let info = mergeInfo info info2 in
+  | (OpNeg info, TmConst { val = CFloat { val = val } } & expr) ->
+    let info = mergeInfo info (infoTm expr) in
     TmConst {
       val = CFloat { val = negf val },
       ty = ityunknown_ info,
@@ -199,28 +204,28 @@ end
 
 lang VarParser = AstParserBase + VarAst
   sem parseExprROpen state =
-  | { token = LIdentTok { val = val, info = info }, stream = stream } ->
+  | { token = LIdentTok { val = val } } & cur ->
     let expr = TmVar {
       ident = nameNoSym val,
-      ty = ityunknown_ info,
-      info = info,
+      ty = ityunknown_ cur.info,
+      info = cur.info,
       frozen = false -- TODO: Always false?
     } in
     let state = breakableAddAtom (config ()) (OpAtom expr) state in
-    parseExprRClosed state (nextToken stream)
+    parseExprRClosed state (nextToken cur.stream)
 end
 
 lang AppParser = AstParserBase + AppAst
   sem parseExprRClosed state =
-  | { token = token, info = info } & next ->
+  | { token = token } & cur ->
     -- check if the next token can be part of the current expression.
-    match canStartExpr next with true then
-      match breakableAddInfix (config ()) (OpApp info) state with Some(state) then
-        parseExprROpen state next
+    match canStartExpr cur with true then
+      match breakableAddInfix (config ()) (OpApp cur.info) state with Some(state) then
+        parseExprROpen state cur
       else
-        parseErr (info, "Breakable add infix error")
+        parseErr (cur.info, "Breakable add infix error")
     else
-      finalizeParseExpr state next
+      finalizeParseExpr state cur
 
   sem constructInfix =
   | (OpApp info, lhs, rhs) ->
@@ -238,84 +243,167 @@ lang ParenParser = AstParserBase + RecordAst
   | { token = RParenTok {} } -> false
 
   sem parseExprROpen state =
-  | { token = LParenTok {}, info = info, stream = stream } ->
-    let next = nextToken stream in
-    match next with { token = RParenTok {}, info = info2, stream = stream } then
+  | { token = LParenTok {} } & open ->
+    match (nextToken open.stream) with { token = RParenTok {} } & close then
       -- this is a unit
-      let info = mergeInfo info info2 in
+      let info = mergeInfo open.info close.info in
       let expr = TmRecord {
         bindings = mapEmpty cmpSID,
         ty = ityunknown_ info,
         info = info
       } in
       let state = breakableAddAtom (config ()) (OpAtom expr) state in
-      parseExprRClosed state (nextToken stream)
+      parseExprRClosed state (nextToken close.stream)
     else
       -- start parsing a new expression at (
-      result.bind (parseExpr (nextToken stream)) (lam a.
-        match a with (expr, next) in
+      result.bind (parseExpr (nextToken open.stream)) (lam expr.
+        match expr with (expr, cur) in
         -- and check for a following )
-        match next with { token = RParenTok {}, stream = stream } then
+        match cur with { token = RParenTok {} } & close then
           let state = breakableAddAtom (config ()) (OpAtom expr) state in
-          parseExprRClosed state (nextToken stream)
+          parseExprRClosed state (nextToken close.stream)
         else
-          parseErr (next.info, "Missing closing parenthesis")
+          parseErr (cur.info, "Missing closing parenthesis")
       )
 end
 
 lang BoolParser = AstParserBase + BoolAst
   sem parseExprROpen state =
-  | { token = LIdentTok { val = "true", info = info}, stream = stream} ->
+  | { token = LIdentTok { val = "true" } } & cur ->
     let expr = TmConst {
       val = CBool { val = true },
-      ty = ityunknown_ info,
-      info = info
+      ty = ityunknown_ cur.info,
+      info = cur.info
     } in
     let state = breakableAddAtom (config ()) (OpAtom expr) state in
-    parseExprRClosed state (nextToken stream)
-  | { token = LIdentTok { val = "false", info = info}, stream = stream} ->
+    parseExprRClosed state (nextToken cur.stream)
+  | { token = LIdentTok { val = "false" } } & cur ->
     let expr = TmConst {
       val = CBool { val = false },
-      ty = ityunknown_ info,
-      info = info
+      ty = ityunknown_ cur.info,
+      info = cur.info
     } in
     let state = breakableAddAtom (config ()) (OpAtom expr) state in
-    parseExprRClosed state (nextToken stream)
+    parseExprRClosed state (nextToken cur.stream)
 end
 
 lang CharParser = AstParserBase + CharAst
   sem parseExprROpen state =
-  | { token = CharTok { val = val, info = info }, stream = stream } ->
+  | { token = CharTok { val = val } } & cur ->
     let expr = TmConst {
       val = CChar { val = val },
-      ty = ityunknown_ info,
-      info = info
+      ty = ityunknown_ cur.info,
+      info = cur.info
     } in
     let state = breakableAddAtom (config ()) (OpAtom expr) state in
-    parseExprRClosed state (nextToken stream)
+    parseExprRClosed state (nextToken cur.stream)
 end
 
 lang StringParser = AstParserBase + SeqAst + CharAst
   sem parseExprROpen state =
-  | { token = StringTok { val = val, info = info }, stream = stream } ->
+  | { token = StringTok { val = val } } & cur ->
     let expr = TmSeq {
       tms = map (lam ch. TmConst {
         val = CChar { val = ch },
-        ty = ityunknown_ info,
-        info = info
+        ty = ityunknown_ cur.info,
+        info = cur.info
       }) val,
-      ty = ityunknown_ info,
-      info = info
+      ty = ityunknown_ cur.info,
+      info = cur.info
     } in
     let state = breakableAddAtom (config ()) (OpAtom expr) state in
-    parseExprRClosed state (nextToken stream)
+    parseExprRClosed state (nextToken cur.stream)
 end
 
-lang NotImplementedParser = AstParserBase
+lang LetDeclParser = AstParserBase + LetDeclAst
+  sem canStartExpr =
+  | { token = LIdentTok { val = "let" } } -> false
+  | { token = OperatorTok { val = "="} } -> false
+  | { token = LIdentTok { val = "in"} } -> false
+
   sem parseExprROpen state =
-  | next ->
-    let str = concat "Not implemented: " (tokToStr next.token) in
-    parseErr (next.info, str)
+  | { token = LIdentTok { val = "let" } } & toklet ->
+    let cur = nextToken toklet.stream in
+
+    match cur with { token = LIdentTok { val = ident } } & tokident then
+      let cur = nextToken tokident.stream in
+
+      let tyAnnot =
+        match cur with { token = OperatorTok { val = ":" } } & tokcol then
+          let cur = nextToken tokcol.stream in
+          parseType cur
+        else
+          parseOk (ityunknown_ toklet.info, cur)
+      in
+
+      result.bind tyAnnot (lam tyAnnot.
+        match tyAnnot with (tyAnnot, cur) in
+
+        match cur with { token = OperatorTok { val = "=" } } & tokeq then
+          let cur = nextToken tokeq.stream in
+
+          result.bind (parseExpr cur) (lam body.
+            match body with (body, cur) in
+
+            match cur with { token = LIdentTok { val = "in" } } & tokin then
+              let cur = nextToken tokin.stream in
+
+              result.bind (parseExpr cur) (lam inexpr.
+                match inexpr with (inexpr, cur) in
+
+                let info = mergeInfo toklet.info tokin.info in
+                let expr = TmDecl {
+                  decl = DeclLet {
+                    ident = nameNoSym ident,
+                    tyAnnot = tyAnnot,
+                    tyBody = ityunknown_ info,
+                    body = body,
+                    info = info
+                  },
+                  inexpr = inexpr,
+                  ty = ityunknown_ info,
+                  info = info
+                } in
+                let state = breakableAddAtom (config ()) (OpAtom expr) state in
+                parseExprRClosed state (nextToken cur.stream)
+              )
+
+            else
+              parseErr (cur.info, "Missing in expression")
+          )
+
+        else
+          parseErr (cur.info, "Missing assignment")
+      )
+    else
+      parseErr (cur.info, "Missing identifier")
+end
+
+lang UnexpectedTokenParser = AstParserBase
+  sem parseExprROpen state =
+  | cur ->
+    let str = concat "Unexpexted token while parsing expr: " (tokToStr cur.token) in
+    parseErr (cur.info, str)
+
+  sem parseDecl =
+  | cur ->
+    let str = concat "Unexpexted token while parsing decl: " (tokToStr cur.token) in
+    parseErr (cur.info, str)
+
+  sem parseType =
+  | cur ->
+    let str = concat "Unexpexted token while parsing type: " (tokToStr cur.token) in
+    parseErr (cur.info, str)
+
+  sem parseKind =
+  | cur ->
+    let str = concat "Unexpexted token while parsing kind: " (tokToStr cur.token) in
+    parseErr (cur.info, str)
+
+  sem parsePat =
+  | cur ->
+    let str = concat "Unexpexted token while parsing pat: " (tokToStr cur.token) in
+    parseErr (cur.info, str)
 end
 
 lang AstParser =
@@ -328,11 +416,12 @@ lang AstParser =
   + VarParser
   + AppParser
   + ParenParser
+  + LetDeclParser
+  + UnexpectedTokenParser
 end
 
 lang TestParser =
     AstParser
-  + NotImplementedParser
   + MExprPrettyPrint
   + MExprEq
   + MExprToJson
@@ -381,9 +470,10 @@ let printAst = lam expr.
   end
 in
 
+-- let str = "let a: Int = 1 in a" in
 -- printLn "";
--- printAst (parseBoot "(())");
--- printAst (parse "(())");
+-- printAst (parseBoot str);
+-- printAst (parse str);
 
 utest compare "0" with true in
 utest compare "1" with true in
@@ -411,5 +501,9 @@ utest compareWithoutInfo "()" with true in
 utest compareWithoutInfo "(())" with true in
 utest compareWithoutInfo "addi () ()" with true in
 utest compareWithoutInfo "(addi ()) ()" with true in
+
+utest compare "let a = 1 in a" with true in
+utest compare "let a = 1 in let b = 2 in addi a b" with true in
+utest compare "let a: Int = 1 in a" with true in
 
 ()
