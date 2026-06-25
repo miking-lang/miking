@@ -504,6 +504,73 @@ lang StringParser = AstParserBase + SeqAst + CharAst
     parseTypeRClosed state (nextToken cur.stream)
 end
 
+lang SeqParser = AstParserBase + SeqAst + SeqTypeAst
+  sem canStartAppArgExpr =
+  | { token = LBracketTok { } } -> true
+  | { token = RBracketTok { } } -> false
+  | { token = CommaTok { } } -> false
+
+  sem canStartAppArgType =
+  | { token = LBracketTok { } } -> true
+  | { token = RBracketTok { } } -> false
+
+  sem parseExprROpen state =
+  | { token = LBracketTok { } } & toklb ->
+    recursive let parseItems = lam acc. lam cur.
+      result.bind (parseExpr cur) (lam expr.
+        match expr with (expr, cur) in
+        let acc = snoc acc expr in
+        switch cur
+          case { token = RBracketTok { } } then
+            parseOk (cur, acc)
+          case { token = CommaTok { } } then
+            let cur = nextToken cur.stream in
+            parseItems acc cur
+          case _ then
+            parseErr (cur.info, "Unexpected token in sequence")
+        end
+      )
+    in
+
+    let cur = nextToken toklb.stream in
+    let res = switch cur
+      case { token = RBracketTok { } } then
+        parseOk (cur, [])
+      case _ then
+        parseItems [] cur
+    end in
+
+    result.bind res (lam res.
+      match res with (tokrb, tms) in
+      let info = mergeInfo toklb.info tokrb.info in
+      let expr = TmSeq {
+        tms = tms,
+        ty = ityunknown_ info,
+        info = info
+      } in
+      let state = breakableAddAtom (configExpr ()) (OpExprAtom expr) state in
+      parseExprRClosed state (nextToken cur.stream)
+    )
+
+  sem parseTypeROpen state =
+  | { token = LBracketTok { } } & toklb ->
+    let cur = nextToken toklb.stream in
+    result.bind (parseType cur) (lam res.
+      match res with (ty, cur) in
+      match cur with { token = RBracketTok {} } & tokrb then
+        let info = mergeInfo toklb.info tokrb.info in
+        let typ = TySeq {
+          ty = ty,
+          info = info
+        } in
+        let state = breakableAddAtom (configType ()) (OpTypeAtom typ) state in
+        parseTypeRClosed state (nextToken cur.stream)
+      else
+        parseErr (cur.info, "Missing right bracket")
+    )
+
+end
+
 lang LetDeclParser = AstParserBase + LetDeclAst
   sem canStartAppArgExpr =
   | { token = LIdentTok { val = "let" } } -> false
@@ -631,6 +698,7 @@ lang AstParser =
   + BoolParser
   + CharParser
   + StringParser
+  + SeqParser
   + NegParser
   + VarParser
   + AppParser
@@ -690,7 +758,7 @@ let printAst = lam expr.
   end
 in
 
--- let str = "-5" in
+-- let str = "let a: [Int] = () in a" in
 -- printLn "\nBoot:";
 -- printAst (parseBoot str);
 -- printLn "Native:";
@@ -736,5 +804,13 @@ utest compareWithoutInfo "let a: Int Int = 1 1 in a" with true in
 
 utest compareWithoutInfo "let a: Int -> Int = addi 1 in a" with true in
 utest compareWithoutInfo "let a: Int Int -> Int = addi in a" with true in
+
+utest compare "[]" with true in
+utest compare "[1]" with true in
+utest compare "[1, 2]" with true in
+utest compare "cons 0 [1, 2]" with true in
+
+utest compareWithoutInfo "let a: [Int] = () in a" with true in
+utest compareWithoutInfo "let a: [[Int]] = () in a" with true in
 
 ()
