@@ -23,15 +23,6 @@ include "map.mc"
 include "parser/breakable.mc"
 include "name.mc"
 
-type BrkOpExpr lstyle rstyle
-con OpExprAtom: use Ast in Expr -> BrkOpExpr LClosed RClosed
-con OpExprApp: Info -> BrkOpExpr LOpen ROpen
-
-type BrkOpType lstyle rstyle
-con OpTypeAtom: use Ast in Type -> BrkOpType LClosed RClosed
-con OpTypeApp: Info -> BrkOpType LOpen ROpen
-con OpTypeArrow: Info -> BrkOpType LOpen ROpen
-
 type ParseResult w a = Result w (Info, String) a
 
 let parseOk:  all w. all a. a              -> ParseResult w a = lam a. result.ok a
@@ -40,6 +31,12 @@ let parseErrs: all w. all a. [(Info, String)] -> ParseResult w a = lam errs.
   foldl1 result.withAnnotations (map result.err errs)
 
 lang AstParserBase = Lexer + Ast
+  syn BrkOpExpr lstyle rstyle =
+  | OpExprAtom Expr
+
+  syn BrkOpType lstyle rstyle =
+  | OpTypeAtom Type
+
   sem parseExpr: all w. NextTokenResult -> ParseResult w (Expr, NextTokenResult)
   sem parseDecl: all w. NextTokenResult -> ParseResult w (Decl, NextTokenResult)
   sem parseType: all w. NextTokenResult -> ParseResult w (Type, NextTokenResult)
@@ -113,7 +110,8 @@ lang AstParserBase = Lexer + Ast
         lpar = "(",
         rpar = ")"
       } in
-      let errs = breakableDefaultHighlight config cur.stream.str sppf in
+      -- TODO use correct src string
+      let errs = breakableDefaultHighlight config "" sppf in
       match errs with [first] ++ _ then
         parseErrs errs
       else
@@ -203,10 +201,10 @@ lang AstParserBase = Lexer + Ast
   | _ -> GEither ()
 
   sem groupingsAllowedExpr =
-  | _ -> GLeft ()
+  | _ -> GEither ()
 
   sem groupingsAllowedType =
-  | _ -> GLeft ()
+  | _ -> GEither ()
 
   sem terminalInfosExpr =
   | op -> [getInfoExpr op]
@@ -215,12 +213,12 @@ lang AstParserBase = Lexer + Ast
   | op -> [getInfoType op]
 
   sem getInfoExpr =
-  | op ->
-    never -- TODO
+  | OpExprAtom expr ->
+    infoTm expr
 
   sem getInfoType =
-  | op ->
-    never -- TODO
+  | OpTypeAtom typ ->
+    infoTy typ
 end
 
 lang IntParser = AstParserBase + IntAst
@@ -320,6 +318,20 @@ lang VarParser = AstParserBase + VarAst
 end
 
 lang AppParser = AstParserBase + AppAst + AppTypeAst
+  syn BrkOpExpr lstyle rstyle =
+  | OpExprApp Info
+
+  syn BrkOpType lstyle rstyle =
+  | OpTypeApp Info
+
+  sem getInfoExpr =
+  | OpExprApp info ->
+    info
+
+  sem getInfoType =
+  | OpTypeApp info ->
+    info
+
   sem parseExprRClosed state =
   | cur ->
     -- check if the next token can be part of the current expression.
@@ -572,6 +584,13 @@ lang SeqParser = AstParserBase + SeqAst + SeqTypeAst
 end
 
 lang LetDeclParser = AstParserBase + LetDeclAst
+  syn BrkOpExpr lstyle rstyle =
+  | OpExprLet Decl
+
+  sem getInfoExpr =
+  | OpExprLet decl ->
+    infoDecl decl
+
   sem canStartAppArgExpr =
   | { token = LIdentTok { val = "let" } } -> false
   | { token = LIdentTok { val = "in"} } -> false
@@ -581,23 +600,11 @@ lang LetDeclParser = AstParserBase + LetDeclAst
     result.bind (parseDecl toklet) (lam decl.
       match decl with (decl, cur) in
 
+      let state = breakableAddPrefix (configExpr ()) (OpExprLet decl) state in
+
       match cur with { token = LIdentTok { val = "in" } } & tokin then
         let cur = nextToken tokin.stream in
-
-        result.bind (parseExpr cur) (lam inexpr.
-          match inexpr with (inexpr, cur) in
-
-          let info = mergeInfo toklet.info tokin.info in
-          let expr = TmDecl {
-            decl = decl,
-            inexpr = inexpr,
-            ty = ityunknown_ info,
-            info = info
-          } in
-          let state = breakableAddAtom (configExpr ()) (OpExprAtom expr) state in
-          parseExprRClosed state (nextToken cur.stream)
-        )
-
+        parseExprROpen state cur
       else
         parseErr (cur.info, "Missing in expression")
     )
@@ -614,7 +621,7 @@ lang LetDeclParser = AstParserBase + LetDeclAst
           let cur = nextToken tokcol.stream in
           parseType cur
         else
-          parseOk (ityunknown_ toklet.info, cur)
+          parseOk (ityunknown_ tokident.info, cur)
       in
 
       result.bind tyAnnot (lam tyAnnot.
@@ -641,11 +648,67 @@ lang LetDeclParser = AstParserBase + LetDeclAst
       )
     else
       parseErr (cur.info, "Missing identifier")
+
+  sem constructPrefixExpr =
+  | (OpExprLet decl, inexpr) ->
+    let info = infoDecl decl in
+    TmDecl {
+      decl = decl,
+      inexpr = inexpr,
+      ty = ityunknown_ info,
+      info = info
+    }
 end
 
-lang ArrowParser = AstParserBase + FunTypeAst
+lang LamParser = AstParserBase + LamAst + FunTypeAst
+  syn BrkOpExpr lstyle rstyle =
+  | OpExprLam (Info, String, Type, Type)
+
+  syn BrkOpType lstyle rstyle =
+  | OpTypeArrow Info
+
+  sem getInfoExpr =
+  | OpExprLam (info, _, _, _) -> info
+
+  sem getInfoType =
+  | OpTypeArrow info -> info
+
+  sem canStartAppArgExpr =
+  | { token = LIdentTok { val = "lam" } } -> false
+  | { token = OperatorTok { val = "." } } -> false
+
   sem canStartAppArgType =
   | { token = OperatorTok { val = "->" } } -> false
+
+  sem parseExprROpen state =
+  | { token = LIdentTok { val = "lam" } } & toklam ->
+    let cur = nextToken toklam.stream in
+
+    match match cur with { token = LIdentTok { val = ident } } & tokident then
+      let cur = nextToken tokident.stream in
+      let tyAnnot =
+        match cur with { token = OperatorTok { val = ":" } } & tokcol then
+          let cur = nextToken tokcol.stream in
+          parseType cur
+        else
+          parseOk (tyunknown_, cur)
+      in
+      (ident, ityunknown_ tokident.info, tyAnnot)
+    else
+      ("", tyunknown_, parseOk (tyunknown_, cur))
+    with (ident, tyParam, tyAnnot) in
+
+    result.bind tyAnnot (lam res.
+      match res with (tyAnnot, cur) in
+
+      let state = breakableAddPrefix (configExpr ()) (OpExprLam (toklam.info, ident, tyParam, tyAnnot)) state in
+
+      match cur with { token = OperatorTok { val = "." } } & tokdot then
+        let cur = nextToken tokdot.stream in
+        parseExprROpen state cur
+      else
+        parseErr (cur.info, "Missing period")
+    )
 
   sem parseTypeRClosed state =
   | { token = OperatorTok { val = "->" } } & cur ->
@@ -655,6 +718,18 @@ lang ArrowParser = AstParserBase + FunTypeAst
     else
       parseErr (cur.info, "Breakable add infix error")
 
+  sem constructPrefixExpr =
+  | (OpExprLam (beginInfo, ident, tyParam, tyAnnot), body) ->
+    let info = mergeInfo beginInfo (infoTm body) in
+    TmLam {
+      ident = nameNoSym ident,
+      tyAnnot = tyAnnot,
+      tyParam = tyParam,
+      body = body,
+      ty = ityunknown_ info,
+      info = info
+    }
+
   sem constructInfixType =
   | (OpTypeArrow info, from, to) ->
     let info = mergeInfo (infoTy from) (infoTy to) in
@@ -663,6 +738,20 @@ lang ArrowParser = AstParserBase + FunTypeAst
       to = to,
       info = info
     }
+end
+
+-- TODO: Better solution
+lang PrecedenceParser = AppParser + LamParser + LetDeclParser
+  sem groupingsAllowedExpr =
+  | (OpExprApp _, OpExprApp _) -> GLeft ()
+  | (OpExprLet _, OpExprApp _) -> GRight ()
+  | (OpExprLam _, OpExprApp _) -> GRight ()
+
+  sem groupingsAllowedType =
+  | (OpTypeApp _, OpTypeApp _)  -> GLeft ()
+  | (OpTypeArrow _, OpTypeArrow _) -> GLeft ()
+  | (OpTypeApp _, OpTypeArrow _) -> GLeft ()
+  | (OpTypeArrow _, OpTypeApp _) -> GRight ()
 end
 
 lang UnexpectedTokenParser = AstParserBase
@@ -704,7 +793,8 @@ lang AstParser =
   + AppParser
   + ParenParser
   + LetDeclParser
-  + ArrowParser
+  + LamParser
+  + PrecedenceParser
   + UnexpectedTokenParser
 end
 
@@ -758,7 +848,7 @@ let printAst = lam expr.
   end
 in
 
--- let str = "let a: [Int] = () in a" in
+-- let str = "let a = 1 in let b = 2 in addi a b" in
 -- printLn "\nBoot:";
 -- printAst (parseBoot str);
 -- printLn "Native:";
@@ -812,5 +902,11 @@ utest compare "cons 0 [1, 2]" with true in
 
 utest compareWithoutInfo "let a: [Int] = () in a" with true in
 utest compareWithoutInfo "let a: [[Int]] = () in a" with true in
+
+utest compareWithoutInfo "lam. ()" with true in
+utest compareWithoutInfo "lam a. a" with true in
+utest compareWithoutInfo "lam a: Int. a" with true in
+utest compareWithoutInfo "lam. lam. ()" with true in
+utest compareWithoutInfo "lam a. lam b. addi a b" with true in
 
 ()
