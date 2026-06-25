@@ -25,7 +25,6 @@ include "name.mc"
 
 type BrkOpExpr lstyle rstyle
 con OpExprAtom: use Ast in Expr -> BrkOpExpr LClosed RClosed
-con OpExprNeg: Info -> BrkOpExpr LClosed ROpen
 con OpExprApp: Info -> BrkOpExpr LOpen ROpen
 
 type BrkOpType lstyle rstyle
@@ -262,43 +261,33 @@ lang FloatParser = AstParserBase + FloatAst
     parseTypeRClosed state (nextToken cur.stream)
 end
 
-lang NegParser = AstParserBase + ArithIntAst + ArithFloatAst + AppAst
+lang NegParser = AstParserBase + IntAst + FloatAst
   sem parseExprROpen state =
-  | { token = OperatorTok { val = "-" } } & cur ->
-    let state = breakableAddPrefix (configExpr ()) (OpExprNeg cur.info) state in
-    parseExprROpen state (nextToken cur.stream)
+  | { token = OperatorTok { val = "-" } } & tokneg ->
+    let cur = nextToken tokneg.stream in
 
-  -- Two special cases if the rhs is a constant int or float
-  sem constructPrefixExpr =
-  | (OpExprNeg info, TmConst { val = CInt { val = val } } & expr) ->
-    let info = mergeInfo info (infoTm expr) in
-    TmConst {
-      val = CInt { val = negi val },
-      ty = ityunknown_ info,
-      info = info
-    }
-
-  | (OpExprNeg info, TmConst { val = CFloat { val = val } } & expr) ->
-    let info = mergeInfo info (infoTm expr) in
-    TmConst {
-      val = CFloat { val = negf val },
-      ty = ityunknown_ info,
-      info = info
-    }
-
-  -- Normal case
-  | (OpExprNeg info, rhs) ->
-    let info2 = mergeInfo info (infoTm rhs) in
-    TmApp {
-      lhs = TmConst {
-        val = CNegi {}, -- TODO: What about CNegf?
-        ty = ityunknown_ info,
-        info = info
-      },
-      rhs = rhs,
-      ty = ityunknown_ info2,
-      info = info2
-    }
+    switch cur
+      case { token = IntTok { val = val } } then
+        let info = mergeInfo tokneg.info cur.info in
+        let expr = TmConst {
+          val = CInt { val = negi val },
+          ty = ityunknown_ info,
+          info = info
+        } in
+        let state = breakableAddAtom (configExpr ()) (OpExprAtom expr) state in
+        parseExprRClosed state (nextToken cur.stream)
+      case { token = FloatTok { val = val } } then
+        let info = mergeInfo tokneg.info cur.info in
+        let expr = TmConst {
+          val = CFloat { val = negf val },
+          ty = ityunknown_ info,
+          info = info
+        } in
+        let state = breakableAddAtom (configExpr ()) (OpExprAtom expr) state in
+        parseExprRClosed state (nextToken cur.stream)
+      case _ then
+        parseErr (cur.info, "Expected a number")
+    end
 end
 
 lang VarParser = AstParserBase + VarAst
@@ -668,9 +657,10 @@ let printAst = lam expr.
   end
 in
 
--- let str = "let a: Int -> Int = addi 1 in a" in
--- printLn "";
+-- let str = "-5" in
+-- printLn "\nBoot:";
 -- printAst (parseBoot str);
+-- printLn "Native:";
 -- printAst (parse str);
 
 utest compare "0" with true in
