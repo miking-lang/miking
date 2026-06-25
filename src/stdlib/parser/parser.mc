@@ -55,8 +55,8 @@ lang AstParserBase = Lexer + Ast
   sem finalizeParseExpr: all w. State BrkOpExpr RClosed -> NextTokenResult -> ParseResult w (Expr, NextTokenResult)
   sem finalizeParseType: all w. State BrkOpType RClosed -> NextTokenResult -> ParseResult w (Type, NextTokenResult)
 
-  sem canAppExpr: NextTokenResult -> Bool
-  sem canAppType: NextTokenResult -> Bool
+  sem canStartAppArgExpr: NextTokenResult -> Bool
+  sem canStartAppArgType: NextTokenResult -> Bool
 
   sem constructPrefixExpr: (BrkOpExpr LClosed ROpen, Expr) -> Expr
   sem constructPrefixType: (BrkOpType LClosed ROpen, Type) -> Type
@@ -152,13 +152,11 @@ lang AstParserBase = Lexer + Ast
     else
       parseErr (cur.info, "Breakable parse error")
 
-  sem canAppExpr =
-  | { token = EOFTok {} } -> false
-  | _ -> true
+  sem canStartAppArgExpr =
+  | _ -> false
 
-  sem canAppType =
-  | { token = EOFTok {} } -> false
-  | _ -> true
+  sem canStartAppArgType =
+  | _ -> false
 
   sem configExpr =
   | _ ->
@@ -226,6 +224,12 @@ lang AstParserBase = Lexer + Ast
 end
 
 lang IntParser = AstParserBase + IntAst
+  sem canStartAppArgExpr =
+  | { token = IntTok { } } -> true
+
+  sem canStartAppArgType =
+  | { token = UIdentTok { val = "Int" } } -> true
+
   sem parseExprROpen state =
   | { token = IntTok { val = val } } & cur ->
     let expr = TmConst {
@@ -244,6 +248,12 @@ lang IntParser = AstParserBase + IntAst
 end
 
 lang FloatParser = AstParserBase + FloatAst
+  sem canStartAppArgExpr =
+  | { token = FloatTok { } } -> true
+
+  sem canStartAppArgType =
+  | { token = UIdentTok { val = "Float" } } -> true
+
   sem parseExprROpen state =
   | { token = FloatTok { val = val } } & cur ->
     let expr = TmConst {
@@ -262,6 +272,9 @@ lang FloatParser = AstParserBase + FloatAst
 end
 
 lang NegParser = AstParserBase + IntAst + FloatAst
+  sem canStartAppArgExpr =
+  | { token = OperatorTok { val = "-" } } -> true
+
   sem parseExprROpen state =
   | { token = OperatorTok { val = "-" } } & tokneg ->
     let cur = nextToken tokneg.stream in
@@ -291,6 +304,9 @@ lang NegParser = AstParserBase + IntAst + FloatAst
 end
 
 lang VarParser = AstParserBase + VarAst
+  sem canStartAppArgExpr =
+  | { token = LIdentTok { } } -> true
+
   sem parseExprROpen state =
   | { token = LIdentTok { val = val } } & cur ->
     let expr = TmVar {
@@ -307,7 +323,7 @@ lang AppParser = AstParserBase + AppAst + AppTypeAst
   sem parseExprRClosed state =
   | cur ->
     -- check if the next token can be part of the current expression.
-    match canAppExpr cur with true then
+    match canStartAppArgExpr cur with true then
       match breakableAddInfix (configExpr ()) (OpExprApp cur.info) state with Some(state) then
         parseExprROpen state cur
       else
@@ -318,7 +334,7 @@ lang AppParser = AstParserBase + AppAst + AppTypeAst
   sem parseTypeRClosed state =
   | cur ->
     -- check if the next token can be part of the current type.
-    match canAppType cur with true then
+    match canStartAppArgType cur with true then
       match breakableAddInfix (configType ()) (OpTypeApp cur.info) state with Some(state) then
         parseTypeROpen state cur
       else
@@ -347,10 +363,12 @@ lang AppParser = AstParserBase + AppAst + AppTypeAst
 end
 
 lang ParenParser = AstParserBase + RecordAst + RecordTypeAst
-  sem canAppExpr =
+  sem canStartAppArgExpr =
+  | { token = LParenTok {} } -> true
   | { token = RParenTok {} } -> false
 
-  sem canAppType =
+  sem canStartAppArgType =
+  | { token = LParenTok {} } -> true
   | { token = RParenTok {} } -> false
 
   sem parseExprROpen state =
@@ -402,6 +420,13 @@ lang ParenParser = AstParserBase + RecordAst + RecordTypeAst
 end
 
 lang BoolParser = AstParserBase + BoolAst
+  sem canStartAppArgExpr =
+  | { token = LIdentTok { val = "true" } } -> true
+  | { token = LIdentTok { val = "false" } } -> true
+
+  sem canStartAppArgType =
+  | { token = UIdentTok { val = "Bool" } } -> true
+
   sem parseExprROpen state =
   | { token = LIdentTok { val = "true" } } & cur ->
     let expr = TmConst {
@@ -428,6 +453,12 @@ lang BoolParser = AstParserBase + BoolAst
 end
 
 lang CharParser = AstParserBase + CharAst
+  sem canStartAppArgExpr =
+  | { token = CharTok { } } -> true
+
+  sem canStartAppArgType =
+  | { token = UIdentTok { val = "Char" } } -> true
+
   sem parseExprROpen state =
   | { token = CharTok { val = val } } & cur ->
     let expr = TmConst {
@@ -446,6 +477,12 @@ lang CharParser = AstParserBase + CharAst
 end
 
 lang StringParser = AstParserBase + SeqAst + CharAst
+  sem canStartAppArgExpr =
+  | { token = StringTok { } } -> true
+
+  sem canStartAppArgType =
+  | { token = UIdentTok { val = "String" } } -> true
+
   sem parseExprROpen state =
   | { token = StringTok { val = val } } & cur ->
     let expr = TmSeq {
@@ -468,13 +505,9 @@ lang StringParser = AstParserBase + SeqAst + CharAst
 end
 
 lang LetDeclParser = AstParserBase + LetDeclAst
-  sem canAppExpr =
+  sem canStartAppArgExpr =
   | { token = LIdentTok { val = "let" } } -> false
-  | { token = OperatorTok { val = "="} } -> false
   | { token = LIdentTok { val = "in"} } -> false
-
-  sem canAppType =
-  | { token = OperatorTok { val = "="} } -> false
 
   sem parseExprROpen state =
   | { token = LIdentTok { val = "let" } } & toklet ->
@@ -544,7 +577,7 @@ lang LetDeclParser = AstParserBase + LetDeclAst
 end
 
 lang ArrowParser = AstParserBase + FunTypeAst
-  sem canAppType =
+  sem canStartAppArgType =
   | { token = OperatorTok { val = "->" } } -> false
 
   sem parseTypeRClosed state =
