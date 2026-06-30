@@ -178,9 +178,9 @@ lang RecLetsEval = EvalF + RecLetsDeclAst + LamEvalF
         r.bindings in
     recursive let reclet = lam env.
       foldl
-        (lam env. lam t.
+        (lam acc. lam t.
           match t with (s, cls) in
-          Cons ((s, VCls (lam val. cls (reclet env) val)), env))
+          Cons ((s, VCls (lam val. cls (reclet env) val)), acc))
         env ts
     in
     reclet
