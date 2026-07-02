@@ -384,6 +384,11 @@ lang AppParser = AstParserBase + AppAst + AppTypeAst
 end
 
 lang ParenParser = AstParserBase + RecordAst + RecordTypeAst
+  sem beginParseExprInParen: all w. State BrkOpExpr ROpen -> NextTokenResult -> NextTokenResult -> ParseResult w (Expr, NextTokenResult)
+  sem beginParseTypeInParen: all w. State BrkOpType ROpen -> NextTokenResult -> NextTokenResult -> ParseResult w (Type, NextTokenResult)
+  sem endParseExprInParen:   all w. State BrkOpExpr ROpen -> NextTokenResult -> Expr -> NextTokenResult -> ParseResult w (Expr, NextTokenResult)
+  sem endParseTypeInParen:   all w. State BrkOpType ROpen -> NextTokenResult -> Type -> NextTokenResult -> ParseResult w (Type, NextTokenResult)
+
   sem canStartAppArgExpr =
   | { token = LParenTok {} } -> true
 
@@ -453,6 +458,43 @@ lang UnitParser = ParenParser
     } in
     let state = breakableAddAtom (configType ()) (OpTypeAtom typ) state in
     parseTypeRClosed state (nextToken close.stream)
+end
+
+lang TupleParser = ParenParser
+  sem endParseExprInParen state open expr =
+  | { token = CommaTok {} } & comma ->
+    recursive let parseItems = lam acc. lam cur.
+      result.bind (parseExpr cur) (lam expr.
+        match expr with (expr, cur) in
+        let acc = snoc acc expr in
+        switch cur
+          case { token = RParenTok { } } then
+            parseOk (cur, acc)
+          case { token = CommaTok { } } then
+            let cur = nextToken cur.stream in
+            parseItems acc cur
+          case _ then
+            parseErr (cur.info, "Unexpected token in tuple")
+        end
+      )
+    in
+
+    let cur = nextToken comma.stream in
+    let res = parseItems [expr] cur in
+
+    result.bind res (lam res.
+      match res with (close, exprs) in
+      let info = mergeInfo open.info close.info in
+      let expr = TmRecord {
+        bindings = foldli (lam acc. lam i. lam expr.
+          mapInsert (stringToSid (int2string i)) expr acc
+        ) (mapEmpty cmpSID) exprs,
+        ty = ityunknown_ info,
+        info = info
+      } in
+      let state = breakableAddAtom (configExpr ()) (OpExprAtom expr) state in
+      parseExprRClosed state (nextToken close.stream)
+    )
 end
 
 lang BoolParser = AstParserBase + BoolAst
@@ -581,7 +623,7 @@ lang SeqParser = AstParserBase + SeqAst + SeqTypeAst
         info = info
       } in
       let state = breakableAddAtom (configExpr ()) (OpExprAtom expr) state in
-      parseExprRClosed state (nextToken cur.stream)
+      parseExprRClosed state (nextToken tokrb.stream)
     )
 
   sem parseTypeROpen state =
@@ -801,6 +843,7 @@ lang AstParser =
   + AppParser
   + ParenParser
   + UnitParser
+  + TupleParser
   + LetDeclParser
   + LamParser
   + PrecedenceParser
@@ -869,7 +912,7 @@ let printAst = lam str.
   end
 in
 
--- let str = "let a = 1 in let b = 2 in addi a b" in
+-- let str = "[1, [2, 3]]" in
 -- printLn "\nBoot:";
 -- printAstBoot str;
 -- printLn "Native:";
@@ -922,6 +965,8 @@ utest compareWithoutInfo "let a: Int Int -> Int = addi in a" with true in
 utest compare "[]" with true in
 utest compare "[1]" with true in
 utest compare "[1, 2]" with true in
+utest compare "[1, [2, 3]]" with true in
+utest compare "[[1, 2], 3]" with true in
 utest compare "cons 0 [1, 2]" with true in
 
 utest compareWithoutInfo "let a: [Int] = () in a" with true in
@@ -932,5 +977,9 @@ utest compareWithoutInfo "lam a. a" with true in
 utest compareWithoutInfo "lam a: Int. a" with true in
 utest compareWithoutInfo "lam. lam. ()" with true in
 utest compareWithoutInfo "lam a. lam b. addi a b" with true in
+
+utest compare "(1, 2)" with true in
+utest compare "(1, (2, 3))" with true in
+utest compare "((1, 2), 3)" with true in
 
 ()
