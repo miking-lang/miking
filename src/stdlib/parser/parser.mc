@@ -33,6 +33,7 @@ let parseErrs: all w. all a. [(Info, String)] -> ParseResult w a = lam errs.
 lang AstParserBase = Lexer + Ast
   syn BrkOpExpr lstyle rstyle =
   | OpExprAtom Expr
+  | OpExprDecl Decl
 
   syn BrkOpType lstyle rstyle =
   | OpTypeAtom Type
@@ -213,12 +214,11 @@ lang AstParserBase = Lexer + Ast
   | op -> [getInfoType op]
 
   sem getInfoExpr =
-  | OpExprAtom expr ->
-    infoTm expr
+  | OpExprAtom expr -> infoTm expr
+  | OpExprDecl decl -> infoDecl decl
 
   sem getInfoType =
-  | OpTypeAtom typ ->
-    infoTy typ
+  | OpTypeAtom typ -> infoTy typ
 end
 
 lang IntParser = AstParserBase + IntAst
@@ -311,10 +311,20 @@ lang VarParser = AstParserBase + VarAst
       ident = nameNoSym val,
       ty = ityunknown_ cur.info,
       info = cur.info,
-      frozen = false -- TODO: Always false?
+      frozen = false
     } in
     let state = breakableAddAtom (configExpr ()) (OpExprAtom expr) state in
     parseExprRClosed state (nextToken cur.stream)
+
+  | { token = HashStringTok { hash = "frozen", val = val } } & cur ->
+    let expr = TmVar {
+        ident = nameNoSym val,
+        ty = ityunknown_ cur.info,
+        info = cur.info,
+        frozen = true
+      } in
+      let state = breakableAddAtom (configExpr ()) (OpExprAtom expr) state in
+      parseExprRClosed state (nextToken cur.stream)
 end
 
 lang AppParser = AstParserBase + AppAst + AppTypeAst
@@ -377,11 +387,9 @@ end
 lang ParenParser = AstParserBase + RecordAst + RecordTypeAst
   sem canStartAppArgExpr =
   | { token = LParenTok {} } -> true
-  | { token = RParenTok {} } -> false
 
   sem canStartAppArgType =
   | { token = LParenTok {} } -> true
-  | { token = RParenTok {} } -> false
 
   sem parseExprROpen state =
   | { token = LParenTok {} } & open ->
@@ -433,8 +441,7 @@ end
 
 lang BoolParser = AstParserBase + BoolAst
   sem canStartAppArgExpr =
-  | { token = LIdentTok { val = "true" } } -> true
-  | { token = LIdentTok { val = "false" } } -> true
+  | { token = LIdentTok { val = "true" | "false" } } -> true
 
   sem canStartAppArgType =
   | { token = UIdentTok { val = "Bool" } } -> true
@@ -584,23 +591,15 @@ lang SeqParser = AstParserBase + SeqAst + SeqTypeAst
 end
 
 lang LetDeclParser = AstParserBase + LetDeclAst
-  syn BrkOpExpr lstyle rstyle =
-  | OpExprLet Decl
-
-  sem getInfoExpr =
-  | OpExprLet decl ->
-    infoDecl decl
-
   sem canStartAppArgExpr =
-  | { token = LIdentTok { val = "let" } } -> false
-  | { token = LIdentTok { val = "in"} } -> false
+  | { token = LIdentTok { val = "let" | "in" } } -> false
 
   sem parseExprROpen state =
   | { token = LIdentTok { val = "let" } } & toklet ->
     result.bind (parseDecl toklet) (lam decl.
       match decl with (decl, cur) in
 
-      let state = breakableAddPrefix (configExpr ()) (OpExprLet decl) state in
+      let state = breakableAddPrefix (configExpr ()) (OpExprDecl decl) state in
 
       match cur with { token = LIdentTok { val = "in" } } & tokin then
         let cur = nextToken tokin.stream in
@@ -650,7 +649,7 @@ lang LetDeclParser = AstParserBase + LetDeclAst
       parseErr (cur.info, "Missing identifier")
 
   sem constructPrefixExpr =
-  | (OpExprLet decl, inexpr) ->
+  | (OpExprDecl decl, inexpr) ->
     let info = infoDecl decl in
     TmDecl {
       decl = decl,
@@ -744,7 +743,7 @@ end
 lang PrecedenceParser = AppParser + LamParser + LetDeclParser
   sem groupingsAllowedExpr =
   | (OpExprApp _, OpExprApp _) -> GLeft ()
-  | (OpExprLet _, OpExprApp _) -> GRight ()
+  | (OpExprDecl _, OpExprApp _) -> GRight ()
   | (OpExprLam _, OpExprApp _) -> GRight ()
 
   sem groupingsAllowedType =
@@ -875,6 +874,9 @@ utest compare "addi 1 2 3" with true in
 utest compare "addi addi 1 2 3" with true in
 utest compare "addi (addi 1 2) 3" with true in
 utest compare "addi 1 (addi 2 3)" with true in
+
+utest compare "a" with true in
+utest compare "#frozen\"a\"" with true in
 
 utest compareWithoutInfo "()" with true in
 utest compareWithoutInfo "(())" with true in
