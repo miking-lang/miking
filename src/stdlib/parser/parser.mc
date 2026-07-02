@@ -1,10 +1,3 @@
-include "result.mc"
-include "mexpr/ast.mc"
-include "basic-types.mc"
-include "stringid.mc"
-include "mexpr/pprint.mc"
-include "string.mc"
-include "common.mc"
 /-
 
 This will be a parser for MCore.
@@ -97,17 +90,17 @@ lang AstParserBase = Lexer + Ast
   sem getInfoType: all lstyle. all rstyle. BrkOpType lstyle rstyle -> Info
 
   -- The main entry point
-  sem parseExpr +=
+  sem parseExpr =
   | cur ->
     let state = breakableInitState () in
     parseExprROpen state cur
 
-  sem parseType +=
+  sem parseType =
   | cur ->
     let state = breakableInitState () in
     parseTypeROpen state cur
 
-  sem finalizeParseExpr state +=
+  sem finalizeParseExpr state =
   | cur ->
     match breakableFinalizeParse (configExpr ()) state with Some sppf then
       let config: BreakableErrorHighlightConfig BrkOpExpr = {
@@ -132,7 +125,7 @@ lang AstParserBase = Lexer + Ast
     else
       parseErr (cur.info, "Breakable parse error")
 
-  sem finalizeParseType state +=
+  sem finalizeParseType state =
   | cur ->
     match breakableFinalizeParse (configType ()) state with Some sppf then
       let config: BreakableErrorHighlightConfig BrkOpType = {
@@ -157,13 +150,13 @@ lang AstParserBase = Lexer + Ast
     else
       parseErr (cur.info, "Breakable parse error")
 
-  sem canStartAppArgExpr +=
+  sem canStartAppArgExpr =
   | _ -> false
 
-  sem canStartAppArgType +=
+  sem canStartAppArgType =
   | _ -> false
 
-  sem configExpr +=
+  sem configExpr =
   | _ ->
     {
       topAllowed = #frozen"topAllowedExpr",
@@ -173,7 +166,7 @@ lang AstParserBase = Lexer + Ast
       groupingsAllowed = #frozen"groupingsAllowedExpr"
     }
 
-  sem configType +=
+  sem configType =
   | _ ->
     {
       topAllowed = #frozen"topAllowedType",
@@ -183,58 +176,58 @@ lang AstParserBase = Lexer + Ast
       groupingsAllowed = #frozen"groupingsAllowedType"
     }
 
-  sem topAllowedExpr +=
+  sem topAllowedExpr =
   | _ -> true
 
-  sem topAllowedType +=
+  sem topAllowedType =
   | _ -> true
 
-  sem leftAllowedExpr +=
+  sem leftAllowedExpr =
   | _ -> true
 
-  sem leftAllowedType +=
+  sem leftAllowedType =
   | _ -> true
 
-  sem rightAllowedExpr +=
+  sem rightAllowedExpr =
   | _ -> true
 
-  sem rightAllowedType +=
+  sem rightAllowedType =
   | _ -> true
 
-  sem parenAllowedExpr +=
+  sem parenAllowedExpr =
   | _ -> GEither ()
 
-  sem parenAllowedType +=
+  sem parenAllowedType =
   | _ -> GEither ()
 
-  sem groupingsAllowedExpr +=
+  sem groupingsAllowedExpr =
   | _ -> GEither ()
 
-  sem groupingsAllowedType +=
+  sem groupingsAllowedType =
   | _ -> GEither ()
 
-  sem terminalInfosExpr +=
+  sem terminalInfosExpr =
   | op -> [getInfoExpr op]
 
-  sem terminalInfosType +=
+  sem terminalInfosType =
   | op -> [getInfoType op]
 
-  sem getInfoExpr +=
+  sem getInfoExpr =
   | OpExprAtom expr -> infoTm expr
   | OpExprDecl decl -> infoDecl decl
 
-  sem getInfoType +=
+  sem getInfoType =
   | OpTypeAtom typ -> infoTy typ
 end
 
 lang IntParser = AstParserBase + IntAst
-  sem canStartAppArgExpr +=
+  sem canStartAppArgExpr =
   | { token = IntTok { } } -> true
 
-  sem canStartAppArgType +=
+  sem canStartAppArgType =
   | { token = UIdentTok { val = "Int" } } -> true
 
-  sem parseExprROpen state +=
+  sem parseExprROpen state =
   | { token = IntTok { val = val } } & cur ->
     let expr = TmConst {
       val = CInt { val = val },
@@ -244,7 +237,7 @@ lang IntParser = AstParserBase + IntAst
     let state = breakableAddAtom (configExpr ()) (OpExprAtom expr) state in
     parseExprRClosed state (nextToken cur.stream)
 
-  sem parseTypeROpen state +=
+  sem parseTypeROpen state =
   | { token = UIdentTok { val = "Int" } } & cur ->
     let typ = ityint_ cur.info in
     let state = breakableAddAtom (configType ()) (OpTypeAtom typ) state in
@@ -252,13 +245,13 @@ lang IntParser = AstParserBase + IntAst
 end
 
 lang FloatParser = AstParserBase + FloatAst
-  sem canStartAppArgExpr +=
+  sem canStartAppArgExpr =
   | { token = FloatTok { } } -> true
 
-  sem canStartAppArgType +=
+  sem canStartAppArgType =
   | { token = UIdentTok { val = "Float" } } -> true
 
-  sem parseExprROpen state +=
+  sem parseExprROpen state =
   | { token = FloatTok { val = val } } & cur ->
     let expr = TmConst {
       val = CFloat { val = val },
@@ -268,7 +261,7 @@ lang FloatParser = AstParserBase + FloatAst
     let state = breakableAddAtom (configExpr ()) (OpExprAtom expr) state in
     parseExprRClosed state (nextToken cur.stream)
 
-  sem parseTypeROpen state +=
+  sem parseTypeROpen state =
   | { token = UIdentTok { val = "Float" } } & cur ->
     let typ = ityfloat_ cur.info in
     let state = breakableAddAtom (configType ()) (OpTypeAtom typ) state in
@@ -276,10 +269,10 @@ lang FloatParser = AstParserBase + FloatAst
 end
 
 lang NegParser = AstParserBase + IntAst + FloatAst
-  sem canStartAppArgExpr +=
+  sem canStartAppArgExpr =
   | { token = OperatorTok { val = "-" } } -> true
 
-  sem parseExprROpen state +=
+  sem parseExprROpen state =
   | { token = OperatorTok { val = "-" } } & tokneg ->
     let cur = nextToken tokneg.stream in
 
@@ -308,10 +301,10 @@ lang NegParser = AstParserBase + IntAst + FloatAst
 end
 
 lang VarParser = AstParserBase + VarAst
-  sem canStartAppArgExpr +=
+  sem canStartAppArgExpr =
   | { token = LIdentTok { } } -> true
 
-  sem parseExprROpen state +=
+  sem parseExprROpen state =
   | { token = LIdentTok { val = val } } & cur ->
     let expr = TmVar {
       ident = nameNoSym val,
@@ -334,21 +327,21 @@ lang VarParser = AstParserBase + VarAst
 end
 
 lang AppParser = AstParserBase + AppAst + AppTypeAst
-  syn BrkOpExpr lstyle rstyle +=
+  syn BrkOpExpr lstyle rstyle =
   | OpExprApp Info
 
-  syn BrkOpType lstyle rstyle +=
+  syn BrkOpType lstyle rstyle =
   | OpTypeApp Info
 
-  sem getInfoExpr +=
+  sem getInfoExpr =
   | OpExprApp info ->
     info
 
-  sem getInfoType +=
+  sem getInfoType =
   | OpTypeApp info ->
     info
 
-  sem parseExprRClosed state +=
+  sem parseExprRClosed state =
   | cur ->
     -- check if the next token can be part of the current expression.
     match canStartAppArgExpr cur with true then
@@ -359,7 +352,7 @@ lang AppParser = AstParserBase + AppAst + AppTypeAst
     else
       finalizeParseExpr state cur
 
-  sem parseTypeRClosed state +=
+  sem parseTypeRClosed state =
   | cur ->
     -- check if the next token can be part of the current type.
     match canStartAppArgType cur with true then
@@ -370,7 +363,7 @@ lang AppParser = AstParserBase + AppAst + AppTypeAst
     else
       finalizeParseType state cur
 
-  sem constructInfixExpr +=
+  sem constructInfixExpr =
   | (OpExprApp info, lhs, rhs) ->
     let info = mergeInfo (infoTm lhs) (infoTm rhs) in
     TmApp {
@@ -380,7 +373,7 @@ lang AppParser = AstParserBase + AppAst + AppTypeAst
       info = info
     }
 
-  sem constructInfixType +=
+  sem constructInfixType =
   | (OpTypeApp info, lhs, rhs) ->
     let info = mergeInfo (infoTy lhs) (infoTy rhs) in
     TyApp {
@@ -391,17 +384,57 @@ lang AppParser = AstParserBase + AppAst + AppTypeAst
 end
 
 lang ParenParser = AstParserBase + RecordAst + RecordTypeAst
-  sem canStartAppArgExpr +=
+  sem canStartAppArgExpr =
   | { token = LParenTok {} } -> true
 
-  sem canStartAppArgType +=
+  sem canStartAppArgType =
   | { token = LParenTok {} } -> true
 
-  sem parseExprROpen state +=
+  sem beginParseExprInParen state open =
+  | cur ->
+    -- start of new expression in paren
+    result.bind (parseExpr cur) (lam expr.
+      match expr with (expr, cur) in
+      endParseExprInParen state open expr cur
+    )
+
+  sem endParseExprInParen state open expr =
+  | { token = RParenTok {} } & close ->
+    let state = breakableAddAtom (configExpr ()) (OpExprAtom expr) state in
+    parseExprRClosed state (nextToken close.stream)
+
+  | cur -> parseErr (cur.info, "Missing closing parenthesis")
+
+  sem beginParseTypeInParen state open =
+  | cur ->
+    -- start of new type in paren
+    result.bind (parseType cur) (lam typ.
+      match typ with (typ, cur) in
+      endParseTypeInParen state open typ cur
+    )
+
+  sem endParseTypeInParen state open typ =
+  | { token = RParenTok {} } & close ->
+    let state = breakableAddAtom (configType ()) (OpTypeAtom typ) state in
+    parseTypeRClosed state (nextToken close.stream)
+
+  | cur -> parseErr (cur.info, "Missing closing parenthesis")
+
+  sem parseExprROpen state =
   | { token = LParenTok {} } & open ->
-    match (nextToken open.stream) with { token = RParenTok {} } & close then
-      -- this is a unit
-      let info = mergeInfo open.info close.info in
+    beginParseExprInParen state open (nextToken open.stream)
+
+  sem parseTypeROpen state =
+  | { token = LParenTok {} } & open ->
+    beginParseTypeInParen state open (nextToken open.stream)
+
+end
+
+lang UnitParser = ParenParser
+  sem beginParseExprInParen state open =
+  | { token = RParenTok {} } & close ->
+    -- this is a unit
+    let info = mergeInfo open.info close.info in
       let expr = TmRecord {
         bindings = mapEmpty cmpSID,
         ty = ityunknown_ info,
@@ -409,50 +442,27 @@ lang ParenParser = AstParserBase + RecordAst + RecordTypeAst
       } in
       let state = breakableAddAtom (configExpr ()) (OpExprAtom expr) state in
       parseExprRClosed state (nextToken close.stream)
-    else
-      -- start parsing a new expression at (
-      result.bind (parseExpr (nextToken open.stream)) (lam expr.
-        match expr with (expr, cur) in
-        -- and check for a following )
-        match cur with { token = RParenTok {} } & close then
-          let state = breakableAddAtom (configExpr ()) (OpExprAtom expr) state in
-          parseExprRClosed state (nextToken close.stream)
-        else
-          parseErr (cur.info, "Missing closing parenthesis")
-      )
 
-  sem parseTypeROpen state +=
-  | { token = LParenTok {} } & open ->
-    match (nextToken open.stream) with { token = RParenTok {} } & close then
-      -- this is a unit
-      let info = mergeInfo open.info close.info in
-      let typ = TyRecord {
-        fields = mapEmpty cmpSID,
-        info = info
-      } in
-      let state = breakableAddAtom (configType ()) (OpTypeAtom typ) state in
-      parseTypeRClosed state (nextToken close.stream)
-    else
-      -- start parsing a new type at (
-      result.bind (parseType (nextToken open.stream)) (lam typ.
-        match typ with (typ, cur) in
-        -- and check for a following )
-        match cur with { token = RParenTok {} } & close then
-          let state = breakableAddAtom (configType ()) (OpTypeAtom typ) state in
-          parseTypeRClosed state (nextToken close.stream)
-        else
-          parseErr (cur.info, "Missing closing parenthesis")
-      )
+  sem beginParseTypeInParen state open =
+  | { token = RParenTok {} } & close ->
+    -- this is a unit
+    let info = mergeInfo open.info close.info in
+    let typ = TyRecord {
+      fields = mapEmpty cmpSID,
+      info = info
+    } in
+    let state = breakableAddAtom (configType ()) (OpTypeAtom typ) state in
+    parseTypeRClosed state (nextToken close.stream)
 end
 
 lang BoolParser = AstParserBase + BoolAst
-  sem canStartAppArgExpr +=
+  sem canStartAppArgExpr =
   | { token = LIdentTok { val = "true" | "false" } } -> true
 
-  sem canStartAppArgType +=
+  sem canStartAppArgType =
   | { token = UIdentTok { val = "Bool" } } -> true
 
-  sem parseExprROpen state +=
+  sem parseExprROpen state =
   | { token = LIdentTok { val = "true" } } & cur ->
     let expr = TmConst {
       val = CBool { val = true },
@@ -470,7 +480,7 @@ lang BoolParser = AstParserBase + BoolAst
     let state = breakableAddAtom (configExpr ()) (OpExprAtom expr) state in
     parseExprRClosed state (nextToken cur.stream)
 
-  sem parseTypeROpen state +=
+  sem parseTypeROpen state =
   | { token = UIdentTok { val = "Bool" } } & cur ->
     let typ = itybool_ cur.info in
     let state = breakableAddAtom (configType ()) (OpTypeAtom typ) state in
@@ -478,13 +488,13 @@ lang BoolParser = AstParserBase + BoolAst
 end
 
 lang CharParser = AstParserBase + CharAst
-  sem canStartAppArgExpr +=
+  sem canStartAppArgExpr =
   | { token = CharTok { } } -> true
 
-  sem canStartAppArgType +=
+  sem canStartAppArgType =
   | { token = UIdentTok { val = "Char" } } -> true
 
-  sem parseExprROpen state +=
+  sem parseExprROpen state =
   | { token = CharTok { val = val } } & cur ->
     let expr = TmConst {
       val = CChar { val = val },
@@ -494,7 +504,7 @@ lang CharParser = AstParserBase + CharAst
     let state = breakableAddAtom (configExpr ()) (OpExprAtom expr) state in
     parseExprRClosed state (nextToken cur.stream)
 
-  sem parseTypeROpen state +=
+  sem parseTypeROpen state =
   | { token = UIdentTok { val = "Char" } } & cur ->
     let typ = itychar_ cur.info in
     let state = breakableAddAtom (configType ()) (OpTypeAtom typ) state in
@@ -502,13 +512,13 @@ lang CharParser = AstParserBase + CharAst
 end
 
 lang StringParser = AstParserBase + SeqAst + CharAst
-  sem canStartAppArgExpr +=
+  sem canStartAppArgExpr =
   | { token = StringTok { } } -> true
 
-  sem canStartAppArgType +=
+  sem canStartAppArgType =
   | { token = UIdentTok { val = "String" } } -> true
 
-  sem parseExprROpen state +=
+  sem parseExprROpen state =
   | { token = StringTok { val = val } } & cur ->
     let expr = TmSeq {
       tms = map (lam ch. TmConst {
@@ -522,7 +532,7 @@ lang StringParser = AstParserBase + SeqAst + CharAst
     let state = breakableAddAtom (configExpr ()) (OpExprAtom expr) state in
     parseExprRClosed state (nextToken cur.stream)
 
-  sem parseTypeROpen state +=
+  sem parseTypeROpen state =
   | { token = UIdentTok { val = "String" } } & cur ->
     let typ = itystr_ cur.info in
     let state = breakableAddAtom (configType ()) (OpTypeAtom typ) state in
@@ -530,16 +540,13 @@ lang StringParser = AstParserBase + SeqAst + CharAst
 end
 
 lang SeqParser = AstParserBase + SeqAst + SeqTypeAst
-  sem canStartAppArgExpr +=
+  sem canStartAppArgExpr =
   | { token = LBracketTok { } } -> true
-  | { token = RBracketTok { } } -> false
-  | { token = CommaTok { } } -> false
 
-  sem canStartAppArgType +=
+  sem canStartAppArgType =
   | { token = LBracketTok { } } -> true
-  | { token = RBracketTok { } } -> false
 
-  sem parseExprROpen state +=
+  sem parseExprROpen state =
   | { token = LBracketTok { } } & toklb ->
     recursive let parseItems = lam acc. lam cur.
       result.bind (parseExpr cur) (lam expr.
@@ -577,7 +584,7 @@ lang SeqParser = AstParserBase + SeqAst + SeqTypeAst
       parseExprRClosed state (nextToken cur.stream)
     )
 
-  sem parseTypeROpen state +=
+  sem parseTypeROpen state =
   | { token = LBracketTok { } } & toklb ->
     let cur = nextToken toklb.stream in
     result.bind (parseType cur) (lam res.
@@ -597,10 +604,10 @@ lang SeqParser = AstParserBase + SeqAst + SeqTypeAst
 end
 
 lang LetDeclParser = AstParserBase + LetDeclAst
-  sem canStartAppArgExpr +=
+  sem canStartAppArgExpr =
   | { token = LIdentTok { val = "let" | "in" } } -> false
 
-  sem parseExprROpen state +=
+  sem parseExprROpen state =
   | { token = LIdentTok { val = "let" } } & toklet ->
     result.bind (parseDecl toklet) (lam decl.
       match decl with (decl, cur) in
@@ -614,7 +621,7 @@ lang LetDeclParser = AstParserBase + LetDeclAst
         parseErr (cur.info, "Missing in expression")
     )
 
-  sem parseDecl +=
+  sem parseDecl =
   | { token = LIdentTok { val = "let" } } & toklet ->
     let cur = nextToken toklet.stream in
 
@@ -654,7 +661,7 @@ lang LetDeclParser = AstParserBase + LetDeclAst
     else
       parseErr (cur.info, "Missing identifier")
 
-  sem constructPrefixExpr +=
+  sem constructPrefixExpr =
   | (OpExprDecl decl, inexpr) ->
     let info = infoDecl decl in
     TmDecl {
@@ -666,26 +673,22 @@ lang LetDeclParser = AstParserBase + LetDeclAst
 end
 
 lang LamParser = AstParserBase + LamAst + FunTypeAst
-  syn BrkOpExpr lstyle rstyle +=
+  syn BrkOpExpr lstyle rstyle =
   | OpExprLam (Info, String, Type, Type)
 
-  syn BrkOpType lstyle rstyle +=
+  syn BrkOpType lstyle rstyle =
   | OpTypeArrow Info
 
-  sem getInfoExpr +=
+  sem getInfoExpr =
   | OpExprLam (info, _, _, _) -> info
 
-  sem getInfoType +=
+  sem getInfoType =
   | OpTypeArrow info -> info
 
-  sem canStartAppArgExpr +=
+  sem canStartAppArgExpr =
   | { token = LIdentTok { val = "lam" } } -> false
-  | { token = OperatorTok { val = "." } } -> false
 
-  sem canStartAppArgType +=
-  | { token = OperatorTok { val = "->" } } -> false
-
-  sem parseExprROpen state +=
+  sem parseExprROpen state =
   | { token = LIdentTok { val = "lam" } } & toklam ->
     let cur = nextToken toklam.stream in
 
@@ -715,7 +718,7 @@ lang LamParser = AstParserBase + LamAst + FunTypeAst
         parseErr (cur.info, "Missing period")
     )
 
-  sem parseTypeRClosed state +=
+  sem parseTypeRClosed state =
   | { token = OperatorTok { val = "->" } } & cur ->
     match breakableAddInfix (configType ()) (OpTypeArrow cur.info) state with Some(state) then
       let cur = nextToken cur.stream in
@@ -723,7 +726,7 @@ lang LamParser = AstParserBase + LamAst + FunTypeAst
     else
       parseErr (cur.info, "Breakable add infix error")
 
-  sem constructPrefixExpr +=
+  sem constructPrefixExpr =
   | (OpExprLam (beginInfo, ident, tyParam, tyAnnot), body) ->
     let info = mergeInfo beginInfo (infoTm body) in
     TmLam {
@@ -735,7 +738,7 @@ lang LamParser = AstParserBase + LamAst + FunTypeAst
       info = info
     }
 
-  sem constructInfixType +=
+  sem constructInfixType =
   | (OpTypeArrow info, from, to) ->
     let info = mergeInfo (infoTy from) (infoTy to) in
     TyArrow {
@@ -747,12 +750,12 @@ end
 
 -- TODO: Better solution
 lang PrecedenceParser = AppParser + LamParser + LetDeclParser
-  sem groupingsAllowedExpr +=
+  sem groupingsAllowedExpr =
   | (OpExprApp _, OpExprApp _) -> GLeft ()
   | (OpExprDecl _, OpExprApp _) -> GRight ()
   | (OpExprLam _, OpExprApp _) -> GRight ()
 
-  sem groupingsAllowedType +=
+  sem groupingsAllowedType =
   | (OpTypeApp _, OpTypeApp _)  -> GLeft ()
   | (OpTypeArrow _, OpTypeArrow _) -> GLeft ()
   | (OpTypeApp _, OpTypeArrow _) -> GLeft ()
@@ -760,27 +763,27 @@ lang PrecedenceParser = AppParser + LamParser + LetDeclParser
 end
 
 lang UnexpectedTokenParser = AstParserBase
-  sem parseExprROpen state +=
+  sem parseExprROpen state =
   | cur ->
     let str = concat "Unexpexted token while parsing expr: " (tokToStr cur.token) in
     parseErr (cur.info, str)
 
-  sem parseDecl +=
+  sem parseDecl =
   | cur ->
     let str = concat "Unexpexted token while parsing decl: " (tokToStr cur.token) in
     parseErr (cur.info, str)
 
-  sem parseTypeROpen state +=
+  sem parseTypeROpen state =
   | cur ->
     let str = concat "Unexpexted token while parsing type: " (tokToStr cur.token) in
     parseErr (cur.info, str)
 
-  sem parseKind +=
+  sem parseKind =
   | cur ->
     let str = concat "Unexpexted token while parsing kind: " (tokToStr cur.token) in
     parseErr (cur.info, str)
 
-  sem parsePat +=
+  sem parsePat =
   | cur ->
     let str = concat "Unexpexted token while parsing pat: " (tokToStr cur.token) in
     parseErr (cur.info, str)
@@ -797,6 +800,7 @@ lang AstParser =
   + VarParser
   + AppParser
   + ParenParser
+  + UnitParser
   + LetDeclParser
   + LamParser
   + PrecedenceParser
