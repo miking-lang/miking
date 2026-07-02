@@ -30,7 +30,7 @@ let parseErr: all w. all a. (Info, String) -> ParseResult w a = lam e. result.er
 let parseErrs: all w. all a. [String -> (Info, String)] -> ParseResult w a = lam errs.
   foldl1 result.withAnnotations (map result.err errs)
 
-lang AstParserBase = Lexer + Ast
+lang AstParserBase = Lexer + Ast + DeclAst
   syn BrkOpExpr lstyle rstyle =
   | OpExprAtom Expr
   | OpExprDecl Decl
@@ -155,6 +155,16 @@ lang AstParserBase = Lexer + Ast
 
   sem canStartAppArgType =
   | _ -> false
+
+  sem constructPrefixExpr =
+  | (OpExprDecl decl, inexpr) ->
+    let info = infoDecl decl in
+    TmDecl {
+      decl = decl,
+      inexpr = inexpr,
+      ty = ityunknown_ info,
+      info = info
+    }
 
   sem configExpr =
   | _ ->
@@ -835,16 +845,43 @@ lang LetDeclParser = AstParserBase + LetDeclAst
       )
     else
       parseErr (cur.info, "Missing identifier")
+end
 
-  sem constructPrefixExpr =
-  | (OpExprDecl decl, inexpr) ->
-    let info = infoDecl decl in
-    TmDecl {
-      decl = decl,
-      inexpr = inexpr,
-      ty = ityunknown_ info,
-      info = info
-    }
+lang RecLetsDeclParser = AstParserBase + RecLetsDeclAst
+  sem canStartAppArgExpr =
+  | { token = LIdentTok { val = "recursive" | "let" | "in" } } -> false
+
+  sem parseExprROpen state =
+  | { token = LIdentTok { val = "recursive" } } & rokrec ->
+    recursive let parseItems = lam acc. lam cur.
+      result.bind (parseDecl cur) (lam decl.
+        match decl with (DeclLet decl, cur) in
+        let acc = snoc acc decl in
+        switch cur
+          case { token = LIdentTok { val = "in" } } & tokin then
+            let cur = nextToken tokin.stream in
+            parseOk (tokin, cur, acc)
+          case { token = LIdentTok { val = "let" } } then
+            parseItems acc cur
+          case _ then
+            parseErr (cur.info, "Unexpected token in recursive declaration")
+        end
+      )
+    in
+
+    let cur = nextToken rokrec.stream in
+    let res = parseItems [] cur in
+
+    result.bind res (lam res.
+      match res with (tokin, cur, bindings) in
+      let info = mergeInfo rokrec.info tokin.info in
+      let decl = DeclRecLets {
+        bindings = bindings,
+        info = info
+      } in
+      let state = breakableAddPrefix (configExpr ()) (OpExprDecl decl) state in
+      parseExprROpen state (nextToken tokin.stream)
+    )
 end
 
 lang LamParser = AstParserBase + LamAst + FunTypeAst
@@ -923,6 +960,17 @@ lang LamParser = AstParserBase + LamAst + FunTypeAst
     }
 end
 
+lang NeverParser = AstParserBase + NeverAst
+  sem parseExprROpen state =
+  | { token = LIdentTok { val = "never" } } & cur ->
+    let expr = TmNever {
+      ty = ityunknown_ cur.info,
+      info = cur.info
+    } in
+    let state = breakableAddAtom (configExpr ()) (OpExprAtom expr) state in
+    parseExprRClosed state (nextToken cur.stream)
+end
+
 -- TODO: Better solution
 lang PrecedenceParser = AppParser + LamParser + LetDeclParser
   sem groupingsAllowedExpr =
@@ -979,7 +1027,9 @@ lang AstParser =
   + TupleParser
   + RecordParser
   + LetDeclParser
+  + RecLetsDeclParser
   + LamParser
+  + NeverParser
   + PrecedenceParser
   + UnexpectedTokenParser
 end
@@ -1046,7 +1096,7 @@ let printAst = lam str.
   end
 in
 
--- let str = "let a: {a: Int, b: Bool} = () in a" in
+-- let str = "recursive let a = lam. 1 in ()" in
 -- printLn "\nBoot:";
 -- printAstBoot str;
 -- printLn "Native:";
@@ -1123,5 +1173,11 @@ utest compare "{a = 1, bc = { b = 2, c = 3 } }" with true in
 
 utest compareWithoutInfo "let a: { a: Int, b: Bool } = () in a" with true in
 utest compareWithoutInfo "let a: { a: Int, bc: { b: Bool, c: Char } } = () in a" with true in
+
+utest compare "never" with true in
+
+utest compareWithoutInfo "recursive let a = lam b. 1 in c" with true in
+
+utest compareWithoutInfo "recursive let a = lam b. 1 let c = lam d. 2 in e" with true in
 
 ()
