@@ -680,6 +680,104 @@ lang SeqParser = AstParserBase + SeqAst + SeqTypeAst
 
 end
 
+lang RecordParser = AstParserBase + RecordAst + RecordTypeAst
+  sem canStartAppArgExpr =
+  | { token = LBraceTok { } } -> true
+
+  sem canStartAppArgType =
+  | { token = LBraceTok { } } -> true
+
+  sem parseExprROpen state =
+  | { token = LBraceTok { } } & toklb ->
+    recursive let parseItems = lam acc. lam cur.
+      match cur with { token = LIdentTok { val = field } } & tokfield then
+        match nextToken tokfield.stream with { token = OperatorTok { val = "=" } } & tokeq then
+          let cur = nextToken tokeq.stream in
+          result.bind (parseExpr cur) (lam expr.
+            match expr with (expr, cur) in
+            let acc = mapInsert (stringToSid field) expr acc in
+            switch cur
+              case { token = RBraceTok { } } then
+                parseOk (cur, acc)
+              case { token = CommaTok { } } then
+                let cur = nextToken cur.stream in
+                parseItems acc cur
+              case _ then
+                parseErr (cur.info, "Unexpected token in sequence")
+            end
+          )
+        else
+          parseErr (cur.info, "Missing assignment")
+      else
+        parseErr (cur.info, "Unexpected token in record")
+    in
+
+    let cur = nextToken toklb.stream in
+    let res = switch cur
+      case { token = RBraceTok { } } then
+        parseOk (cur, (mapEmpty cmpSID))
+      case _ then
+        parseItems (mapEmpty cmpSID) cur
+    end in
+
+    result.bind res (lam res.
+      match res with (tokrb, bindings) in
+      let info = mergeInfo toklb.info tokrb.info in
+      let expr = TmRecord {
+        bindings = bindings,
+        ty = ityunknown_ info,
+        info = info
+      } in
+      let state = breakableAddAtom (configExpr ()) (OpExprAtom expr) state in
+      parseExprRClosed state (nextToken tokrb.stream)
+    )
+
+  sem parseTypeROpen state =
+  | { token = LBraceTok { } } & toklb ->
+    recursive let parseItems = lam acc. lam cur.
+      match cur with { token = LIdentTok { val = field } } & tokfield then
+        match nextToken tokfield.stream with { token = OperatorTok { val = ":" } } & tokcol then
+          let cur = nextToken tokcol.stream in
+          result.bind (parseType cur) (lam typ.
+            match typ with (typ, cur) in
+            let acc = mapInsert (stringToSid field) typ acc in
+            switch cur
+              case { token = RBraceTok { } } then
+                parseOk (cur, acc)
+              case { token = CommaTok { } } then
+                let cur = nextToken cur.stream in
+                parseItems acc cur
+              case _ then
+                parseErr (cur.info, "Unexpected token in sequence")
+            end
+          )
+        else
+          parseErr (cur.info, "Missing type assignment")
+      else
+        parseErr (cur.info, "Unexpected token in record")
+    in
+
+    let cur = nextToken toklb.stream in
+    let res = switch cur
+      case { token = RBraceTok { } } then
+        parseOk (cur, (mapEmpty cmpSID))
+      case _ then
+        parseItems (mapEmpty cmpSID) cur
+    end in
+
+    result.bind res (lam res.
+      match res with (tokrb, fields) in
+      let info = mergeInfo toklb.info tokrb.info in
+      let typ = TyRecord {
+        fields = fields,
+        info = info
+      } in
+      let state = breakableAddAtom (configType ()) (OpTypeAtom typ) state in
+      parseTypeRClosed state (nextToken tokrb.stream)
+    )
+
+end
+
 lang LetDeclParser = AstParserBase + LetDeclAst
   sem canStartAppArgExpr =
   | { token = LIdentTok { val = "let" | "in" } } -> false
@@ -879,6 +977,7 @@ lang AstParser =
   + ParenParser
   + UnitParser
   + TupleParser
+  + RecordParser
   + LetDeclParser
   + LamParser
   + PrecedenceParser
@@ -947,7 +1046,7 @@ let printAst = lam str.
   end
 in
 
--- let str = "let a: (Int, Int) = () in a" in
+-- let str = "let a: {a: Int, b: Bool} = () in a" in
 -- printLn "\nBoot:";
 -- printAstBoot str;
 -- printLn "Native:";
@@ -1018,5 +1117,11 @@ utest compare "(1, (2, 3))" with true in
 utest compare "((1, 2), 3)" with true in
 
 utest compareWithoutInfo "let a: ((Int, Bool), String) = () in a" with true in
+
+utest compare "{a = 1, b = 2}" with true in
+utest compare "{a = 1, bc = { b = 2, c = 3 } }" with true in
+
+utest compareWithoutInfo "let a: { a: Int, b: Bool } = () in a" with true in
+utest compareWithoutInfo "let a: { a: Int, bc: { b: Bool, c: Char } } = () in a" with true in
 
 ()
