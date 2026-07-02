@@ -30,11 +30,11 @@ include "map.mc"
 include "parser/breakable.mc"
 include "name.mc"
 
-type ParseResult w a = Result w (Info, String) a
+type ParseResult w a = Result w (String -> (Info, String)) a
 
 let parseOk:  all w. all a. a              -> ParseResult w a = lam a. result.ok a
-let parseErr: all w. all a. (Info, String) -> ParseResult w a = lam e. result.err e
-let parseErrs: all w. all a. [(Info, String)] -> ParseResult w a = lam errs.
+let parseErr: all w. all a. (Info, String) -> ParseResult w a = lam e. result.err (lam src. e)
+let parseErrs: all w. all a. [String -> (Info, String)] -> ParseResult w a = lam errs.
   foldl1 result.withAnnotations (map result.err errs)
 
 lang AstParserBase = Lexer + Ast
@@ -118,10 +118,9 @@ lang AstParserBase = Lexer + Ast
         lpar = "(",
         rpar = ")"
       } in
-      -- TODO use correct src string
-      let errs = breakableDefaultHighlight config "" sppf in
-      match errs with [first] ++ _ then
-        parseErrs errs
+      let errSpecs = breakableToErrorHighlightSpec config sppf in
+      match errSpecs with [first] ++ _ then
+        parseErrs (map breakableHighlightOne errSpecs)
       else
         let expr = breakableConstructSimple {
           constructAtom = lam op. match op with OpExprAtom expr in expr,
@@ -144,9 +143,9 @@ lang AstParserBase = Lexer + Ast
         lpar = "(",
         rpar = ")"
       } in
-      let errs = breakableDefaultHighlight config cur.stream.str sppf in
-      match errs with [first] ++ _ then
-        parseErrs errs
+      let errSpecs = breakableToErrorHighlightSpec config sppf in
+      match errSpecs with [first] ++ _ then
+        parseErrs (map breakableHighlightOne errSpecs)
       else
         let typ = breakableConstructSimple {
           constructAtom = lam op. match op with OpTypeAtom typ in typ,
@@ -842,8 +841,8 @@ let compareWithoutInfo = lam str.
     false
   in
 
-let printAst = lam expr.
-  switch result.consume expr
+let printAstBoot = lam str.
+  switch result.consume (parseBoot str)
   case (w, Left e) then
     printLn "Parse error:";
     iter (lam e.
@@ -854,11 +853,23 @@ let printAst = lam expr.
   end
 in
 
+let printAst = lam str.
+  switch result.consume (parse str)
+  case (w, Left e) then
+    printLn "Parse error:";
+    iter (lam e.
+      match e str with (info, msg) in printLn (infoErrorString info msg)
+    ) e
+  case (w, Right expr) then
+    printLn (jsonStr expr)
+  end
+in
+
 -- let str = "let a = 1 in let b = 2 in addi a b" in
 -- printLn "\nBoot:";
--- printAst (parseBoot str);
+-- printAstBoot str;
 -- printLn "Native:";
--- printAst (parse str);
+-- printAst str;
 
 utest compare "0" with true in
 utest compare "1" with true in
