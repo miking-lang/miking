@@ -1,5 +1,8 @@
 -- Implementation of AVL trees.
 
+include "basic-types.mc"
+include "seq.mc"
+include "bool.mc"
 include "option.mc"
 include "string.mc"
 
