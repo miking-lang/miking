@@ -1,6 +1,8 @@
 include "either.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/pprint.mc"
+include "mexpr/type.mc"
+include "result.mc"
 /-
 
 NOTE(vipa, 2022-05-20): This file decomposes nested patterns into a
@@ -88,7 +90,7 @@ let _empty : all v. () -> Map Name v = lam. mapEmpty nameCmp
 let _singleton : all v. Name -> v -> Map Name v =
   lam n. lam p. mapInsert n p (_empty ())
 
-lang ShallowBase = Ast + NamedPat
+lang ShallowBase = Ast + NamedPat + DeclAst + UnknownTypeAst
   syn SPat =
   | SPatWild ()
 
@@ -112,6 +114,17 @@ lang ShallowBase = Ast + NamedPat
   -- A pair of new names to examine, along with the names that were
   -- bound.
   type PatUpdate = [BranchInfo]
+
+  type LowerEnv =
+    { int2string : Option Name
+    , escapeChar : Option Name
+    , cons : Map Name (Set Name)
+    -- Maps each constructor to the type it belongs to, i.e. the
+    -- reverse of `cons`. Used to find the full set of sibling
+    -- constructors for a `PatCon` from its `ident` alone, without
+    -- relying on its (occasionally unresolved) `ty` field.
+    , conTys : Map Name Name
+    }
 
   -- # Interface to implement
 
@@ -142,6 +155,59 @@ lang ShallowBase = Ast + NamedPat
   sem mkMatch : Name -> Expr -> Expr -> SPat -> Expr
   sem mkMatch scrutinee t e =
   | SPatWild _ -> t
+
+  syn FormatString =
+  | FSLit String
+  | FSStrings (String, [Expr], String)
+
+  sem fsAppend : FormatString -> FormatString -> FormatString
+  sem fsAppend x = | y -> _fsAppend (x, y)
+  sem _fsAppend : (FormatString, FormatString) -> FormatString
+  sem _fsAppend =
+  | (FSLit l, FSLit r) -> FSLit (concat l r)
+  | (FSLit l, FSStrings (rl, r, rr)) -> FSStrings (concat l rl, r, rr)
+  | (FSStrings (ll, l, lr), FSLit r) -> FSStrings (ll, l, concat lr r)
+  | (FSStrings (ll, l, lr), FSStrings (rl, r, rr)) ->
+    let middle = concat lr rl in
+    let middle = if null middle then [] else [withType tystr_ (str_ middle)] in
+    FSStrings (ll, join [l, middle, r], rr)
+
+  sem fsString : Expr -> FormatString
+  sem fsString = | e -> FSStrings ("", [e], "")
+
+  syn FormatKind =
+  | FKChar
+  | FKApp
+  | FKClosed
+
+  type PartialFormat = (FormatKind, FormatString)
+
+  sem pfToFs : PartialFormat -> FormatString
+  sem pfToFs =
+  | (FKChar _, fs) -> foldl1 fsAppend [FSLit "'", fs, FSLit "'"]
+  | (FKApp _ | FKClosed _, fs) -> fs
+
+  sem fsToExpr : FormatString -> Expr
+  sem fsToExpr =
+  | FSLit str -> withType tystr_ (str_ str)
+  | FSStrings (l, m, r) ->
+    let l = if null l then [] else [withType tystr_ (str_ l)] in
+    let r = if null r then [] else [withType tystr_ (str_ r)] in
+    let strs = join [l, m, r] in
+    switch strs
+    case [] then withType tystr_ (str_ [])
+    case [str] then str
+    case [str] ++ strs then foldl (lam acc. lam s. withType tystr_ (concat_ acc s)) str strs
+    end
+
+  sem spatErrorFormat : LowerEnv -> (Name -> PartialFormat) -> Name -> Either [SPat] SPat -> PartialFormat
+  sem spatErrorFormat env lookup scrutinee =
+  | Right (SPatWild _) -> (FKClosed (), FSLit "_")
+  | Left ([SPatWild _] ++ _) -> (FKClosed (), FSLit "!_")
+
+  sem spatSubtract : (SPat, SPat) -> Option SPat
+  sem spatSubtract =
+  | (l, r) -> if eqi 0 (shallowCmp l r) then None () else Some l
 
   -- The singular SPat is just there to choose the implementation,
   -- its contents should be ignored; it's also present in the set.
@@ -270,36 +336,97 @@ lang ShallowBase = Ast + NamedPat
         end
     in work (nameNoSym "") [] branches
 
-  sem collectNames : Pat -> Set Name
+  sem collectNames : Pat -> Map Name Type
   sem collectNames =
-  | PatNamed {ident = PName n} -> setInsert n (setEmpty nameCmp)
-  | p -> sfold_Pat_Pat (lam acc. lam p. setUnion acc (collectNames p)) (setEmpty nameCmp) p
+  | PatNamed {ident = PName n, ty = ty} -> _singleton n ty
+  | p -> sfold_Pat_Pat (lam acc. lam p. mapUnion acc (collectNames p)) (_empty ()) p
 
   sem lowerToExpr
-    : Name
+    : LowerEnv
+    -> Name
     -> [(Pat, Expr)]
     -> Expr
     -> Expr
-  sem lowerToExpr scrutinee branches = | fallthrough ->
+end
+
+lang DedupBranchesAndInformativeNever = ShallowBase + NeverAst + AppAst + SeqAst + CharAst + FunTypeAst
+  sem lowerToExpr env scrutinee branches = | fallthrough ->
     let inconsistentError = lam info. lam name.
       errorSingle [info] (join ["Inconsistent pattern; '", nameGetStr name, "' is not always bound."]) in
-    type BranchLibrary = [(Info, [Name], Expr)] in
-    type CountingTree = {count : Map Int Int, create : [Map Name Name -> Expr] -> Expr} in
+    let resultTy =
+      let candidates = snoc (map (lam pair. pair.1) branches) fallthrough in
+      match find (lam body. match tyTm body with TyUnknown _ then false else true) candidates
+      with Some body then tyTm body
+      else tyunknown_
+    in
+    -- Local helpers to make it a bit easier to build ASTs with `ty`
+    -- fields properly
+    let mkTypedLam : Name -> Type -> Expr -> Expr = lam n. lam ty. lam body.
+      withType (tyarrow_ ty (tyTm body)) (nlam_ n ty body) in
+    let mkTypedLams : [(Name, Type)] -> Expr -> Expr = lam params. lam body.
+      foldr (lam p. lam acc. mkTypedLam p.0 p.1 acc) body params in
+    let mkTypedApp : Expr -> Expr -> Expr = lam f. lam arg.
+      match tyTm f with TyArrow r then withType r.to (app_ f arg)
+      else app_ f arg in
+    let mkTypedAppSeq : Expr -> [Expr] -> Expr = lam f. lam args.
+      foldl mkTypedApp f args in
+    type BranchLibrary = [(Info, [(Name, Type)], Expr)] in
+    type CountingTree = {count : Map Int Int, create : Map Name (Result () SPat SPat) -> [Map Name Name -> Expr] -> Expr} in
     let addBranch : BranchLibrary -> (Pat, Expr) -> (BranchLibrary, (Pat, Map Name Name -> CountingTree))
       = lam library. lam branch.
         match branch with (pat, branch) in
-        let names = setToSeq (collectNames pat) in
-        let idx = length library in
-        let createTree = lam nameMap.
-          { count = mapSingleton subi idx 1
-          , create = lam library.
-            get library idx nameMap
-          } in
-        (snoc library (infoPat pat, names, branch), (pat, createTree)) in
+        let neverAndContext = switch branch
+          case TmNever {info = info} then Some (info, "")
+          case TmApp {lhs = TmNever {info = info}, rhs = TmSeq seq} then
+            let asChar = lam tm. match tm with TmConst {val = CChar {val = v}}
+              then Some v
+              else None () in
+            match optionMapM asChar seq.tms with Some context
+            then Some (info, context)
+            else None ()
+          case _ then None ()
+          end in
+        match neverAndContext with Some (info, context) then
+          let createTree = lam.
+            { count = mapEmpty subi
+            , create = lam history. lam.
+              recursive let work = lam n.
+                switch optionMap result.consume (mapLookup n history)
+                case Some (_, x) then spatErrorFormat env work n x
+                case None _ then (FKClosed (), FSLit "_")
+                end in
+              let pat = fsToExpr (pfToFs (work scrutinee)) in
+              let msg = withType tystr_
+                (snoc_
+                  (withType tystr_
+                    (concat_ (withType tystr_ (str_ (infoErrorString info (join ["Unmatched pattern", context, ": "])))) pat))
+                  (char_ '\n')) in
+              -- NOTE(vipa, 2026-07-14): It turns out that the
+              -- highlighting is comparatively slow (0.5ms per call,
+              -- and this code path is called *a lot*), so we only
+              -- give an info field for the error for now.
+              -- match errorMsg [{errorDefault with info = info}] {single = "", multi = ""} with (info, msg) in
+              -- let msg = concat_ (concat_ (str_ (infoErrorString info "")) pat) (str_ (cons '\n' msg)) in
+              let print = withType tyunit_ (print_ msg) in
+              let exit = withType resultTy (exit_ (int_ 1)) in
+              semi_ print exit
+            } in
+          (library, (pat, createTree))
+        else
+          let names = mapBindings (collectNames pat) in
+          let idx = length library in
+          let createTree = lam nameMap.
+            { count = mapSingleton subi idx 1
+            , create = lam. lam library.
+              get library idx nameMap
+            } in
+          (snoc library (infoPat pat, names, branch), (pat, createTree)) in
     let mkMatch = lam n. lam spat. lam thn. lam els.
       { count = mapUnionWith addi thn.count els.count
-      , create = lam library.
-        mkMatch n (thn.create library) (els.create library) spat
+      , create = lam history. lam library.
+        let thnHistory = mapInsert n (result.ok spat) history in
+        let elsHistory = mapInsertWith result.or n (result.err spat) history in
+        mkMatch n (thn.create thnHistory library) (els.create elsHistory library) spat
       } in
     match mapAccumL addBranch [] branches with (library, branches) in
     match addBranch library (pvarw_, fallthrough) with (library, (_, fallthrough)) in
@@ -308,23 +435,23 @@ lang ShallowBase = Ast + NamedPat
       match branch with (info, names, body) in
       if gti (mapLookupOr 0 acc.idx res.count) 1 then
         let fName = nameSym "matchBody" in
-        let body = if null names
-          then ulam_ "" body
-          else nulams_ names body in
-        let decl = nulet_ fName body in
+        let fnBody = if null names
+          then mkTypedLam (nameNoSym "") tyunit_ body
+          else mkTypedLams names body in
+        let decl = nlet_ fName (tyTm fnBody) fnBody in
         let f = if null names
-          then lam. app_ (nvar_ fName) unit_
+          then lam. mkTypedApp (withType (tyTm fnBody) (nvar_ fName)) unit_
           else lam nameMap.
             let lookup = lam n. mapLookupOrElse (lam. inconsistentError info n) n nameMap in
-            appSeq_ (nvar_ fName) (map (lam n. nvar_ (lookup n)) names) in
+            mkTypedAppSeq (withType (tyTm fnBody) (nvar_ fName)) (map (lam nt. withType nt.1 (nvar_ (lookup nt.0))) names) in
         ({idx = addi acc.idx 1, lets = snoc acc.lets decl}, f)
       else
         let f = lam nameMap.
           let lookup = lam n. mapLookupOrElse (lam. inconsistentError info n) n nameMap in
-          bindall_ (map (lam n. nulet_ n (nvar_ (lookup n))) names) body in
+          bindall_ (map (lam nt. nlet_ nt.0 nt.1 (withType nt.1 (nvar_ (lookup nt.0)))) names) body in
         ({acc with idx = addi acc.idx 1}, f) in
     match mapAccumL updateBranch {idx = 0, lets = []} library with ({lets = lets}, library) in
-    bindall_ lets (res.create library)
+    bindall_ lets (res.create (mapEmpty nameCmp) library)
 end
 
 lang ShallowAnd = ShallowBase + AndPat
@@ -441,7 +568,7 @@ lang ShallowNot = ShallowBase + NotPat + OrPat + AndPat
     (negSubPatterns, failPat)
 
   sem collectNames =
-  | PatNot _ -> setEmpty nameCmp
+  | PatNot _ -> _empty ()
 end
 
 lang ShallowInt = ShallowBase + IntPat
@@ -460,7 +587,16 @@ lang ShallowInt = ShallowBase + IntPat
 
   sem mkMatch scrutinee t e =
   | SPatInt i ->
-    withType (tyTm t) (match_ (nvar_ scrutinee) (withTypePat tyint_ (withInfoPat i.info (pint_ i.val))) t e)
+    withType (tyTm t) (match_ (withType tyint_ (nvar_ scrutinee)) (withTypePat tyint_ (withInfoPat i.info (pint_ i.val))) t e)
+
+  sem spatErrorFormat env lookup scrutinee =
+  | Right (SPatInt i) -> (FKClosed (), FSLit (int2string i.val))
+  | Left ([SPatInt x] ++ i) ->
+    match env.int2string with Some int2string then
+      (FKClosed (), fsString (withType tystr_ (app_ (nvar_ int2string) (nvar_ scrutinee))))
+    else
+    let spatToInt = lam spat. match spat with SPatInt i in FSLit (concat " | " (int2string i.val)) in
+    (FKClosed (), foldl1 fsAppend [FSLit "!(", foldl fsAppend (FSLit (int2string x.val)) (map spatToInt i), FSLit ")"])
 
   sem shallowCmp =
   | (SPatInt l, SPatInt r) -> subi l.val r.val
@@ -480,9 +616,18 @@ lang ShallowChar = ShallowBase + CharPat
   sem collectShallows =
   | PatChar x -> _ssingleton (SPatChar {val = x.val, info = x.info})
 
+  sem spatErrorFormat env lookup scrutinee =
+  | Right (SPatChar c) -> (FKChar (), FSLit (escapeChar c.val))
+  | Left ([SPatChar x] ++ c) ->
+    match env.escapeChar with Some escapeChar then
+      (FKChar (), fsString (withType tystr_ (app_ (nvar_ escapeChar) (nvar_ scrutinee))))
+    else
+    let spatToChar = lam spat. match spat with SPatChar c in FSLit (concat " | " (escapeChar c.val)) in
+    (FKClosed (), foldl1 fsAppend [FSLit "!(", foldl fsAppend (FSLit (escapeChar x.val)) (map spatToChar c), FSLit ")"])
+
   sem mkMatch scrutinee t e =
   | SPatChar v ->
-    withType (tyTm t) (match_ (nvar_ scrutinee) (withTypePat tychar_ (withInfoPat v.info (pchar_ v.val))) t e)
+    withType (tyTm t) (match_ (withType tychar_ (nvar_ scrutinee)) (withTypePat tychar_ (withInfoPat v.info (pchar_ v.val))) t e)
 
   sem shallowCmp =
   | (SPatChar l, SPatChar r) -> cmpChar l.val r.val
@@ -502,9 +647,15 @@ lang ShallowBool = ShallowBase + BoolPat
   sem collectShallows =
   | PatBool x -> _ssingleton (SPatBool {val = x.val, info = x.info})
 
+  sem spatErrorFormat env lookup scrutinee =
+  | Right (SPatBool c) -> (FKClosed (), FSLit (bool2string c.val))
+  | Left ([SPatBool {val = true}]) -> (FKClosed (), FSLit "false")
+  | Left ([SPatBool {val = false}]) -> (FKClosed (), FSLit "true")
+  | Left ([SPatBool _] ++ _) -> (FKClosed (), FSLit "!_")
+
   sem mkMatch scrutinee t e =
   | SPatBool v ->
-    withType (tyTm t) (match_ (nvar_ scrutinee) (withTypePat tybool_ (withInfoPat v.info (pbool_ v.val))) t e)
+    withType (tyTm t) (match_ (withType tybool_ (nvar_ scrutinee)) (withTypePat tybool_ (withInfoPat v.info (pbool_ v.val))) t e)
 
   sem shallowCmp =
   | (SPatBool {val = true}, SPatBool {val = true}) -> 0
@@ -532,14 +683,38 @@ lang ShallowRecord = ShallowBase + RecordPat + RecordTypeAst + PrettyPrint
     else errorSingle [px.info]
       (join ["I can't immediately see the record type of this pattern, it's a ", type2str px.ty])
 
+  sem spatErrorFormat env lookup scrutinee =
+  | Right (SPatRecord x) ->
+    let bindings = mapMap (lam x. pfToFs (lookup x)) x.bindings in
+    match record2tuple bindings with Some subs then
+      let inner = match subs with [sub]
+        then fsAppend sub (FSLit ",")
+        else foldl fsAppend (FSLit "") (intersperse (FSLit ", ") subs) in
+      (FKClosed (), foldl1 fsAppend [FSLit "(", inner, FSLit ")"])
+    else
+      let f = lam k. lam v.
+        [FSLit (pprintLabelString k), FSLit " = ", v] in
+      ( FKClosed ()
+      , foldl1 fsAppend
+        (join
+          [ [FSLit "{"]
+          , seqJoin [FSLit ", "] (mapValues (mapMapWithKey f bindings))
+          , [FSLit "}"]
+          ])
+      )
+  | Left ([SPatRecord _] ++ _) -> (FKClosed (), FSLit "!_")
+
   sem mkMatch scrutinee t e =
   | SPatRecord x ->
+    let fields = match inspectType x.ty with TyRecord tr then tr.fields
+      else errorSingle [x.info]
+        (join ["I can't immediately see the record type of this pattern, it's a ", type2str x.ty]) in
     let pat = PatRecord
-      { bindings = mapMap npvar_ x.bindings
+      { bindings = mapMapWithKey (lam sid. lam n. withTypePat (mapFindExn sid fields) (npvar_ n)) x.bindings
       , ty = x.ty
       , info = x.info
       } in
-    withInfo x.info (withType (tyTm t) (match_ (nvar_ scrutinee) pat t (withType (tyTm t) never_)))
+    withInfo x.info (withType (tyTm t) (match_ (withType x.ty (nvar_ scrutinee)) pat t (withType (tyTm t) never_)))
 
   sem shallowIsInfallible =
   | SPatRecord _ -> true
@@ -658,74 +833,151 @@ lang ShallowSeq = ShallowBase + SeqTotPat + SeqEdgePat + SeqTypeAst
     , info = x.info
     })
 
+  sem spatErrorFormat env lookup scrutinee =
+  | Right (SPatSeqTot x) ->
+    let elements = map (lam x. pfToFs (lookup x)) x.elements in
+    (FKClosed (), foldl1 fsAppend (join [[FSLit "["], intersperse (FSLit ", ") elements, [FSLit "]"]]))
+  | Right (SPatSeqGE x) ->
+    let dropWhile : all x. (x -> Bool) -> [x] -> [x] = lam pred. lam xs.
+      match findi (lam x. not (pred x)) xs with Some idx
+      then subsequence xs idx (subi (length xs) idx)
+      else [] in
+    let dropWild = dropWhile (lam x. match x with (FKClosed _, FSLit "_") then true else false) in
+    let padWild : Int -> [PartialFormat] -> [PartialFormat] = lam len. lam xs.
+      concat xs (make (subi len (length xs)) (FKClosed (), FSLit "_")) in
+    let seqFurniture : [PartialFormat] -> Option FormatString = lam xs.
+      match xs with [] then None () else
+      let asChar = lam x. match x with (FKChar _, fs) then Some fs else None () in
+      match optionMapM asChar xs with Some chars
+      then Some (foldl fsAppend (FSLit "\"") (snoc chars (FSLit "\"")))
+      else Some (fsAppend (foldl fsAppend (FSLit "[") (intersperse (FSLit ", ") (map pfToFs xs))) (FSLit "]")) in
+    let prefix = reverse (dropWild (mapReverse lookup (deref x.prefix))) in
+    let postfix = dropWild (map lookup (deref x.postfix)) in
+    if leqi (addi (length prefix) (length postfix)) x.minLength then
+      -- NOTE(vipa, 2026-07-14): Both fit, we can use one "pattern"
+      let prefix = padWild (subi x.minLength (length postfix)) prefix in
+      let fs = switch (seqFurniture prefix, seqFurniture postfix)
+        case (Some prefix, Some postfix) then foldl1 fsAppend [prefix, FSLit " ++ _ ++ ", postfix]
+        case (Some prefix, None _) then fsAppend prefix (FSLit " ++ _")
+        case (None _, Some postfix) then fsAppend (FSLit "_ ++ ") postfix
+        end in
+      (FKApp (), fs)
+    else
+      -- NOTE(vipa, 2026-07-14): They don't fit together, need two patterns
+      let prefix = if geqi (length prefix) (length postfix)
+        then padWild x.minLength prefix
+        else prefix in
+      let postfix = if geqi (length prefix) (length postfix)
+        then postfix
+        else padWild x.minLength postfix in
+      match (seqFurniture prefix, seqFurniture postfix)
+        with (Some prefix, Some postfix) in
+      (FKClosed (), foldl1 fsAppend [FSLit "(", prefix, FSLit " ++ _ & _ ++ ", postfix, FSLit ")"])
+  | Left (spats & [SPatSeqGE _ | SPatSeqTot _] ++ _) ->
+    let asLen = lam x. switch x
+      case SPatSeqGE x then x.minLength
+      case SPatSeqTot x then length x.elements
+      end in
+    let lengths = (map asLen spats) in
+    let upperBound = optionGetOr 0 (max subi lengths) in
+    let checked = setOfSeq subi lengths in
+    let toCheck = setSubtract (setOfSeq subi (create (addi 1 upperBound) (lam i. i))) checked in
+    let litOfLen = lam len. seq2string (lam x. x) (make len "_") in
+    let default = concat (litOfLen (addi 1 upperBound)) " ++ _" in
+    let n = nameSym "len" in
+    let decl = nulet_ n (withType tyint_ (length_ (nvar_ scrutinee))) in
+    let lenCase = lam els. lam len.
+      withType tystr_
+        (match_ (withType tyint_ (nvar_ n)) (pint_ len)
+          (withType tystr_ (str_ (litOfLen len)))
+          els) in
+    if setIsEmpty toCheck
+    then (FKApp (), FSLit default)
+    -- NOTE(vipa, 2026-07-14): Technically, the result might be
+    -- unclosed if it fell through to the default, which means we'd
+    -- have to check things at runtime to be correct. I'd rather have
+    -- one pair too few parens for now though, since there's only one
+    -- interpretation that is type correct anyway.
+    else (FKClosed (), fsString (withType tystr_ (bind_ decl (setFold lenCase (withType tystr_ (str_ default)) toCheck))))
+
   sem collectNames =
   | pat & PatSeqEdge x ->
     let here = match x.middle with PName name
-      then setInsert name (setEmpty nameCmp)
-      else setEmpty nameCmp in
-    sfold_Pat_Pat (lam acc. lam p. setUnion acc (collectNames p)) here pat
+      then _singleton name x.ty
+      else _empty () in
+    sfold_Pat_Pat (lam acc. lam p. mapUnion acc (collectNames p)) here pat
 
   sem mkMatch scrutinee t e =
   | SPatSeqTot x ->
+    match unwrapType x.ty with TySeq {ty = elemTy} in
+    let scrutineeVar = withType x.ty (nvar_ scrutinee) in
     let for = lam s. lam f. map f s in
     let slices = for (mapBindings (deref x.slices))
       (lam pair. match pair with (pair, name) in
         let expr = switch pair
-          case (0, 0) then nvar_ scrutinee
+          case (0, 0) then scrutineeVar
           case (n, 0) then
-            tupleproj_ 1
-              (withType
-                (tytuple_ [x.ty, x.ty])
-                (splitat_ (nvar_ scrutinee) (int_ n)))
+            withType x.ty
+              (tupleproj_ 1
+                (withType
+                  (tytuple_ [x.ty, x.ty])
+                  (splitat_ scrutineeVar (int_ n))))
           case (0, n) then
-            tupleproj_ 0
-              (withType
-                (tytuple_ [x.ty, x.ty])
-                (splitat_ (nvar_ scrutinee) (int_ (subi (length x.elements) n))))
+            withType x.ty
+              (tupleproj_ 0
+                (withType
+                  (tytuple_ [x.ty, x.ty])
+                  (splitat_ scrutineeVar (int_ (subi (length x.elements) n)))))
           case (n, m) then
-            subsequence_ (nvar_ scrutinee) (int_ n) (int_ (subi (length x.elements) (addi n m)))
+            withType x.ty
+              (subsequence_ scrutineeVar (int_ n) (int_ (subi (length x.elements) (addi n m))))
           end
         in nulet_ name expr) in
     withType (tyTm t)
-      (match_ (nvar_ scrutinee)
-        (withInfoPat x.info (withTypePat x.ty (pseqtot_ (map npvar_ x.elements))))
+      (match_ scrutineeVar
+        (withInfoPat x.info (withTypePat x.ty (pseqtot_ (map (lam n. withTypePat elemTy (npvar_ n)) x.elements))))
         (bindall_ slices t)
         e)
   | SPatSeqGE x ->
     match unwrapType x.ty with TySeq {ty = elemTy} in
-    let letFrom_ = lam n. lam i. nulet_ n (withType elemTy (get_ (nvar_ scrutinee) i)) in
+    let scrutineeVar = withType x.ty (nvar_ scrutinee) in
+    let letFrom_ = lam n. lam i. nulet_ n (withType elemTy (get_ scrutineeVar i)) in
     let pres = mapi
       (lam i. lam n. letFrom_ n (int_ i))
       (deref x.prefix) in
     let lenName = nameSym "len" in
+    let lenVar = withType tyint_ (nvar_ lenName) in
     let posts = mapi
-      (lam i. lam n. letFrom_ n (subi_ (nvar_ lenName) (int_ (addi i 1))))
+      (lam i. lam n. letFrom_ n (subi_ lenVar (int_ (addi i 1))))
       (reverse (deref x.postfix)) in
     let needLen = ref (not (null posts)) in
     let for = lam s. lam f. map f s in
     let slices = for (mapBindings (deref x.slices))
       (lam pair. match pair with (pair, name) in
         let expr = switch pair
-          case (0, 0) then nvar_ scrutinee
+          case (0, 0) then scrutineeVar
           case (n, 0) then
-            tupleproj_ 1
-              (withType
-                (tytuple_ [x.ty, x.ty])
-                (splitat_ (nvar_ scrutinee) (int_ n)))
+            withType x.ty
+              (tupleproj_ 1
+                (withType
+                  (tytuple_ [x.ty, x.ty])
+                  (splitat_ scrutineeVar (int_ n))))
           case (0, n) then
             modref needLen true;
-            tupleproj_ 0
-              (withType
-                (tytuple_ [x.ty, x.ty])
-                (splitat_ (nvar_ scrutinee) (subi_ (nvar_ lenName) (int_ n))))
+            withType x.ty
+              (tupleproj_ 0
+                (withType
+                  (tytuple_ [x.ty, x.ty])
+                  (splitat_ scrutineeVar (subi_ lenVar (int_ n)))))
           case (n, m) then
             modref needLen true;
-            subsequence_ (nvar_ scrutinee) (int_ n) (subi_ (nvar_ lenName) (int_ (addi n m)))
+            withType x.ty
+              (subsequence_ scrutineeVar (int_ n) (subi_ lenVar (int_ (addi n m))))
           end
         in nulet_ name expr) in
-    let len = if deref needLen then [nulet_ lenName (length_ (nvar_ scrutinee))] else [] in
+    let len = if deref needLen then [nulet_ lenName (withType tyint_ (length_ scrutineeVar))] else [] in
     withType (tyTm t)
-      (match_ (nvar_ scrutinee) (withInfoPat x.info (withTypePat x.ty (pseqedgew_ (make x.minLength pvarw_) [])))
+      (match_ scrutineeVar (withInfoPat x.info (withTypePat x.ty (pseqedgew_ (make x.minLength pvarw_) [])))
         (bindall_ (join [pres, len, slices, posts]) t)
         e)
 
@@ -739,7 +991,7 @@ end
 
 lang ShallowCon = ShallowBase + DataPat
   syn SPat =
-  | SPatCon {conName : Name, subName : Name, ty : Type, info : Info}
+  | SPatCon {conName : Name, subName : Name, ty : Type, argTy : Type, info : Info}
 
   sem decompose name =
   | (SPatCon shallow, pat & PatCon x) ->
@@ -748,12 +1000,42 @@ lang ShallowCon = ShallowBase + DataPat
     else defaultDecomposition pat
 
   sem collectShallows =
-  | PatCon x -> _ssingleton (SPatCon {conName = x.ident, subName = nameSym "carried", ty = x.ty, info = x.info})
+  | PatCon x -> _ssingleton (SPatCon
+    { conName = x.ident, subName = nameSym "carried"
+    , ty = x.ty, argTy = tyPat x.subpat, info = x.info
+    })
+
+  sem spatErrorFormat env lookup scrutinee =
+  | Right (SPatCon x) ->
+    let fs = switch lookup x.subName
+      case (FKApp _, fs) then foldl1 fsAppend [FSLit "(", fs, FSLit ")"]
+      case pf then pfToFs pf
+      end in
+    (FKApp (), fsAppend (FSLit (concat (nameGetStr x.conName) " ")) fs)
+  | Left (cons & [SPatCon x] ++ _) ->
+    let ty = mapLookupOrElse
+      (lam. error (join ["Unknown constructor in spatErrorFormat: ", nameGetStr x.conName]))
+      x.conName env.conTys in
+    let allCons = mapLookupOr (setEmpty nameCmp) ty env.cons in
+    let asCon = lam x. match x with SPatCon x in x.conName in
+    let cons = setOfSeq nameCmp (map asCon cons) in
+    let toCheck = setToSeq (setSubtract allCons cons) in
+    switch toCheck
+    case [] then (FKClosed (), FSLit "!_")
+    case [c] then (FKApp (), FSLit (concat (nameGetStr c) " _"))
+    case toCheck then
+      let cCase = lam acc. lam c.
+        withType tystr_
+          (match_ (withType (ntycon_ ty) (nvar_ scrutinee)) (npcon_ c pvarw_)
+            (withType tystr_ (str_ (concat (nameGetStr c) " _")))
+            acc) in
+      (FKApp (), fsString (foldl cCase (withType tystr_ (str_ "!_")) toCheck))
+    end
 
   sem mkMatch scrutinee t e =
   | SPatCon x -> withType (tyTm t)
-    (match_ (nvar_ scrutinee)
-      (withTypePat x.ty (withInfoPat x.info (npcon_ x.conName (npvar_ x.subName))))
+    (match_ (withType x.ty (nvar_ scrutinee))
+      (withTypePat x.ty (withInfoPat x.info (npcon_ x.conName (withTypePat x.argTy (npvar_ x.subName)))))
       t e)
 
   sem shallowCmp =
@@ -776,36 +1058,51 @@ lang CollectBranches = MatchAst + VarAst + NamedPat + AndPat + OrPat + NotPat
       else (acc, t)
     in
     match work [] t with (branches, fallthrough) in
-    let alreadyShallow =
-      if geqi (length branches) 2 then false else
-      match x.pat with PatAnd _ | PatOr _ | PatNot _ then false else
-      let isWild = lam acc. lam sub.
-        match (acc, sub) with (true, PatNamed _) then true else false in
-      sfold_Pat_Pat isWild true x.pat in
-    if alreadyShallow
-    then None ()
-    else Some (Right scrutinee, branches, fallthrough)
+    Some (Right scrutinee, branches, fallthrough)
   | TmMatch (t & {target = !TmVar _}) ->
     Some (Left t.target, [(t.pat, t.thn)], t.els)
   | _ -> None ()
 end
 
-lang LowerNestedPatterns = CollectBranches + ShallowBase + OpaqueAst
+lang LowerNestedPatterns = CollectBranches + ShallowBase + DedupBranchesAndInformativeNever + OpaqueAst + AppTypeUtils + LetDeclAst + DataDeclAst + ConTypeAst
   sem lowerAll : Expr -> Expr
-  sem lowerAll =
+  sem lowerAll = | t ->
+    _lowerAll
+      {int2string = None (), escapeChar = None (), cons = mapEmpty nameCmp, conTys = mapEmpty nameCmp}
+      t
+
+  sem _lowerAll : LowerEnv -> Expr -> Expr
+  sem _lowerAll env =
   | t & TmOpaque _ -> t
+  | TmDecl (x & {decl = DeclLet d}) ->
+    let inEnv =
+      { env with int2string = optionOrElse
+        (lam. if eqString (nameGetStr d.ident) "int2string" then Some d.ident else None ())
+        env.int2string
+      , escapeChar = optionOrElse
+        (lam. if eqString (nameGetStr d.ident) "escapeChar" then Some d.ident else None ())
+        env.escapeChar
+      } in
+    TmDecl {x with decl = DeclLet {d with body = _lowerAll env d.body}, inexpr = _lowerAll inEnv x.inexpr}
+  | tm & TmDecl {decl = DeclConDef d} ->
+    let ty = match getConDefType d.tyIdent with TyCon x in x.ident in
+    let env = {env with
+      cons = mapInsertWith setUnion ty (setSingleton nameCmp d.ident) env.cons,
+      conTys = mapInsert d.ident ty env.conTys
+    } in
+    smap_Expr_Expr (_lowerAll env) tm
   | t ->
-    let f = lam pair. (pair.0, lowerAll pair.1) in
+    let f = lam pair. (pair.0, _lowerAll env pair.1) in
     match collectBranches t with Some (target, branches, fallthrough)
     then
       match target with Left expr then
         let targetId = nameSym "_target" in
-        bind_ (nulet_ targetId (lowerAll expr))
-        (lowerToExpr targetId (map f branches) (lowerAll fallthrough))
+        bind_ (nulet_ targetId (_lowerAll env expr))
+        (lowerToExpr env targetId (map f branches) (_lowerAll env fallthrough))
       else match target with Right name then
-        lowerToExpr name (map f branches) (lowerAll fallthrough)
+        lowerToExpr env name (map f branches) (_lowerAll env fallthrough)
       else never
-    else smap_Expr_Expr lowerAll t
+    else smap_Expr_Expr (_lowerAll env) t
 end
 
 lang MExprLowerNestedPatterns = ShallowMExpr + LowerNestedPatterns
