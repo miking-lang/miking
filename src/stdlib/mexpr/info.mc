@@ -2,6 +2,7 @@
 -- Copyright (C) David Broman. See file LICENSE.txt
 --
 
+include "seq.mc"
 include "string.mc"
 
 -- Data type of info terms

@@ -4,6 +4,7 @@
 -- Defines a set wrapper around the map intrinsics.
 
 
+include "basic-types.mc"
 include "map.mc"
 
 type Set a = Map a {}
@@ -37,9 +38,9 @@ let setUnion : all a. Set a -> Set a -> Set a = lam s1. lam s2. mapUnion s1 s2
 let setIntersect : all a. Set a -> Set a -> Set a = lam s1. lam s2.
   mapIntersectWith (lam. lam. ()) s1 s2
 
--- `setDisjoint s1 s2` returns true if `s1` and `s2` are disjoint, 
+-- `setDisjoint s1 s2` returns true if `s1` and `s2` are disjoint,
 --false otherwise.
-let setDisjoint : all a. Set a -> Set a -> Bool = lam s1. lam s2. 
+let setDisjoint : all a. Set a -> Set a -> Bool = lam s1. lam s2.
   setIsEmpty (setIntersect s1 s2)
 
 -- `setSubtract s1 s2` is the relative complement of set `s2` in `s1` (set
@@ -53,11 +54,11 @@ lam cmp. lam seq.
   foldr setInsert (setEmpty cmp) seq
 
 -- `setSingleton cmp x` creates a set containing only the element x
-let setSingleton : all a. (a -> a -> Int) -> a -> Set a 
+let setSingleton : all a. (a -> a -> Int) -> a -> Set a
   = lam cmp. lam x.
     setInsert x (setEmpty cmp)
 
-utest setSize (setSingleton subi 1) with 1 
+utest setSize (setSingleton subi 1) with 1
 utest setMem 1 (setSingleton subi 1) with true
 
 -- `setFold f acc s` folds over the values of s with the given function and
@@ -66,12 +67,12 @@ let setFold : all a. all acc. (acc -> a -> acc) -> acc -> Set a -> acc =
   lam f. lam acc. lam s.
     mapFoldWithKey (lam acc. lam k. lam. f acc k) acc s
 
--- `setMap cmp f s` maps over the values of s and creates a new set from the 
+-- `setMap cmp f s` maps over the values of s and creates a new set from the
 -- results
-let setMap : all a. all b. (b -> b -> Int) -> (a -> b) -> Set a -> Set b = 
+let setMap : all a. all b. (b -> b -> Int) -> (a -> b) -> Set a -> Set b =
   lam cmp. lam f. lam s.
-    mapFoldWithKey 
-      (lam acc. lam k. lam. mapInsert (f k) () acc) 
+    mapFoldWithKey
+      (lam acc. lam k. lam. mapInsert (f k) () acc)
       (mapEmpty cmp)
       s
 
@@ -84,14 +85,14 @@ let setToSeq : all a. Set a -> [a] = lam s. mapKeys s
 -- Both sets are assumed to have the same equality function.
 let setEq : all a. Set a -> Set a -> Bool = lam m1. lam m2. mapEq (lam. lam. true) m1 m2
 
--- `setMap cmp f s` maps over the values of s and creates a new set from the 
--- results. 
+-- `setMap cmp f s` maps over the values of s and creates a new set from the
+-- results.
 -- Note that the size of the set can change when multiple 'a's get mapped
 -- to the same 'b'.
-let setMap : all a. all b. (b -> b -> Int) -> (a -> b) -> Set a -> Set b = 
+let setMap : all a. all b. (b -> b -> Int) -> (a -> b) -> Set a -> Set b =
   lam cmp. lam f. lam s.
-    mapFoldWithKey 
-      (lam acc. lam k. lam. mapInsert (f k) () acc) 
+    mapFoldWithKey
+      (lam acc. lam k. lam. mapInsert (f k) () acc)
       (mapEmpty cmp)
       s
 
@@ -126,13 +127,13 @@ let setOfKeys : all k. all v. Map k v -> Set k = lam m. mapMap (lam. ()) m
 
 -- `setFilter p s` creates a new set containing exactly those elements in set `s`
 -- that satisfy predicate `p`.
-let setFilter : all a. (a -> Bool) -> Set a -> Set a = 
-  lam p. lam s. 
+let setFilter : all a. (a -> Bool) -> Set a -> Set a =
+  lam p. lam s.
     mapFilterWithKey (lam k. lam. p k) s
 
-utest setFilter (lam. true) (setOfSeq subi [1,2,3]) with (setOfSeq subi [1,2,3]) using setEq 
-utest setIsEmpty (setFilter (lam. false) (setOfSeq subi [1,2,3])) with true 
-utest (setFilter (lam x. eqi (modi x 2) 0) (setOfSeq subi [1,2,3,4,5,6])) 
+utest setFilter (lam. true) (setOfSeq subi [1,2,3]) with (setOfSeq subi [1,2,3]) using setEq
+utest setIsEmpty (setFilter (lam. false) (setOfSeq subi [1,2,3])) with true
+utest (setFilter (lam x. eqi (modi x 2) 0) (setOfSeq subi [1,2,3,4,5,6]))
   with (setOfSeq subi [2, 4, 6]) using setEq
 
 mexpr

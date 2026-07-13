@@ -3,6 +3,8 @@
 --
 -- Defines auxiliary functions for the map intrinsics.
 
+include "basic-types.mc"
+include "bool.mc"
 include "avl.mc"
 include "option.mc"
 include "seq.mc"
