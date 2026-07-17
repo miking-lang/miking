@@ -16,8 +16,6 @@ include "pprint.mc"
 include "builtin.mc"
 include "type.mc"
 
-include "extrec/ast.mc"
-
 type TypeEnv = {
   varEnv: Map Name (use Ast in Type),
   conEnv: Map Name (use Ast in Type),

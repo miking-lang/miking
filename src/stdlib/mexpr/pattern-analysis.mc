@@ -7,8 +7,6 @@ include "stringid.mc"
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
 
-include "extrec/ast.mc"
-
 lang NormPat = Ast
   syn SimpleCon =
   syn SNPat =
@@ -337,7 +335,7 @@ lang ConNormPat = NPatImpl + DataPat
       (patToNormpat p)
 end
 
-lang RecordNormPat = NPatImpl + RecordPat + ExtRecordPat
+lang RecordNormPat = NPatImpl + RecordPat
   syn SNPat =
   | NPatRecord (Map SID NPat)
 
@@ -378,7 +376,7 @@ lang RecordNormPat = NPatImpl + RecordPat + ExtRecordPat
     }
 
   sem patToNormpat =
-  | PatRecord { bindings = bs } | PatExtRecord {bindings = bs} ->
+  | PatRecord { bindings = bs } ->
     let nested = mapMap (lam p. patToNormpat p) bs in
     let bindings =
       seqMapM (lam kv. map (lam v. (kv.0, v)) kv.1) (mapBindings nested) in

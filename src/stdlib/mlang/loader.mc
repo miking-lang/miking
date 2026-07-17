@@ -23,11 +23,10 @@ include "mexpr/boot-parser.mc"
 include "mexpr/json-debug.mc"
 include "mexpr/keyword-maker.mc"
 include "mexpr/resymbolize.mc"
+include "mexpr/type-check.mc"
 
 include "mlang/boot-parser.mc"
 include "mlang/ast.mc"
-include "mlang/symbolize.mc"
-include "mlang/type-check.mc"
 include "mlang/pprint.mc"
 
 lang SymGetters = Sym
@@ -834,7 +833,7 @@ lang MLangLoader = LoaderImpl + BootParserMLang
         -- OPT(vipa, 2026-07-17): The body of this function could be
         -- delayed until later, as a "lazy" body, to minimize the
         -- amount of work per language fragment until we know the
-        -- function will actuall be used.
+        -- function will actually be used.
         let addBranch = lam branch. lam acc.
           match acc with (resymEnv, tm) in
           let tm = withType (tyTm branch.body) (match_ (withType (tyPat branch.pat) (nvar_ scrutName))
@@ -1239,16 +1238,45 @@ lang MLangSem = MLangLoader + SemDeclAst + LetSym + PatTypeCheck + SubstituteUnk
     (langData, loader)
 end
 
-lang ComposedMLangLoader
-  = MLangTypeAlias + MLangSyn + MLangSem + MExprResymbolize + MExprSym + MLangSym
-  + MExprTypeCheck + MLangTypeCheck + MExprPatAnalysis + IncludeLoader
+let updateEnv : SymEnv -> NameEnv -> SymEnv = lam symEnv. lam langEnv.
+  {symEnv with currentEnv = mergeNameEnv (symEnv.currentEnv) langEnv}
+
+lang DeclUseSym = Sym + UseDeclAst + DeclAst + RecLetsDeclAst
+  sem symbolizeDecl env =
+  | DeclUse x ->
+    let n = getSymbol {kind = "language fragment", info = [x.info], allowFree = env.allowFree}
+      env.namespaceEnv x.ident in
+    match mapLookup n env.langEnv with Some langEnv
+    -- NOTE(vipa, 2026-07-16): An empty reclets decl is a no-op decl,
+    -- so this is a way to remove the DeclUse
+    then (updateEnv env langEnv, DeclRecLets {bindings = [], info = x.info})
+    else if env.allowFree
+      then (env, DeclUse {x with ident = n})
+      else error "Compiler error: missing langEnv"
 end
 
-lang MCoreLoader
-  = MCorePathResolution + BootParserLoader
-  + MExprSym + MLangSym
-  + MExprTypeCheck + MLangTypeCheck
+lang TyUseSym = Sym + TyUseAst
+  sem symbolizeType env =
+  | TyUse x ->
+    let n = getSymbol {kind = "language fragment", info = [x.info], allowFree = env.allowFree}
+      env.namespaceEnv x.ident in
+    match mapLookup n env.langEnv with Some langEnv
+      then symbolizeType (updateEnv env langEnv) x.inty
+      else if env.allowFree
+        then TyUse {x with inty = symbolizeType env x.inty}
+        else error "Compiler error: missing langEnv"
 end
+
+lang ComposedMLangLoader
+  = MLangTypeAlias + MLangSyn + MLangSem + MExprResymbolize + MExprSym + DeclUseSym + TyUseSym
+  + MExprTypeCheck + MExprPatAnalysis + IncludeLoader
+end
+
+-- lang MCoreLoader
+--   = MCorePathResolution + BootParserLoader
+--   + MExprSym + MLangSym
+--   + MExprTypeCheck
+-- end
 
 mexpr
 
@@ -1284,8 +1312,8 @@ let loader = mkLoader typcheckEnvDefault [] in
 let loader = (includeFileTypeExn (FMCore {includeMExpr = true}) "." input loader).1 in
 let ast = buildFullAst loader in
 
-printLn (expr2str ast);
-exit 1
+-- printLn (expr2str ast);
+-- exit 1;
 
 -- let ocamlCompile : [String] -> [String] -> String -> String = lam libs. lam clibs. lam prog.
 --   let opts =

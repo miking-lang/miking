@@ -4,8 +4,6 @@
 include "mexpr/ast-builder.mc"
 include "ast.mc"
 
-include "extrec/ast.mc"
-
 
 -- Extended expressions --
 
@@ -51,7 +49,7 @@ let decl_langin_ = use MLangAst in
 
 let decl_langi_ = use MLangAst in
   lam s. lam incls. lam decls.
-  decl_nlangin_ (nameNoSym s) (map nameNoSym incls) decls
+  decl_nlangin_ (nameNoSym s) (map (lam x. (nameNoSym x, NoInfo ())) incls) decls
 
 let decl_nlang_ = use MLangAst in
   lam n. lam decls.
@@ -63,13 +61,13 @@ let decl_lang_ = use MLangAst in
 
 
 let decl_nsynn_ = use MLangAst in
-  lam kind. lam n. lam ndefs: [(Name, Type)].
-  DeclSyn {ident = n,
-           defs = map (lam t. {ident = t.0, tyIdent = t.1, tyName = nameNoSym (concat (nameGetStr t.0) "Type")}) ndefs,
-           params = [],
-           includes = [],
-           info = NoInfo {},
-           declKind = kind}
+  lam kind. lam n. lam ndefs: [(Name, Type)]. DeclSyn
+  { ident = n
+  , defs = map (lam t. {ident = t.0, tyIdent = t.1, info = NoInfo ()}) ndefs
+  , params = []
+  , info = NoInfo {}
+  , kind = kind
+  }
 
 let decl_nsyn_ = use MLangAst in
   lam kind. lam n. lam defs: [(String, Type)].
@@ -130,13 +128,17 @@ let decl_sem_args_ty_cases_ = use MLangAst in
            declKind = SemBase ()}
 
 let decl_nsem_ = use MLangAst in
-  lam kind. lam n. lam nargs: [(Name, Type)]. lam cases: [(Pat, Expr)].
-  DeclSem {ident = n, tyAnnot = tyunknown_,
-           tyBody = tyunknown_, includes = [],
-           args = Some (map (lam t. {ident = t.0, tyAnnot = t.1}) nargs),
-           cases = map (lam t. {pat = t.0, thn = t.1}) cases,
-           info = NoInfo {},
-           declKind = kind}
+  lam kind. lam n. lam nargs: [(Name, Type)]. lam cases: [(Pat, Expr)]. DeclSem
+  { ident = n
+  , tyAnnot = tyunknown_
+  , tyBody = tyunknown_
+  , impl = Some
+    { params = map (lam t. {ident = t.0, tyAnnot = t.1, tyParam = tyunknown_, info = NoInfo ()}) nargs
+    , cases = map (lam t. {pat = t.0, body = t.1, info = NoInfo ()}) cases
+    }
+  , info = NoInfo {}
+  , kind = kind
+  }
 
 let decl_nusem_ = use MLangAst in
   lam n. lam nuargs: [Name]. lam cases.
