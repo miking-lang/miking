@@ -60,6 +60,8 @@ lang NormPat = Ast
   sem normpatIntersect  : NormPat -> NormPat -> NormPat
   sem patToNormpat : Pat -> NormPat
   sem normpatToPat : NormPat -> Pat
+
+  sem normpatJointProof : NormPat -> NormPat -> Option NPat
 end
 
 lang NPatImpl = NormPat
@@ -137,6 +139,20 @@ lang NormPatImpl = NPatImpl
     join
       (seqLiftA2 (lam x. lam y. npatIntersect (x, y))
          np1 np2)
+
+  sem normpatJointProof as = | bs ->
+    recursive let work = lam as. lam local.
+      switch (as, local)
+      case ([a] ++ _, [b] ++ local) then
+        match npatIntersect (a, b) with [proof] ++ _
+        then Some proof
+        else work as local
+      case ([_] ++ as, []) then
+        work as bs
+      case ([], _) then
+        None ()
+      end
+    in work as bs
 
   sem normpatToPat =
   | [] -> pnot_ pvarw_
