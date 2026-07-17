@@ -462,3 +462,20 @@ utest
   utest theseBindThere (These (0, '0')) f with These (1, '0') in
   ()
 with ()
+
+let zipWithThese : all a. all b. all c. (These a b -> c) -> [a] -> [b] -> [c]
+  = lam f.
+    recursive let work = lam acc. lam as. lam bs.
+      switch (as, bs)
+      case ([], []) then acc
+      case ([a] ++ as, []) then work (snoc acc (f (This a))) as []
+      case ([], [b] ++ bs) then work (snoc acc (f (That b))) [] bs
+      case ([a] ++ as, [b] ++ bs) then work (snoc acc (f (These (a, b)))) as bs
+      end
+    in work []
+
+utest zipWithThese (lam x. x) [] [] with [] using eqSeq (theseEq (lam. lam. false) (lam. lam. false))
+utest zipWithThese (lam x. x) [1] [] with [This 1] using eqSeq (theseEq eqi (lam. lam. false))
+utest zipWithThese (lam x. x) [] [2] with [That 2] using eqSeq (theseEq (lam. lam. false) eqi)
+utest zipWithThese (lam x. x) [1] [2] with [These (1, 2)]
+utest zipWithThese (lam x. x) [1, 2] [3, 4, 5] with [These (1, 3), These (2, 4), That 5]
