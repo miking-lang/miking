@@ -779,11 +779,6 @@ lang TypeCheck = TCUnify + Generalize + RemoveMetaVar
     errorSingle [infoTm tm] "Unmatched term expression in 'typeCheckExpr'"
 
   sem typeCheckDecl : TCEnv -> Decl -> (TCEnv, Decl)
-  sem typeCheckDecl env =
-  | d ->
-    dprint d;
-    print "\n";
-    errorSingle [infoDecl d] "Unmatched decl in 'typeCheckDecl'"
 end
 
 lang PatTypeCheck = TCUnify

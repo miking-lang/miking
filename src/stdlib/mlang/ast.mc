@@ -23,10 +23,6 @@ include "stringid.mc"
 include "mexpr/ast.mc"
 include "mexpr/info.mc"
 
-type DeclKind
-con BaseKind : () -> DeclKind
-con SumExtKind : () -> DeclKind
-
 -- DeclUse --
 lang UseDeclAst = Ast
   syn Decl =
@@ -56,7 +52,7 @@ end
 lang LangDeclAst = DeclAst
   syn Decl =
   | DeclLang {ident : Name,
-              includes : [Name],
+              includes : [(Name, Info)],
               decls : [Decl],
               info : Info}
 
@@ -74,16 +70,17 @@ end
 
 -- DeclSyn --
 lang SynDeclAst = DeclAst
+  syn SynDeclKind =
+  | SynBase
+  | SynSum {base : Name}
+  -- | SynProd {base : Name, globalExt : Map SID Type}
+
   syn Decl =
   | DeclSyn {ident : Name,
              params : [Name],
-             defs : [{ident : Name, tyIdent : Type, tyName : Name}],
-             -- The list of syns whose constructors should be included.
-             -- The first string identifies the langauge of the include
-             -- and the second string identifies the name.
-             includes : [(String, String)],
+             defs : [{ident : Name, tyIdent : Type, info : Info}],
              info : Info,
-             declKind : DeclKind}
+             kind : SynDeclKind}
 
   sem infoDecl =
   | DeclSyn d -> d.info
@@ -100,46 +97,23 @@ lang SynDeclAst = DeclAst
     (acc, DeclSyn {x with defs = defs})
 end
 
-lang SynProdExtDeclAst = DeclAst
-  syn Decl =
-  | SynDeclProdExt {ident : Name,
-                    extIdent : Name,
-                    params : [Name],
-                    globalExt : Option Type,
-                    individualExts : [{ident : Name, tyIdent : Type}],
-                    includes : [(String, String)],
-                    info : Info}
-
-  sem infoDecl =
-  | SynDeclProdExt {info = info} -> info
-
-  sem declWithInfo info =
-  | SynDeclProdExt d -> SynDeclProdExt {d with info = info}
-
-  sem smapAccumL_Decl_Type f acc =
-  | SynDeclProdExt x ->
-    let f = lam acc. lam def.
-      match f acc def.tyIdent with (acc, tyIdent) in
-      (acc, {def with tyIdent = tyIdent}) in
-    match mapAccumL f acc x.individualExts with (acc, individualExts) in
-    (acc, SynDeclProdExt {x with individualExts = individualExts})
-end
-
 -- DeclSem --
 lang SemDeclAst = DeclAst
-  type DeclSemType = {ident : Name,
-                      tyAnnot : Type,
-                      tyBody : Type,
-                      args : Option [{ident : Name, tyAnnot : Type}],
-                      cases : [{pat : Pat, thn : Expr}],
-                      -- The list of semantic function s whose cases should be included.
-                      -- The first string identifies the langauge of the include
-                      -- and the second string identifies the name.
-                      includes : [(String, String)],
-                      info : Info,
-                      declKind : DeclKind}
+  syn SemDeclKind =
+  | SemBase
+  | SemSum {base : Name}
   syn Decl =
-  | DeclSem DeclSemType
+  | DeclSem
+    { ident : Name
+    , tyAnnot : Type
+    , tyBody : Type
+    , impl : Option
+      { params : [{ident : Name, tyAnnot : Type, tyParam : Type, info : Info}]
+      , cases : [{pat : Pat, body : Expr, info : Info}]
+      }
+    , info : Info
+    , kind : SemDeclKind
+    }
 
   sem infoDecl =
   | DeclSem d -> d.info
@@ -149,21 +123,27 @@ lang SemDeclAst = DeclAst
 
   sem smapAccumL_Decl_Type f acc =
   | DeclSem x ->
-    let farg = lam acc. lam def.
+    let fparam = lam acc. lam def.
       match f acc def.tyAnnot with (acc, tyAnnot) in
       (acc, {def with tyAnnot = tyAnnot}) in
+    let fimpl = lam acc. lam impl.
+      match mapAccumL fparam acc impl.params with (acc, params) in
+      (acc, {impl with params = params}) in
     match f acc x.tyAnnot with (acc, tyAnnot) in
     match f acc x.tyBody with (acc, tyBody) in
-    match optionMapAccum (mapAccumL farg) acc x.args with (acc, args) in
-    (acc, DeclSem {x with args = args, tyAnnot = tyAnnot, tyBody = tyBody})
+    match optionMapAccum fimpl acc x.impl with (acc, impl) in
+    (acc, DeclSem {x with impl = impl, tyAnnot = tyAnnot, tyBody = tyBody})
 
   sem smapAccumL_Decl_Expr f acc =
   | DeclSem x ->
     let fcase = lam acc. lam c.
-      match f acc c.thn with (acc, thn) in
-      (acc, {c with thn = thn}) in
-    match mapAccumL fcase acc x.cases with (acc, cases) in
-    (acc, DeclSem {x with cases = cases})
+      match f acc c.body with (acc, body) in
+      (acc, {c with body = body}) in
+    let fimpl = lam acc. lam impl.
+      match mapAccumL fcase acc impl.cases with (acc, cases) in
+      (acc, {impl with cases = cases}) in
+    match optionMapAccum fimpl acc x.impl with (acc, impl) in
+    (acc, DeclSem {x with impl = impl})
 
   sem smapAccumL_Decl_Pat f acc =
   | DeclSem x ->
