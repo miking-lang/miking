@@ -32,8 +32,6 @@ include "mexpr/type.mc"
 include "mexpr/unify.mc"
 include "mexpr/repr-ast.mc"
 
-include "extrec/ast.mc"
-
 type ReprSubst = use Ast in {vars : [Name], pat : Type, repr : Type}
 
 type ExtRecDefs = use Ast in Map Name (Map String (Name, Type))
@@ -636,7 +634,7 @@ let _computeUniverse : TCEnv -> Name -> Map Name (Set Name) =
 -- with something which also performs a proper kind check.
 lang ResolveType = ConTypeAst + AppTypeAst + AliasTypeAst + VariantTypeAst +
   UnknownTypeAst + DataTypeAst + DataKindAst + FunTypeAst + VarTypeSubstitute +
-  AppTypeUtils + QualifiedTypeAst + MExprPrettyPrint
+  AppTypeUtils + MExprPrettyPrint
   sem resolveType : Info -> TCEnv -> Bool -> Type -> Type
   sem resolveType info env closeDatas =
   | (TyCon _ | TyApp _) & ty ->
@@ -690,11 +688,6 @@ lang ResolveType = ConTypeAst + AppTypeAst + AliasTypeAst + VariantTypeAst +
   -- If we encounter a TyAlias, it means that the type was already processed by
   -- a previous call to typeCheck.
   | TyAlias t -> TyAlias t
-  | TyQualifiedName t & ty ->
-    errorSingle [t.info] (join [
-      " * Encountered a qualified name during type checking.\n",
-      " * These types should have been resolved before type checking!"
-    ])
   | ty ->
     smap_Type_Type (resolveType info env closeDatas) ty
 end

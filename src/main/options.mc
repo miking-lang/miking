@@ -37,10 +37,8 @@ let optionsDefault : Options = {
   disableJsTCO = false,
   output = None (),
   tuneOptions = tuneOptionsDefault,
-  docgenOptions = docGenOptionsDefault,    
-  mlangPipeline = false,
-  experimentalRecords = false,
-  disableStrictSumExtension = false
+  docgenOptions = docGenOptionsDefault,
+  mlangPipeline = false
 }
 
 -- Get the help string for options

@@ -22,15 +22,12 @@ include "ocaml/wrap-in-try-with.mc"
 include "tuning/context-expansion.mc"
 include "tuning/tune-file.mc"
 include "jvm/compile.mc"
-include "mlang/main.mc"
 include "peval/compile.mc"
 include "mexpr/generate-pprint.mc"
 
 include "mexpr/invariants/in-scope.mc"
 include "mexpr/invariants/definitions.mc"
 include "mexpr/invariants/info.mc"
-
-include "extrec/main.mc"
 
 lang MCoreCompile =
   BootParser +
@@ -168,12 +165,8 @@ let compile = lam files. lam options : Options. lam args.
 
   if options.mlangPipeline then
     printLn " * WARNING: You are using an experimental, unstable pipeline.";
-    use MLangPipeline in
-    iter (compileMLangToOcaml options compileWithUtests) files
-  else if options.experimentalRecords then
-    printLn " * WARNING: You are using an experimental, unstable pipeline.";
-    use BigPipeline in
-    iter (compileExtendedMLangToOcaml options compileWithUtests) files
+    error "TODO"
+    -- iter (compileMLangToOcaml options compileWithUtests) files
   else
     let compileFile = lam file.
       let log = mkPhaseLogState options.debugDumpPhases options.debugPhases mkInvariantAttrs in

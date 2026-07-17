@@ -414,8 +414,9 @@ match head p.decls with DeclLang d in
 utest nameGetStr d.ident with "IntArith" in
 match head d.decls with DeclSem s in
 utest nameGetStr s.ident with "f" in
-utest (head s.cases).thn with int_ 0 using eqExpr in
-utest (get s.cases 1).thn with int_ 1 using eqExpr in
+match s.impl with Some impl in
+utest (head impl.cases).body with int_ 0 using eqExpr in
+utest (get impl.cases 1).body with int_ 1 using eqExpr in
 -- printLn (mlang2str p) ;
 
 -- Test language with semantic function
@@ -439,7 +440,7 @@ let str = strJoin "\n" [
 let p = parseProgram str in
 match get p.decls 3 with DeclLang d in
 utest nameGetStr d.ident with "L12" in
-utest d.includes with [nameNoSym "L1", nameNoSym "L2"] using eqSeq nameEqStr in
+utest d.includes with [nameNoSym "L1", nameNoSym "L2"] using eqSeq (lam a. lam b. nameEqStr a.0 b) in
 -- printLn (mlang2str p) ;
 
 -- Test semantic function with multiple args
@@ -457,7 +458,8 @@ match head p.decls with DeclLang d in
 utest nameGetStr d.ident with "IntArith" in
 match head d.decls with DeclSem s in
 utest nameGetStr s.ident with "f" in
-utest optionMap (map (lam a. nameGetStr a.ident)) s.args with Some (["x", "y"]) using optionEq (eqSeq eqString) in
+match s.impl with Some impl in
+utest map (lam a. nameGetStr a.ident) impl.params with ["x", "y"] in
 -- printLn (mlang2str p) ;
 
 -- Test semantic function with type params
@@ -566,7 +568,7 @@ let str = strJoin "\n" [
 let p = parseProgram str in
 match head p.decls with DeclLang l in
 match head l.decls with DeclSem f in
-match optionIsNone f.args with true in
+match optionIsNone f.impl with true in
 
 -- Test syn sum extension
 let str = strJoin "\n" [

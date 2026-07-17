@@ -179,9 +179,11 @@ let _mkBaseFragment
       { ident = desc.functions.topAllowed
       , tyBody = ty
       , tyAnnot = ty
-      , args = Some []
-      , includes = [], declKind = BaseKind ()
-      , cases = [{pat = pvarw_, thn = true_}]
+      , impl = Some
+        { params = []
+        , cases = [{pat = pvarw_, body = true_, info = NoInfo ()}]
+        }
+      , kind = SemBase ()
       , info = NoInfo ()
       }
     in
@@ -193,9 +195,11 @@ let _mkBaseFragment
       { ident = desc.functions.leftAllowed
       , tyAnnot = ty
       , tyBody = ty
-      , args = Some []
-      , includes = [], declKind = BaseKind ()
-      , cases = [{pat = pvarw_, thn = true_}]
+      , impl = Some
+        { params = []
+        , cases = [{pat = pvarw_, body = true_, info = NoInfo ()}]
+        }
+      , kind = SemBase ()
       , info = NoInfo ()
       }
     in
@@ -207,9 +211,11 @@ let _mkBaseFragment
       { ident = desc.functions.rightAllowed
       , tyAnnot = ty
       , tyBody = ty
-      , args = Some []
-      , includes = [], declKind = BaseKind ()
-      , cases = [{pat = pvarw_, thn = true_}]
+      , impl = Some
+        { params = []
+        , cases = [{pat = pvarw_, body = true_, info = NoInfo ()}]
+        }
+      , kind = SemBase ()
       , info = NoInfo ()
       }
     in
@@ -219,9 +225,11 @@ let _mkBaseFragment
       { ident = desc.functions.groupingsAllowed
       , tyAnnot = ty
       , tyBody = ty
-      , args = Some []
-      , includes = [], declKind = BaseKind ()
-      , cases = [{pat = pvarw_, thn = _geither}]
+      , impl = Some
+        { params = []
+        , cases = [{pat = pvarw_, body = _geither, info = NoInfo ()}]
+        }
+      , kind = SemBase ()
       , info = NoInfo ()
       }
     in
@@ -231,9 +239,11 @@ let _mkBaseFragment
       { ident = desc.functions.parenAllowed
       , tyAnnot = ty
       , tyBody = ty
-      , args = Some []
-      , includes = [], declKind = BaseKind ()
-      , cases = [{pat = pvarw_, thn = _geither}]
+      , impl = Some
+        { params = []
+        , cases = [{pat = pvarw_, body = _geither, info = NoInfo ()}]
+        }
+      , kind = SemBase ()
       , info = NoInfo ()
       }
     in
@@ -243,9 +253,11 @@ let _mkBaseFragment
       { ident = desc.functions.getInfo
       , tyAnnot = ty
       , tyBody = ty
-      , cases = []
-      , args = Some []
-      , includes = [], declKind = BaseKind ()
+      , impl = Some
+        { params = []
+        , cases = []
+        }
+      , kind = SemBase ()
       , info = NoInfo ()
       }
     in
@@ -255,9 +267,11 @@ let _mkBaseFragment
       { ident = desc.functions.getTerms
       , tyAnnot = ty
       , tyBody = ty
-      , cases = []
-      , args = Some []
-      , includes = [], declKind = BaseKind ()
+      , impl = Some
+        { params = []
+        , cases = []
+        }
+      , kind = SemBase ()
       , info = NoInfo ()
       }
     in
@@ -267,18 +281,25 @@ let _mkBaseFragment
       { ident = desc.functions.unsplit
       , tyAnnot = ty
       , tyBody = ty
-      , args = Some []
-      , args = Some []
-      , cases = []
-      , includes = [], declKind = BaseKind ()
+      , impl = Some
+        { params = []
+        , cases = []
+        }
+      , kind = SemBase ()
       , info = NoInfo ()
       }
     in
     DeclLang
     { ident = desc.baseOpFragmentName
-    , includes = [desc.baseFragmentName]
+    , includes = [(desc.baseFragmentName, NoInfo ())]
     , decls =
-      [ DeclSyn {ident = synName, params = [nameNoSym "lstyle", nameNoSym "rstyle"], defs = [], includes = [], declKind = BaseKind (), info = NoInfo ()}
+      [ DeclSyn
+        { ident = synName
+        , params = [nameNoSym "lstyle", nameNoSym "rstyle"]
+        , defs = []
+        , kind = SynBase ()
+        , info = NoInfo ()
+        }
       , topAllowed, leftAllowed, rightAllowed, groupingsAllowed
       , parenAllowed, getInfo, getTerms, unsplit
       ]
@@ -302,9 +323,11 @@ lang GenOpAstLang = SynDeclAst + SemDeclAst + LangDeclAst
       { ident = desc.functions.getInfo
       , tyAnnot = tyunknown_
       , tyBody = tyunknown_
-      , args = Some []
-      , includes = [], declKind = BaseKind ()
-      , cases = [{pat = npcon_ conName (npvar_ x), thn = recordproj_ labels.info (nvar_ x)}]
+      , impl = Some
+        { params = []
+        , cases = [{pat = npcon_ conName (npvar_ x), body = recordproj_ labels.info (nvar_ x), info = NoInfo ()}]
+        }
+      , kind = SemSum {base = desc.functions.getInfo}
       , info = NoInfo ()
       } in
     let getTerms =
@@ -313,9 +336,11 @@ lang GenOpAstLang = SynDeclAst + SemDeclAst + LangDeclAst
       { ident = desc.functions.getTerms
       , tyAnnot = tyunknown_
       , tyBody = tyunknown_
-      , args = Some []
-      , includes = [], declKind = BaseKind ()
-      , cases = [{pat = npcon_ conName (npvar_ x), thn = recordproj_ labels.terms (nvar_ x)}]
+      , impl = Some
+        { params = []
+        , cases = [{pat = npcon_ conName (npvar_ x), body = recordproj_ labels.terms (nvar_ x), info = NoInfo ()}]
+        }
+      , kind = SemSum {base = desc.functions.getInfo}
       , info = NoInfo ()
       } in
     let unsplit =
@@ -324,10 +349,11 @@ lang GenOpAstLang = SynDeclAst + SemDeclAst + LangDeclAst
       let arm = switch op.mkUnsplit
         case AtomUnsplit f then
           { pat = npcon_ _incNames.c.atomP (prec_ [("self", npcon_ conName (npvar_ x))])
-          , thn = utuple_
+          , body = utuple_
             [ recordproj_ labels.info (nvar_ x)
             , f {record = nvar_ x, info = recordproj_ labels.info (nvar_ x)}
             ]
+          , info = NoInfo ()
           }
         case PrefixUnsplit f then
           let info = nameSym "info" in
@@ -339,7 +365,7 @@ lang GenOpAstLang = SynDeclAst + SemDeclAst + LangDeclAst
               , ("rightChildAlts", pseqedgew_ [npvar_ r] [])
               ]
             )
-          , thn = match_
+          , body = match_
             (unsplit_ (nvar_ r))
             (ptuple_ [npvar_ rinfo, npvar_ r])
             (_nuletin_ info (_mergeInfos_ [recordproj_ labels.info (nvar_ x), nvar_ rinfo])
@@ -348,6 +374,7 @@ lang GenOpAstLang = SynDeclAst + SemDeclAst + LangDeclAst
                 , f { record = nvar_ x , right = nvar_ r , info = nvar_ info}
                 ]))
             never_
+          , info = NoInfo ()
           }
         case PostfixUnsplit f then
           let info = nameSym "info" in
@@ -359,7 +386,7 @@ lang GenOpAstLang = SynDeclAst + SemDeclAst + LangDeclAst
               , ("leftChildAlts", pseqedgew_ [npvar_ l] [])
               ]
             )
-          , thn = match_
+          , body = match_
             (unsplit_ (nvar_ l))
             (ptuple_ [npvar_ linfo, npvar_ l])
             (_nuletin_ info (_mergeInfos_ [nvar_ linfo, recordproj_ labels.info (nvar_ x)])
@@ -368,6 +395,7 @@ lang GenOpAstLang = SynDeclAst + SemDeclAst + LangDeclAst
                 , f { record = nvar_ x , left = nvar_ l , info = nvar_ info}
                 ]))
             never_
+          , info = NoInfo ()
           }
         case InfixUnsplit f then
           let info = nameSym "info" in
@@ -382,7 +410,7 @@ lang GenOpAstLang = SynDeclAst + SemDeclAst + LangDeclAst
               , ("rightChildAlts", pseqedgew_ [npvar_ r] [])
               ]
             )
-          , thn = match_
+          , body = match_
             (utuple_ [unsplit_ (nvar_ l), unsplit_ (nvar_ r)])
             (ptuple_
               [ ptuple_ [npvar_ linfo, npvar_ l]
@@ -394,15 +422,18 @@ lang GenOpAstLang = SynDeclAst + SemDeclAst + LangDeclAst
                 , f { record = nvar_ x , left = nvar_ l, right = nvar_ r , info = nvar_ info}
                 ]))
             never_
+          , info = NoInfo ()
           }
         end
       in DeclSem
       { ident = desc.functions.unsplit
       , tyAnnot = tyunknown_
       , tyBody = tyunknown_
-      , args = Some []
-      , includes = [], declKind = BaseKind ()
-      , cases = [arm]
+      , impl = Some
+        { params = []
+        , cases = [arm]
+        }
+      , kind = SemSum {base = desc.functions.unsplit}
       , info = NoInfo ()
       } in
     let grouping = match (op.mkUnsplit, op.assoc) with (InfixUnsplit _, !NAssoc _)
@@ -410,26 +441,29 @@ lang GenOpAstLang = SynDeclAst + SemDeclAst + LangDeclAst
         { ident = desc.functions.groupingsAllowed
         , tyAnnot = tyunknown_
         , tyBody = tyunknown_
-        , args = Some []
-        , includes = [], declKind = BaseKind ()
-        , cases =
-          [ { pat = ptuple_ [npcon_ op.opConstructorName pvarw_, npcon_ op.opConstructorName pvarw_]
-            , thn = match op.assoc with LAssoc _ then nconapp_ _incNames.c.gleft unit_ else nconapp_ _incNames.c.gright unit_
-            }
-          ]
+        , impl = Some
+          { params = []
+          , cases =
+            [ { pat = ptuple_ [npcon_ op.opConstructorName pvarw_, npcon_ op.opConstructorName pvarw_]
+              , body = match op.assoc with LAssoc _ then nconapp_ _incNames.c.gleft unit_ else nconapp_ _incNames.c.gright unit_
+              , info = NoInfo ()
+              }
+            ]
+          }
+        , kind = SemSum {base = desc.functions.groupingsAllowed}
         , info = NoInfo ()
         }]
       else [] in
     DeclLang
     { ident = conName  -- TODO(vipa, 2023-05-08): This reuses a `Name`, though in a different kind of scope. Might be worth creating a new name and syncing, but it's too much work right now
-    , includes = cons desc.baseOpFragmentName op.requiredFragments
+    , includes = map (lam x. (x, NoInfo ())) (cons desc.baseOpFragmentName op.requiredFragments)
     , decls = concat
       grouping
       [ DeclSyn
         { ident = synName
         , params = [nameNoSym "lstyle", nameNoSym "rstyle"]
-        , includes = [], declKind = BaseKind ()
-        , defs = [{ident = conName, tyIdent = op.carried, tyName = nameNoSym (concat (nameGetStr conName) "Type")}]
+        , kind = SynSum {base = synName}
+        , defs = [{ident = conName, tyIdent = op.carried, info = NoInfo ()}]
         , info = NoInfo ()
         }
       , getInfo
@@ -450,7 +484,7 @@ let _mkGroupingSem
       : Ordering
       -> {canBeLeft : Bool, canBeRight : Bool, assoc : Assoc, conName : Name}
       -> {canBeLeft : Bool, canBeRight : Bool, assoc : Assoc, conName : Name}
-      -> Option {pat : Pat, thn : Expr}
+      -> Option {pat : Pat, body : Expr, info : Info}
       = lam ordering. lam l. lam r.
         if and l.canBeLeft r.canBeRight then
           let dir = switch ordering
@@ -464,10 +498,10 @@ let _mkGroupingSem
               end
             end
           in match dir with Some dir then
-            Some {pat = ptuple_ [npcon_ l.conName pvarw_, npcon_ r.conName pvarw_], thn = nconapp_ dir unit_}
+            Some {pat = ptuple_ [npcon_ l.conName pvarw_, npcon_ r.conName pvarw_], body = nconapp_ dir unit_, info = NoInfo ()}
           else None ()
         else None () in
-    let mkCases : ((Name, Name), Ordering) -> [{pat : Pat, thn : Expr}] = lam pair.
+    let mkCases : ((Name, Name), Ordering) -> [{pat : Pat, body : Expr, info : Info}] = lam pair.
       let linfo : {canBeLeft : Bool, canBeRight : Bool, assoc : Assoc, conName : Name}
         = mapFindExn pair.0 .0 opMap in
       let rinfo : {canBeLeft : Bool, canBeRight : Bool, assoc : Assoc, conName : Name}
@@ -478,9 +512,11 @@ let _mkGroupingSem
     { ident = desc.functions.groupingsAllowed
     , tyAnnot = tyunknown_
     , tyBody = tyunknown_
-    , args = Some []
-    , includes = [], declKind = BaseKind ()
-    , cases = join (map mkCases (mapBindings desc.precedence))
+    , impl = Some
+      { params = []
+      , cases = join (map mkCases (mapBindings desc.precedence))
+      }
+    , kind = SemSum {base = desc.functions.groupingsAllowed}
     , info = NoInfo ()
     }
 
@@ -507,11 +543,11 @@ let _mkComposedFragment
     let groupingSems = map (_mkGroupingSem opMap) (mapValues synDescs) in
     DeclLang
     { ident = config.composedName
-    , includes = join
+    , includes = map (lam x. (x, NoInfo ())) (join
       [ opFragments
       , badFragments
       , config.extraFragments
-      ]
+      ])
     , decls = groupingSems
     , info = NoInfo ()
     }
