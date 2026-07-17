@@ -11,9 +11,8 @@
 -- `stdlib/mexpr/boot-parser.mc`.
 
 include "ast.mc"
-include "ast-builder.mc"
+-- include "ast-builder.mc"
 include "pprint.mc"
-include "compile.mc"
 
 include "mexpr/eval.mc"
 include "mexpr/boot-parser.mc"
@@ -23,7 +22,7 @@ include "seq.mc"
 include "option.mc"
 include "result.mc"
 
-lang BootParserMLang = BootParser + MLangAst + CosemDeclAst
+lang BootParserMLang = BootParser + MLangAst -- + CosemDeclAst
   sem parseMLangFile : all a. String -> Result a (Info, String) MLangProgram
   sem parseMLangFile =| filepath ->
     let p = bootParserParseMLangFile filepath in
@@ -70,49 +69,49 @@ lang BootParserMLang = BootParser + MLangAst + CosemDeclAst
     {decls = concat includes decls,
      expr = matchTerm unparsedExpr (bootParserGetId unparsedExpr)}
 
-  -- Semantic function declaration can be split into a type annotation and args
-  -- + cases. This function merges sems into a single declaration.
-  sem mergeSems : [Decl] -> [Decl]
-  sem mergeSems =| decls ->
-    let work = lam acc : ([Decl], Map String Decl). lam decl : Decl.
-      match acc with (res, m) in
-      match decl with DeclSem s1 then
-        let str = nameGetStr s1.ident in
-        match mapLookup str m with Some (DeclSem s2) then
-          match s1.tyAnnot with TyUnknown _ then
-            let m = mapRemove str m in
-            (res, mapInsert str (DeclSem {s1 with tyAnnot = s2.tyAnnot}) m)
-          else
-            let m = mapRemove str m in
-            (res, mapInsert str (DeclSem {s1 with args = s2.args, cases = s2.cases}) m)
-        else
-          (res, mapInsert str decl m)
-      else
-        (cons decl res, m)
-    in
-    match foldl work ([], mapEmpty cmpString) decls with (res, m) in
-    concat res (mapValues m)
+  -- -- Semantic function declaration can be split into a type annotation and args
+  -- -- + cases. This function merges sems into a single declaration.
+  -- sem mergeSems : [Decl] -> [Decl]
+  -- sem mergeSems =| decls ->
+  --   let work = lam acc : ([Decl], Map String Decl). lam decl : Decl.
+  --     match acc with (res, m) in
+  --     match decl with DeclSem s1 then
+  --       let str = nameGetStr s1.ident in
+  --       match mapLookup str m with Some (DeclSem s2) then
+  --         match s1.tyAnnot with TyUnknown _ then
+  --           let m = mapRemove str m in
+  --           (res, mapInsert str (DeclSem {s1 with tyAnnot = s2.tyAnnot}) m)
+  --         else
+  --           let m = mapRemove str m in
+  --           (res, mapInsert str (DeclSem {s1 with args = s2.args, cases = s2.cases}) m)
+  --       else
+  --         (res, mapInsert str decl m)
+  --     else
+  --       (cons decl res, m)
+  --   in
+  --   match foldl work ([], mapEmpty cmpString) decls with (res, m) in
+  --   concat res (mapValues m)
 
-  sem mergeCosems : [Decl] -> [Decl]
-  sem mergeCosems =| decls ->
-    let work = lam acc : ([Decl], Map String Decl). lam decl : Decl.
-      match acc with (res, m) in
-      match decl with DeclCosem s1 then
-        let str = nameGetStr s1.ident in
-        match mapLookup str m with Some (DeclCosem s2) then
-          match s1.tyAnnot with TyUnknown _ then
-            let m = mapRemove str m in
-            (res, mapInsert str (DeclCosem {s1 with tyAnnot = s2.tyAnnot}) m)
-          else
-            let m = mapRemove str m in
-            (res, mapInsert str (DeclCosem {s1 with args = s2.args, cases = s2.cases}) m)
-        else
-          (res, mapInsert str decl m)
-      else
-        (cons decl res, m)
-    in
-    match foldl work ([], mapEmpty cmpString) decls with (res, m) in
-    concat res (mapValues m)
+  -- sem mergeCosems : [Decl] -> [Decl]
+  -- sem mergeCosems =| decls ->
+  --   let work = lam acc : ([Decl], Map String Decl). lam decl : Decl.
+  --     match acc with (res, m) in
+  --     match decl with DeclCosem s1 then
+  --       let str = nameGetStr s1.ident in
+  --       match mapLookup str m with Some (DeclCosem s2) then
+  --         match s1.tyAnnot with TyUnknown _ then
+  --           let m = mapRemove str m in
+  --           (res, mapInsert str (DeclCosem {s1 with tyAnnot = s2.tyAnnot}) m)
+  --         else
+  --           let m = mapRemove str m in
+  --           (res, mapInsert str (DeclCosem {s1 with args = s2.args, cases = s2.cases}) m)
+  --       else
+  --         (res, mapInsert str decl m)
+  --     else
+  --       (cons decl res, m)
+  --   in
+  --   match foldl work ([], mapEmpty cmpString) decls with (res, m) in
+  --   concat res (mapValues m)
 
 
   sem matchDecl : Unknown -> Int -> Decl
@@ -120,52 +119,52 @@ lang BootParserMLang = BootParser + MLangAst + CosemDeclAst
   | 702 ->
     let nCons = glistlen d 0 in
     let nParams = if eqi nCons 0 then 0 else glistlen d 1 in
+    let info = ginfo d 0 in
 
     let parseCon = lam i.
       let ident = gname d (addi i 1) in
       let ty = gtype d i in
       let tyName = nameNoSym (concat (gstr d (addi i 1)) "Type") in
-      {ident = ident, tyIdent = ty, tyName = tyName}
+      {ident = ident, tyIdent = ty, info = info} -- TODO(vipa, 2026-07-16): Proper info
     in
 
     let kind = switch gint d 0
-      case 0 then base_kind_
-      case 1 then sumext_kind_
+      case 0 then SynBase ()
+      case 1 then SynSum {base = gname d 0}
     end in
 
     DeclSyn {ident = gname d 0,
-             includes = [],
              defs = map parseCon (range 0 nCons 1),
              params = map (lam i. gname d (addi (addi 1 nCons) i)) (range 0 nParams 1),
-             info = ginfo d 0,
-             declKind = kind}
+             info = info,
+             kind = kind}
   | 703 ->
+    let info = ginfo d 0 in
     let nCases = glistlen d 0 in
     let nArgs = glistlen d 1 in
     let parseCase = lam i.
-      {pat = gpat d i, thn = gterm d i}
+      -- TODO(vipa, 2026-07-16): Proper info field
+      {pat = gpat d i, body = gterm d i, info = info}
     in
-    let parseArg = (lam i. {ident = gname d i, tyAnnot = gtype d i}) in
+    -- TODO(vipa, 2026-07-16): Proper info field
+    let parseArg = (lam i. {ident = gname d i, tyAnnot = gtype d i, tyParam = tyunknown_, info = info}) in
 
-    let args = if eqi nArgs -1 then
-      None ()
-    else
-      Some (map (lam i. {ident = gname d i, tyAnnot = gtype d i}) (range 1 (addi 1 nArgs) 1))
-    in
+    let impl = if eqi nArgs -1 then None () else Some
+      { params = map parseArg (range 1 (addi 1 nArgs) 1)
+      , cases = map parseCase (range 0 nCases 1)
+      } in
 
     let kind = switch gint d 0
-      case 0 then base_kind_
-      case 1 then sumext_kind_
+      case 0 then SemBase ()
+      case 1 then SemSum {base = gname d 0}
     end in
 
     DeclSem {ident = gname d 0,
              tyAnnot = gtype d 0,
              tyBody = tyunknown_,
-             args = args,
-             cases = map parseCase (range 0 nCases 1),
-             includes = [],
-             info = ginfo d 0,
-             declKind = kind}
+             impl = impl,
+             info = info,
+             kind = kind}
   | 705 ->
     DeclType {ident = gname d 0,
               params = map (gname d) (range 1 (addi 1 (glistlen d 0)) 1),
@@ -178,6 +177,8 @@ lang BootParserMLang = BootParser + MLangAst + CosemDeclAst
     let nIncludes = glistlen d 0 in
     let nDecls = glistlen d 1 in
 
+    let info = ginfo d 0 in
+
     let includes = map (gname d) (range 1 (addi nIncludes 1) 1) in
 
     let parseDecl = lam i.
@@ -186,14 +187,14 @@ lang BootParserMLang = BootParser + MLangAst + CosemDeclAst
     in
 
     let decls = map parseDecl (range 0 nDecls 1) in
-    let decls = reverse (mergeSems decls) in
-    let decls = reverse (mergeCosems decls) in
+    -- let decls = reverse (mergeSems decls) in
+    -- let decls = reverse (mergeCosems decls) in
 
 
 
     DeclLang {ident = gname d 0,
-              info = ginfo d 0,
-              includes = includes,
+              info = info,
+              includes = map (lam x. (x, info)) includes, -- TODO(vipa, 2026-07-15): Proper info fields
               decls = decls}
   | 704 ->
     DeclLet {ident = gname d 0,
