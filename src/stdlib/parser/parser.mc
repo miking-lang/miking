@@ -690,60 +690,144 @@ lang SeqParser = AstParserBase + SeqAst + SeqTypeAst
 
 end
 
-lang RecordParser = AstParserBase + RecordAst + RecordTypeAst
+lang BraceParser = AstParserBase
+  sem beginParseExprInBrace: all w. State BrkOpExpr ROpen -> NextTokenResult -> NextTokenResult -> ParseResult w (Expr, NextTokenResult)
+  sem beginParseTypeInBrace: all w. State BrkOpType ROpen -> NextTokenResult -> NextTokenResult -> ParseResult w (Type, NextTokenResult)
+  
   sem canStartAppArgExpr =
-  | { token = LBraceTok { } } -> true
+  | { token = LBraceTok {} } -> true
 
   sem canStartAppArgType =
-  | { token = LBraceTok { } } -> true
+  | { token = LBraceTok {} } -> true
 
   sem parseExprROpen state =
-  | { token = LBraceTok { } } & toklb ->
-    recursive let parseItems = lam acc. lam cur.
-      match cur with { token = LIdentTok { val = field } } & tokfield then
-        match nextToken tokfield.stream with { token = OperatorTok { val = "=" } } & tokeq then
-          let cur = nextToken tokeq.stream in
-          result.bind (parseExpr cur) (lam expr.
-            match expr with (expr, cur) in
-            let acc = mapInsert (stringToSid field) expr acc in
-            switch cur
-              case { token = RBraceTok { } } then
-                parseOk (cur, acc)
-              case { token = CommaTok { } } then
-                let cur = nextToken cur.stream in
-                parseItems acc cur
-              case _ then
-                parseErr (cur.info, "Unexpected token in sequence")
-            end
-          )
-        else
-          parseErr (cur.info, "Missing assignment")
-      else
-        parseErr (cur.info, "Unexpected token in record")
-    in
-
-    let cur = nextToken toklb.stream in
-    let res = switch cur
-      case { token = RBraceTok { } } then
-        parseOk (cur, (mapEmpty cmpSID))
-      case _ then
-        parseItems (mapEmpty cmpSID) cur
-    end in
-
-    result.bind res (lam res.
-      match res with (tokrb, bindings) in
-      let info = mergeInfo toklb.info tokrb.info in
-      let expr = TmRecord {
-        bindings = bindings,
-        ty = ityunknown_ info,
-        info = info
-      } in
-      let state = breakableAddAtom (configExpr ()) (OpExprAtom expr) state in
-      parseExprRClosed state (nextToken tokrb.stream)
-    )
+  | { token = LBraceTok {} } & open ->
+    beginParseExprInBrace state open (nextToken open.stream)
 
   sem parseTypeROpen state =
-  | { token = LBraceTok { } } & toklb ->
+  | { token = LBraceTok {} } & open ->
+    beginParseTypeInBrace state open (nextToken open.stream)
+end
+
+lang RecordParser = BraceParser + RecordAst + RecordTypeAst
+  sem canStartAppArgExpr =
+    | { token = LIdentTok { val = "with" } } -> false
+
+  sem beginParseExprInBrace state open =
+  | { token = RBraceTok {} } & close ->
+    -- this is a empty record
+    let info = mergeInfo open.info close.info in
+    let expr = TmRecord {
+      bindings = mapEmpty cmpSID,
+      ty = ityunknown_ info,
+      info = info
+    } in
+    let state = breakableAddAtom (configExpr ()) (OpExprAtom expr) state in
+    parseExprRClosed state (nextToken close.stream)
+  
+  | cur ->
+    let res = parseExpr cur in
+    result.bind res (lam res.
+      match res with (fieldOrRec, next) in
+      switch next
+        -- Record
+        case { token = OperatorTok { val = "=" } } then
+          recursive let parseItems = lam acc. lam cur.
+            match cur with { token = LIdentTok { val = field } } & tokfield then
+              match nextToken tokfield.stream with { token = OperatorTok { val = "=" } } & tokeq then
+                let cur = nextToken tokeq.stream in
+                result.bind (parseExpr cur) (lam expr.
+                  match expr with (expr, cur) in
+                  let acc = mapInsert (stringToSid field) expr acc in
+                  switch cur
+                    case { token = RBraceTok { } } then
+                      parseOk (cur, acc)
+                    case { token = CommaTok { } } then
+                      let cur = nextToken cur.stream in
+                      parseItems acc cur
+                    case _ then
+                      parseErr (cur.info, "Unexpected token in sequence")
+                  end
+                )
+              else
+                parseErr (cur.info, "Missing assignment")
+            else
+              parseErr (cur.info, "Unexpected token in record")
+          in
+
+          let res = parseItems (mapEmpty cmpSID) cur in
+
+          result.bind res (lam res.
+            match res with (close, bindings) in
+            let info = mergeInfo open.info close.info in
+            let expr = TmRecord {
+              bindings = bindings,
+              ty = ityunknown_ info,
+              info = info
+            } in
+            let state = breakableAddAtom (configExpr ()) (OpExprAtom expr) state in
+            parseExprRClosed state (nextToken close.stream)
+          )
+
+        -- RecordUpdate
+        case { token = LIdentTok { val = "with" } } & tokwith then
+          let cur = nextToken tokwith.stream in
+
+          recursive let parseItems = lam rec. lam cur.
+            match cur with { token = LIdentTok { val = field } } & tokfield then
+              match nextToken tokfield.stream with { token = OperatorTok { val = "=" } } & tokeq then
+                let cur = nextToken tokeq.stream in
+                result.bind (parseExpr cur) (lam expr.
+                  match expr with (expr, cur) in
+                  let info = mergeInfo (infoTm rec) (infoTm expr) in
+                  let rec = TmRecordUpdate {
+                    rec = rec,
+                    key = stringToSid field,
+                    value = expr,
+                    ty = ityunknown_ info,
+                    info = info
+                  } in
+                  switch cur
+                    case { token = RBraceTok { } } then
+                      parseOk (cur, rec)
+                    case { token = CommaTok { } } then
+                      let cur = nextToken cur.stream in
+                      parseItems rec cur
+                    case _ then
+                      parseErr (cur.info, "Unexpected token in sequence")
+                  end
+                )
+              else
+                parseErr (cur.info, "Missing assignment")
+            else
+              parseErr (cur.info, "Unexpected token in record update")
+          in
+
+          let res = parseItems fieldOrRec cur in
+          
+          result.bind res (lam res.
+            match res with (close, expr) in
+            let state = breakableAddAtom (configExpr ()) (OpExprAtom expr) state in
+            parseExprRClosed state (nextToken close.stream)
+          )
+
+        case _ then
+          parseErr (cur.info, "Unexpected token in record")
+      end
+    )
+
+  sem beginParseTypeInBrace state open =
+  | { token = RBraceTok {} } & close ->
+    -- this is a empty record
+    let info = mergeInfo open.info close.info in
+    let typ = TyRecord {
+      fields = mapEmpty cmpSID,
+      info = info
+    } in
+    let state = breakableAddAtom (configType ()) (OpTypeAtom typ) state in
+    parseTypeRClosed state (nextToken close.stream)
+  
+  | cur ->
     recursive let parseItems = lam acc. lam cur.
       match cur with { token = LIdentTok { val = field } } & tokfield then
         match nextToken tokfield.stream with { token = OperatorTok { val = ":" } } & tokcol then
@@ -766,26 +850,19 @@ lang RecordParser = AstParserBase + RecordAst + RecordTypeAst
       else
         parseErr (cur.info, "Unexpected token in record")
     in
-
-    let cur = nextToken toklb.stream in
-    let res = switch cur
-      case { token = RBraceTok { } } then
-        parseOk (cur, (mapEmpty cmpSID))
-      case _ then
-        parseItems (mapEmpty cmpSID) cur
-    end in
+    
+    let res = parseItems (mapEmpty cmpSID) cur in
 
     result.bind res (lam res.
-      match res with (tokrb, fields) in
-      let info = mergeInfo toklb.info tokrb.info in
+      match res with (close, fields) in
+      let info = mergeInfo open.info close.info in
       let typ = TyRecord {
         fields = fields,
         info = info
       } in
       let state = breakableAddAtom (configType ()) (OpTypeAtom typ) state in
-      parseTypeRClosed state (nextToken tokrb.stream)
+      parseTypeRClosed state (nextToken close.stream)
     )
-
 end
 
 lang LetDeclParser = AstParserBase + LetDeclAst
@@ -1096,7 +1173,7 @@ let printAst = lam str.
   end
 in
 
--- let str = "recursive let a = lam. 1 in ()" in
+-- let str = "{negi 1 with b = 2}" in
 -- printLn "\nBoot:";
 -- printAstBoot str;
 -- printLn "Native:";
@@ -1173,6 +1250,10 @@ utest compare "{a = 1, bc = { b = 2, c = 3 } }" with true in
 
 utest compareWithoutInfo "let a: { a: Int, b: Bool } = () in a" with true in
 utest compareWithoutInfo "let a: { a: Int, bc: { b: Bool, c: Char } } = () in a" with true in
+
+utest compareWithoutInfo "{negi 1 with b = 2}" with true in
+utest compareWithoutInfo "{negi 1 with b = 2, c = 3}" with true in
+utest compareWithoutInfo "{{negi 1 with b = 2} with c = 3}" with true in
 
 utest compare "never" with true in
 
