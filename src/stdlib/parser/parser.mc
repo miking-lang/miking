@@ -414,13 +414,13 @@ lang NegParser = AstParserBase + IntAst + FloatAst + IntPat
       parseErr (cur.info, "Expected an integer")
 end
 
-lang VarParser = AstParserBase + VarAst
+lang VarParser = AstParserBase + VarAst + NamedPat
   sem canStartAppArgExpr =
   | { token = LIdentTok { } } -> true
   | { token = HashStringTok { hash = "frozen" | "var" } } -> true
 
   sem parseExprROpen state =
-  | { token = LIdentTok { val = val } } & cur ->
+  | { token = LIdentTok { val = val } | HashStringTok { hash = "var", val = val } } & cur ->
     let expr = TmVar {
       ident = nameNoSym val,
       ty = ityunknown_ cur.info,
@@ -432,23 +432,33 @@ lang VarParser = AstParserBase + VarAst
 
   | { token = HashStringTok { hash = "frozen", val = val } } & cur ->
     let expr = TmVar {
-        ident = nameNoSym val,
-        ty = ityunknown_ cur.info,
-        info = cur.info,
-        frozen = true
-      } in
-      let state = breakableAddAtom (configExpr ()) (OpExprAtom expr) state in
-      parseExprRClosed state (nextToken cur.stream)
+      ident = nameNoSym val,
+      ty = ityunknown_ cur.info,
+      info = cur.info,
+      frozen = true
+    } in
+    let state = breakableAddAtom (configExpr ()) (OpExprAtom expr) state in
+    parseExprRClosed state (nextToken cur.stream)
 
-  | { token = HashStringTok { hash = "var", val = val } } & cur ->
-    let expr = TmVar {
-        ident = nameNoSym val,
-        ty = ityunknown_ cur.info,
-        info = cur.info,
-        frozen = false
-      } in
-      let state = breakableAddAtom (configExpr ()) (OpExprAtom expr) state in
-      parseExprRClosed state (nextToken cur.stream)
+  sem parsePatROpen state =
+  | { token = LIdentTok { val = "_" } } & cur ->
+    let pat = PatNamed {
+      ident = PWildcard (),
+      ty = ityunknown_ cur.info,
+      info = cur.info
+    } in
+    let state = breakableAddAtom (configPat ()) (OpPatAtom pat) state in
+    parsePatRClosed state (nextToken cur.stream)
+
+  | { token = LIdentTok { val = val } | HashStringTok { hash = "var", val = val } } & cur ->
+    let pat = PatNamed {
+      ident = PName (nameNoSym val),
+      ty = ityunknown_ cur.info,
+      info = cur.info
+    } in
+    let state = breakableAddAtom (configPat ()) (OpPatAtom pat) state in
+    parsePatRClosed state (nextToken cur.stream)
+    
 end
 
 lang AppParser = AstParserBase + AppAst + AppTypeAst
@@ -1219,8 +1229,82 @@ lang NeverParser = AstParserBase + NeverAst
     parseExprRClosed state (nextToken cur.stream)
 end
 
+lang AndParser = AstParserBase + AndPat
+  syn BrkOpPat lstyle rstyle =
+  | OpPatAnd Info
+
+  sem getInfoPat =
+  | OpPatAnd info -> info
+
+  sem parsePatRClosed state =
+  | { token = OperatorTok { val = "&" } } & cur ->
+    match breakableAddInfix (configPat ()) (OpPatAnd cur.info) state with Some(state) then
+      parsePatROpen state cur
+    else
+      parseErr (cur.info, "Breakable add infix error")
+
+  sem constructInfixPat =
+  | (OpPatAnd info, lhs, rhs) ->
+    let info = mergeInfo (infoPat lhs) (infoPat rhs) in
+    PatAnd {
+      lpat = lhs,
+      rpat = rhs,
+      ty = ityunknown_ info,
+      info = info
+    }
+end
+
+lang OrParser = AstParserBase + OrPat
+  syn BrkOpPat lstyle rstyle =
+  | OpPatOr Info
+
+  sem getInfoPat =
+  | OpPatOr info -> info
+
+  sem parsePatRClosed state =
+  | { token = OperatorTok { val = "|" } } & cur ->
+    match breakableAddInfix (configPat ()) (OpPatOr cur.info) state with Some(state) then
+      parsePatROpen state cur
+    else
+      parseErr (cur.info, "Breakable add infix error")
+
+  sem constructInfixPat =
+  | (OpPatOr info, lhs, rhs) ->
+    let info = mergeInfo (infoPat lhs) (infoPat rhs) in
+    PatOr {
+      lpat = lhs,
+      rpat = rhs,
+      ty = ityunknown_ info,
+      info = info
+    }
+end
+
+lang NotParser = AstParserBase + NotPat
+  syn BrkOpPat lstyle rstyle =
+  | OpPatNot Info
+
+  sem getInfoPat =
+  | OpPatNot info -> info
+
+  sem parsePatRClosed state =
+  | { token = OperatorTok { val = "!" } } & cur ->
+    match breakableAddPrefix (configPat ()) (OpPatNot cur.info) state with Some(state) then
+      parsePatROpen state cur
+    else
+      parseErr (cur.info, "Breakable add infix error")
+
+  sem constructPrefixPat =
+  | (OpPatNot info, rhs) ->
+    let info = mergeInfo info (infoPat rhs) in
+    PatNot {
+      subpat = rhs,
+      ty = ityunknown_ info,
+      info = info
+    }
+end
+
 -- TODO: Better solution
-lang PrecedenceParser = AppParser + LamParser + LetDeclParser
+lang PrecedenceParser = AppParser + LamParser + LetDeclParser + AndParser + OrParser + NotParser
   sem groupingsAllowedExpr =
   | (OpExprApp _, OpExprApp _) -> GLeft ()
   | (OpExprDecl _, OpExprApp _) -> GRight ()
@@ -1228,9 +1312,20 @@ lang PrecedenceParser = AppParser + LamParser + LetDeclParser
 
   sem groupingsAllowedType =
   | (OpTypeApp _, OpTypeApp _)  -> GLeft ()
-  | (OpTypeArrow _, OpTypeArrow _) -> GLeft ()
   | (OpTypeApp _, OpTypeArrow _) -> GLeft ()
   | (OpTypeArrow _, OpTypeApp _) -> GRight ()
+  | (OpTypeArrow _, OpTypeArrow _) -> GLeft ()
+
+  sem groupingsAllowedPat =
+  | (OpPatAnd _, OpPatAnd _) -> GLeft ()
+  | (OpPatAnd _, OpPatOr _) -> GLeft ()
+  | (OpPatAnd _, OpPatNot _) -> GRight ()
+  | (OpPatOr _, OpPatAnd _) -> GRight ()
+  | (OpPatOr _, OpPatOr _) -> GLeft ()
+  | (OpPatOr _, OpPatNot _) -> GRight ()
+  | (OpPatNot _, OpPatAnd _) -> GLeft ()
+  | (OpPatNot _, OpPatOr _) -> GLeft ()
+  | (OpPatNot _, OpPatNot _) -> GLeft ()
 end
 
 lang UnexpectedTokenParser = AstParserBase
@@ -1278,6 +1373,9 @@ lang AstParser =
   + RecLetsDeclParser
   + LamParser
   + NeverParser
+  + AndParser
+  + OrParser
+  + NotParser
   + PrecedenceParser
   + UnexpectedTokenParser
 end
@@ -1344,11 +1442,11 @@ let printAst = lam str.
   end
 in
 
--- let str = "match 1 with \"test\" then 3 else 4" in
--- printLn "\nBoot:";
--- printAstBoot str;
--- printLn "Native:";
--- printAst str;
+let str = "match 1 with 1 & 2 | 3 then 3 else 4" in
+printLn "\nBoot:";
+printAstBoot str;
+printLn "Native:";
+printAst str;
 
 utest compare "0" with true in
 utest compare "1" with true in
