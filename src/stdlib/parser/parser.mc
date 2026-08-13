@@ -313,6 +313,7 @@ end
 lang VarParser = AstParserBase + VarAst
   sem canStartAppArgExpr =
   | { token = LIdentTok { } } -> true
+  | { token = HashStringTok { hash = "frozen" | "var" } } -> true
 
   sem parseExprROpen state =
   | { token = LIdentTok { val = val } } & cur ->
@@ -331,6 +332,16 @@ lang VarParser = AstParserBase + VarAst
         ty = ityunknown_ cur.info,
         info = cur.info,
         frozen = true
+      } in
+      let state = breakableAddAtom (configExpr ()) (OpExprAtom expr) state in
+      parseExprRClosed state (nextToken cur.stream)
+
+  | { token = HashStringTok { hash = "var", val = val } } & cur ->
+    let expr = TmVar {
+        ident = nameNoSym val,
+        ty = ityunknown_ cur.info,
+        info = cur.info,
+        frozen = false
       } in
       let state = breakableAddAtom (configExpr ()) (OpExprAtom expr) state in
       parseExprRClosed state (nextToken cur.stream)
@@ -726,55 +737,65 @@ lang RecordParser = BraceParser + RecordAst + RecordTypeAst
     parseExprRClosed state (nextToken close.stream)
   
   | cur ->
-    let res = parseExpr cur in
-    result.bind res (lam res.
-      match res with (fieldOrRec, next) in
-      switch next
-        -- Record
-        case { token = OperatorTok { val = "=" } } then
-          recursive let parseItems = lam acc. lam cur.
-            match cur with { token = LIdentTok { val = field } } & tokfield then
-              match nextToken tokfield.stream with { token = OperatorTok { val = "=" } } & tokeq then
-                let cur = nextToken tokeq.stream in
-                result.bind (parseExpr cur) (lam expr.
-                  match expr with (expr, cur) in
-                  let acc = mapInsert (stringToSid field) expr acc in
-                  switch cur
-                    case { token = RBraceTok { } } then
-                      parseOk (cur, acc)
-                    case { token = CommaTok { } } then
-                      let cur = nextToken cur.stream in
-                      parseItems acc cur
-                    case _ then
-                      parseErr (cur.info, "Unexpected token in sequence")
-                  end
-                )
-              else
-                parseErr (cur.info, "Missing assignment")
-            else
-              parseErr (cur.info, "Unexpected token in record")
-          in
 
-          let res = parseItems (mapEmpty cmpSID) cur in
+    let isNormalRecord =
+      match cur with { token = LIdentTok { } | HashStringTok { hash = "label" } } then
+        match (nextToken cur.stream) with { token = OperatorTok { val = "=" } } then
+          true
+        else
+          false
+      else
+        false
+    in
 
-          result.bind res (lam res.
-            match res with (close, bindings) in
-            let info = mergeInfo open.info close.info in
-            let expr = TmRecord {
-              bindings = bindings,
-              ty = ityunknown_ info,
-              info = info
-            } in
-            let state = breakableAddAtom (configExpr ()) (OpExprAtom expr) state in
-            parseExprRClosed state (nextToken close.stream)
-          )
+    match isNormalRecord with true then
+      -- Normal Record
+      recursive let parseItems = lam acc. lam cur.
+        match cur with { token = LIdentTok { val = field } | HashStringTok { hash = "label", val = field } } & tokfield then
+          match nextToken tokfield.stream with { token = OperatorTok { val = "=" } } & tokeq then
+            let cur = nextToken tokeq.stream in
+            result.bind (parseExpr cur) (lam expr.
+              match expr with (expr, cur) in
+              let acc = mapInsert (stringToSid field) expr acc in
+              switch cur
+                case { token = RBraceTok { } } then
+                  parseOk (cur, acc)
+                case { token = CommaTok { } } then
+                  let cur = nextToken cur.stream in
+                  parseItems acc cur
+                case _ then
+                  parseErr (cur.info, "Unexpected token in sequence")
+              end
+            )
+          else
+            parseErr (cur.info, "Missing assignment")
+        else
+          parseErr (cur.info, "Unexpected token in record")
+      in
 
-        -- RecordUpdate
-        case { token = LIdentTok { val = "with" } } & tokwith then
+      let res = parseItems (mapEmpty cmpSID) cur in
+
+      result.bind res (lam res.
+        match res with (close, bindings) in
+        let info = mergeInfo open.info close.info in
+        let expr = TmRecord {
+          bindings = bindings,
+          ty = ityunknown_ info,
+          info = info
+        } in
+        let state = breakableAddAtom (configExpr ()) (OpExprAtom expr) state in
+        parseExprRClosed state (nextToken close.stream)
+      )
+    
+    -- Record Update
+    else
+      let res = parseExpr cur in
+      result.bind res (lam res.
+        match res with (rec, cur) in
+        match cur with { token = LIdentTok { val = "with" } } & tokwith then
           let cur = nextToken tokwith.stream in
-
           recursive let parseItems = lam rec. lam cur.
-            match cur with { token = LIdentTok { val = field } } & tokfield then
+            match cur with { token = LIdentTok { val = field } | HashStringTok { hash = "label", val = field } } & tokfield then
               match nextToken tokfield.stream with { token = OperatorTok { val = "=" } } & tokeq then
                 let cur = nextToken tokeq.stream in
                 result.bind (parseExpr cur) (lam expr.
@@ -803,18 +824,16 @@ lang RecordParser = BraceParser + RecordAst + RecordTypeAst
               parseErr (cur.info, "Unexpected token in record update")
           in
 
-          let res = parseItems fieldOrRec cur in
+          let res = parseItems rec cur in
           
           result.bind res (lam res.
             match res with (close, expr) in
             let state = breakableAddAtom (configExpr ()) (OpExprAtom expr) state in
             parseExprRClosed state (nextToken close.stream)
           )
-
-        case _ then
+        else
           parseErr (cur.info, "Unexpected token in record")
-      end
-    )
+      )
 
   sem beginParseTypeInBrace state open =
   | { token = RBraceTok {} } & close ->
@@ -1173,7 +1192,7 @@ let printAst = lam str.
   end
 in
 
--- let str = "{negi 1 with b = 2}" in
+-- let str = "{#label\"a\" = 1, b = 2}" in
 -- printLn "\nBoot:";
 -- printAstBoot str;
 -- printLn "Native:";
@@ -1203,6 +1222,7 @@ utest compare "addi 1 (addi 2 3)" with true in
 
 utest compare "a" with true in
 utest compare "#frozen\"a\"" with true in
+utest compare "#var\"a\"" with true in
 
 utest compareWithoutInfo "()" with true in
 utest compareWithoutInfo "(())" with true in
@@ -1247,6 +1267,7 @@ utest compareWithoutInfo "let a: ((Int, Bool), String) = () in a" with true in
 
 utest compare "{a = 1, b = 2}" with true in
 utest compare "{a = 1, bc = { b = 2, c = 3 } }" with true in
+utest compareWithoutInfo "{#label\"a\" = 1, b = 2}" with true in
 
 utest compareWithoutInfo "let a: { a: Int, b: Bool } = () in a" with true in
 utest compareWithoutInfo "let a: { a: Int, bc: { b: Bool, c: Char } } = () in a" with true in
