@@ -38,6 +38,9 @@ lang AstParserBase = Lexer + Ast + DeclAst
   syn BrkOpType lstyle rstyle =
   | OpTypeAtom Type
 
+  syn BrkOpPat lstyle rstyle =
+  | OpPatAtom Pat
+
   sem parseExpr: all w. NextTokenResult -> ParseResult w (Expr, NextTokenResult)
   sem parseDecl: all w. NextTokenResult -> ParseResult w (Decl, NextTokenResult)
   sem parseType: all w. NextTokenResult -> ParseResult w (Type, NextTokenResult)
@@ -46,48 +49,62 @@ lang AstParserBase = Lexer + Ast + DeclAst
 
   sem parseExprRClosed:  all w. State BrkOpExpr RClosed -> NextTokenResult -> ParseResult w (Expr, NextTokenResult)
   sem parseTypeRClosed:  all w. State BrkOpType RClosed -> NextTokenResult -> ParseResult w (Type, NextTokenResult)
+  sem parsePatRClosed:   all w. State BrkOpPat  RClosed -> NextTokenResult -> ParseResult w (Pat,  NextTokenResult)
 
   sem parseExprROpen:    all w. State BrkOpExpr ROpen   -> NextTokenResult -> ParseResult w (Expr, NextTokenResult)
   sem parseTypeROpen:    all w. State BrkOpType ROpen   -> NextTokenResult -> ParseResult w (Type, NextTokenResult)
+  sem parsePatROpen:     all w. State BrkOpPat  ROpen   -> NextTokenResult -> ParseResult w (Pat,  NextTokenResult)
 
   sem finalizeParseExpr: all w. State BrkOpExpr RClosed -> NextTokenResult -> ParseResult w (Expr, NextTokenResult)
   sem finalizeParseType: all w. State BrkOpType RClosed -> NextTokenResult -> ParseResult w (Type, NextTokenResult)
+  sem finalizeParsePat:  all w. State BrkOpPat  RClosed -> NextTokenResult -> ParseResult w (Pat,  NextTokenResult)
 
   sem canStartAppArgExpr: NextTokenResult -> Bool
   sem canStartAppArgType: NextTokenResult -> Bool
 
   sem constructPrefixExpr: (BrkOpExpr LClosed ROpen, Expr) -> Expr
   sem constructPrefixType: (BrkOpType LClosed ROpen, Type) -> Type
+  sem constructPrefixPat:  (BrkOpPat  LClosed ROpen, Pat)  -> Pat
 
   sem constructInfixExpr: (BrkOpExpr LOpen ROpen, Expr, Expr) -> Expr
   sem constructInfixType: (BrkOpType LOpen ROpen, Type, Type) -> Type
+  sem constructInfixPat:  (BrkOpPat  LOpen ROpen, Pat,  pat)  -> Pat
 
   sem constructPostfixExpr: (BrkOpExpr LOpen RClosed, Expr) -> Expr
   sem constructPostfixType: (BrkOpType LOpen RClosed, Type) -> Type
+  sem constructPostfixPat:  (BrkOpPat  LOpen RClosed, Pat)  -> Pat
 
   sem configExpr: () -> Config BrkOpExpr
   sem configType: () -> Config BrkOpType
+  sem configPat:  () -> Config BrkOpPat
 
   sem topAllowedExpr: TopAllowedFunc BrkOpExpr
   sem topAllowedType: TopAllowedFunc BrkOpType
+  sem topAllowedPat:  TopAllowedFunc BrkOpPat
 
   sem leftAllowedExpr: LeftAllowedFunc BrkOpExpr
   sem leftAllowedType: LeftAllowedFunc BrkOpType
+  sem leftAllowedPat:  LeftAllowedFunc BrkOpPat
 
   sem rightAllowedExpr: RightAllowedFunc BrkOpExpr
   sem rightAllowedType: RightAllowedFunc BrkOpType
+  sem rightAllowedPat:  RightAllowedFunc BrkOpPat
 
   sem parenAllowedExpr: ParenAllowedFunc BrkOpExpr
   sem parenAllowedType: ParenAllowedFunc BrkOpType
+  sem parenAllowedPat:  ParenAllowedFunc BrkOpPat
 
   sem groupingsAllowedExpr: GroupingsAllowedFunc BrkOpExpr
   sem groupingsAllowedType: GroupingsAllowedFunc BrkOpType
+  sem groupingsAllowedPat:  GroupingsAllowedFunc BrkOpPat
 
   sem terminalInfosExpr: all lstyle. all rstyle. BrkOpExpr lstyle rstyle -> [Info]
   sem terminalInfosType: all lstyle. all rstyle. BrkOpType lstyle rstyle -> [Info]
+  sem terminalInfosPat:  all lstyle. all rstyle. BrkOpPat  lstyle rstyle -> [Info]
 
   sem getInfoExpr: all lstyle. all rstyle. BrkOpExpr lstyle rstyle -> Info
   sem getInfoType: all lstyle. all rstyle. BrkOpType lstyle rstyle -> Info
+  sem getInfoPat:  all lstyle. all rstyle. BrkOpPat lstyle rstyle -> Info
 
   -- The main entry point
   sem parseExpr =
@@ -99,6 +116,11 @@ lang AstParserBase = Lexer + Ast + DeclAst
   | cur ->
     let state = breakableInitState () in
     parseTypeROpen state cur
+
+  sem parsePat =
+  | cur ->
+    let state = breakableInitState () in
+    parsePatROpen state cur
 
   sem finalizeParseExpr state =
   | cur ->
@@ -150,6 +172,31 @@ lang AstParserBase = Lexer + Ast + DeclAst
     else
       parseErr (cur.info, "Breakable parse error")
 
+  sem finalizeParsePat state =
+  | cur ->
+    match breakableFinalizeParse (configType ()) state with Some sppf then
+      let config: BreakableErrorHighlightConfig BrkOpPat = {
+        parenAllowed = #frozen"parenAllowedPat",
+        topAllowed = #frozen"topAllowedPat",
+        terminalInfos = #frozen"terminalInfosPat",
+        getInfo = #frozen"getInfoPat",
+        lpar = "(",
+        rpar = ")"
+      } in
+      let errSpecs = breakableToErrorHighlightSpec config sppf in
+      match errSpecs with [first] ++ _ then
+        parseErrs (map breakableHighlightOne errSpecs)
+      else
+        let pat = breakableConstructSimple {
+          constructAtom = lam op. match op with OpPatAtom pat in pat,
+          constructInfix = lam op. lam lhs. lam rhs. constructInfixPat (op, lhs, rhs),
+          constructPrefix = lam op. lam rhs. constructPrefixPat (op, rhs),
+          constructPostfix = lam op. lam lhs. constructPostfixPat (op, lhs)
+        } sppf in
+        parseOk (pat, cur)
+    else
+      parseErr (cur.info, "Breakable parse error")
+
   sem canStartAppArgExpr =
   | _ -> false
 
@@ -186,10 +233,23 @@ lang AstParserBase = Lexer + Ast + DeclAst
       groupingsAllowed = #frozen"groupingsAllowedType"
     }
 
+  sem configPat =
+  | _ ->
+    {
+      topAllowed = #frozen"topAllowedPat",
+      leftAllowed = #frozen"leftAllowedPat",
+      rightAllowed = #frozen"rightAllowedPat",
+      parenAllowed = #frozen"parenAllowedPat",
+      groupingsAllowed = #frozen"groupingsAllowedPat"
+    }
+
   sem topAllowedExpr =
   | _ -> true
 
   sem topAllowedType =
+  | _ -> true
+
+  sem topAllowedPat =
   | _ -> true
 
   sem leftAllowedExpr =
@@ -198,10 +258,16 @@ lang AstParserBase = Lexer + Ast + DeclAst
   sem leftAllowedType =
   | _ -> true
 
+  sem leftAllowedPat =
+  | _ -> true
+
   sem rightAllowedExpr =
   | _ -> true
 
   sem rightAllowedType =
+  | _ -> true
+
+  sem rightAllowedPat =
   | _ -> true
 
   sem parenAllowedExpr =
@@ -210,10 +276,16 @@ lang AstParserBase = Lexer + Ast + DeclAst
   sem parenAllowedType =
   | _ -> GEither ()
 
+  sem parenAllowedPat =
+  | _ -> GEither ()
+
   sem groupingsAllowedExpr =
   | _ -> GEither ()
 
   sem groupingsAllowedType =
+  | _ -> GEither ()
+
+  sem groupingsAllowedPat =
   | _ -> GEither ()
 
   sem terminalInfosExpr =
@@ -222,15 +294,21 @@ lang AstParserBase = Lexer + Ast + DeclAst
   sem terminalInfosType =
   | op -> [getInfoType op]
 
+  sem terminalInfosPat =
+  | op -> [getInfoPat op]
+
   sem getInfoExpr =
   | OpExprAtom expr -> infoTm expr
   | OpExprDecl decl -> infoDecl decl
 
   sem getInfoType =
   | OpTypeAtom typ -> infoTy typ
+
+  sem getInfoPat =
+  | OpPatAtom pat -> infoPat pat
 end
 
-lang IntParser = AstParserBase + IntAst
+lang IntParser = AstParserBase + IntAst + IntPat
   sem canStartAppArgExpr =
   | { token = IntTok { } } -> true
 
@@ -252,6 +330,16 @@ lang IntParser = AstParserBase + IntAst
     let typ = ityint_ cur.info in
     let state = breakableAddAtom (configType ()) (OpTypeAtom typ) state in
     parseTypeRClosed state (nextToken cur.stream)
+
+  sem parsePatROpen state =
+  | { token = IntTok { val = val } } & cur ->
+    let pat = PatInt {
+      val = val,
+      ty = ityunknown_ cur.info,
+      info = cur.info
+    } in
+    let state = breakableAddAtom (configPat ()) (OpPatAtom pat) state in
+    parsePatRClosed state (nextToken cur.stream)
 end
 
 lang FloatParser = AstParserBase + FloatAst
@@ -278,7 +366,7 @@ lang FloatParser = AstParserBase + FloatAst
     parseTypeRClosed state (nextToken cur.stream)
 end
 
-lang NegParser = AstParserBase + IntAst + FloatAst
+lang NegParser = AstParserBase + IntAst + FloatAst + IntPat
   sem canStartAppArgExpr =
   | { token = OperatorTok { val = "-" } } -> true
 
@@ -308,6 +396,22 @@ lang NegParser = AstParserBase + IntAst + FloatAst
       case _ then
         parseErr (cur.info, "Expected a number")
     end
+
+  sem parsePatROpen state =
+  | { token = OperatorTok { val = "-" } } & tokneg ->
+    let cur = nextToken tokneg.stream in
+
+    match cur with { token = IntTok { val = val } } then
+      let info = mergeInfo tokneg.info cur.info in
+      let pat = PatInt {
+        val = negi val,
+        ty = ityunknown_ info,
+        info = info
+      } in
+      let state = breakableAddAtom (configPat ()) (OpPatAtom pat) state in
+      parsePatRClosed state (nextToken cur.stream)
+    else
+      parseErr (cur.info, "Expected an integer")
 end
 
 lang VarParser = AstParserBase + VarAst
@@ -553,7 +657,7 @@ lang TupleParser = ParenParser + RecordAst + RecordTypeAst
 
 end
 
-lang BoolParser = AstParserBase + BoolAst
+lang BoolParser = AstParserBase + BoolAst + BoolPat
   sem identIsKeyword =
   | "true" | "false" -> true
 
@@ -586,9 +690,27 @@ lang BoolParser = AstParserBase + BoolAst
     let typ = itybool_ cur.info in
     let state = breakableAddAtom (configType ()) (OpTypeAtom typ) state in
     parseTypeRClosed state (nextToken cur.stream)
+
+  sem parsePatROpen state =
+  | { token = KeywordTok { val = "true" } } & cur ->
+    let pat = PatBool {
+      val = true,
+      ty = ityunknown_ cur.info,
+      info = cur.info
+    } in
+    let state = breakableAddAtom (configPat ()) (OpPatAtom pat) state in
+    parsePatRClosed state (nextToken cur.stream)
+  | { token = KeywordTok { val = "false" } } & cur ->
+    let pat = PatBool {
+      val = false,
+      ty = ityunknown_ cur.info,
+      info = cur.info
+    } in
+    let state = breakableAddAtom (configPat ()) (OpPatAtom pat) state in
+    parsePatRClosed state (nextToken cur.stream)
 end
 
-lang CharParser = AstParserBase + CharAst
+lang CharParser = AstParserBase + CharAst + CharPat
   sem canStartAppArgExpr =
   | { token = CharTok { } } -> true
 
@@ -610,9 +732,19 @@ lang CharParser = AstParserBase + CharAst
     let typ = itychar_ cur.info in
     let state = breakableAddAtom (configType ()) (OpTypeAtom typ) state in
     parseTypeRClosed state (nextToken cur.stream)
+
+  sem parsePatROpen state =
+  | { token = CharTok { val = val } } & cur ->
+    let pat = PatChar {
+      val = val,
+      ty = ityunknown_ cur.info,
+      info = cur.info
+    } in
+    let state = breakableAddAtom (configPat ()) (OpPatAtom pat) state in
+    parsePatRClosed state (nextToken cur.stream)
 end
 
-lang StringParser = AstParserBase + SeqAst + CharAst
+lang StringParser = AstParserBase + SeqAst + CharAst + SeqTotPat + CharPat
   sem canStartAppArgExpr =
   | { token = StringTok { } } -> true
 
@@ -638,6 +770,20 @@ lang StringParser = AstParserBase + SeqAst + CharAst
     let typ = itystr_ cur.info in
     let state = breakableAddAtom (configType ()) (OpTypeAtom typ) state in
     parseTypeRClosed state (nextToken cur.stream)
+
+  sem parsePatROpen state =
+  | { token = StringTok { val = val } } & cur ->
+    let pat = PatSeqTot {
+      pats = map (lam ch. PatChar {
+        val = ch,
+        ty = ityunknown_ cur.info,
+        info = cur.info
+      }) val,
+      ty = ityunknown_ cur.info,
+      info = cur.info
+    } in
+    let state = breakableAddAtom (configPat ()) (OpPatAtom pat) state in
+    parsePatRClosed state (nextToken cur.stream)
 end
 
 lang SeqParser = AstParserBase + SeqAst + SeqTypeAst
@@ -1108,7 +1254,7 @@ lang UnexpectedTokenParser = AstParserBase
     let str = concat "Unexpexted token while parsing kind: " (tokToStr cur.token) in
     parseErr (cur.info, str)
 
-  sem parsePat =
+  sem parsePatROpen state =
   | cur ->
     let str = concat "Unexpexted token while parsing pat: " (tokToStr cur.token) in
     parseErr (cur.info, str)
@@ -1198,7 +1344,7 @@ let printAst = lam str.
   end
 in
 
--- let str = "let let = true in ()" in
+-- let str = "match 1 with \"test\" then 3 else 4" in
 -- printLn "\nBoot:";
 -- printAstBoot str;
 -- printLn "Native:";
