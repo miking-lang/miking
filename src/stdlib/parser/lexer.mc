@@ -155,7 +155,34 @@ with {val = "_asd", str = " ", pos = posVal "" 1 4}
 utest parseIdentCont (initPos "") "Asd12 "
 with {val = "Asd12", str = " ", pos = posVal "" 1 5}
 
-lang LIdentTokenParser = TokenParser
+lang KeywordTokenParser = TokenParser
+  syn Token +=
+  | KeywordTok {info : Info, val : String}
+  syn TokenRepr +=
+  | KeywordRepr ()
+
+  sem identIsKeyword: String -> Bool
+
+  sem identIsKeyword =
+  | _ -> false
+
+  sem tokKindEq (tokRepr : TokenRepr) +=
+  | KeywordTok _ -> match tokRepr with KeywordRepr _ then true else false
+
+  sem tokInfo +=
+  | KeywordTok {info = info} -> info
+
+  sem tokReprToStr +=
+  | KeywordRepr _ -> "<Keyword>"
+
+  sem tokToStr +=
+  | KeywordTok tok -> concat "<Keyword>" tok.val
+
+  sem tokToRepr +=
+  | KeywordTok _ -> KeywordRepr ()
+end
+
+lang LIdentTokenParser = KeywordTokenParser
   syn Token +=
   | LIdentTok {info : Info, val : String}
   syn TokenRepr +=
@@ -169,7 +196,7 @@ lang LIdentTokenParser = TokenParser
     then
       let val = cons c val in
       let info = makeInfo pos pos2 in
-      { token = LIdentTok {info = info, val = val}
+      { token = match identIsKeyword val with true then KeywordTok {info = info, val = val} else LIdentTok {info = info, val = val}
       , lit = val
       , info = info
       , stream = {pos = pos2, str = str}
@@ -192,7 +219,7 @@ lang LIdentTokenParser = TokenParser
   | LIdentTok _ -> LIdentRepr ()
 end
 
-lang UIdentTokenParser = TokenParser
+lang UIdentTokenParser = KeywordTokenParser
   syn Token +=
   | UIdentTok {info : Info, val : String}
   syn TokenRepr +=
@@ -206,7 +233,7 @@ lang UIdentTokenParser = TokenParser
     then
       let val = cons c val in
       let info = makeInfo pos pos2 in
-      { token = UIdentTok {info = info, val = val}
+      { token = match identIsKeyword val with true then KeywordTok {info = info, val = val} else UIdentTok {info = info, val = val}
       , lit = val
       , info = info
       , stream = {pos = pos2, str = str}

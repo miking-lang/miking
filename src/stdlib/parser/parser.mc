@@ -4,7 +4,7 @@ This will be a parser for MCore.
 It is work in progress.
 
 The parser is designed to be as extensible as possible.
-It is built on top of the breakable libarary.
+It is built on top of the breakable library.
 
 The new parser is simply tested against the ocaml boot parser.
 The tests checks that the parsed AST is identical.
@@ -554,14 +554,17 @@ lang TupleParser = ParenParser + RecordAst + RecordTypeAst
 end
 
 lang BoolParser = AstParserBase + BoolAst
+  sem identIsKeyword =
+  | "true" | "false" -> true
+
   sem canStartAppArgExpr =
-  | { token = LIdentTok { val = "true" | "false" } } -> true
+  | { token = KeywordTok { val = "true" | "false" } } -> true
 
   sem canStartAppArgType =
   | { token = UIdentTok { val = "Bool" } } -> true
 
   sem parseExprROpen state =
-  | { token = LIdentTok { val = "true" } } & cur ->
+  | { token = KeywordTok { val = "true" } } & cur ->
     let expr = TmConst {
       val = CBool { val = true },
       ty = ityunknown_ cur.info,
@@ -569,7 +572,7 @@ lang BoolParser = AstParserBase + BoolAst
     } in
     let state = breakableAddAtom (configExpr ()) (OpExprAtom expr) state in
     parseExprRClosed state (nextToken cur.stream)
-  | { token = LIdentTok { val = "false" } } & cur ->
+  | { token = KeywordTok { val = "false" } } & cur ->
     let expr = TmConst {
       val = CBool { val = false },
       ty = ityunknown_ cur.info,
@@ -721,8 +724,8 @@ lang BraceParser = AstParserBase
 end
 
 lang RecordParser = BraceParser + RecordAst + RecordTypeAst
-  sem canStartAppArgExpr =
-    | { token = LIdentTok { val = "with" } } -> false
+  sem identIsKeyword =
+  | "with" -> true
 
   sem beginParseExprInBrace state open =
   | { token = RBraceTok {} } & close ->
@@ -792,7 +795,7 @@ lang RecordParser = BraceParser + RecordAst + RecordTypeAst
       let res = parseExpr cur in
       result.bind res (lam res.
         match res with (rec, cur) in
-        match cur with { token = LIdentTok { val = "with" } } & tokwith then
+        match cur with { token = KeywordTok { val = "with" } } & tokwith then
           let cur = nextToken tokwith.stream in
           recursive let parseItems = lam rec. lam cur.
             match cur with { token = LIdentTok { val = field } | HashStringTok { hash = "label", val = field } } & tokfield then
@@ -848,7 +851,7 @@ lang RecordParser = BraceParser + RecordAst + RecordTypeAst
   
   | cur ->
     recursive let parseItems = lam acc. lam cur.
-      match cur with { token = LIdentTok { val = field } } & tokfield then
+      match cur with { token = LIdentTok { val = field } | HashStringTok { hash = "label", val = field } } & tokfield then
         match nextToken tokfield.stream with { token = OperatorTok { val = ":" } } & tokcol then
           let cur = nextToken tokcol.stream in
           result.bind (parseType cur) (lam typ.
@@ -885,17 +888,17 @@ lang RecordParser = BraceParser + RecordAst + RecordTypeAst
 end
 
 lang LetDeclParser = AstParserBase + LetDeclAst
-  sem canStartAppArgExpr =
-  | { token = LIdentTok { val = "let" | "in" } } -> false
+  sem identIsKeyword =
+  | "let" | "in" -> true
 
   sem parseExprROpen state =
-  | { token = LIdentTok { val = "let" } } & toklet ->
+  | { token = KeywordTok { val = "let" } } & toklet ->
     result.bind (parseDecl toklet) (lam decl.
       match decl with (decl, cur) in
 
       let state = breakableAddPrefix (configExpr ()) (OpExprDecl decl) state in
 
-      match cur with { token = LIdentTok { val = "in" } } & tokin then
+      match cur with { token = KeywordTok { val = "in" } } & tokin then
         let cur = nextToken tokin.stream in
         parseExprROpen state cur
       else
@@ -903,10 +906,10 @@ lang LetDeclParser = AstParserBase + LetDeclAst
     )
 
   sem parseDecl =
-  | { token = LIdentTok { val = "let" } } & toklet ->
+  | { token = KeywordTok { val = "let" } } & toklet ->
     let cur = nextToken toklet.stream in
 
-    match cur with { token = LIdentTok { val = ident } } & tokident then
+    match cur with { token = LIdentTok { val = ident } | HashStringTok { hash = "var", val = ident } } & tokident then
       let cur = nextToken tokident.stream in
 
       let tyAnnot =
@@ -944,20 +947,20 @@ lang LetDeclParser = AstParserBase + LetDeclAst
 end
 
 lang RecLetsDeclParser = AstParserBase + RecLetsDeclAst
-  sem canStartAppArgExpr =
-  | { token = LIdentTok { val = "recursive" | "let" | "in" } } -> false
+  sem identIsKeyword =
+  | "recursive" | "let" | "in" -> true
 
   sem parseExprROpen state =
-  | { token = LIdentTok { val = "recursive" } } & rokrec ->
+  | { token = KeywordTok { val = "recursive" } } & rokrec ->
     recursive let parseItems = lam acc. lam cur.
       result.bind (parseDecl cur) (lam decl.
         match decl with (DeclLet decl, cur) in
         let acc = snoc acc decl in
         switch cur
-          case { token = LIdentTok { val = "in" } } & tokin then
+          case { token = KeywordTok { val = "in" } } & tokin then
             let cur = nextToken tokin.stream in
             parseOk (tokin, cur, acc)
-          case { token = LIdentTok { val = "let" } } then
+          case { token = KeywordTok { val = "let" } } then
             parseItems acc cur
           case _ then
             parseErr (cur.info, "Unexpected token in recursive declaration")
@@ -987,20 +990,20 @@ lang LamParser = AstParserBase + LamAst + FunTypeAst
   syn BrkOpType lstyle rstyle =
   | OpTypeArrow Info
 
+  sem identIsKeyword =
+  | "lam" -> true
+
   sem getInfoExpr =
   | OpExprLam (info, _, _, _) -> info
 
   sem getInfoType =
   | OpTypeArrow info -> info
 
-  sem canStartAppArgExpr =
-  | { token = LIdentTok { val = "lam" } } -> false
-
   sem parseExprROpen state =
-  | { token = LIdentTok { val = "lam" } } & toklam ->
+  | { token = KeywordTok { val = "lam" } } & toklam ->
     let cur = nextToken toklam.stream in
 
-    match match cur with { token = LIdentTok { val = ident } } & tokident then
+    match match cur with { token = LIdentTok { val = ident } | HashStringTok { hash = "var", val = ident } } & tokident then
       let cur = nextToken tokident.stream in
       let tyAnnot =
         match cur with { token = OperatorTok { val = ":" } } & tokcol then
@@ -1057,8 +1060,11 @@ lang LamParser = AstParserBase + LamAst + FunTypeAst
 end
 
 lang NeverParser = AstParserBase + NeverAst
+  sem identIsKeyword =
+  | "never" -> true
+
   sem parseExprROpen state =
-  | { token = LIdentTok { val = "never" } } & cur ->
+  | { token = KeywordTok { val = "never" } } & cur ->
     let expr = TmNever {
       ty = ityunknown_ cur.info,
       info = cur.info
@@ -1192,7 +1198,7 @@ let printAst = lam str.
   end
 in
 
--- let str = "{#label\"a\" = 1, b = 2}" in
+-- let str = "let let = true in ()" in
 -- printLn "\nBoot:";
 -- printAstBoot str;
 -- printLn "Native:";
