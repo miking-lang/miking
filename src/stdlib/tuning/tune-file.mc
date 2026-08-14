@@ -1,6 +1,15 @@
 
 include "context-expansion.mc"
 include "string.mc"
+include "seq.mc"
+include "basic-types.mc"
+include "tuning/name-info.mc"
+include "tuning/graph-coloring.mc"
+include "map.mc"
+include "tuning/ast.mc"
+include "mexpr/ast.mc"
+include "mexpr/info.mc"
+include "mexpr/boot-parser.mc"
 
 -- Defines helpers for writing to and reading from a tune file.
 

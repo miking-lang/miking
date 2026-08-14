@@ -7,6 +7,8 @@
 
 include "util.mc"
 include "format.mc"
+include "common.mc"
+include "seq.mc"
 
 type Logger = String -> ()
 

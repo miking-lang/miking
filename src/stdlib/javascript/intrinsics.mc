@@ -3,6 +3,7 @@ include "mexpr/pprint.mc"
 include "mexpr/const-arity.mc"
 include "javascript/ast.mc"
 include "stdlib.mc"
+include "name.mc"
 
 
 -- Fragments used by the intrinsic functions

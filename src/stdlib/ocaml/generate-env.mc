@@ -2,6 +2,10 @@ include "name.mc"
 include "stringid.mc"
 include "ocaml/external-includes.mc"
 include "mexpr/cmp.mc"
+include "map.mc"
+include "mexpr/ast.mc"
+include "ocaml/ast.mc"
+include "mexpr/ast-builder.mc"
 
 type GenerateEnv = {
   variants : Map Name (Map Name (use Ast in Type)),

@@ -1,5 +1,6 @@
 include "string.mc"
 include "./mdx-style.mc"
+include "seq.mc"
 
 let mdxJsComponents =
 join(["import React, { useMemo, useRef, useState, createContext, useContext } from 'react';

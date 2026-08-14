@@ -17,6 +17,12 @@ include "pprint.mc"
 include "symbolize.mc"
 include "type-check.mc"
 include "cmp.mc"
+include "mexpr/eq.mc"
+include "mexpr/info.mc"
+include "basic-types.mc"
+include "error.mc"
+include "seq.mc"
+include "bool.mc"
 
 ------------------------------
 -- TYPE LIFTING ENVIRONMENT --
@@ -26,17 +32,17 @@ include "cmp.mc"
 -- between variant types in the type environment before their constructors have
 -- been added.
 lang VariantNameTypeAst = Ast + Eq
-  syn Type =
+  syn Type +=
   | TyVariantName {ident : Name,
                    info : Info}
 
-  sem tyWithInfo (info : Info) =
+  sem tyWithInfo (info : Info) +=
   | TyVariantName t -> TyVariantName {t with info = info}
 
-  sem infoTy =
+  sem infoTy +=
   | TyVariantName r -> r.info
 
-  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) +=
   | TyVariantName {ident = rid} ->
     match lhs with TyVariantName {ident = lid} then
       if nameEq lid rid then Some free else None ()
@@ -169,7 +175,7 @@ lang TypeLift = TypeLiftBase + Cmp
 end
 
 lang TypeLiftAddRecordToEnv = TypeLift + RecordTypeAst
-  sem addRecordToEnv (env : TypeLiftEnv) =
+  sem addRecordToEnv (env : TypeLiftEnv) +=
   | TyRecord {fields = fields, info = info} & ty ->
     switch mapLookup fields env.records
     case Some name then
@@ -189,7 +195,7 @@ end
 
 lang TypeTypeLift = TypeLift + TypeDeclAst + VariantTypeAst + UnknownTypeAst +
                     VariantNameTypeAst + RecordTypeAst
-  sem typeLiftExpr (env : TypeLiftEnv) =
+  sem typeLiftExpr (env : TypeLiftEnv) +=
   | TmDecl (x & {decl = DeclType t}) ->
     let tyIdent =
       match t.tyIdent with TyUnknown t2 then tyWithInfo t2.info (tyvariant_ [])
@@ -216,7 +222,7 @@ lang TypeTypeLift = TypeLift + TypeDeclAst + VariantTypeAst + UnknownTypeAst +
 end
 
 lang DataTypeLift = TypeLift + DataAst + FunTypeAst + ConTypeAst + AppTypeAst
-  sem typeLiftExpr (env : TypeLiftEnv) =
+  sem typeLiftExpr (env : TypeLiftEnv) +=
   | TmDecl (x & {decl = DeclConDef t}) ->
     recursive let unwrapTypeVarIdent = lam ty : Type.
       match ty with TyCon t then Some t.ident
@@ -246,7 +252,7 @@ lang DataTypeLift = TypeLift + DataAst + FunTypeAst + ConTypeAst + AppTypeAst
 end
 
 lang MatchTypeLift = TypeLift + MatchAst + RecordPat + RecordTypeAst
-  sem typeLiftExpr (env : TypeLiftEnv) =
+  sem typeLiftExpr (env : TypeLiftEnv) +=
   | TmMatch t ->
     match typeLiftExpr env t.target with (env, target) in
     match typeLiftPat env t.pat with (env, pat) in
@@ -265,7 +271,7 @@ end
 -----------
 
 lang RecordTypeTypeLift = TypeLift + RecordTypeAst
-  sem typeLiftType (env : TypeLiftEnv) =
+  sem typeLiftType (env : TypeLiftEnv) +=
   | TyRecord ({fields = fields} & r) & ty ->
     if eqi (mapLength fields) 0 then
       (env, ty)
@@ -278,7 +284,7 @@ end
 
 -- Optional lifting of sequences (not added as default in MExprTypeLift)
 lang SeqTypeTypeLift = TypeLift + SeqTypeAst + TypeLiftAddSeqToEnv
-  sem typeLiftType (env : TypeLiftEnv) =
+  sem typeLiftType (env : TypeLiftEnv) +=
   | TySeq ({info = info, ty = innerTy} & r) & ty ->
     match typeLiftType env innerTy with (env, innerTy) then
       addSeqToEnv env (TySeq {r with ty = innerTy})
@@ -287,20 +293,20 @@ end
 
 -- Type lifting, but leave strings = [char] intact (not added as default in MExprTypeLift).
 lang SeqTypeNoStringTypeLift = SeqTypeTypeLift + CharTypeAst
-  sem typeLiftType (env : TypeLiftEnv) =
+  sem typeLiftType (env : TypeLiftEnv) +=
   | TySeq {info = _, ty = TyChar _} & ty -> (env,ty)
 end
 
 -- Optional type lifting of tensors (not added to MExprTypeLift by default)
 lang TensorTypeTypeLift = TypeLift + TensorTypeAst + TypeLiftAddTensorToEnv
-  sem typeLiftType (env : TypeLiftEnv) =
+  sem typeLiftType (env : TypeLiftEnv) +=
   | TyTensor ({info = info, ty = innerTy} & r) ->
     match typeLiftType env innerTy with (env, innerTy) in
     addTensorToEnv env (TyTensor {r with ty = innerTy})
 end
 
 lang AppTypeTypeLift = TypeLift + AppTypeAst
-  sem typeLiftType (env : TypeLiftEnv) =
+  sem typeLiftType (env : TypeLiftEnv) +=
   | TyApp t -> typeLiftType env t.lhs
 end
 

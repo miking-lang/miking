@@ -8,19 +8,26 @@ include "mexpr/ast.mc"
 include "mexpr/invariants.mc"
 
 include "mexpr/cmp.mc"
+include "thunk.mc"
+include "string.mc"
+include "seq.mc"
+include "common.mc"
+include "mexpr/info.mc"
+include "lazy.mc"
+include "mexpr/ast-builder.mc"
 
 lang WithoutInfoAttr = Invariant
   type WithoutInfoAttr loc = [loc]
-  syn Attr loc =
+  syn Attr loc +=
   | WithoutInfoAttr (Thunk (WithoutInfoAttr loc))
 
-  sem newAttr label =
+  sem newAttr label +=
   | WithoutInfoAttr _ -> WithoutInfoAttr (mkThunk label)
 
-  sem attrKindToString =
+  sem attrKindToString +=
   | WithoutInfoAttr _ -> "WithoutInfoAttr"
 
-  sem printInvariantSummary =
+  sem printInvariantSummary +=
   | WithoutInfoAttr x ->
     let start = wallTimeMs () in
     let x = x.read () in
@@ -42,7 +49,7 @@ lang WithoutInfoAttr = Invariant
   sem openWithoutInfoAttr : all loc. Attr loc -> Thunk (WithoutInfoAttr loc)
   sem openWithoutInfoAttr = | WithoutInfoAttr x -> x
 
-  sem processAttrDecl env st loc =
+  sem processAttrDecl env st loc +=
   | pair & (decl, WithoutInfoAttr _) ->
     simpleSynthesizedDecl st
       pair
@@ -51,7 +58,7 @@ lang WithoutInfoAttr = Invariant
       concat
       (match infoDecl decl with NoInfo _ then cons loc else lam x. x)
 
-  sem processAttrExpr env st loc =
+  sem processAttrExpr env st loc +=
   | pair & (tm, WithoutInfoAttr _) ->
     simpleSynthesizedExpr st
       pair
@@ -60,7 +67,7 @@ lang WithoutInfoAttr = Invariant
       concat
       (match infoTm tm with NoInfo _ then cons loc else lam x. x)
 
-  sem processAttrType env st loc =
+  sem processAttrType env st loc +=
   | pair & (TyAlias _, WithoutInfoAttr _) ->
     simpleSynthesizedType st
       pair
@@ -76,7 +83,7 @@ lang WithoutInfoAttr = Invariant
       concat
       (match infoTy ty with NoInfo _ then cons loc else lam x. x)
 
-  sem processAttrPat env st loc =
+  sem processAttrPat env st loc +=
   | pair & (pat, WithoutInfoAttr _) ->
     simpleSynthesizedPat st
       pair

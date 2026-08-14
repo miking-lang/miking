@@ -37,6 +37,15 @@
 include "set.mc"
 include "optparse-applicative.mc"
 include "fileutils.mc"
+include "map.mc"
+include "char.mc"
+include "string.mc"
+include "basic-types.mc"
+include "seq.mc"
+include "bool.mc"
+include "sys.mc"
+include "option.mc"
+include "common.mc"
 
 type Substituter =
   { flag : String
@@ -702,7 +711,7 @@ lang TestSpec
     if eqi 0 (command "test -d build") then () else
     error "Could not find a 'build' folder. Are you at the root of the project, and have you created 'build'?"
 
-  sem testMain substituters paths sourceLocation = | declareTests ->
+  sem testMain substituters paths sourceLocation += | declareTests ->
     let catInternal = "Internal commands:" in
     let catMode = "Build system flags:" in
     let catSubstituters = "Test mode flags:" in

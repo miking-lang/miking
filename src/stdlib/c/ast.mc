@@ -46,6 +46,8 @@
 include "name.mc"
 include "option.mc"
 include "externals.mc"
+include "basic-types.mc"
+include "seq.mc"
 
 -----------------------------
 -- C TYPES AND EXPRESSIONS --

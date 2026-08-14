@@ -2,9 +2,14 @@ include "generate-pprint.mc"
 include "generate-eq.mc"
 
 include "mlang/loader.mc"
+include "mexpr/ast.mc"
+include "mexpr/ast-builder.mc"
+include "name.mc"
+include "mexpr/info.mc"
+include "basic-types.mc"
 
 lang StripUtestLoader = MCoreLoader + UtestDeclAst + OpaqueAst
-  syn Hook =
+  syn Hook +=
   | StripUtestHook ()
 
   sem stripUtests : Expr -> Expr
@@ -13,7 +18,7 @@ lang StripUtestLoader = MCoreLoader + UtestDeclAst + OpaqueAst
   | t & TmOpaque _ -> t
   | t -> smap_Expr_Expr stripUtests t
 
-  sem _postTypecheck loader decl = | StripUtestHook _ ->
+  sem _postTypecheck loader decl += | StripUtestHook _ ->
     let decl = match decl with DeclUtest x
       then DeclLet
         { ident = nameNoSym ""
@@ -27,7 +32,7 @@ lang StripUtestLoader = MCoreLoader + UtestDeclAst + OpaqueAst
 end
 
 lang UtestLoader = MCoreLoader + GenerateEqLoader + GeneratePprintLoader + StripUtestLoader
-  syn Hook =
+  syn Hook +=
   | UtestHook
     { defaultOnFail : Name
     , runner : Name
@@ -59,7 +64,7 @@ lang UtestLoader = MCoreLoader + GenerateEqLoader + GeneratePprintLoader + Strip
     let loader = remHook (lam x. match x with StripUtestHook _ then true else false) loader in
     addHook loader (UtestHook hook)
 
-  sem _preBuildFullAst loader = | UtestHook hook ->
+  sem _preBuildFullAst loader += | UtestHook hook ->
     let decl = DeclLet
       { ident = nameNoSym ""
       , tyAnnot = tyunknown_
@@ -69,7 +74,7 @@ lang UtestLoader = MCoreLoader + GenerateEqLoader + GeneratePprintLoader + Strip
       } in
     _addDeclExn loader decl
 
-  sem _postTypecheck loader decl = | UtestHook hook ->
+  sem _postTypecheck loader decl += | UtestHook hook ->
     match decl with DeclUtest d then
       if hook.includeUtestIf {static = true, info = d.info} then
         match replaceUtests hook true loader (bind_ decl unit_) with (loader, expr) in

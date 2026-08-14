@@ -6,6 +6,17 @@ include "pprint.mc"
 include "type-check.mc"
 
 include "mlang/loader.mc"
+include "name.mc"
+include "map.mc"
+include "error.mc"
+include "mexpr/ast-builder.mc"
+include "stringid.mc"
+include "basic-types.mc"
+include "seq.mc"
+include "mexpr/unify.mc"
+include "set.mc"
+include "mexpr/type.mc"
+include "mexpr/info.mc"
 
 lang GeneratePprint = Ast + PrettyPrint
   type GPprintEnv =
@@ -34,47 +45,47 @@ lang GeneratePprint = Ast + PrettyPrint
 end
 
 lang GeneratePprintInt = GeneratePprint + IntTypeAst
-  sem _getPprintFunction env =
+  sem _getPprintFunction env +=
   | TyInt _ -> (env, nvar_ env.int2string)
 end
 
 lang GeneratePprintFloat = GeneratePprint + FloatTypeAst + FloatStringConversionAst
-  sem _getPprintFunction env =
+  sem _getPprintFunction env +=
   | TyFloat _ -> (env, uconst_ (CFloat2string ()))
 end
 
 lang GeneratePprintBool = GeneratePprint + BoolTypeAst
-  sem _getPprintFunction env =
+  sem _getPprintFunction env +=
   | TyBool _ -> (env, nvar_ env.bool2string)
 end
 
 lang GeneratePprintSeq = GeneratePprint + SeqTypeAst
-  sem _getPprintFunction env =
+  sem _getPprintFunction env +=
   | TySeq x ->
     _getSeqPprintFunction env (unwrapType x.ty)
 
-  sem _getSeqPprintFunction env =
+  sem _getSeqPprintFunction env +=
   | ty ->
     match getPprintFunction env ty with (env, elemF) in
     (env, app_ (nvar_ env.seq2string) elemF)
 end
 
 lang GeneratePprintString = GeneratePprint + SeqTypeAst + CharTypeAst
-  sem _getSeqPprintFunction env =
+  sem _getSeqPprintFunction env +=
   | ty & TyChar _ ->
     let n = nameSym "x" in
     (env, nlam_ n (tyseq_ ty) (cons_ (char_ '"') (snoc_ (app_ (nvar_ env.escapeString) (nvar_ n)) (char_ '"'))))
 end
 
 lang GeneratePprintChar = GeneratePprint + CharTypeAst
-  sem _getPprintFunction env =
+  sem _getPprintFunction env +=
   | ty & TyChar _ ->
     let n = nameSym "c" in
     (env, nlam_ n ty (snoc_ (cons_ (char_ '\'') (app_ (nvar_ env.escapeChar) (nvar_ n))) (char_ '\'')))
 end
 
 lang GeneratePprintRecord = GeneratePprint + RecordTypeAst + MExprIdentifierPrettyPrint
-  sem _getPprintFunction env =
+  sem _getPprintFunction env +=
   | ty & TyRecord x ->
     if mapIsEmpty x.fields then (env, ulam_ "" (str_ "()")) else
 
@@ -107,7 +118,7 @@ lang GeneratePprintRecord = GeneratePprint + RecordTypeAst + MExprIdentifierPret
 end
 
 lang GeneratePprintApp = GeneratePprint + AppTypeAst
-  sem _getPprintFunction env =
+  sem _getPprintFunction env +=
   | TyApp x ->
     match getPprintFunction env x.lhs with (env, lhs) in
     match getPprintFunction env x.rhs with (env, rhs) in
@@ -115,7 +126,7 @@ lang GeneratePprintApp = GeneratePprint + AppTypeAst
 end
 
 lang GeneratePprintCon = GeneratePprint + ConTypeAst + Generalize + UnifyPure
-  sem _getPprintFunction env =
+  sem _getPprintFunction env +=
   | ty & TyCon x ->
     -- TODO(vipa, 2025-01-27): Invalidate old pprint functions if
     -- we've introduced constructors to pre-existing types
@@ -168,7 +179,7 @@ lang GeneratePprintVar = GeneratePprint + VarTypeAst
   -- value of unknown type. We could error instead, or somehow ask
   -- surrounding code to be rewritten to carry an extra pprint
   -- function for the polymorphic type.
-  sem _getPprintFunction env =
+  sem _getPprintFunction env +=
   | TyVar x ->
     match mapLookup x.ident env.varFunctions with Some fname
     then (env, nvar_ fname)
@@ -176,13 +187,13 @@ lang GeneratePprintVar = GeneratePprint + VarTypeAst
 end
 
 lang GeneratePprintTensor = GeneratePprint + TensorTypeAst
-  sem _getPprintFunction env =
+  sem _getPprintFunction env +=
   | TyTensor x ->
     (env, ulam_ "" (str_ "<tensor>"))
 end
 
 lang GeneratePprintMissingCase = GeneratePprint
-  sem _getPprintFunction env =
+  sem _getPprintFunction env +=
   | !TyUnknown _ -> (env, ulam_ "" (str_ "<missing case>"))
   | TyUnknown _ -> (env, ulam_ "" (str_ "<tyunknown>"))
 end
@@ -202,7 +213,7 @@ lang MExprGeneratePprint
 end
 
 lang GeneratePprintLoader = MCoreLoader + GeneratePprint
-  syn Hook =
+  syn Hook +=
   | PprintHook
     { baseEnv : GPprintEnv
     , functions : Ref (Map Name Name)  -- Names for TyCon related pprint functions
@@ -265,7 +276,7 @@ lang GeneratePprintLoader = MCoreLoader + GeneratePprint
 end
 
 lang DPrintViaPprintLoader = GeneratePprintLoader + IOAst
-  syn Hook =
+  syn Hook +=
   | DPrintViaPprintHook ()
 
   sem enableDPrintViaPprint : Loader -> Loader
@@ -276,7 +287,7 @@ lang DPrintViaPprintLoader = GeneratePprintLoader + IOAst
     let loader = addHook loader (DPrintViaPprintHook ()) in
     loader
 
-  sem _postTypecheck loader decl = | DPrintViaPprintHook _ ->
+  sem _postTypecheck loader decl += | DPrintViaPprintHook _ ->
     recursive let work = lam loader. lam tm. switch tm
       case TmConst {val = CDPrint _, ty = ty} then
         match unwrapType ty with TyArrow {from = from} in

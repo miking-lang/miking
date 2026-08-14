@@ -42,6 +42,11 @@ include "mexpr/ast.mc"
 include "mexpr/pprint.mc"
 include "lazy.mc"
 include "thunk.mc"
+include "map.mc"
+include "basic-types.mc"
+include "seq.mc"
+include "error.mc"
+include "mexpr/ast-builder.mc"
 
 lang AttributeGrammar = Ast + DeclAst + PrettyPrint
   -- Each `Attr` is expected to contain exactly a `Thunk` of whatever
@@ -370,15 +375,15 @@ lang AttributeGrammar = Ast + DeclAst + PrettyPrint
 
   -- === Internals ===
 
-  syn Expr = | TmWithEnv {env : Ref (InvEnv Loc), label : Lazy String}
-  syn Decl = | DeclWithEnv {env : Ref (InvEnv Loc), label : Lazy String}
-  syn Type = | TyWithEnv {env : Ref (InvEnv Loc), label : Lazy String}
-  syn Pat = | PatWithEnv {env : Ref (InvEnv Loc), label : Lazy String}
+  syn Expr += | TmWithEnv {env : Ref (InvEnv Loc), label : Lazy String}
+  syn Decl += | DeclWithEnv {env : Ref (InvEnv Loc), label : Lazy String}
+  syn Type += | TyWithEnv {env : Ref (InvEnv Loc), label : Lazy String}
+  syn Pat += | PatWithEnv {env : Ref (InvEnv Loc), label : Lazy String}
 
-  sem pprintCode indent env = | TmWithEnv x -> (env, join ["<omitted tm, ", lazyForce x.label, ">"])
-  sem getTypeStringCode indent env = | TyWithEnv x -> (env, join ["<omitted ty, ", lazyForce x.label, ">"])
-  sem getPatStringCode indent env = | PatWithEnv x -> (env, join ["<omitted pat, ", lazyForce x.label, ">"])
-  sem pprintDeclCode indent env = | DeclWithEnv x -> (env, join ["<omitted decl, ", lazyForce x.label, ">"])
+  sem pprintCode indent env += | TmWithEnv x -> (env, join ["<omitted tm, ", lazyForce x.label, ">"])
+  sem getTypeStringCode indent env += | TyWithEnv x -> (env, join ["<omitted ty, ", lazyForce x.label, ">"])
+  sem getPatStringCode indent env += | PatWithEnv x -> (env, join ["<omitted pat, ", lazyForce x.label, ">"])
+  sem pprintDeclCode indent env += | DeclWithEnv x -> (env, join ["<omitted decl, ", lazyForce x.label, ">"])
 
   -- sem infoTm = | TmWithEnv _ -> NoInfo ()
   -- sem infoTy = | TyWithEnv _ -> NoInfo ()
@@ -562,13 +567,13 @@ lang CountAttr = AttributeGrammar + MExprAst
     , pat : Int
     }
 
-  syn Attr loc =
+  syn Attr loc +=
   | CountAttr (Thunk (CountAttr loc))
 
-  sem newAttr label =
+  sem newAttr label +=
   | CountAttr _ -> CountAttr (mkThunk label)
 
-  sem attrKindToString =
+  sem attrKindToString +=
   | CountAttr _ -> "CountAttr"
 
   sem openCountAttr : all loc. Attr loc -> Thunk (CountAttr loc)
@@ -583,7 +588,7 @@ lang CountAttr = AttributeGrammar + MExprAst
     , pat = addi a.pat b.pat
     }
 
-  sem processAttrDecl env st loc =
+  sem processAttrDecl env st loc +=
   | pair & (_, CountAttr _) ->
     simpleSynthesizedDecl st
       pair
@@ -592,7 +597,7 @@ lang CountAttr = AttributeGrammar + MExprAst
       mergeCount
       (lam x. {x with decl = addi x.decl 1})
 
-  sem processAttrExpr env st loc =
+  sem processAttrExpr env st loc +=
   | pair & (_, CountAttr _) ->
     simpleSynthesizedExpr st
       pair
@@ -601,7 +606,7 @@ lang CountAttr = AttributeGrammar + MExprAst
       mergeCount
       (lam x. {x with tm = addi x.tm 1})
 
-  sem processAttrType env st loc =
+  sem processAttrType env st loc +=
   | pair & (_, CountAttr _) ->
     simpleSynthesizedType st
       pair
@@ -610,7 +615,7 @@ lang CountAttr = AttributeGrammar + MExprAst
       mergeCount
       (lam x. {x with ty = addi x.ty 1})
 
-  sem processAttrPat env st loc =
+  sem processAttrPat env st loc +=
   | pair & (_, CountAttr _) ->
     simpleSynthesizedPat st
       pair

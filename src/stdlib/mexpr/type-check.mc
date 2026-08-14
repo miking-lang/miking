@@ -31,6 +31,18 @@ include "mexpr/symbolize.mc"
 include "mexpr/type.mc"
 include "mexpr/unify.mc"
 include "mexpr/repr-ast.mc"
+include "name.mc"
+include "map.mc"
+include "set.mc"
+include "basic-types.mc"
+include "stringid.mc"
+include "int.mc"
+include "string.mc"
+include "bool.mc"
+include "option.mc"
+include "common.mc"
+include "../annotate.mc"
+include "char.mc"
 
 type ReprSubst = use Ast in {vars : [Name], pat : Type, repr : Type}
 
@@ -351,7 +363,7 @@ lang TCUnify = Unify + AliasTypeAst + MetaVarTypeAst + DataKindAst +
 end
 
 lang VarTypeTCUnify = TCUnify + VarTypeAst
-  sem unifyCheckBase env info boundVars tv =
+  sem unifyCheckBase env info boundVars tv +=
   | TyVar t ->
     if not (setMem t.ident boundVars) then
       if optionMapOr true (lam x. lti tv.level x.0) (mapLookup t.ident env.tyVarEnv) then
@@ -393,11 +405,11 @@ lang DataTypeTCUnify = TCUnify + DataTypeAst + DataKindAst
                (setToSeq tks.1))
       (mapBindings data)
 
-  sem unifyCheckBase env info boundVars tv =
+  sem unifyCheckBase env info boundVars tv +=
   | TyData t ->
     unifyCheckData env.conEnv env.tyConEnv info tv (computeData t)
 
-  sem unifyCheckKind env info boundVars tv =
+  sem unifyCheckKind env info boundVars tv +=
   | Data t ->
     unifyCheckData env.conEnv env.tyConEnv info tv
       (mapMap
@@ -426,7 +438,7 @@ end
 lang MetaVarTypeTCUnify =
   TCUnify + MetaVarTypeUnify + PolyKindAst + MonoKindAst + GetKind
 
-  sem unifyMeta u tcenv info env =
+  sem unifyMeta u tcenv info env +=
   | (TyMetaVar t1 & ty1, TyMetaVar t2 & ty2) ->
     match (deref t1.contents, deref t2.contents) with (Unbound r1, Unbound r2) then
       if not (nameEq r1.ident r2.ident) then
@@ -446,7 +458,7 @@ lang MetaVarTypeTCUnify =
       modref t1.contents (Link env.wrappedRhs)
     else error "unifyMeta reached non-unwrapped MetaVar!"
 
-  sem unifyCheckBase env info boundVars tv =
+  sem unifyCheckBase env info boundVars tv +=
   | TyMetaVar t ->
     match deref t.contents with Unbound r then
       if nameEq r.ident tv.ident then
@@ -469,7 +481,7 @@ lang MetaVarTypeTCUnify =
 end
 
 lang AllTypeTCUnify = TCUnify + AllTypeAst + MonoKindAst
-  sem unifyCheckBase env info boundVars tv =
+  sem unifyCheckBase env info boundVars tv +=
   | TyAll t ->
     match tv.kind with Mono _ then
       let msg = join [
@@ -484,7 +496,7 @@ lang AllTypeTCUnify = TCUnify + AllTypeAst + MonoKindAst
 end
 
 lang ConTypeTCUnify = TCUnify + ConTypeAst
-  sem unifyCheckBase env info boundVars tv =
+  sem unifyCheckBase env info boundVars tv +=
   | TyCon t ->
     if optionMapOr true (lam r. lti tv.level r.0) (mapLookup t.ident env.tyConEnv) then
       let msg = join [
@@ -541,7 +553,7 @@ lang Generalize = AllTypeAst + VarTypeSubstitute + MetaVarTypeAst + PolyKindAst 
 end
 
 lang MetaVarTypeGeneralize = Generalize + MetaVarTypeAst + VarTypeAst
-  sem genBase (lvl : Level) (vs : Map Name Kind) (bound : Set Name) =
+  sem genBase (lvl : Level) (vs : Map Name Kind) (bound : Set Name) +=
   | TyMetaVar t ->
     switch deref t.contents
     case Unbound {ident = n, level = k, kind = s} then
@@ -561,7 +573,7 @@ lang MetaVarTypeGeneralize = Generalize + MetaVarTypeAst + VarTypeAst
 end
 
 lang VarTypeGeneralize = Generalize + VarTypeAst
-  sem genBase (lvl : Level) (vs : Map Name Kind) (bound : Set Name) =
+  sem genBase (lvl : Level) (vs : Map Name Kind) (bound : Set Name) +=
   | TyVar t ->
     match mapLookup t.ident vs with Some kind then
       if not (setMem t.ident bound) then [(t.ident, kind)]
@@ -570,7 +582,7 @@ lang VarTypeGeneralize = Generalize + VarTypeAst
 end
 
 lang AllTypeGeneralize = Generalize + AllTypeAst
-  sem genBase (lvl : Level) (vs : Map Name Kind) (bound : Set Name) =
+  sem genBase (lvl : Level) (vs : Map Name Kind) (bound : Set Name) +=
   | TyAll t -> genBase lvl vs (setInsert t.ident bound) t.ty
 end
 
@@ -994,14 +1006,14 @@ lang IsEmpty =
 end
 
 lang OpaqueTypeCheck = TypeCheck + OpaqueAst
-  sem typeCheckExpr env =
+  sem typeCheckExpr env +=
   | TmOpaque x ->
     let body = typeCheckExpr env x.body in
     TmOpaque {x with ty = tyTm body, body = body}
 end
 
 lang VarTypeCheck = TypeCheck + VarAst
-  sem typeCheckExpr env =
+  sem typeCheckExpr env +=
   | TmVar t ->
     match mapLookup t.ident env.varEnv with Some ty then
       let ty =
@@ -1019,7 +1031,7 @@ lang VarTypeCheck = TypeCheck + VarAst
 end
 
 lang OpVarTypeCheck = TypeCheck + OpVarAst + RepTypesHelpers + SubstituteNewReprs + NeverAst + NamedPat + RecordPat + VarAst + MatchAst
-  sem typeCheckExpr env =
+  sem typeCheckExpr env +=
   | TmOpVar x ->
     match mapLookup x.ident env.varEnv with Some ty then
       switch mapLookup x.ident env.reptypes.opNamesInScope
@@ -1066,7 +1078,7 @@ lang OpVarTypeCheck = TypeCheck + OpVarAst + RepTypesHelpers + SubstituteNewRepr
 end
 
 lang LamTypeCheck = TypeCheck + LamAst + ResolveType + SubstituteUnknown + SubstituteNewReprs
-  sem typeCheckExpr env =
+  sem typeCheckExpr env +=
   | TmLam t ->
     let tyAnnot = resolveType t.info env false t.tyAnnot in
     let tyAnnot = substituteNewReprs env tyAnnot in
@@ -1077,7 +1089,7 @@ lang LamTypeCheck = TypeCheck + LamAst + ResolveType + SubstituteUnknown + Subst
 end
 
 lang AppTypeCheck = TypeCheck + AppAst
-  sem typeCheckExpr env =
+  sem typeCheckExpr env +=
   | TmApp t ->
     let lhs = typeCheckExpr env t.lhs in
     let rhs = typeCheckExpr env t.rhs in
@@ -1089,7 +1101,7 @@ lang AppTypeCheck = TypeCheck + AppAst
 end
 
 lang DeclTypeCheck = TypeCheck + DeclAst
-  sem typeCheckExpr env =
+  sem typeCheckExpr env +=
   | TmDecl x ->
     let preLvl = env.currentLvl in
     match typeCheckDecl env x.decl with (env, decl) in
@@ -1101,7 +1113,7 @@ lang DeclTypeCheck = TypeCheck + DeclAst
 end
 
 lang OpDeclTypeCheck = OpDeclAst + TypeCheck + ResolveType + SubstituteNewReprs
-  sem typeCheckDecl env =
+  sem typeCheckDecl env +=
   | DeclOp x ->
     let lvl = env.currentLvl in
     let tyAnnot = resolveType x.info env false x.tyAnnot in
@@ -1116,7 +1128,7 @@ lang OpDeclTypeCheck = OpDeclAst + TypeCheck + ResolveType + SubstituteNewReprs
 end
 
 lang ReprDeclTypeCheck = ReprDeclAst + TypeCheck + ResolveType + WildToMeta
-  sem typeCheckDecl env =
+  sem typeCheckDecl env +=
   | DeclRepr x ->
     let pat = resolveType x.info env false x.pat in
     let repr = resolveType x.info env false x.repr in
@@ -1141,7 +1153,7 @@ end
 lang LetTypeCheck =
   TypeCheck + LetDeclAst + LamAst + FunTypeAst + ResolveType + SubstituteUnknown +
   NonExpansive + MetaVarDisableGeneralize + PropagateTypeAnnot + SubstituteNewReprs
-  sem typeCheckDecl env =
+  sem typeCheckDecl env +=
   | DeclLet t ->
     let newLvl = addi 1 env.currentLvl in
     let tyAnnot = resolveType t.info env false t.tyAnnot in
@@ -1211,7 +1223,7 @@ lang ApplyReprSubsts = TypeCheck + WildToMeta + ReprSubstAst
 end
 
 lang OpImplTypeCheck = OpImplAst + TypeCheck + ResolveType + PropagateTypeAnnot + SubstituteNewReprs + WildToMeta + ApplyReprSubsts + SubstituteUnknown
-  sem typeCheckDecl env =
+  sem typeCheckDecl env +=
   | DeclOpImpl x ->
     match mapLookup x.ident env.varEnv with Some ty then
       if optionIsSome (mapLookup x.ident env.reptypes.opNamesInScope) then
@@ -1280,7 +1292,7 @@ lang OpImplTypeCheck = OpImplAst + TypeCheck + ResolveType + PropagateTypeAnnot 
 end
 
 lang RecLetsTypeCheck = TypeCheck + RecLetsDeclAst + MetaVarDisableGeneralize + PropagateTypeAnnot + SubstituteUnknown + ResolveType + SubstituteNewReprs
-  sem typeCheckDecl env =
+  sem typeCheckDecl env +=
   | DeclRecLets t ->
     -- NOTE(aathn, 2024-05-24): This code assumes that each recursive let-binding
     -- is a syntactic lambda, so that generalization is always safe.
@@ -1329,7 +1341,7 @@ lang RecLetsTypeCheck = TypeCheck + RecLetsDeclAst + MetaVarDisableGeneralize + 
 end
 
 lang MatchTypeCheck = TypeCheck + PatTypeCheck + MatchAst + NormPatMatch
-  sem typeCheckExpr env =
+  sem typeCheckExpr env +=
   | TmMatch t ->
     let target = typeCheckExpr env t.target in
     match typeCheckPat env (mapEmpty nameCmp) t.pat with (patEnv, pat) in
@@ -1379,7 +1391,7 @@ lang MatchTypeCheck = TypeCheck + PatTypeCheck + MatchAst + NormPatMatch
 end
 
 lang ConstTypeCheck = TypeCheck + MExprConstType
-  sem typeCheckExpr env =
+  sem typeCheckExpr env +=
   | TmConst t ->
     let constTy = tyConstBase env.disableConstructorTypes t.val in
     recursive let f = lam ty. smap_Type_Type f (tyWithInfo t.info ty) in
@@ -1387,7 +1399,7 @@ lang ConstTypeCheck = TypeCheck + MExprConstType
 end
 
 lang SeqTypeCheck = TypeCheck + SeqAst
-  sem typeCheckExpr env =
+  sem typeCheckExpr env +=
   | TmSeq t ->
     let elemTy = newpolyvar env.currentLvl t.info in
     let tms = map (typeCheckExpr env) t.tms in
@@ -1396,7 +1408,7 @@ lang SeqTypeCheck = TypeCheck + SeqAst
 end
 
 lang RecordTypeCheck = TypeCheck + RecordAst + RecordTypeAst
-  sem typeCheckExpr env =
+  sem typeCheckExpr env +=
   | TmRecord t ->
     let bindings = mapMap (typeCheckExpr env) t.bindings in
     let bindingTypes = mapMap tyTm bindings in
@@ -1405,7 +1417,7 @@ lang RecordTypeCheck = TypeCheck + RecordAst + RecordTypeAst
 end
 
 lang RecordUpdateTypeCheck = TypeCheck + RecordAst + RecordTypeAst
-  sem typeCheckExpr env =
+  sem typeCheckExpr env +=
   | TmRecordUpdate t ->
     let rec = typeCheckExpr env t.rec in
     let value = typeCheckExpr env t.value in
@@ -1415,7 +1427,7 @@ lang RecordUpdateTypeCheck = TypeCheck + RecordAst + RecordTypeAst
 end
 
 lang TypeTypeCheck = TypeCheck + TypeDeclAst + VariantTypeAst + ResolveType
-  sem typeCheckDecl env =
+  sem typeCheckDecl env +=
   | DeclType t ->
     let tyIdent = resolveType t.info env false t.tyIdent in
     -- NOTE(aathn, 2023-05-08): Aliases are treated as the underlying
@@ -1469,7 +1481,7 @@ lang DataTypeCheck = TypeCheck + DataAst + FunTypeAst + ResolveType + Substitute
       else errorSingle [info] (msg ())
     else errorSingle [info] (msg ())
 
-  sem typeCheckDecl env =
+  sem typeCheckDecl env +=
   | DeclConDef t ->
     let tyIdent = resolveType t.info env false t.tyIdent in
     let tyIdent = substituteNewReprs env tyIdent in
@@ -1490,7 +1502,7 @@ lang DataTypeCheck = TypeCheck + DataAst + FunTypeAst + ResolveType + Substitute
       }
     , DeclConDef {t with tyIdent = tyIdent}
     )
-  sem typeCheckExpr env =
+  sem typeCheckExpr env +=
   | TmConApp t ->
     let body = typeCheckExpr env t.body in
     match mapLookup t.ident env.conEnv with Some (_, lty) then
@@ -1519,7 +1531,7 @@ lang DataTypeCheck = TypeCheck + DataAst + FunTypeAst + ResolveType + Substitute
 end
 
 lang UtestTypeCheck = TypeCheck + UtestDeclAst
-  sem typeCheckDecl env =
+  sem typeCheckDecl env +=
   | DeclUtest t ->
     let test = typeCheckExpr env t.test in
     let expected = typeCheckExpr env t.expected in
@@ -1551,7 +1563,7 @@ lang UtestTypeCheck = TypeCheck + UtestDeclAst
 end
 
 lang NeverTypeCheck = TypeCheck + NeverAst + IsEmpty
-  sem typeCheckExpr env =
+  sem typeCheckExpr env +=
   | TmNever t ->
     if env.disableConstructorTypes then
       TmNever {t with ty = newpolyvar env.currentLvl t.info}
@@ -1628,13 +1640,13 @@ lang NeverTypeCheck = TypeCheck + NeverAst + IsEmpty
 end
 
 lang PlaceholderTypeCheck = TypeCheck + PlaceholderAst
-  sem typeCheckExpr env =
+  sem typeCheckExpr env +=
   | TmPlaceholder t ->
     TmPlaceholder {t with ty = newpolyvar env.currentLvl t.info}
 end
 
 lang ExtTypeCheck = TypeCheck + ExtDeclAst + ResolveType
-  sem typeCheckDecl env =
+  sem typeCheckDecl env +=
   | DeclExt t ->
     -- TODO(vipa, 2023-06-15): Error if a RepType shows up in an external definition?
     let tyIdent = resolveType t.info env true t.tyIdent in
@@ -1648,7 +1660,7 @@ end
 ---------------------------
 
 lang NamedPatTypeCheck = PatTypeCheck + NamedPat
-  sem typeCheckPat env patEnv =
+  sem typeCheckPat env patEnv +=
   | PatNamed t ->
     match t.ident with PName n then
       match mapLookup n patEnv with Some ty then
@@ -1661,7 +1673,7 @@ lang NamedPatTypeCheck = PatTypeCheck + NamedPat
 end
 
 lang SeqTotPatTypeCheck = PatTypeCheck + SeqTotPat
-  sem typeCheckPat env patEnv =
+  sem typeCheckPat env patEnv +=
   | PatSeqTot t ->
     let elemTy = newvar env.currentLvl t.info in
     match mapAccumL (typeCheckPat env) patEnv t.pats with (patEnv, pats) in
@@ -1670,7 +1682,7 @@ lang SeqTotPatTypeCheck = PatTypeCheck + SeqTotPat
 end
 
 lang SeqEdgePatTypeCheck = PatTypeCheck + SeqEdgePat
-  sem typeCheckPat env patEnv =
+  sem typeCheckPat env patEnv +=
   | PatSeqEdge t ->
     let elemTy = newpolyvar env.currentLvl t.info in
     let seqTy = ityseq_ t.info elemTy in
@@ -1689,7 +1701,7 @@ lang SeqEdgePatTypeCheck = PatTypeCheck + SeqEdgePat
 end
 
 lang SeqPatIsEmpty = IsEmpty + SeqTypeAst + SeqNormPat
-  sem snpatIsEmpty env =
+  sem snpatIsEmpty env +=
   | (TySeq { ty = ty }, NPatSeqTot pats) ->
     foldl (lam ms. lam p. concat ms (npatIsEmpty env (ty, p))) [] pats
   | (TySeq { ty = ty }, NPatSeqEdge { prefix = pre, postfix = post }) ->
@@ -1698,7 +1710,7 @@ lang SeqPatIsEmpty = IsEmpty + SeqTypeAst + SeqNormPat
 end
 
 lang RecordPatTypeCheck = PatTypeCheck + RecordPat
-  sem typeCheckPat env patEnv =
+  sem typeCheckPat env patEnv +=
   | PatRecord t ->
     let typeCheckBinding = lam patEnv. lam. lam pat. typeCheckPat env patEnv pat in
     match mapMapAccum typeCheckBinding patEnv t.bindings with (patEnv, bindings) in
@@ -1707,7 +1719,7 @@ lang RecordPatTypeCheck = PatTypeCheck + RecordPat
 end
 
 lang RecordPatIsEmpty = IsEmpty + RecordTypeAst + RecordNormPat
-  sem snpatIsEmpty env =
+  sem snpatIsEmpty env +=
   | (TyRecord { fields = fields }, NPatRecord pats) ->
     mapFoldWithKey (lam o1. lam. lam o2. concat o1 o2) []
       (mapIntersectWith (lam ty. lam p. npatIsEmpty env (ty, p)) fields pats)
@@ -1721,7 +1733,7 @@ lang RecordPatIsEmpty = IsEmpty + RecordTypeAst + RecordNormPat
 end
 
 lang DataPatTypeCheck = PatTypeCheck + DataPat + FunTypeAst + Generalize
-  sem typeCheckPat env patEnv =
+  sem typeCheckPat env patEnv +=
   | PatCon t ->
     match mapLookup t.ident env.conEnv with Some (_, ty) then
       match inst t.info env.currentLvl ty with TyArrow {from = from, to = to} then
@@ -1739,7 +1751,7 @@ lang DataPatTypeCheck = PatTypeCheck + DataPat + FunTypeAst + Generalize
 end
 
 lang ConPatIsEmpty = IsEmpty + ConNormPat + FunTypeAst + Generalize
-  sem snpatIsEmpty env =
+  sem snpatIsEmpty env +=
   | (ty, NPatCon {ident = c, subpat = p}) ->
     match mapLookup c env.conEnv with Some (_, tycon) then
       match inst (infoTy ty) env.currentLvl tycon with TyArrow {from = from, to = to} then
@@ -1752,32 +1764,32 @@ lang ConPatIsEmpty = IsEmpty + ConNormPat + FunTypeAst + Generalize
 end
 
 lang IntPatTypeCheck = PatTypeCheck + IntPat + IntTypeAst
-  sem typeCheckPat env patEnv =
+  sem typeCheckPat env patEnv +=
   | PatInt t -> (patEnv, PatInt {t with ty = TyInt {info = t.info}})
 end
 
 lang CharPatTypeCheck = PatTypeCheck + CharPat + CharTypeAst
-  sem typeCheckPat env patEnv =
+  sem typeCheckPat env patEnv +=
   | PatChar t -> (patEnv, PatChar {t with ty = TyChar {info = t.info}})
 end
 
 lang BoolPatTypeCheck = PatTypeCheck + BoolPat + BoolTypeAst
-  sem typeCheckPat env patEnv =
+  sem typeCheckPat env patEnv +=
   | PatBool t -> (patEnv, PatBool {t with ty = TyBool {info = t.info}})
 end
 
 lang AndPatTypeCheck = PatTypeCheck + AndPat
-  sem typeCheckPat env patEnv =
+  sem typeCheckPat env patEnv +=
   | PatAnd t -> typeCheckPatSimple env patEnv (PatAnd t)
 end
 
 lang OrPatTypeCheck = PatTypeCheck + OrPat
-  sem typeCheckPat env patEnv =
+  sem typeCheckPat env patEnv +=
   | PatOr t -> typeCheckPatSimple env patEnv (PatOr t)
 end
 
 lang NotPatTypeCheck = PatTypeCheck + NotPat
-  sem typeCheckPat env patEnv =
+  sem typeCheckPat env patEnv +=
   | PatNot t -> typeCheckPatSimple env patEnv (PatNot t)
 end
 
@@ -1856,38 +1868,38 @@ lang TyAnnot = AnnotateSources + PrettyPrint + Ast + AliasTypeAst
 end
 
 lang PprintTyAnnot = PrettyPrint + Annotator + Ast + AliasTypeAst + MetaVarTypeAst
-  syn Expr = | FakeExpr {id : Int, result : Ref String, real : Expr}
-  syn Type = | FakeType {id : Int, result : Ref String, real : Type}
-  syn Pat  = | FakePat  {id : Int, result : Ref String, real : Pat}
+  syn Expr += | FakeExpr {id : Int, result : Ref String, real : Expr}
+  syn Type += | FakeType {id : Int, result : Ref String, real : Type}
+  syn Pat  += | FakePat  {id : Int, result : Ref String, real : Pat}
 
-  sem isAtomic =
+  sem isAtomic +=
   | FakeExpr x -> isAtomic x.real
   sem patIsAtomic =
   | FakePat x -> patIsAtomic x.real
-  sem typePrecedence =
+  sem typePrecedence +=
   | FakeType x -> typePrecedence x.real
 
-  sem pprintCode indent env =
+  sem pprintCode indent env +=
   | FakeExpr x ->
     match pprintAnnotExpr indent env x.real with (env, real) in
     modref x.result real;
     (env, cons '!' (cons '!' (int2string x.id)))
-  sem getPatStringCode indent env =
+  sem getPatStringCode indent env +=
   | FakePat x ->
     match pprintAnnotPat indent env x.real with (env, real) in
     modref x.result real;
     (env, cons '!' (cons '!' (int2string x.id)))
-  sem getTypeStringCode indent env =
+  sem getTypeStringCode indent env +=
   | FakeType x ->
     match pprintAnnotType indent env x.real with (env, real) in
     modref x.result real;
     (env, cons '!' (cons '!' (int2string x.id)))
 
-  sem infoTm =
+  sem infoTm +=
   | FakeExpr x -> infoTm x.real
-  sem infoPat =
+  sem infoPat +=
   | FakePat x -> infoPat x.real
-  sem infoTy =
+  sem infoTy +=
   | FakeType x -> infoTy x.real
 
   sem subSwap

@@ -6,6 +6,9 @@ include "option.mc"
 include "map.mc"
 include "error.mc"
 include "fileutils.mc"
+include "string.mc"
+include "seq.mc"
+include "basic-types.mc"
 
 -- Helpers
 

@@ -9,19 +9,30 @@ include "mexpr/invariants.mc"
 include "mexpr/invariants/in-scope.mc"
 
 include "mexpr/cmp.mc"
+include "map.mc"
+include "name.mc"
+include "thunk.mc"
+include "common.mc"
+include "seq.mc"
+include "string.mc"
+include "set.mc"
+include "mexpr/info.mc"
+include "tuple.mc"
+include "lazy.mc"
+include "mexpr/ast-builder.mc"
 
 lang DefinedAttr = Invariant + MExprAst + DeclaredHereAttr
   type DefinedAttr loc = Map Name [loc]
-  syn Attr loc =
+  syn Attr loc +=
   | DefinedAttr (Thunk (DefinedAttr loc))
 
-  sem newAttr label =
+  sem newAttr label +=
   | DefinedAttr _ -> DefinedAttr (mkThunk label)
 
-  sem attrKindToString =
+  sem attrKindToString +=
   | DefinedAttr _ -> "DefinedAttr"
 
-  sem printInvariantSummary =
+  sem printInvariantSummary +=
   | DefinedAttr x ->
     let start = wallTimeMs () in
     let x = x.read () in
@@ -65,7 +76,7 @@ lang DefinedAttr = Invariant + MExprAst + DeclaredHereAttr
   | TyAll x -> mapInsertWith concat x.ident [loc]
   | _ -> lam x. x
 
-  sem processAttrDecl env st loc =
+  sem processAttrDecl env st loc +=
   | pair & (_, DefinedAttr _) ->
     simpleSynthesizedDecl st
       pair
@@ -74,7 +85,7 @@ lang DefinedAttr = Invariant + MExprAst + DeclaredHereAttr
       (mapUnionWith concat)
       (lam x. x)
 
-  sem processAttrExpr env st loc =
+  sem processAttrExpr env st loc +=
   | (TmMatch x, attr & DefinedAttr here) ->
     match willWrite st here with (st, writeHere) in
     match willRead st (openDefinedAttr (getAttrExpr attr x.target)) with (st, readTarget) in
@@ -97,7 +108,7 @@ lang DefinedAttr = Invariant + MExprAst + DeclaredHereAttr
       (mapUnionWith concat)
       addHere
 
-  sem processAttrType env st loc =
+  sem processAttrType env st loc +=
   | pair & (ty, DefinedAttr _) ->
     simpleSynthesizedType st
       pair

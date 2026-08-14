@@ -7,6 +7,11 @@ include "mexpr/info.mc"
 include "mexpr/pprint.mc"
 include "ast.mc"
 include "ast-builder.mc"
+include "seq.mc"
+include "string.mc"
+include "mexpr/ast.mc"
+include "basic-types.mc"
+include "common.mc"
 
 -- Language fragment string parser translation
 let pprintLangString = lam str.
@@ -23,14 +28,14 @@ end
 
 
 lang UsePrettyPrint = PrettyPrint + UseDeclAst + MLangIdentifierPrettyPrint
-  sem pprintDeclCode (indent : Int) (env: PprintEnv) =
+  sem pprintDeclCode (indent : Int) (env: PprintEnv) +=
   | DeclUse t ->
     match pprintLangName env t.ident with (env,ident) in
     (env, join ["use ", ident])
 end
 
 lang TyUsePrettyPrint = MExprPrettyPrint + TyUseAst + MLangIdentifierPrettyPrint
-  sem getTypeStringCode (indent : Int) (env : PprintEnv) =
+  sem getTypeStringCode (indent : Int) (env : PprintEnv) +=
   | TyUse t ->
     match pprintLangName env t.ident with (env, ident) in
     match getTypeStringCode indent env t.inty with (env, inty) in
@@ -51,7 +56,7 @@ lang LangDeclPrettyPrint = PrettyPrint + LangDeclAst + MLangIdentifierPrettyPrin
     match declFoldResult with (env, declStrings) in
     (env, strJoin (pprintNewline indent) declStrings)
 
-  sem pprintDeclCode (indent : Int) (env : PprintEnv) =
+  sem pprintDeclCode (indent : Int) (env : PprintEnv) +=
   | DeclLang t ->
     match pprintLangName env t.ident with (env, langNameStr) in
     match
@@ -77,7 +82,7 @@ end
 
 
 lang SynDeclPrettyPrint = PrettyPrint + SynDeclAst + DataPrettyPrint
-  sem pprintDeclCode (indent : Int) (env : PprintEnv) =
+  sem pprintDeclCode (indent : Int) (env : PprintEnv) +=
   | DeclSyn t ->
     match pprintTypeName env t.ident with (env, typeNameStr) in
     match mapAccumL pprintEnvGetStr env t.params with (env, params) in
@@ -101,7 +106,7 @@ lang SynDeclPrettyPrint = PrettyPrint + SynDeclAst + DataPrettyPrint
 end
 
 lang SemDeclPrettyPrint = PrettyPrint + SemDeclAst + UnknownTypeAst
-  sem pprintDeclCode (indent : Int) (env : PprintEnv) =
+  sem pprintDeclCode (indent : Int) (env : PprintEnv) +=
   | DeclSem t ->
     match pprintEnvGetStr env t.ident with (env, baseStr) in
     match
@@ -151,7 +156,7 @@ end
 
 
 lang IncludeDeclPrettyPrint = PrettyPrint + IncludeDeclAst
-  sem pprintDeclCode (indent : Int) (env : PprintEnv) =
+  sem pprintDeclCode (indent : Int) (env : PprintEnv) +=
   | DeclInclude t -> (env, join ["include \"", escapeString t.path, "\""])
 end
 

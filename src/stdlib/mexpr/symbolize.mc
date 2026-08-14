@@ -16,6 +16,11 @@ include "info.mc"
 include "error.mc"
 include "pprint.mc"
 include "repr-ast.mc"
+include "int.mc"
+include "seq.mc"
+include "option.mc"
+include "set.mc"
+include "char.mc"
 
 ---------------------------
 -- SYMBOLIZE ENVIRONMENT --
@@ -248,13 +253,13 @@ lang Sym = Ast + SymLookup
 end
 
 lang OpaqueSym = Sym + OpaqueAst
-  sem symbolizeExpr env =
+  sem symbolizeExpr env +=
   | TmOpaque x ->
     TmOpaque {x with body = symbolizeExpr env x.body}
 end
 
 lang VarSym = Sym + VarAst
-  sem symbolizeExpr (env : SymEnv) =
+  sem symbolizeExpr (env : SymEnv) +=
   | TmVar t ->
     let ident =
       getSymbol {kind = "variable",
@@ -266,7 +271,7 @@ lang VarSym = Sym + VarAst
 end
 
 lang LamSym = Sym + LamAst + VarSym
-  sem symbolizeExpr (env : SymEnv) =
+  sem symbolizeExpr (env : SymEnv) +=
   | TmLam t ->
     match setSymbol env.currentEnv.varEnv t.ident with (varEnv, ident) in
     TmLam {t with ident = ident,
@@ -275,20 +280,20 @@ lang LamSym = Sym + LamAst + VarSym
 end
 
 lang DeclSym = Sym + DeclAst
-  sem symbolizeExpr env =
+  sem symbolizeExpr env +=
   | TmDecl x ->
     match symbolizeDecl env x.decl with (env, decl) in
     let inexpr = symbolizeExpr env x.inexpr in
     TmDecl {x with decl = decl, inexpr = inexpr}
 
-  sem addTopNames (env : SymEnv) =
+  sem addTopNames (env : SymEnv) +=
   | TmDecl x ->
     let env = declAddDefinition env x.decl in
     addTopNames env x.inexpr
 end
 
 lang LetSym = Sym + LetDeclAst + AllTypeAst
-  sem symbolizeDecl (env : SymEnv) =
+  sem symbolizeDecl (env : SymEnv) +=
   | DeclLet t ->
     match symbolizeTyAnnot env t.tyAnnot with (tyVarEnv, tyAnnot) in
     match setSymbol env.currentEnv.varEnv t.ident with (varEnv, ident) in
@@ -307,14 +312,14 @@ lang LetSym = Sym + LetDeclAst + AllTypeAst
     (foldl (lam env. lam nk. mapInsert (nameGetStr nk.0) nk.0 env)
        env.currentEnv.tyVarEnv vars, symbolized)
 
-  sem declAddDefinition env =
+  sem declAddDefinition env +=
   | DeclLet t ->
     let varEnv = mapInsert (nameGetStr t.ident) t.ident env.currentEnv.varEnv in
     symbolizeUpdateVarEnv env varEnv
 end
 
 lang RecLetsSym = Sym + RecLetsDeclAst + LetSym
-  sem symbolizeDecl (env : SymEnv) =
+  sem symbolizeDecl (env : SymEnv) +=
   | DeclRecLets t ->
     -- Generate fresh symbols for all identifiers and add to the environment
     let setSymbolIdent = lam env. lam b.
@@ -333,7 +338,7 @@ lang RecLetsSym = Sym + RecLetsDeclAst + LetSym
 
     (newEnv, DeclRecLets {t with bindings = bindings})
 
-  sem declAddDefinition env =
+  sem declAddDefinition env +=
   | DeclRecLets t ->
     let varEnv =
       foldr (lam b. mapInsert (nameGetStr b.ident) b.ident) env.currentEnv.varEnv t.bindings in
@@ -341,7 +346,7 @@ lang RecLetsSym = Sym + RecLetsDeclAst + LetSym
 end
 
 lang ExtSym = Sym + ExtDeclAst
-  sem symbolizeDecl (env : SymEnv) =
+  sem symbolizeDecl (env : SymEnv) +=
   | DeclExt t ->
     let setName = if env.ignoreExternals then lam x. lam y. (x, y) else setSymbol in
     match setName env.currentEnv.varEnv t.ident with (varEnv, ident) in
@@ -349,14 +354,14 @@ lang ExtSym = Sym + ExtDeclAst
     , DeclExt {t with ident = ident, tyIdent = symbolizeType env t.tyIdent}
     )
 
-  sem declAddDefinition (env : SymEnv) =
+  sem declAddDefinition (env : SymEnv) +=
   | DeclExt t ->
     let varEnv = mapInsert (nameGetStr t.ident) t.ident env.currentEnv.varEnv in
     symbolizeUpdateVarEnv env varEnv
 end
 
 lang TypeSym = Sym + TypeDeclAst
-  sem symbolizeDecl (env : SymEnv) =
+  sem symbolizeDecl (env : SymEnv) +=
   | DeclType t ->
     match setSymbol env.currentEnv.tyConEnv t.ident with (tyConEnv, ident) in
     match mapAccumL setSymbol env.currentEnv.tyVarEnv t.params with (tyVarEnv, params) in
@@ -368,21 +373,21 @@ lang TypeSym = Sym + TypeDeclAst
       }
     )
 
-  sem declAddDefinition (env : SymEnv) =
+  sem declAddDefinition (env : SymEnv) +=
   | DeclType t ->
     let tyConEnv = mapInsert (nameGetStr t.ident) t.ident env.currentEnv.tyConEnv in
     symbolizeUpdateTyConEnv env tyConEnv
 end
 
 lang DataSym = Sym + DataAst + DataDeclAst
-  sem symbolizeDecl (env : SymEnv) =
+  sem symbolizeDecl (env : SymEnv) +=
   | DeclConDef t ->
     match setSymbol env.currentEnv.conEnv t.ident with (conEnv, ident) in
     ( symbolizeUpdateConEnv env conEnv
     , DeclConDef {t with ident = ident, tyIdent = symbolizeType env t.tyIdent}
     )
 
-  sem symbolizeExpr env =
+  sem symbolizeExpr env +=
   | TmConApp t ->
     let ident =
       getSymbol {kind = "constructor",
@@ -393,14 +398,14 @@ lang DataSym = Sym + DataAst + DataDeclAst
     TmConApp {t with ident = ident,
                      body = symbolizeExpr env t.body}
 
-  sem declAddDefinition (env : SymEnv) =
+  sem declAddDefinition (env : SymEnv) +=
   | DeclConDef t ->
     let conEnv = mapInsert (nameGetStr t.ident) t.ident env.currentEnv.conEnv in
     symbolizeUpdateConEnv env conEnv
 end
 
 lang MatchSym = Sym + MatchAst
-  sem symbolizeExpr (env : SymEnv) =
+  sem symbolizeExpr (env : SymEnv) +=
   | TmMatch t ->
     match symbolizePat env (mapEmpty cmpString) t.pat with (thnVarEnv, pat) in
     let thnPatEnv = symbolizeUpdateVarEnv env (mapUnion env.currentEnv.varEnv thnVarEnv) in
@@ -411,7 +416,7 @@ lang MatchSym = Sym + MatchAst
 end
 
 lang OpImplSym = OpImplAst + Sym + LetSym
-  sem symbolizeDecl env =
+  sem symbolizeDecl env +=
   | DeclOpImpl x ->
     let ident = getSymbol
       { kind = "variable"
@@ -426,7 +431,7 @@ lang OpImplSym = OpImplAst + Sym + LetSym
 end
 
 lang OpDeclSym = OpDeclAst + Sym + OpImplAst + ReprDeclAst + OpImplSym
-  sem symbolizeDecl env =
+  sem symbolizeDecl env +=
   | DeclOp x ->
     let symbolizeReprDecl = lam reprEnv. lam binding.
       match mapAccumL setSymbol env.currentEnv.tyVarEnv binding.1 .vars with (tyVarEnv, vars) in
@@ -450,7 +455,7 @@ lang OpDeclSym = OpDeclAst + Sym + OpImplAst + ReprDeclAst + OpImplSym
 end
 
 lang ReprTypeSym = Sym + ReprDeclAst
-  sem symbolizeDecl env =
+  sem symbolizeDecl env +=
   | DeclRepr x ->
     match setSymbol env.currentEnv.reprEnv x.ident with (reprEnv, ident) in
     match mapAccumL setSymbol env.currentEnv.tyVarEnv x.vars with (tyVarEnv, vars) in
@@ -463,7 +468,7 @@ lang ReprTypeSym = Sym + ReprDeclAst
 end
 
 lang OpVarSym = OpVarAst + Sym
-  sem symbolizeExpr env =
+  sem symbolizeExpr env +=
   | TmOpVar x ->
     let ident = getSymbol
       { kind = "variable"
@@ -480,14 +485,14 @@ end
 -----------
 
 lang VariantTypeSym = Sym + VariantTypeAst
-  sem symbolizeType env =
+  sem symbolizeType env +=
   | TyVariant t & ty ->
     if eqi (mapLength t.constrs) 0 then ty
     else errorSingle [t.info] "Symbolizing non-empty variant types not yet supported"
 end
 
 lang ConTypeSym = Sym + ConTypeAst
-  sem symbolizeType env =
+  sem symbolizeType env +=
   | TyCon t ->
     let ident =
       getSymbol {kind = "type constructor",
@@ -499,7 +504,7 @@ lang ConTypeSym = Sym + ConTypeAst
 end
 
 lang DataTypeSym = Sym + DataTypeAst
-  sem symbolizeType env =
+  sem symbolizeType env +=
   | TyData t ->
     let cons =
       setFold (lam ks. lam k.
@@ -513,7 +518,7 @@ lang DataTypeSym = Sym + DataTypeAst
 end
 
 lang VarTypeSym = Sym + VarTypeAst + UnknownTypeAst
-  sem symbolizeType env =
+  sem symbolizeType env +=
   | TyVar t ->
     let ident =
       getSymbol {kind = "type variable",
@@ -525,7 +530,7 @@ lang VarTypeSym = Sym + VarTypeAst + UnknownTypeAst
 end
 
 lang AllTypeSym = Sym + AllTypeAst
-  sem symbolizeType env =
+  sem symbolizeType env +=
   | TyAll t ->
     let kind = symbolizeKind t.info env t.kind in
     match setSymbol env.currentEnv.tyVarEnv t.ident with (tyVarEnv, ident) in
@@ -535,7 +540,7 @@ lang AllTypeSym = Sym + AllTypeAst
 end
 
 lang DataKindSym = Sym + DataKindAst
-  sem symbolizeKind info env =
+  sem symbolizeKind info env +=
   | Data t ->
     let symbolizeCons = lam cons.
       setFold
@@ -570,7 +575,7 @@ lang DataKindSym = Sym + DataKindAst
 end
 
 lang ReprSubstSym = Sym + ReprSubstAst
-  sem symbolizeType env =
+  sem symbolizeType env +=
   | TySubst x ->
     let arg = symbolizeType env x.arg in
     let subst = getSymbol
@@ -601,14 +606,14 @@ let _symbolizePatName: Map String Name -> PatName -> (Map String Name, PatName) 
     else (patEnv, pname)
 
 lang NamedPatSym = Sym + NamedPat
-  sem symbolizePat env patEnv =
+  sem symbolizePat env patEnv +=
   | PatNamed p ->
     match _symbolizePatName patEnv p.ident with (patEnv, patname) in
     (patEnv, PatNamed {p with ident = patname})
 end
 
 lang SeqEdgePatSym = Sym + SeqEdgePat
-  sem symbolizePat env patEnv =
+  sem symbolizePat env patEnv +=
   | PatSeqEdge p ->
     match mapAccumL (symbolizePat env) patEnv p.prefix with (patEnv, prefix) in
     match _symbolizePatName patEnv p.middle with (patEnv, middle) in
@@ -619,7 +624,7 @@ lang SeqEdgePatSym = Sym + SeqEdgePat
 end
 
 lang DataPatSym = Sym + DataPat
-  sem symbolizePat env patEnv =
+  sem symbolizePat env patEnv +=
   | PatCon r ->
     let ident =
       getSymbol {kind = "constructor",
@@ -633,7 +638,7 @@ lang DataPatSym = Sym + DataPat
 end
 
 lang NotPatSym = Sym + NotPat
-  sem symbolizePat env patEnv =
+  sem symbolizePat env patEnv +=
   | PatNot p ->
     -- NOTE(vipa, 2020-09-23): new names in a not-pattern do not
     -- matter since they will never bind (it should probably be an

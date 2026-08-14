@@ -6,6 +6,14 @@ include "mexpr/record.mc"
 include "char.mc"
 include "name.mc"
 include "intrinsics-ops.mc"
+include "mexpr/ast.mc"
+include "map.mc"
+include "stringid.mc"
+include "seq.mc"
+include "string.mc"
+include "option.mc"
+include "basic-types.mc"
+include "set.mc"
 
 let _isValidChar = lam c.
   if isAlphanum c then true
@@ -70,7 +78,7 @@ lang OCamlTypePrettyPrint =
   SeqTypeAst + RecordTypeAst + VariantTypeAst + ConTypeAst + AppTypeAst +
   FunTypePrettyPrint + OCamlTypeAst + IdentifierPrettyPrint + RecordTypeUtils
 
-  sem getTypeStringCode (indent : Int) (env : PprintEnv) =
+  sem getTypeStringCode (indent : Int) (env : PprintEnv) +=
   | (TyRecord t) & ty ->
     if mapIsEmpty t.fields then (env, "Obj.t")
     else
@@ -119,7 +127,7 @@ lang OCamlPrettyPrint =
   | name ->
     concat prefix (nameGetStr (esc name))
 
-  sem pprintConName (env : PprintEnv) =
+  sem pprintConName (env : PprintEnv) +=
   | name ->
     (env,
      if nameHasSym name then
@@ -127,7 +135,7 @@ lang OCamlPrettyPrint =
      else
        _nameNoSymString noSymConPrefix escapeConName name)
 
-  sem pprintVarName (env : PprintEnv) =
+  sem pprintVarName (env : PprintEnv) +=
   | name ->
     (env,
      match mapLookup name env.nameMap with Some n then n
@@ -136,10 +144,10 @@ lang OCamlPrettyPrint =
      else
        _nameNoSymString noSymVarPrefix escapeName name)
 
-  sem pprintLabelString =
+  sem pprintLabelString +=
   | s -> escapeLabelString (sidToString s)
 
-  sem isAtomic =
+  sem isAtomic +=
   | TmPlaceholder _ -> true
   | TmLam _ -> false
   | TmDecl {decl = DeclLet _} -> false
@@ -162,12 +170,12 @@ lang OCamlPrettyPrint =
   | OTmLam _ -> false
   | TmVar _ -> true
 
-  sem patPrecedence =
+  sem patPrecedence +=
   | OPatRecord _ -> 0
   | OPatCon {args = ![]} -> 2
   | OPatConExt _ -> 2
 
-  sem getConstStringCode (indent : Int) =
+  sem getConstStringCode (indent : Int) +=
   | CUnsafeCoerce _ -> "(fun x -> x)"
   -- NOTE(oerikss, 2023-10-06): Integer and float constant can here be both
   -- negative and positive. Note that -0 = 0, which is the reason for the
@@ -444,7 +452,7 @@ lang OCamlPrettyPrint =
   | tm -> (env, [], tm)
 
 
-  sem pprintCode (indent : Int) (env: PprintEnv) =
+  sem pprintCode (indent : Int) (env: PprintEnv) +=
   | TmPlaceholder _ -> (env, "(Obj.magic ())")
   | TmVar {ident = ident} -> pprintVarName env ident
   | OTmVarExt {ident = ident} -> (env, ident)
@@ -657,7 +665,7 @@ lang OCamlPrettyPrint =
       (env, join [tm, ".", field])
     else never
 
-  sem getPatStringCode (indent : Int) (env : PprintEnv) =
+  sem getPatStringCode (indent : Int) (env : PprintEnv) +=
   | OPatRecord {bindings = bindings} ->
     let labels = map pprintLabelString (mapKeys bindings) in
     let pats = mapValues bindings in

@@ -1,7 +1,14 @@
 include "../annotate.mc"
 include "ast.mc"
+include "mexpr/info.mc"
+include "map.mc"
+include "stringid.mc"
+include "basic-types.mc"
+include "seq.mc"
 
 lang AnnotateSources = Annotator
+  type InfoRecord = {filename: String, row1: Int, col1: Int, row2: Int, col2: Int}
+
   sem annotateAndReadSources : [(Info, Annotation)] -> Output
   sem annotateAndReadSources = | annots ->
     let annots = _collectAnnots annots in
@@ -81,7 +88,6 @@ lang AnnotateSources = Annotator
       (mapEmpty subi)
       annots
 
-  type InfoRecord = {filename: String, row1: Int, col1: Int, row2: Int, col2: Int}
   type Pos = (Int, Int)
   type StackItem = {endPos : Pos, res : Output, annot : Annotation}
   type State =

@@ -28,6 +28,26 @@ include "mexpr/type-check.mc"
 include "mlang/boot-parser.mc"
 include "mlang/ast.mc"
 include "mlang/pprint.mc"
+include "mexpr/symbolize.mc"
+include "name.mc"
+include "basic-types.mc"
+include "map.mc"
+include "seq.mc"
+include "mexpr/ast.mc"
+include "error.mc"
+include "string.mc"
+include "bool.mc"
+include "option.mc"
+include "mexpr/ast-builder.mc"
+include "mexpr/info.mc"
+include "fileutils.mc"
+include "mexpr/builtin.mc"
+include "mexpr/pattern-analysis.mc"
+include "set.mc"
+include "lazy.mc"
+include "mexpr/pprint.mc"
+include "result.mc"
+include "mexpr/type.mc"
 
 lang SymGetters = Sym
   -- Helpers for looking up names from known symbolization
@@ -140,7 +160,7 @@ end
 -- Use MCore-style path resolution, e.g., using libraries set in
 -- MCORE_LIBS
 lang MCorePathResolution = MCoreLoader
-  sem includeFileTypeExn ftype dir path = | loader ->
+  sem includeFileTypeExn ftype dir path += | loader ->
     let resolved = stdlibResolveFileOr (lam x. error x) dir path in
     match _loadFile resolved (ftype, loader) with (env, loader) in
     ({path = resolved, env = env}, loader)
@@ -165,12 +185,12 @@ lang BootParserLoader = MCorePathResolution + DeclAst + BootParser
     , hooks : [Hook]
     , queue : [Decl]
     }
-  syn Loader =
+  syn Loader +=
   | Loader LoaderRec
-  syn FileType =
+  syn FileType +=
   | FMCore ()
 
-  sem mkLoader symEnv tcEnv = | hooks -> Loader
+  sem mkLoader symEnv tcEnv += | hooks -> Loader
     { decls = []
     , includedFiles = mapEmpty cmpString
     , symEnv = symEnv
@@ -178,36 +198,36 @@ lang BootParserLoader = MCorePathResolution + DeclAst + BootParser
     , hooks = hooks
     , queue = []
     }
-  sem addHook loader = | hook ->
+  sem addHook loader += | hook ->
     match loader with Loader x in
     Loader {x with hooks = snoc x.hooks hook}
-  sem remHook check = | Loader x ->
+  sem remHook check += | Loader x ->
     Loader {x with hooks = filter (lam x. not (check x)) x.hooks}
-  sem hasHook check = | Loader x ->
+  sem hasHook check += | Loader x ->
     optionIsSome (find check x.hooks)
-  sem getHookOpt check = | Loader x ->
+  sem getHookOpt check += | Loader x ->
     findMap check x.hooks
-  sem withHookState f = | loader & Loader x ->
+  sem withHookState f += | loader & Loader x ->
     match findMap (f loader) x.hooks with Some res
     then res
     else error "Compiler error: missing hook in loader"
 
-  sem _getSymEnv = | Loader x -> x.symEnv
-  sem _setSymEnv symEnv = | Loader x -> Loader {x with symEnv = symEnv}
+  sem _getSymEnv += | Loader x -> x.symEnv
+  sem _setSymEnv symEnv += | Loader x -> Loader {x with symEnv = symEnv}
 
-  sem _getTCEnv = | Loader x -> x.tcEnv
-  sem _setTCEnv tcEnv = | Loader x -> Loader {x with tcEnv = tcEnv}
+  sem _getTCEnv += | Loader x -> x.tcEnv
+  sem _setTCEnv tcEnv += | Loader x -> Loader {x with tcEnv = tcEnv}
 
-  sem getDecls = | Loader x -> x.decls
-  sem buildFullAst = | loader & Loader x ->
+  sem getDecls += | Loader x -> x.decls
+  sem buildFullAst += | loader & Loader x ->
     match foldl (lam loader. lam cb. _preBuildFullAst loader cb) loader x.hooks
       with loader & Loader x in
     let ast = foldr bind_ unit_ x.decls in
     foldl (lam ast. lam cb. _postBuildFullAst loader ast cb) ast x.hooks
 
-  sem _fileType = | _ ++ ".mc" -> FMCore ()
+  sem _fileType += | _ ++ ".mc" -> FMCore ()
 
-  sem _loadFile path = | (FMCore _, loader & Loader x) ->
+  sem _loadFile path += | (FMCore _, loader & Loader x) ->
     -- NOTE(vipa, 2024-12-05): Don't reload previously loaded files
     match mapLookup path x.includedFiles with Some symEnv then (symEnv, loader) else
     let args =
@@ -272,7 +292,7 @@ lang BootParserLoader = MCorePathResolution + DeclAst + BootParser
     match loader with Loader {hooks = hooks} in
     foldl (lam acc. lam cb. f acc.0 acc.1 cb) (loader, decl) hooks
 
-  sem _queueAddDecl loader = | decl ->
+  sem _queueAddDecl loader += | decl ->
     match loader with Loader x in
     Loader {x with queue = snoc x.queue decl}
 
@@ -284,7 +304,7 @@ lang BootParserLoader = MCorePathResolution + DeclAst + BootParser
     then _addDeclExn (Loader {x with queue = queue}) d
     else loader
 
-  sem _addDeclWithEnvExn symEnv loader = | decl ->
+  sem _addDeclWithEnvExn symEnv loader += | decl ->
     match _doHook _preSymbolize loader decl with (loader, decl) in
     match symbolizeDecl symEnv decl with (symEnv, decl) in
     match _doHook _postSymbolize loader decl with (loader, decl) in
@@ -302,7 +322,7 @@ lang BootParserLoader = MCorePathResolution + DeclAst + BootParser
 
     (symEnv, loader)
 
-  sem _addDeclExn loader = | decl ->
+  sem _addDeclExn loader += | decl ->
     match _doHook _preSymbolize loader decl with (Loader x, decl) in
     match symbolizeDecl x.symEnv decl with (symEnv, decl) in
     match _doHook _postSymbolize (Loader {x with symEnv = symEnv}) decl with (loader, decl) in
@@ -320,7 +340,7 @@ lang BootParserLoader = MCorePathResolution + DeclAst + BootParser
 
     loader
 
-  sem _addSymbolizedDeclExn loader = | decl ->
+  sem _addSymbolizedDeclExn loader += | decl ->
     match _doHook _preTypecheck loader decl with (Loader x, decl) in
     match typeCheckDecl x.tcEnv decl with (tcEnv, decl) in
     match _doHook _postTypecheck (Loader {x with tcEnv = tcEnv}) decl with (Loader x, decl) in
@@ -334,7 +354,7 @@ lang BootParserLoader = MCorePathResolution + DeclAst + BootParser
 
     loader
 
-  sem _addTypecheckedDecl loader = | decl ->
+  sem _addTypecheckedDecl loader += | decl ->
     match loader with Loader x in
 
     let includedFiles = match infoDecl decl with Info {filename = filename}
@@ -442,9 +462,9 @@ end
 lang LoaderImpl = LoaderInterface
 
   -- The loader itself
-  syn Loader =
+  syn Loader +=
   -- How to load a given file
-  syn FileType =
+  syn FileType +=
 
 
   type LoaderRec =
@@ -455,10 +475,10 @@ lang LoaderImpl = LoaderInterface
     , includeStack : Map String Int
     , currentFileEnv : SymEnv
     }
-  syn Loader =
+  syn Loader +=
   | Loader LoaderRec
 
-  sem mkLoader tcEnv = | hooks -> Loader
+  sem mkLoader tcEnv += | hooks -> Loader
     { decls = []
     , includedFiles = mapEmpty cmpString
     , tcEnv = tcEnv
@@ -466,29 +486,29 @@ lang LoaderImpl = LoaderInterface
     , includeStack = mapEmpty cmpString
     , currentFileEnv = _symEnvEmpty
     }
-  sem addHook loader = | hook ->
+  sem addHook loader += | hook ->
     match loader with Loader x in
     Loader {x with hooks = snoc x.hooks hook}
-  sem remHook check = | Loader x ->
+  sem remHook check += | Loader x ->
     Loader {x with hooks = filter (lam x. not (check x)) x.hooks}
-  sem hasHook check = | Loader x ->
+  sem hasHook check += | Loader x ->
     optionIsSome (find check x.hooks)
-  sem getHookOpt check = | Loader x ->
+  sem getHookOpt check += | Loader x ->
     findMap check x.hooks
-  sem withHookState f = | loader & Loader x ->
+  sem withHookState f += | loader & Loader x ->
     match findMap (f loader) x.hooks with Some res
     then res
     else error "Compiler error: missing hook in loader"
 
-  sem _captureEnv f = | Loader x ->
+  sem _captureEnv f += | Loader x ->
     let prev = x.currentFileEnv in
     match f (Loader {x with currentFileEnv = _symEnvEmpty}) with (a, Loader x) in
     (a, x.currentFileEnv, Loader {x with currentFileEnv = prev})
 
-  sem _updateFileEnv f = | Loader x ->
+  sem _updateFileEnv f += | Loader x ->
     Loader {x with currentFileEnv = f x.currentFileEnv}
 
-  sem includeFileTypeExn ftype dir path = | loader & Loader x ->
+  sem includeFileTypeExn ftype dir path += | loader & Loader x ->
     let resolved = stdlibResolveFileOr (lam x. error x) dir path in
 
     match mapLookup resolved x.includedFiles with Some env then
@@ -518,12 +538,12 @@ lang LoaderImpl = LoaderInterface
 
     (env, loader)
 
-  sem _withTCEnv f = | Loader x ->
+  sem _withTCEnv f += | Loader x ->
     match f x.tcEnv with (tcEnv, a) in
     (Loader {x with tcEnv = tcEnv}, a)
 
-  sem getDecls = | Loader x -> x.decls
-  sem buildFullAst = | loader & Loader x ->
+  sem getDecls += | Loader x -> x.decls
+  sem buildFullAst += | loader & Loader x ->
     match foldl (lam loader. lam cb. _preBuildFullAst loader cb) loader x.hooks
       with loader & Loader x in
     let ast = foldr bind_ unit_ x.decls in
@@ -534,7 +554,7 @@ lang LoaderImpl = LoaderInterface
     match loader with Loader {hooks = hooks} in
     foldl (lam acc. lam cb. f acc.0 acc.1 cb) (loader, decl) hooks
 
-  sem _addDeclExn symEnv loader = | decl ->
+  sem _addDeclExn symEnv loader += | decl ->
     match _doHook _preSymbolize loader decl with (loader, decl) in
     match symbolizeDecl symEnv decl with (symEnv, decl) in
     match _doHook _postSymbolize loader decl with (loader, decl) in
@@ -550,7 +570,7 @@ lang LoaderImpl = LoaderInterface
 
     (symEnv, loader)
 
-  sem _addSymbolizedDeclExn loader = | decl ->
+  sem _addSymbolizedDeclExn loader += | decl ->
     match _doHook _preTypecheck loader decl with (loader, decl) in
     match _withTCEnv (lam tcEnv. typeCheckDecl tcEnv decl) loader with (loader, decl) in
     match _doHook _postTypecheck loader decl with (Loader x, decl) in
@@ -562,7 +582,7 @@ lang LoaderImpl = LoaderInterface
 
     loader
 
-  sem _addTypecheckedDecl loader = | decl ->
+  sem _addTypecheckedDecl loader += | decl ->
     match loader with Loader x in
 
     let loader = Loader
@@ -574,7 +594,7 @@ lang LoaderImpl = LoaderInterface
 end
 
 lang IncludeLoader = LoaderImpl + IncludeDeclAst
-  sem _addDeclExn symEnv loader =
+  sem _addDeclExn symEnv loader +=
   | DeclInclude x ->
     match x.info with Info {filename = filename} in
     match includeFileExn (dirname filename) x.path loader with (incEnv, loader) in
@@ -582,7 +602,7 @@ lang IncludeLoader = LoaderImpl + IncludeDeclAst
 end
 
 lang BuiltinLoader = LoaderInterface
-  syn Hook =
+  syn Hook +=
   | BuiltinHook {env : SymEnv}
 
   sem includeBuiltinEnv : Loader -> (SymEnv, Loader)
@@ -607,9 +627,9 @@ lang MLangLoader = LoaderImpl + BootParserMLang
   + Resymbolize
   + NormPat
 
-  syn FileType =
+  syn FileType +=
   | FMCore {includeMExpr : Bool}
-  sem _fileType = | _ ++ ".mc" -> FMCore {includeMExpr = false}
+  sem _fileType += | _ ++ ".mc" -> FMCore {includeMExpr = false}
 
   type BranchId = Int
 
@@ -620,6 +640,20 @@ lang MLangLoader = LoaderImpl + BootParserMLang
   type OrderCache =
     { cache : Ref (Map BranchId (Either (Info -> Option Order) Order))
     , id : BranchId
+    }
+
+  type Branch =
+    -- NOTE(vipa, 2026-07-13): The definitional stuff for the branch,
+    -- included to be able to resymbolize when we include it in a
+    -- materialized `sem`.
+    { pat : Pat
+    , body : Expr
+    , params : {params : [Name], tyParams : [Name]}
+    -- NOTE(vipa, 2026-07-13): Caches to not have to recompute pattern
+    -- analysis.
+    , posPat : Lazy NormPat
+    , negPat : Lazy NormPat
+    , orderCache : OrderCache -- order against all *earlier* branches
     }
 
   sem addToDigraph : Info -> Set BranchId -> OrderCache -> Digraph BranchId () -> Digraph BranchId ()
@@ -687,20 +721,6 @@ lang MLangLoader = LoaderImpl + BootParserMLang
       }
     }
 
-  type Branch =
-    -- NOTE(vipa, 2026-07-13): The definitional stuff for the branch,
-    -- included to be able to resymbolize when we include it in a
-    -- materialized `sem`.
-    { pat : Pat
-    , body : Expr
-    , params : {params : [Name], tyParams : [Name]}
-    -- NOTE(vipa, 2026-07-13): Caches to not have to recompute pattern
-    -- analysis.
-    , posPat : Lazy NormPat
-    , negPat : Lazy NormPat
-    , orderCache : OrderCache -- order against all *earlier* branches
-    }
-
   syn LangDefVar =
   | LDSem
 
@@ -749,7 +769,7 @@ lang MLangLoader = LoaderImpl + BootParserMLang
     , localToGlobalSems : Map Name Name
     , langs : Map Name (LangEnv, LangData)
     }
-  syn Hook =
+  syn Hook +=
   | MLangHook (Ref LangState)
 
   sem mergeLangEnvExn : Option Info -> LangEnv -> LangEnv -> LangEnv
@@ -859,7 +879,7 @@ lang MLangLoader = LoaderImpl + BootParserMLang
       } in
     _addTypecheckedDecl loader decl
 
-  sem _addDeclExn symEnv loader =
+  sem _addDeclExn symEnv loader +=
   | DeclLang x ->
     match
       match getHookOpt (lam x. match x with MLangHook x then Some x else None ()) loader
@@ -983,7 +1003,7 @@ lang MLangLoader = LoaderImpl + BootParserMLang
 
     (symEnv, loader)
 
-  sem _loadFile path = | (FMCore {includeMExpr = includeMExpr}, loader) ->
+  sem _loadFile path += | (FMCore {includeMExpr = includeMExpr}, loader) ->
     let prog = switch result.consume (parseMLangFile path)
       case (_, Right prog) then prog
       case (_, Left errs) then
@@ -998,10 +1018,10 @@ lang MLangLoader = LoaderImpl + BootParserMLang
 end
 
 lang MLangTypeAlias = MLangLoader + TypeDeclAst
-  sem _langPreSymbolize stateRef langEnv symEnv loader = | decl & DeclType {tyIdent = !TyVariant _} ->
+  sem _langPreSymbolize stateRef langEnv symEnv loader += | decl & DeclType {tyIdent = !TyVariant _} ->
     (langEnv, symEnv, Some decl, loader)
 
-  sem _langSymbolize langEnv symEnv loader = | decl & DeclType {tyIdent = !TyVariant _} ->
+  sem _langSymbolize langEnv symEnv loader += | decl & DeclType {tyIdent = !TyVariant _} ->
     match symbolizeDecl symEnv decl with (symEnv, decl & DeclType x) in
     let langEnv = mergeLangEnvExn (None ()) langEnv
       {emptyLangEnv () with tyConEnv = mapSingleton cmpString (nameGetStr x.ident) (x.ident, x.info, LDAlias ())} in
@@ -1010,7 +1030,7 @@ lang MLangTypeAlias = MLangLoader + TypeDeclAst
 end
 
 lang MLangSyn = MLangLoader + SynDeclAst
-  sem _langPreSymbolize stateRef langEnv symEnv loader = | DeclSyn x ->
+  sem _langPreSymbolize stateRef langEnv symEnv loader += | DeclSyn x ->
     match
       switch x.kind
       case SynBase _ then (nameSetNewSym x.ident, x.kind)
@@ -1041,7 +1061,7 @@ lang MLangSyn = MLangLoader + SynDeclAst
       else loader in
     (langEnv, symEnv, Some (DeclSyn {x with ident = ident, kind = kind, defs = defs}), loader)
 
-  sem _langSymbolize langEnv symEnv loader = | DeclSyn x ->
+  sem _langSymbolize langEnv symEnv loader += | DeclSyn x ->
     let f = lam loader. lam def.
       let params = map nameSetNewSym x.params in
       let tyVarEnv = foldl
@@ -1057,7 +1077,7 @@ lang MLangSyn = MLangLoader + SynDeclAst
 end
 
 lang MLangSem = MLangLoader + SemDeclAst + LetSym + PatTypeCheck + SubstituteUnknown + SubstituteNewReprs + ResolveType
-  sem _langMergeAdjacent = | (DeclSem a, DeclSem b) ->
+  sem _langMergeAdjacent += | (DeclSem a, DeclSem b) ->
     match a.kind with SemBase _
     then match (a.tyAnnot, b.tyAnnot) with (!TyUnknown _, TyUnknown _)
       then match (a.impl, b.impl) with (None _, Some impl)
@@ -1075,7 +1095,7 @@ lang MLangSem = MLangLoader + SemDeclAst + LetSym + PatTypeCheck + SubstituteUnk
       else None ()
     else None ()
 
-  sem _langPreSymbolize stateRef langEnv symEnv loader = | DeclSem x ->
+  sem _langPreSymbolize stateRef langEnv symEnv loader += | DeclSem x ->
     match setSymbol symEnv.currentEnv.varEnv x.ident with (varEnv, ident) in
     let symEnv = symbolizeUpdateVarEnv symEnv varEnv in
 
@@ -1097,7 +1117,7 @@ lang MLangSem = MLangLoader + SemDeclAst + LetSym + PatTypeCheck + SubstituteUnk
 
     (langEnv, symEnv, Some (DeclSem {x with ident = ident, kind = kind}), loader)
 
-  sem _langSymbolize langEnv symEnv loader = | DeclSem x ->
+  sem _langSymbolize langEnv symEnv loader += | DeclSem x ->
     match symbolizeTyAnnot symEnv x.tyAnnot with (tyVarEnv, tyAnnot) in
 
     let symImpl = lam impl.
@@ -1118,7 +1138,7 @@ lang MLangSem = MLangLoader + SemDeclAst + LetSym + PatTypeCheck + SubstituteUnk
 
     (langEnv, symEnv, Some (DeclSem {x with tyAnnot = tyAnnot, impl = impl}), loader)
 
-  sem _langPreTypecheck loader = | DeclSem x ->
+  sem _langPreTypecheck loader += | DeclSem x ->
     _withTCEnv (lam tcEnv.
       let newLvl = addi 1 tcEnv.currentLvl in
       let tyAnnot = resolveType x.info tcEnv false x.tyAnnot in
@@ -1135,7 +1155,7 @@ lang MLangSem = MLangLoader + SemDeclAst + LetSym + PatTypeCheck + SubstituteUnk
 
       (_insertVar x.ident tyBody tcEnv, Some (DeclSem {x with tyAnnot = tyAnnot, tyBody = tyBody}))) loader
 
-  sem _langTypecheck loader =
+  sem _langTypecheck loader +=
   | decl & DeclSem {impl = None _} -> (loader, Some decl)
   | DeclSem (x & {impl = Some impl}) ->
     let f = lam tcEnv.
@@ -1186,7 +1206,7 @@ lang MLangSem = MLangLoader + SemDeclAst + LetSym + PatTypeCheck + SubstituteUnk
     let decl = (_withTCEnv f loader).1 in
     (loader, Some decl)
 
-  sem _langAddDecl stateRef langData loader =
+  sem _langAddDecl stateRef langData loader +=
   | DeclSem x ->
     let state = deref stateRef in
     let base = switch x.kind
@@ -1239,7 +1259,7 @@ let updateEnv : SymEnv -> NameEnv -> SymEnv = lam symEnv. lam langEnv.
   {symEnv with currentEnv = mergeNameEnv (symEnv.currentEnv) langEnv}
 
 lang DeclUseSym = Sym + UseDeclAst + DeclAst + RecLetsDeclAst
-  sem symbolizeDecl env =
+  sem symbolizeDecl env +=
   | DeclUse x ->
     let n = getSymbol {kind = "language fragment", info = [x.info], allowFree = env.allowFree}
       env.namespaceEnv x.ident in
@@ -1253,7 +1273,7 @@ lang DeclUseSym = Sym + UseDeclAst + DeclAst + RecLetsDeclAst
 end
 
 lang TyUseSym = Sym + TyUseAst
-  sem symbolizeType env =
+  sem symbolizeType env +=
   | TyUse x ->
     let n = getSymbol {kind = "language fragment", info = [x.info], allowFree = env.allowFree}
       env.namespaceEnv x.ident in

@@ -1,5 +1,9 @@
 
 include "map.mc"
+include "string.mc"
+include "seq.mc"
+include "bool.mc"
+include "char.mc"
 
 /-
   Implements functionality for reading and writing TOML data.

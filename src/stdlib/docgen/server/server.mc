@@ -7,6 +7,9 @@ include "./server-options.mc"
 include "./python-server.mc"
 include "./server-options.mc"
 include "../options/cast-options.mc"
+include "docgen/global/format.mc"
+include "common.mc"
+include "seq.mc"
 
 -- ## startServer
 --

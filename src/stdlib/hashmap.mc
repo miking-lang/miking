@@ -13,6 +13,9 @@
 include "math.mc"
 include "option.mc"
 include "string.mc"
+include "int.mc"
+include "seq.mc"
+include "basic-types.mc"
 
 -- The base type of a HashMap object.
 --   k: Polymorphic key type

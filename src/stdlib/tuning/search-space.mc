@@ -8,6 +8,18 @@ include "data-frame.mc"
 include "map.mc"
 include "graph.mc"
 include "eqset.mc"
+include "seq.mc"
+include "bool.mc"
+include "basic-types.mc"
+include "tuning/graph-coloring.mc"
+include "set.mc"
+include "option.mc"
+include "float.mc"
+include "mexpr/eq.mc"
+include "mexpr/ast.mc"
+include "string.mc"
+include "mexpr/ast-builder.mc"
+include "common.mc"
 
 -- NOTE: floats because of numerical overflows with ints
 type SearchSpaceSize = {

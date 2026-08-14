@@ -4,6 +4,11 @@
 include "stringid.mc"
 include "mexpr/ast.mc"
 include "error.mc"
+include "char.mc"
+include "seq.mc"
+include "bool.mc"
+include "string.mc"
+include "map.mc"
 
 let recordOrderedLabels = lam labels: [SID].
   let isTupleLabel = lam sid.

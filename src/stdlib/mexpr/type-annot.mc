@@ -15,6 +15,14 @@ include "eq.mc"
 include "pprint.mc"
 include "builtin.mc"
 include "type.mc"
+include "map.mc"
+include "name.mc"
+include "mexpr/ast-builder.mc"
+include "basic-types.mc"
+include "error.mc"
+include "option.mc"
+include "stringid.mc"
+include "seq.mc"
 
 type TypeEnv = {
   varEnv: Map Name (use Ast in Type),
@@ -85,7 +93,7 @@ end
 
 lang UnknownCompatibleType = CompatibleType + UnknownTypeAst
 
-  sem compatibleTypeBase (tyEnv: Map Name Type) =
+  sem compatibleTypeBase (tyEnv: Map Name Type) +=
   | (TyUnknown _ & ty1, TyUnknown _) -> Some ty1
   | (TyUnknown _, ! TyUnknown _ & ty2) -> Some ty2
   | (! TyUnknown _ & ty1, TyUnknown _) -> Some ty1
@@ -94,11 +102,11 @@ end
 
 lang ConCompatibleType = CompatibleType + ConTypeAst
 
-  sem compatibleTypeBase (tyEnv : Map Name Type) =
+  sem compatibleTypeBase (tyEnv : Map Name Type) +=
   | (TyCon t1 & ty1, TyCon t2) ->
     if nameEq t1.ident t2.ident then Some ty1 else None ()
 
-  sem reduceType (tyEnv : Map Name Type) =
+  sem reduceType (tyEnv : Map Name Type) +=
   | TyCon {info = info, ident = id} ->
     match mapLookup id tyEnv with Some ty then Some ty else
       errorSingle [info] (concat "Unbound TyCon in reduceType: " (nameGetStr id))
@@ -106,55 +114,55 @@ lang ConCompatibleType = CompatibleType + ConTypeAst
 end
 
 lang VarCompatibleType = CompatibleType + VarTypeAst + UnknownTypeAst
-  sem reduceTyVar =
+  sem reduceTyVar +=
   | TyVar {info = i} -> TyUnknown {info = i}
 end
 
 lang AliasCompatibleType = CompatibleType + AliasTypeAst
-  sem reduceType (tyEnv : Map Name Type) =
+  sem reduceType (tyEnv : Map Name Type) +=
   | TyAlias t -> Some t.content
 end
 
 lang AllCompatibleType = CompatibleType + AllTypeAst
-  sem reduceType (tyEnv : Map Name Type) =
+  sem reduceType (tyEnv : Map Name Type) +=
   | TyAll t -> Some t.ty
 end
 
 lang AppCompatibleType = CompatibleType + AppTypeAst
 
-  sem compatibleTypeBase (tyEnv : Map Name Type) =
+  sem compatibleTypeBase (tyEnv : Map Name Type) +=
   -- TODO(dlunde,2021-05-05): Left out for now for compatibility with original
   -- compatibleTypes
 
   -- NOTE(dlunde,2021-05-05): This is NOT how we want to handle TmApp in the
   -- end. We are now just discarding the RHS of all applications
-  sem reduceType (tyEnv : Map Name Type) =
+  sem reduceType (tyEnv : Map Name Type) +=
   | TyApp t -> Some t.lhs
 
 end
 
 lang BoolCompatibleType = CompatibleType + BoolTypeAst
-  sem compatibleTypeBase (tyEnv : Map Name Type) =
+  sem compatibleTypeBase (tyEnv : Map Name Type) +=
   | (TyBool _ & t1, TyBool _) -> Some t1
 end
 
 lang IntCompatibleType = CompatibleType + IntTypeAst
-  sem compatibleTypeBase (tyEnv : Map Name Type) =
+  sem compatibleTypeBase (tyEnv : Map Name Type) +=
   | (TyInt _ & t1, TyInt _) -> Some t1
 end
 
 lang FloatCompatibleType = CompatibleType + FloatTypeAst
-  sem compatibleTypeBase (tyEnv : Map Name Type) =
+  sem compatibleTypeBase (tyEnv : Map Name Type) +=
   | (TyFloat _ & t1, TyFloat _) -> Some t1
 end
 
 lang CharCompatibleType = CompatibleType + CharTypeAst
-  sem compatibleTypeBase (tyEnv : Map Name Type) =
+  sem compatibleTypeBase (tyEnv : Map Name Type) +=
   | (TyChar _ & t1, TyChar _) -> Some t1
 end
 
 lang FunCompatibleType = CompatibleType + FunTypeAst
-  sem compatibleTypeBase (tyEnv : Map Name Type) =
+  sem compatibleTypeBase (tyEnv : Map Name Type) +=
   | (TyArrow t1, TyArrow t2) ->
     match compatibleType tyEnv t1.from t2.from with Some a then
       match compatibleType tyEnv t1.to t2.to with Some b then
@@ -164,7 +172,7 @@ lang FunCompatibleType = CompatibleType + FunTypeAst
 end
 
 lang SeqCompatibleType = CompatibleType + SeqTypeAst
-  sem compatibleTypeBase (tyEnv : Map Name Type) =
+  sem compatibleTypeBase (tyEnv : Map Name Type) +=
   | (TySeq t1, TySeq t2) ->
     match compatibleType tyEnv t1.ty t2.ty with Some t then
       Some (TySeq {t1 with ty = t})
@@ -172,7 +180,7 @@ lang SeqCompatibleType = CompatibleType + SeqTypeAst
 end
 
 lang TensorCompatibleType = CompatibleType + TensorTypeAst
-  sem compatibleTypeBase (tyEnv : Map Name Type) =
+  sem compatibleTypeBase (tyEnv : Map Name Type) +=
   | (TyTensor t1, TyTensor t2) ->
     match compatibleType tyEnv t1.ty t2.ty with Some t then
       Some (TyTensor {t1 with ty = t})
@@ -180,7 +188,7 @@ lang TensorCompatibleType = CompatibleType + TensorTypeAst
 end
 
 lang RecordCompatibleType = CompatibleType + RecordTypeAst
-  sem compatibleTypeBase (tyEnv : Map Name Type) =
+  sem compatibleTypeBase (tyEnv : Map Name Type) +=
   | (TyRecord t1, TyRecord t2) ->
     let f = lam acc. lam p.
       match p with (k, ty1) then
@@ -197,7 +205,7 @@ lang RecordCompatibleType = CompatibleType + RecordTypeAst
 end
 
 lang VariantCompatibleType = CompatibleType + VariantTypeAst
-  sem compatibleTypeBase (tyEnv : Map Name Type) =
+  sem compatibleTypeBase (tyEnv : Map Name Type) +=
   | (TyVariant t1, TyVariant t2) ->
     let constrsOpt = mapFoldlOption (lam acc. lam ident. lam ty1.
       match mapLookup ident t2.constrs with Some ty2 then
@@ -227,12 +235,12 @@ lang TypeAnnot = CompatibleType
 end
 
 lang OpaqueTypeAnnot = TypeAnnot + OpaqueAst
-  sem typeAnnotExpr env =
+  sem typeAnnotExpr env +=
   | tm & TmOpaque _ -> tm
 end
 
 lang VarTypeAnnot = TypeAnnot + VarAst
-  sem typeAnnotExpr (env : TypeEnv) =
+  sem typeAnnotExpr (env : TypeEnv) +=
   | TmVar t ->
     let ty =
       match env with {varEnv = varEnv, tyEnv = tyEnv} then
@@ -254,7 +262,7 @@ lang VarTypeAnnot = TypeAnnot + VarAst
 end
 
 lang AppTypeAnnot = TypeAnnot + AppAst + FunTypeAst + MExprEq
-  sem typeAnnotExpr (env : TypeEnv) =
+  sem typeAnnotExpr (env : TypeEnv) +=
   | TmApp t ->
     let lhs = typeAnnotExpr env t.lhs in
     let rhs = typeAnnotExpr env t.rhs in
@@ -271,7 +279,7 @@ lang AppTypeAnnot = TypeAnnot + AppAst + FunTypeAst + MExprEq
 end
 
 lang LamTypeAnnot = TypeAnnot + LamAst + FunTypeAst
-  sem typeAnnotExpr (env : TypeEnv) =
+  sem typeAnnotExpr (env : TypeEnv) +=
   | TmLam t ->
     match env with {varEnv = varEnv} then
       let env = {env with varEnv = mapInsert t.ident t.tyParam varEnv} in
@@ -288,7 +296,7 @@ lang TypePropagation = TypeAnnot
 end
 
 lang LetTypeAnnot = TypeAnnot + TypePropagation + LetDeclAst +  UnknownTypeAst + AllTypeAst
-  sem typeAnnotExpr (env : TypeEnv) =
+  sem typeAnnotExpr (env : TypeEnv) +=
   | TmDecl (x & {decl = DeclLet t}) ->
     match env with {varEnv = varEnv, tyEnv = tyEnv} then
       let body = match t.tyBody with TyUnknown _ then t.body else
@@ -317,12 +325,12 @@ lang LetTypeAnnot = TypeAnnot + TypePropagation + LetDeclAst +  UnknownTypeAst +
 end
 
 lang PropagateDeclType = TypePropagation + DeclAst
-  sem propagateExpectedType tyEnv =
+  sem propagateExpectedType tyEnv +=
   | (ty, TmDecl x) -> TmDecl {x with inexpr = propagateExpectedType tyEnv (ty, x.inexpr)}
 end
 
 lang PropagateArrowLambda = TypePropagation + FunTypeAst + LamAst
-  sem propagateExpectedType (tyEnv : Map Name Type) =
+  sem propagateExpectedType (tyEnv : Map Name Type) +=
   | (TyArrow {from = from, to = to}, TmLam t) ->
     match compatibleType tyEnv from t.tyParam with Some ty then
       TmLam {t with tyParam = ty,
@@ -337,7 +345,7 @@ lang PropagateArrowLambda = TypePropagation + FunTypeAst + LamAst
 end
 
 lang ExpTypeAnnot = TypeAnnot + ExtDeclAst
-  sem typeAnnotExpr (env : TypeEnv) =
+  sem typeAnnotExpr (env : TypeEnv) +=
   | TmDecl (x & {decl = DeclExt t}) ->
     match env with {varEnv = varEnv, tyEnv = tyEnv} then
       let env = {env with varEnv = mapInsert t.ident t.tyIdent varEnv} in
@@ -347,7 +355,7 @@ lang ExpTypeAnnot = TypeAnnot + ExtDeclAst
 end
 
 lang RecLetsTypeAnnot = TypeAnnot + TypePropagation + RecLetsDeclAst + LamAst + UnknownTypeAst + AllTypeAst
-  sem typeAnnotExpr (env : TypeEnv) =
+  sem typeAnnotExpr (env : TypeEnv) +=
   | TmDecl (x & {decl = DeclRecLets t}) ->
     -- Add mapping from binding identifier to annotated type before doing type
     -- annotations of the bindings. This is to make annotations work for
@@ -392,14 +400,14 @@ lang RecLetsTypeAnnot = TypeAnnot + TypePropagation + RecLetsDeclAst + LamAst + 
 end
 
 lang ConstTypeAnnot = TypeAnnot + MExprConstType + AllTypeAst
-  sem typeAnnotExpr (env : TypeEnv) =
+  sem typeAnnotExpr (env : TypeEnv) +=
   | TmConst t ->
     recursive let f = lam ty. smap_Type_Type f (tyWithInfo t.info ty) in
     TmConst {t with ty = inspectType (f (tyConst t.val))}
 end
 
 lang SeqTypeAnnot = TypeAnnot + SeqAst + MExprEq
-  sem typeAnnotExpr (env : TypeEnv) =
+  sem typeAnnotExpr (env : TypeEnv) +=
   | TmSeq t ->
     let tms = map (typeAnnotExpr env) t.tms in
     let elemTy =
@@ -416,7 +424,7 @@ lang SeqTypeAnnot = TypeAnnot + SeqAst + MExprEq
 end
 
 lang RecordTypeAnnot = TypeAnnot + RecordAst + RecordTypeAst
-  sem typeAnnotExpr (env : TypeEnv) =
+  sem typeAnnotExpr (env : TypeEnv) +=
   | TmRecord t ->
     let bindings = mapMap (typeAnnotExpr env) t.bindings in
     let bindingTypes = mapMap tyTm bindings in
@@ -432,7 +440,7 @@ lang RecordTypeAnnot = TypeAnnot + RecordAst + RecordTypeAst
 end
 
 lang TypeTypeAnnot = TypeAnnot + TypeDeclAst
-  sem typeAnnotExpr (env : TypeEnv) =
+  sem typeAnnotExpr (env : TypeEnv) +=
   | TmDecl (x & {decl = DeclType t}) ->
     let tyEnv = mapInsert t.ident t.tyIdent env.tyEnv in
     let inexpr = typeAnnotExpr {env with tyEnv = tyEnv} x.inexpr in
@@ -440,7 +448,7 @@ lang TypeTypeAnnot = TypeAnnot + TypeDeclAst
 end
 
 lang DataTypeAnnot = TypeAnnot + DataAst + MExprEq
-  sem typeAnnotExpr (env : TypeEnv) =
+  sem typeAnnotExpr (env : TypeEnv) +=
   | TmDecl (x & {decl = DeclConDef t}) ->
     match env with {conEnv = conEnv} then
       let env = {env with conEnv = mapInsert t.ident t.tyIdent conEnv} in
@@ -482,7 +490,7 @@ lang MatchTypeAnnot = TypeAnnot + MatchAst + MExprEq
   sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
   -- Intentionally left blank
 
-  sem typeAnnotExpr (env : TypeEnv) =
+  sem typeAnnotExpr (env : TypeEnv) +=
   | TmMatch t ->
     let target = typeAnnotExpr env t.target in
     match typeAnnotPat env (tyTm target) t.pat with (thnEnv, pat) then
@@ -501,7 +509,7 @@ lang MatchTypeAnnot = TypeAnnot + MatchAst + MExprEq
 end
 
 lang UtestTypeAnnot = TypeAnnot + UtestDeclAst + MExprEq
-  sem typeAnnotExpr (env : TypeEnv) =
+  sem typeAnnotExpr (env : TypeEnv) +=
   | TmDecl (x & {decl = DeclUtest t}) ->
     let test = typeAnnotExpr env t.test in
     let expected = typeAnnotExpr env t.expected in
@@ -618,12 +626,12 @@ lang UtestTypeAnnot = TypeAnnot + UtestDeclAst + MExprEq
 end
 
 lang NeverTypeAnnot = TypeAnnot + NeverAst
-  sem typeAnnotExpr (env : TypeEnv) =
+  sem typeAnnotExpr (env : TypeEnv) +=
   | TmNever t -> TmNever {t with ty = (ityunknown_ t.info)}
 end
 
 lang PlaceHolderTypeAnnotation = TypeAnnot + PlaceholderAst
-  sem typeAnnotExpr (env : TypeEnv) =
+  sem typeAnnotExpr (env : TypeEnv) +=
   | TmPlaceholder t -> TmPlaceholder {t with ty = (ityunknown_ t.info)}
 end
 
@@ -632,7 +640,7 @@ end
 ---------------------------
 
 lang NamedPatTypeAnnot = MatchTypeAnnot + NamedPat
-  sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
+  sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) +=
   | PatNamed t ->
     let env =
       match t.ident with PName n then
@@ -643,7 +651,7 @@ end
 
 lang SeqTotPatTypeAnnot = MatchTypeAnnot + SeqTotPat + UnknownTypeAst +
                           SeqTypeAst
-  sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
+  sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) +=
   | PatSeqTot t ->
     let elemTy =
       match expectedTy with TySeq {ty = elemTy} then elemTy
@@ -656,7 +664,7 @@ end
 
 lang SeqEdgePatTypeAnnot = MatchTypeAnnot + SeqEdgePat + UnknownTypeAst +
                            SeqTypeAst
-  sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
+  sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) +=
   | PatSeqEdge t ->
     let elemTy =
       match expectedTy with TySeq {ty = elemTy} then elemTy
@@ -679,7 +687,7 @@ end
 
 lang RecordPatTypeAnnot = MatchTypeAnnot + RecordPat + UnknownTypeAst +
                           RecordTypeAst
-  sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
+  sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) +=
   | PatRecord t ->
     let expectedTy = unwrapType expectedTy in
     let expectedTy = match expectedTy with TyUnknown _ | TyApp {lhs = TyUnknown _} then t.ty else expectedTy in
@@ -709,7 +717,7 @@ end
 
 lang DataPatTypeAnnot = MatchTypeAnnot + DataPat + VariantTypeAst + ConTypeAst +
                         FunTypeAst + AllTypeAst
-  sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
+  sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) +=
   | PatCon t ->
     match optionMap inspectType (mapLookup t.ident env.conEnv)
     with Some (TyArrow {from = argTy, to = to}) then
@@ -720,22 +728,22 @@ lang DataPatTypeAnnot = MatchTypeAnnot + DataPat + VariantTypeAst + ConTypeAst +
 end
 
 lang IntPatTypeAnnot = MatchTypeAnnot + IntPat
-  sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
+  sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) +=
   | PatInt r -> (env, PatInt {r with ty = tyint_})
 end
 
 lang CharPatTypeAnnot = MatchTypeAnnot + CharPat
-  sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
+  sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) +=
   | PatChar r -> (env, PatChar {r with ty = tychar_})
 end
 
 lang BoolPatTypeAnnot = MatchTypeAnnot + BoolPat
-  sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
+  sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) +=
   | PatBool r -> (env, PatBool {r with ty = tybool_})
 end
 
 lang AndPatTypeAnnot = MatchTypeAnnot + AndPat
-  sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
+  sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) +=
   | PatAnd t ->
     match typeAnnotPat env expectedTy t.lpat with (env, lpat) then
       match typeAnnotPat env expectedTy t.rpat with (env, rpat) then
@@ -745,7 +753,7 @@ lang AndPatTypeAnnot = MatchTypeAnnot + AndPat
 end
 
 lang OrPatTypeAnnot = MatchTypeAnnot + OrPat
-  sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
+  sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) +=
   | PatOr t ->
     match typeAnnotPat env expectedTy t.lpat with (env, lpat) then
       match typeAnnotPat env expectedTy t.rpat with (env, rpat) then
@@ -755,7 +763,7 @@ lang OrPatTypeAnnot = MatchTypeAnnot + OrPat
 end
 
 lang NotPatTypeAnnot = MatchTypeAnnot + NotPat
-  sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) =
+  sem typeAnnotPat (env : TypeEnv) (expectedTy : Type) +=
   | PatNot t ->
     match typeAnnotPat env expectedTy t.subpat with (env, subpat) then
       (env, PatNot {{t with subpat = subpat} with ty = expectedTy})

@@ -38,22 +38,22 @@ lang CSV
 end
 
 lang _testCSV = CSV
-  syn CSVRow =
+  syn CSVRow +=
   | Data {col1: Int, col2: Float}
 
-  sem csvRow2string =
+  sem csvRow2string +=
   | Data {col1 = col1, col2 = col2} ->
     [ int2string col1
     , float2string col2
     ]
 
-  sem csvHeader =
+  sem csvHeader +=
   | Data {col1 = col1, col2 = col2} ->
     [ "col1"
     , "col2"
     ]
 
-  sem csvString2Row =
+  sem csvString2Row +=
   | row ->
     Data {col1 = string2int (get row 0),
           col2 = string2float (get row 1)}

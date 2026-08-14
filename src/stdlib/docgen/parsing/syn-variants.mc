@@ -1,6 +1,9 @@
 include "./token-readers.mc"
 include "./utils.mc"
 include "../global/objects.mc"
+include "basic-types.mc"
+include "docgen/global/util.mc"
+include "string.mc"
 
 -- Extracts variant names from a stream of syntax tree nodes starting with '|'.
 -- Returns a list of the variants.

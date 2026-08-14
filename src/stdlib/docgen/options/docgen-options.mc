@@ -37,6 +37,7 @@ include "../global/format-language.mc"
         
 include "string.mc"
 include "sys.mc"
+include "seq.mc"
 
 -- Data type representing the command-line options that can be passed to `my-doc-gen`.
 type DocGenOptions = use Formats in use FormatLanguages in {

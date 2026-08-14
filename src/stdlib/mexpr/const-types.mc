@@ -4,6 +4,11 @@
 include "ast.mc"
 include "ast-builder.mc"
 include "builtin.mc"
+include "map.mc"
+include "mexpr/info.mc"
+include "set.mc"
+include "name.mc"
+include "basic-types.mc"
 
 let mktyall_ = lam s. lam f. tyall_ s (f (tyvar_ s))
 let mkstyall_ = lam s. lam k. lam f. styall_ s k (f (tyvar_ s))
@@ -41,12 +46,12 @@ lang TyConst = ConstAst
 end
 
 lang UnsafeCoerceTypeAst = TyConst + UnsafeCoerceAst
-  sem tyConstBase d =
+  sem tyConstBase d +=
   | CUnsafeCoerce _ -> mktyall_ "a" (lam a. mktyall_ "b" (lam b. tyarrow_ a b))
 end
 
 lang LiteralTypeAst = TyConst + IntAst + FloatAst + BoolAst + CharAst
-  sem tyConstBase d =
+  sem tyConstBase d +=
   | CInt _ -> tyint_
   | CFloat _ -> tyfloat_
   | CBool _ -> tybool_
@@ -54,7 +59,7 @@ lang LiteralTypeAst = TyConst + IntAst + FloatAst + BoolAst + CharAst
 end
 
 lang ArithIntTypeAst = TyConst + ArithIntAst
-  sem tyConstBase d =
+  sem tyConstBase d +=
   | CAddi _ -> tyarrows_ [tyint_, tyint_, tyint_]
   | CSubi _ -> tyarrows_ [tyint_, tyint_, tyint_]
   | CMuli _ -> tyarrows_ [tyint_, tyint_, tyint_]
@@ -64,14 +69,14 @@ lang ArithIntTypeAst = TyConst + ArithIntAst
 end
 
 lang ShiftIntTypeAst = TyConst + ShiftIntAst
-  sem tyConstBase d =
+  sem tyConstBase d +=
   | CSlli _ -> tyarrows_ [tyint_, tyint_, tyint_]
   | CSrli _ -> tyarrows_ [tyint_, tyint_, tyint_]
   | CSrai _ -> tyarrows_ [tyint_, tyint_, tyint_]
 end
 
 lang ArithFloatTypeAst = TyConst + ArithFloatAst
-  sem tyConstBase d =
+  sem tyConstBase d +=
   | CAddf _ -> tyarrows_ [tyfloat_, tyfloat_, tyfloat_]
   | CSubf _ -> tyarrows_ [tyfloat_, tyfloat_, tyfloat_]
   | CMulf _ -> tyarrows_ [tyfloat_, tyfloat_, tyfloat_]
@@ -80,7 +85,7 @@ lang ArithFloatTypeAst = TyConst + ArithFloatAst
 end
 
 lang FloatIntConversionTypeAst = TyConst + FloatIntConversionAst
-  sem tyConstBase d =
+  sem tyConstBase d +=
   | CFloorfi _ -> tyarrow_ tyfloat_ tyint_
   | CCeilfi _ -> tyarrow_ tyfloat_ tyint_
   | CRoundfi _ -> tyarrow_ tyfloat_ tyint_
@@ -88,7 +93,7 @@ lang FloatIntConversionTypeAst = TyConst + FloatIntConversionAst
 end
 
 lang CmpIntTypeAst = TyConst + CmpIntAst
-  sem tyConstBase d =
+  sem tyConstBase d +=
   | CEqi _ -> tyarrows_ [tyint_, tyint_, tybool_]
   | CNeqi _ -> tyarrows_ [tyint_, tyint_, tybool_]
   | CLti _ -> tyarrows_ [tyint_, tyint_, tybool_]
@@ -98,7 +103,7 @@ lang CmpIntTypeAst = TyConst + CmpIntAst
 end
 
 lang CmpFloatTypeAst = TyConst + CmpFloatAst
-  sem tyConstBase d =
+  sem tyConstBase d +=
   | CEqf _ -> tyarrows_ [tyfloat_, tyfloat_, tybool_]
   | CLtf _ -> tyarrows_ [tyfloat_, tyfloat_, tybool_]
   | CLeqf _ -> tyarrows_ [tyfloat_, tyfloat_, tybool_]
@@ -108,37 +113,37 @@ lang CmpFloatTypeAst = TyConst + CmpFloatAst
 end
 
 lang CmpCharTypeAst = TyConst + CmpCharAst
-  sem tyConstBase d =
+  sem tyConstBase d +=
   | CEqc _ -> tyarrows_ [tychar_, tychar_, tybool_]
 end
 
 lang IntCharConversionTypeAst = TyConst + IntCharConversionAst
-  sem tyConstBase d =
+  sem tyConstBase d +=
   | CInt2Char _ -> tyarrow_ tyint_ tychar_
   | CChar2Int _ -> tyarrow_ tychar_ tyint_
 end
 
 lang FloatStringConversionTypeAst = TyConst + FloatStringConversionAst
-  sem tyConstBase d =
+  sem tyConstBase d +=
   | CStringIsFloat _ -> tyarrow_ tystr_ tybool_
   | CString2float _ -> tyarrow_ tystr_ tyfloat_
   | CFloat2string _ -> tyarrow_ tyfloat_ tystr_
 end
 
 lang SymbTypeAst = TyConst + SymbAst
-  sem tyConstBase d =
+  sem tyConstBase d +=
   | CSymb _ -> mktysym_ d (lam s. s)
   | CGensym _ -> mktysym_ d (lam s. tyarrow_ tyunit_ s)
   | CSym2hash _ -> mktysym_ d (lam s. tyarrow_ s tyint_)
 end
 
 lang CmpSymbTypeAst = TyConst + CmpSymbAst
-  sem tyConstBase d =
+  sem tyConstBase d +=
   | CEqsym _ -> mktysym_ d (lam s. tyarrows_ [s, s, tybool_])
 end
 
 lang SeqOpTypeAst = TyConst + SeqOpAst
-  sem tyConstBase d =
+  sem tyConstBase d +=
   | CSet _ -> mktyall_ "a" (lam a. tyarrows_ [tyseq_ a, tyint_, a, tyseq_ a])
   | CGet _ -> mktyall_ "a" (lam a. tyarrows_ [tyseq_ a, tyint_, a])
   | CCons _ -> mktyall_ "a" (lam a. tyarrows_ [a, tyseq_ a, tyseq_ a])
@@ -182,7 +187,7 @@ lang SeqOpTypeAst = TyConst + SeqOpAst
 end
 
 lang FileOpTypeAst = TyConst + FileOpAst
-  sem tyConstBase d =
+  sem tyConstBase d +=
   | CFileRead _ -> tyarrow_ tystr_ tystr_
   | CFileWrite _ -> tyarrows_ [tystr_, tystr_, tyunit_]
   | CFileExists _ -> tyarrow_ tystr_ tybool_
@@ -190,7 +195,7 @@ lang FileOpTypeAst = TyConst + FileOpAst
 end
 
 lang IOTypeAst = TyConst + IOAst
-  sem tyConstBase d =
+  sem tyConstBase d +=
   | CPrint _ -> tyarrow_ tystr_ tyunit_
   | CPrintError _ -> tyarrow_ tystr_ tyunit_
   | CDPrint _ -> mktyall_ "a" (lam a. tyarrow_ a tyunit_)
@@ -201,13 +206,13 @@ lang IOTypeAst = TyConst + IOAst
 end
 
 lang RandomNumberGeneratorTypeAst = TyConst + RandomNumberGeneratorAst
-  sem tyConstBase d =
+  sem tyConstBase d +=
   | CRandIntU _ -> tyarrows_ [tyint_, tyint_, tyint_]
   | CRandSetSeed _ -> tyarrow_ tyint_ tyunit_
 end
 
 lang SysTypeAst = TyConst + SysAst
-  sem tyConstBase d =
+  sem tyConstBase d +=
   | CExit _ -> mktyall_ "a" (lam a. tyarrow_ tyint_ a)
   | CError _ -> mktyall_ "a" (lam a. tyarrow_ tystr_ a)
   | CArgv _ -> tyseq_ tystr_
@@ -216,30 +221,30 @@ lang SysTypeAst = TyConst + SysAst
 end
 
 lang TimeTypeAst = TyConst + TimeAst
-  sem tyConstBase d =
+  sem tyConstBase d +=
   | CWallTimeMs _ -> tyarrow_ tyunit_ tyfloat_
   | CSleepMs _ -> tyarrow_ tyint_ tyunit_
 end
 
 lang RefOpTypeAst = TyConst + RefOpAst
-  sem tyConstBase d =
+  sem tyConstBase d +=
   | CRef _ -> mktyall_ "a" (lam a. mktyref_ d (lam r. tyarrow_ a (tyapp_ r a)))
   | CModRef _ -> mktyall_ "a" (lam a. mktyref_ d (lam r. tyarrows_ [tyapp_ r a, a, tyunit_]))
   | CDeRef _ -> mktyall_ "a" (lam a. mktyref_ d (lam r. tyarrow_ (tyapp_ r a) a))
 end
 
 lang ConTagTypeAst = TyConst + ConTagAst
-  sem tyConstBase d =
+  sem tyConstBase d +=
   | CConstructorTag _ -> mktyall_ "a" (lam a. tyarrow_ a tyint_)
 end
 
 lang TypeOpTypeAst = TyConst + TypeOpAst
-  sem tyConstBase d =
+  sem tyConstBase d +=
   | CTypeOf _ -> mktyall_ "a" (lam a. tyarrow_ a tystr_)
 end
 
 lang TensorOpTypeAst = TyConst + TensorOpAst
-  sem tyConstBase d =
+  sem tyConstBase d +=
   | CTensorCreateUninitInt _ -> tytensorcreateuninitint_
   | CTensorCreateUninitFloat _ -> tytensorcreateuninitfloat_
   | CTensorCreateInt _ -> tytensorcreateint_
@@ -262,7 +267,7 @@ lang TensorOpTypeAst = TyConst + TensorOpAst
 end
 
 lang BootParserTypeAst = TyConst + BootParserAst
-  sem tyConstBase d =
+  sem tyConstBase d +=
   | CBootParserParseMExprString _ ->
     mktybootparsetree_ d (lam b.
       tyarrows_ [

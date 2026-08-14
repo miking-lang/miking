@@ -2,6 +2,11 @@ include "seq.mc"
 include "parser/ll1.mc"
 include "parser/breakable.mc"
 include "parser/lexer.mc"
+include "mexpr/info.mc"
+include "name.mc"
+include "basic-types.mc"
+include "option.mc"
+include "common.mc"
 lang MergedBaseAst
   syn Binder =
   syn Merged =
@@ -516,9 +521,9 @@ lang TopsMergedFileAst =
   MergedBaseAst
   type TopsMergedFileRecord =
     {info: Info, tops: [MergedTop]}
-  syn MergedFile =
+  syn MergedFile +=
   | TopsMergedFile TopsMergedFileRecord
-  sem smapAccumL_MergedFile_MergedTop f acc =
+  sem smapAccumL_MergedFile_MergedTop f acc +=
   | TopsMergedFile x ->
     match
       match
@@ -545,10 +550,10 @@ lang TopsMergedFileAst =
     in
     (acc, TopsMergedFile
         x)
-  sem get_MergedFile_info =
+  sem get_MergedFile_info +=
   | TopsMergedFile target ->
     target.info
-  sem set_MergedFile_info val =
+  sem set_MergedFile_info val +=
   | TopsMergedFile target ->
     TopsMergedFile
       { target
@@ -560,9 +565,9 @@ lang DefMergedTopAst =
   MergedBaseAst
   type DefMergedTopRecord =
     {b: Binder, info: Info}
-  syn MergedTop =
+  syn MergedTop +=
   | DefMergedTop DefMergedTopRecord
-  sem smapAccumL_MergedTop_Binder f acc =
+  sem smapAccumL_MergedTop_Binder f acc +=
   | DefMergedTop x ->
     match
       match
@@ -584,10 +589,10 @@ lang DefMergedTopAst =
     in
     (acc, DefMergedTop
         x)
-  sem get_MergedTop_info =
+  sem get_MergedTop_info +=
   | DefMergedTop target ->
     target.info
-  sem set_MergedTop_info val =
+  sem set_MergedTop_info val +=
   | DefMergedTop target ->
     DefMergedTop
       { target
@@ -599,9 +604,9 @@ lang ExprMergedTopAst =
   MergedBaseAst
   type ExprMergedTopRecord =
     {e: Merged, info: Info}
-  syn MergedTop =
+  syn MergedTop +=
   | ExprMergedTop ExprMergedTopRecord
-  sem smapAccumL_MergedTop_Merged f acc =
+  sem smapAccumL_MergedTop_Merged f acc +=
   | ExprMergedTop x ->
     match
       match
@@ -623,10 +628,10 @@ lang ExprMergedTopAst =
     in
     (acc, ExprMergedTop
         x)
-  sem get_MergedTop_info =
+  sem get_MergedTop_info +=
   | ExprMergedTop target ->
     target.info
-  sem set_MergedTop_info val =
+  sem set_MergedTop_info val +=
   | ExprMergedTop target ->
     ExprMergedTop
       { target
@@ -638,12 +643,12 @@ lang IncludeMergedTopAst =
   MergedBaseAst
   type IncludeMergedTopRecord =
     {info: Info, path: {i: Info, v: String}}
-  syn MergedTop =
+  syn MergedTop +=
   | IncludeMergedTop IncludeMergedTopRecord
-  sem get_MergedTop_info =
+  sem get_MergedTop_info +=
   | IncludeMergedTop target ->
     target.info
-  sem set_MergedTop_info val =
+  sem set_MergedTop_info val +=
   | IncludeMergedTop target ->
     IncludeMergedTop
       { target
@@ -655,9 +660,9 @@ lang TypeBinderAst =
   MergedBaseAst
   type TypeBinderRecord =
     {info: Info, ident: {i: Info, v: Name}, params: [{i: Info, v: Name}], tyIdent: Option Merged}
-  syn Binder =
+  syn Binder +=
   | TypeBinder TypeBinderRecord
-  sem smapAccumL_Binder_Merged f acc =
+  sem smapAccumL_Binder_Merged f acc +=
   | TypeBinder x ->
     match
       match
@@ -684,10 +689,10 @@ lang TypeBinderAst =
     in
     (acc, TypeBinder
         x)
-  sem get_Binder_info =
+  sem get_Binder_info +=
   | TypeBinder target ->
     target.info
-  sem set_Binder_info val =
+  sem set_Binder_info val +=
   | TypeBinder target ->
     TypeBinder
       { target
@@ -699,9 +704,9 @@ lang ConBinderAst =
   MergedBaseAst
   type ConBinderRecord =
     {info: Info, ident: {i: Info, v: Name}, tyIdent: Merged}
-  syn Binder =
+  syn Binder +=
   | ConBinder ConBinderRecord
-  sem smapAccumL_Binder_Merged f acc =
+  sem smapAccumL_Binder_Merged f acc +=
   | ConBinder x ->
     match
       match
@@ -723,10 +728,10 @@ lang ConBinderAst =
     in
     (acc, ConBinder
         x)
-  sem get_Binder_info =
+  sem get_Binder_info +=
   | ConBinder target ->
     target.info
-  sem set_Binder_info val =
+  sem set_Binder_info val +=
   | ConBinder target ->
     ConBinder
       { target
@@ -738,9 +743,9 @@ lang RecLetBinderAst =
   MergedBaseAst
   type RecLetBinderRecord =
     {info: Info, bindings: [{body: Merged, ident: {i: Info, v: Name}, tyAnnot: Option Merged}]}
-  syn Binder =
+  syn Binder +=
   | RecLetBinder RecLetBinderRecord
-  sem smapAccumL_Binder_Merged f acc =
+  sem smapAccumL_Binder_Merged f acc +=
   | RecLetBinder x ->
     match
       match
@@ -796,10 +801,10 @@ lang RecLetBinderAst =
     in
     (acc, RecLetBinder
         x)
-  sem get_Binder_info =
+  sem get_Binder_info +=
   | RecLetBinder target ->
     target.info
-  sem set_Binder_info val =
+  sem set_Binder_info val +=
   | RecLetBinder target ->
     RecLetBinder
       { target
@@ -811,9 +816,9 @@ lang LetBinderAst =
   MergedBaseAst
   type LetBinderRecord =
     {body: Merged, info: Info, ident: {i: Info, v: Name}, tyAnnot: Option Merged}
-  syn Binder =
+  syn Binder +=
   | LetBinder LetBinderRecord
-  sem smapAccumL_Binder_Merged f acc =
+  sem smapAccumL_Binder_Merged f acc +=
   | LetBinder x ->
     match
       match
@@ -853,10 +858,10 @@ lang LetBinderAst =
     in
     (acc, LetBinder
         x)
-  sem get_Binder_info =
+  sem get_Binder_info +=
   | LetBinder target ->
     target.info
-  sem set_Binder_info val =
+  sem set_Binder_info val +=
   | LetBinder target ->
     LetBinder
       { target
@@ -868,12 +873,12 @@ lang UseBinderAst =
   MergedBaseAst
   type UseBinderRecord =
     {n: {i: Info, v: Name}, info: Info}
-  syn Binder =
+  syn Binder +=
   | UseBinder UseBinderRecord
-  sem get_Binder_info =
+  sem get_Binder_info +=
   | UseBinder target ->
     target.info
-  sem set_Binder_info val =
+  sem set_Binder_info val +=
   | UseBinder target ->
     UseBinder
       { target
@@ -885,9 +890,9 @@ lang UtestBinderAst =
   MergedBaseAst
   type UtestBinderRecord =
     {info: Info, test: Merged, tusing: Option Merged, tonfail: Option Merged, expected: Merged}
-  syn Binder =
+  syn Binder +=
   | UtestBinder UtestBinderRecord
-  sem smapAccumL_Binder_Merged f acc =
+  sem smapAccumL_Binder_Merged f acc +=
   | UtestBinder x ->
     match
       match
@@ -958,10 +963,10 @@ lang UtestBinderAst =
     in
     (acc, UtestBinder
         x)
-  sem get_Binder_info =
+  sem get_Binder_info +=
   | UtestBinder target ->
     target.info
-  sem set_Binder_info val =
+  sem set_Binder_info val +=
   | UtestBinder target ->
     UtestBinder
       { target
@@ -973,9 +978,9 @@ lang ExternalBinderAst =
   MergedBaseAst
   type ExternalBinderRecord =
     {info: Info, ident: {i: Info, v: Name}, effect: Option Info, tyIdent: Merged}
-  syn Binder =
+  syn Binder +=
   | ExternalBinder ExternalBinderRecord
-  sem smapAccumL_Binder_Merged f acc =
+  sem smapAccumL_Binder_Merged f acc +=
   | ExternalBinder x ->
     match
       match
@@ -997,10 +1002,10 @@ lang ExternalBinderAst =
     in
     (acc, ExternalBinder
         x)
-  sem get_Binder_info =
+  sem get_Binder_info +=
   | ExternalBinder target ->
     target.info
-  sem set_Binder_info val =
+  sem set_Binder_info val +=
   | ExternalBinder target ->
     ExternalBinder
       { target
@@ -1012,9 +1017,9 @@ lang ProjMergedAst =
   MergedBaseAst
   type ProjMergedRecord =
     {info: Info, left: Merged, label: {i: Info, v: String}}
-  syn Merged =
+  syn Merged +=
   | ProjMerged ProjMergedRecord
-  sem smapAccumL_Merged_Merged f acc =
+  sem smapAccumL_Merged_Merged f acc +=
   | ProjMerged x ->
     match
       match
@@ -1036,10 +1041,10 @@ lang ProjMergedAst =
     in
     (acc, ProjMerged
         x)
-  sem get_Merged_info =
+  sem get_Merged_info +=
   | ProjMerged target ->
     target.info
-  sem set_Merged_info val =
+  sem set_Merged_info val +=
   | ProjMerged target ->
     ProjMerged
       { target
@@ -1051,9 +1056,9 @@ lang AppMergedAst =
   MergedBaseAst
   type AppMergedRecord =
     {info: Info, left: Merged, right: Merged}
-  syn Merged =
+  syn Merged +=
   | AppMerged AppMergedRecord
-  sem smapAccumL_Merged_Merged f acc =
+  sem smapAccumL_Merged_Merged f acc +=
   | AppMerged x ->
     match
       match
@@ -1088,10 +1093,10 @@ lang AppMergedAst =
     in
     (acc, AppMerged
         x)
-  sem get_Merged_info =
+  sem get_Merged_info +=
   | AppMerged target ->
     target.info
-  sem set_Merged_info val =
+  sem set_Merged_info val +=
   | AppMerged target ->
     AppMerged
       { target
@@ -1103,9 +1108,9 @@ lang SemiMergedAst =
   MergedBaseAst
   type SemiMergedRecord =
     {info: Info, left: Merged, right: Merged}
-  syn Merged =
+  syn Merged +=
   | SemiMerged SemiMergedRecord
-  sem smapAccumL_Merged_Merged f acc =
+  sem smapAccumL_Merged_Merged f acc +=
   | SemiMerged x ->
     match
       match
@@ -1140,10 +1145,10 @@ lang SemiMergedAst =
     in
     (acc, SemiMerged
         x)
-  sem get_Merged_info =
+  sem get_Merged_info +=
   | SemiMerged target ->
     target.info
-  sem set_Merged_info val =
+  sem set_Merged_info val +=
   | SemiMerged target ->
     SemiMerged
       { target
@@ -1155,9 +1160,9 @@ lang RecordAddMergedAst =
   MergedBaseAst
   type RecordAddMergedRecord =
     {info: Info, left: Merged, fields: [{ty: Option Merged, label: {i: Info, v: String}, value: Option Merged}]}
-  syn Merged =
+  syn Merged +=
   | RecordAddMerged RecordAddMergedRecord
-  sem smapAccumL_Merged_Merged f acc =
+  sem smapAccumL_Merged_Merged f acc +=
   | RecordAddMerged x ->
     match
       match
@@ -1231,10 +1236,10 @@ lang RecordAddMergedAst =
     in
     (acc, RecordAddMerged
         x)
-  sem get_Merged_info =
+  sem get_Merged_info +=
   | RecordAddMerged target ->
     target.info
-  sem set_Merged_info val =
+  sem set_Merged_info val +=
   | RecordAddMerged target ->
     RecordAddMerged
       { target
@@ -1246,9 +1251,9 @@ lang RecordSubMergedAst =
   MergedBaseAst
   type RecordSubMergedRecord =
     {info: Info, left: Merged, fields: [{i: Info, v: String}]}
-  syn Merged =
+  syn Merged +=
   | RecordSubMerged RecordSubMergedRecord
-  sem smapAccumL_Merged_Merged f acc =
+  sem smapAccumL_Merged_Merged f acc +=
   | RecordSubMerged x ->
     match
       match
@@ -1270,10 +1275,10 @@ lang RecordSubMergedAst =
     in
     (acc, RecordSubMerged
         x)
-  sem get_Merged_info =
+  sem get_Merged_info +=
   | RecordSubMerged target ->
     target.info
-  sem set_Merged_info val =
+  sem set_Merged_info val +=
   | RecordSubMerged target ->
     RecordSubMerged
       { target
@@ -1285,9 +1290,9 @@ lang RecordChangeMergedAst =
   MergedBaseAst
   type RecordChangeMergedRecord =
     {info: Info, left: Merged, fields: [{ty: Option Merged, label: {i: Info, v: String}, value: Option Merged}]}
-  syn Merged =
+  syn Merged +=
   | RecordChangeMerged RecordChangeMergedRecord
-  sem smapAccumL_Merged_Merged f acc =
+  sem smapAccumL_Merged_Merged f acc +=
   | RecordChangeMerged x ->
     match
       match
@@ -1361,10 +1366,10 @@ lang RecordChangeMergedAst =
     in
     (acc, RecordChangeMerged
         x)
-  sem get_Merged_info =
+  sem get_Merged_info +=
   | RecordChangeMerged target ->
     target.info
-  sem set_Merged_info val =
+  sem set_Merged_info val +=
   | RecordChangeMerged target ->
     RecordChangeMerged
       { target
@@ -1376,9 +1381,9 @@ lang BindMergedAst =
   MergedBaseAst
   type BindMergedRecord =
     {info: Info, right: Merged, binder: Binder}
-  syn Merged =
+  syn Merged +=
   | BindMerged BindMergedRecord
-  sem smapAccumL_Merged_Merged f acc =
+  sem smapAccumL_Merged_Merged f acc +=
   | BindMerged x ->
     match
       match
@@ -1400,7 +1405,7 @@ lang BindMergedAst =
     in
     (acc, BindMerged
         x)
-  sem smapAccumL_Merged_Binder f acc =
+  sem smapAccumL_Merged_Binder f acc +=
   | BindMerged x ->
     match
       match
@@ -1422,10 +1427,10 @@ lang BindMergedAst =
     in
     (acc, BindMerged
         x)
-  sem get_Merged_info =
+  sem get_Merged_info +=
   | BindMerged target ->
     target.info
-  sem set_Merged_info val =
+  sem set_Merged_info val +=
   | BindMerged target ->
     BindMerged
       { target
@@ -1437,9 +1442,9 @@ lang LamMergedAst =
   MergedBaseAst
   type LamMergedRecord =
     {info: Info, ident: Option {i: Info, v: Name}, right: Merged, tyAnnot: Option Merged}
-  syn Merged =
+  syn Merged +=
   | LamMerged LamMergedRecord
-  sem smapAccumL_Merged_Merged f acc =
+  sem smapAccumL_Merged_Merged f acc +=
   | LamMerged x ->
     match
       match
@@ -1479,10 +1484,10 @@ lang LamMergedAst =
     in
     (acc, LamMerged
         x)
-  sem get_Merged_info =
+  sem get_Merged_info +=
   | LamMerged target ->
     target.info
-  sem set_Merged_info val =
+  sem set_Merged_info val +=
   | LamMerged target ->
     LamMerged
       { target
@@ -1494,9 +1499,9 @@ lang MatchMergedAst =
   MergedBaseAst
   type MatchMergedRecord =
     {els: Merged, pat: Merged, thn: Merged, info: Info, target: Merged}
-  syn Merged =
+  syn Merged +=
   | MatchMerged MatchMergedRecord
-  sem smapAccumL_Merged_Merged f acc =
+  sem smapAccumL_Merged_Merged f acc +=
   | MatchMerged x ->
     match
       match
@@ -1557,10 +1562,10 @@ lang MatchMergedAst =
     in
     (acc, MatchMerged
         x)
-  sem get_Merged_info =
+  sem get_Merged_info +=
   | MatchMerged target ->
     target.info
-  sem set_Merged_info val =
+  sem set_Merged_info val +=
   | MatchMerged target ->
     MatchMerged
       { target
@@ -1572,9 +1577,9 @@ lang IfMergedAst =
   MergedBaseAst
   type IfMergedRecord =
     {els: Merged, thn: Merged, info: Info, target: Merged}
-  syn Merged =
+  syn Merged +=
   | IfMerged IfMergedRecord
-  sem smapAccumL_Merged_Merged f acc =
+  sem smapAccumL_Merged_Merged f acc +=
   | IfMerged x ->
     match
       match
@@ -1622,10 +1627,10 @@ lang IfMergedAst =
     in
     (acc, IfMerged
         x)
-  sem get_Merged_info =
+  sem get_Merged_info +=
   | IfMerged target ->
     target.info
-  sem set_Merged_info val =
+  sem set_Merged_info val +=
   | IfMerged target ->
     IfMerged
       { target
@@ -1637,9 +1642,9 @@ lang SwitchMergedAst =
   MergedBaseAst
   type SwitchMergedRecord =
     {fail: Info, info: Info, cases: [{pat: Merged, thn: Merged, keyword: Info}], target: Merged}
-  syn Merged =
+  syn Merged +=
   | SwitchMerged SwitchMergedRecord
-  sem smapAccumL_Merged_Merged f acc =
+  sem smapAccumL_Merged_Merged f acc +=
   | SwitchMerged x ->
     match
       match
@@ -1703,10 +1708,10 @@ lang SwitchMergedAst =
     in
     (acc, SwitchMerged
         x)
-  sem get_Merged_info =
+  sem get_Merged_info +=
   | SwitchMerged target ->
     target.info
-  sem set_Merged_info val =
+  sem set_Merged_info val +=
   | SwitchMerged target ->
     SwitchMerged
       { target
@@ -1718,12 +1723,12 @@ lang ConMergedAst =
   MergedBaseAst
   type ConMergedRecord =
     {info: Info, ident: {i: Info, v: Name}}
-  syn Merged =
+  syn Merged +=
   | ConMerged ConMergedRecord
-  sem get_Merged_info =
+  sem get_Merged_info +=
   | ConMerged target ->
     target.info
-  sem set_Merged_info val =
+  sem set_Merged_info val +=
   | ConMerged target ->
     ConMerged
       { target
@@ -1735,12 +1740,12 @@ lang VarMergedAst =
   MergedBaseAst
   type VarMergedRecord =
     {info: Info, ident: {i: Info, v: Name}}
-  syn Merged =
+  syn Merged +=
   | VarMerged VarMergedRecord
-  sem get_Merged_info =
+  sem get_Merged_info +=
   | VarMerged target ->
     target.info
-  sem set_Merged_info val =
+  sem set_Merged_info val +=
   | VarMerged target ->
     VarMerged
       { target
@@ -1752,12 +1757,12 @@ lang CharMergedAst =
   MergedBaseAst
   type CharMergedRecord =
     {val: {i: Info, v: Char}, info: Info}
-  syn Merged =
+  syn Merged +=
   | CharMerged CharMergedRecord
-  sem get_Merged_info =
+  sem get_Merged_info +=
   | CharMerged target ->
     target.info
-  sem set_Merged_info val =
+  sem set_Merged_info val +=
   | CharMerged target ->
     CharMerged
       { target
@@ -1769,12 +1774,12 @@ lang IntMergedAst =
   MergedBaseAst
   type IntMergedRecord =
     {val: {i: Info, v: Int}, info: Info}
-  syn Merged =
+  syn Merged +=
   | IntMerged IntMergedRecord
-  sem get_Merged_info =
+  sem get_Merged_info +=
   | IntMerged target ->
     target.info
-  sem set_Merged_info val =
+  sem set_Merged_info val +=
   | IntMerged target ->
     IntMerged
       { target
@@ -1786,12 +1791,12 @@ lang FloatMergedAst =
   MergedBaseAst
   type FloatMergedRecord =
     {val: {i: Info, v: Float}, info: Info}
-  syn Merged =
+  syn Merged +=
   | FloatMerged FloatMergedRecord
-  sem get_Merged_info =
+  sem get_Merged_info +=
   | FloatMerged target ->
     target.info
-  sem set_Merged_info val =
+  sem set_Merged_info val +=
   | FloatMerged target ->
     FloatMerged
       { target
@@ -1803,12 +1808,12 @@ lang TrueMergedAst =
   MergedBaseAst
   type TrueMergedRecord =
     {info: Info}
-  syn Merged =
+  syn Merged +=
   | TrueMerged TrueMergedRecord
-  sem get_Merged_info =
+  sem get_Merged_info +=
   | TrueMerged target ->
     target.info
-  sem set_Merged_info val =
+  sem set_Merged_info val +=
   | TrueMerged target ->
     TrueMerged
       { target
@@ -1820,12 +1825,12 @@ lang FalseMergedAst =
   MergedBaseAst
   type FalseMergedRecord =
     {info: Info}
-  syn Merged =
+  syn Merged +=
   | FalseMerged FalseMergedRecord
-  sem get_Merged_info =
+  sem get_Merged_info +=
   | FalseMerged target ->
     target.info
-  sem set_Merged_info val =
+  sem set_Merged_info val +=
   | FalseMerged target ->
     FalseMerged
       { target
@@ -1837,12 +1842,12 @@ lang NeverMergedAst =
   MergedBaseAst
   type NeverMergedRecord =
     {info: Info}
-  syn Merged =
+  syn Merged +=
   | NeverMerged NeverMergedRecord
-  sem get_Merged_info =
+  sem get_Merged_info +=
   | NeverMerged target ->
     target.info
-  sem set_Merged_info val =
+  sem set_Merged_info val +=
   | NeverMerged target ->
     NeverMerged
       { target
@@ -1854,12 +1859,12 @@ lang StringMergedAst =
   MergedBaseAst
   type StringMergedRecord =
     {val: {i: Info, v: String}, info: Info}
-  syn Merged =
+  syn Merged +=
   | StringMerged StringMergedRecord
-  sem get_Merged_info =
+  sem get_Merged_info +=
   | StringMerged target ->
     target.info
-  sem set_Merged_info val =
+  sem set_Merged_info val +=
   | StringMerged target ->
     StringMerged
       { target
@@ -1871,9 +1876,9 @@ lang SequenceMergedAst =
   MergedBaseAst
   type SequenceMergedRecord =
     {tms: [Merged], info: Info}
-  syn Merged =
+  syn Merged +=
   | SequenceMerged SequenceMergedRecord
-  sem smapAccumL_Merged_Merged f acc =
+  sem smapAccumL_Merged_Merged f acc +=
   | SequenceMerged x ->
     match
       match
@@ -1900,10 +1905,10 @@ lang SequenceMergedAst =
     in
     (acc, SequenceMerged
         x)
-  sem get_Merged_info =
+  sem get_Merged_info +=
   | SequenceMerged target ->
     target.info
-  sem set_Merged_info val =
+  sem set_Merged_info val +=
   | SequenceMerged target ->
     SequenceMerged
       { target
@@ -1915,9 +1920,9 @@ lang RecordMergedAst =
   MergedBaseAst
   type RecordMergedRecord =
     {info: Info, fields: [{e: Option Merged, ty: Option Merged, label: {i: Info, v: String}}]}
-  syn Merged =
+  syn Merged +=
   | RecordMerged RecordMergedRecord
-  sem smapAccumL_Merged_Merged f acc =
+  sem smapAccumL_Merged_Merged f acc +=
   | RecordMerged x ->
     match
       match
@@ -1978,10 +1983,10 @@ lang RecordMergedAst =
     in
     (acc, RecordMerged
         x)
-  sem get_Merged_info =
+  sem get_Merged_info +=
   | RecordMerged target ->
     target.info
-  sem set_Merged_info val =
+  sem set_Merged_info val +=
   | RecordMerged target ->
     RecordMerged
       { target
@@ -1993,9 +1998,9 @@ lang NotMergedAst =
   MergedBaseAst
   type NotMergedRecord =
     {info: Info, right: Merged}
-  syn Merged =
+  syn Merged +=
   | NotMerged NotMergedRecord
-  sem smapAccumL_Merged_Merged f acc =
+  sem smapAccumL_Merged_Merged f acc +=
   | NotMerged x ->
     match
       match
@@ -2017,10 +2022,10 @@ lang NotMergedAst =
     in
     (acc, NotMerged
         x)
-  sem get_Merged_info =
+  sem get_Merged_info +=
   | NotMerged target ->
     target.info
-  sem set_Merged_info val =
+  sem set_Merged_info val +=
   | NotMerged target ->
     NotMerged
       { target
@@ -2032,9 +2037,9 @@ lang OrMergedAst =
   MergedBaseAst
   type OrMergedRecord =
     {info: Info, left: Merged, right: Merged}
-  syn Merged =
+  syn Merged +=
   | OrMerged OrMergedRecord
-  sem smapAccumL_Merged_Merged f acc =
+  sem smapAccumL_Merged_Merged f acc +=
   | OrMerged x ->
     match
       match
@@ -2069,10 +2074,10 @@ lang OrMergedAst =
     in
     (acc, OrMerged
         x)
-  sem get_Merged_info =
+  sem get_Merged_info +=
   | OrMerged target ->
     target.info
-  sem set_Merged_info val =
+  sem set_Merged_info val +=
   | OrMerged target ->
     OrMerged
       { target
@@ -2084,9 +2089,9 @@ lang AndMergedAst =
   MergedBaseAst
   type AndMergedRecord =
     {info: Info, left: Merged, right: Merged}
-  syn Merged =
+  syn Merged +=
   | AndMerged AndMergedRecord
-  sem smapAccumL_Merged_Merged f acc =
+  sem smapAccumL_Merged_Merged f acc +=
   | AndMerged x ->
     match
       match
@@ -2121,10 +2126,10 @@ lang AndMergedAst =
     in
     (acc, AndMerged
         x)
-  sem get_Merged_info =
+  sem get_Merged_info +=
   | AndMerged target ->
     target.info
-  sem set_Merged_info val =
+  sem set_Merged_info val +=
   | AndMerged target ->
     AndMerged
       { target
@@ -2136,9 +2141,9 @@ lang ConcatMergedAst =
   MergedBaseAst
   type ConcatMergedRecord =
     {info: Info, left: Merged, right: Merged}
-  syn Merged =
+  syn Merged +=
   | ConcatMerged ConcatMergedRecord
-  sem smapAccumL_Merged_Merged f acc =
+  sem smapAccumL_Merged_Merged f acc +=
   | ConcatMerged x ->
     match
       match
@@ -2173,10 +2178,10 @@ lang ConcatMergedAst =
     in
     (acc, ConcatMerged
         x)
-  sem get_Merged_info =
+  sem get_Merged_info +=
   | ConcatMerged target ->
     target.info
-  sem set_Merged_info val =
+  sem set_Merged_info val +=
   | ConcatMerged target ->
     ConcatMerged
       { target
@@ -2188,12 +2193,12 @@ lang WildMergedAst =
   MergedBaseAst
   type WildMergedRecord =
     {info: Info}
-  syn Merged =
+  syn Merged +=
   | WildMerged WildMergedRecord
-  sem get_Merged_info =
+  sem get_Merged_info +=
   | WildMerged target ->
     target.info
-  sem set_Merged_info val =
+  sem set_Merged_info val +=
   | WildMerged target ->
     WildMerged
       { target
@@ -2205,9 +2210,9 @@ lang ArrowMergedAst =
   MergedBaseAst
   type ArrowMergedRecord =
     {info: Info, left: Merged, right: Merged}
-  syn Merged =
+  syn Merged +=
   | ArrowMerged ArrowMergedRecord
-  sem smapAccumL_Merged_Merged f acc =
+  sem smapAccumL_Merged_Merged f acc +=
   | ArrowMerged x ->
     match
       match
@@ -2242,10 +2247,10 @@ lang ArrowMergedAst =
     in
     (acc, ArrowMerged
         x)
-  sem get_Merged_info =
+  sem get_Merged_info +=
   | ArrowMerged target ->
     target.info
-  sem set_Merged_info val =
+  sem set_Merged_info val +=
   | ArrowMerged target ->
     ArrowMerged
       { target
@@ -2257,9 +2262,9 @@ lang AllMergedAst =
   MergedBaseAst
   type AllMergedRecord =
     {rec: Option Info, info: Info, ident: {i: Info, v: Name}, right: Merged}
-  syn Merged =
+  syn Merged +=
   | AllMerged AllMergedRecord
-  sem smapAccumL_Merged_Merged f acc =
+  sem smapAccumL_Merged_Merged f acc +=
   | AllMerged x ->
     match
       match
@@ -2281,10 +2286,10 @@ lang AllMergedAst =
     in
     (acc, AllMerged
         x)
-  sem get_Merged_info =
+  sem get_Merged_info +=
   | AllMerged target ->
     target.info
-  sem set_Merged_info val =
+  sem set_Merged_info val +=
   | AllMerged target ->
     AllMerged
       { target
@@ -2296,12 +2301,12 @@ lang BadMergedFileAst =
   MergedBaseAst
   type BadMergedFileRecord =
     {info: Info}
-  syn MergedFile =
+  syn MergedFile +=
   | BadMergedFile BadMergedFileRecord
-  sem get_MergedFile_info =
+  sem get_MergedFile_info +=
   | BadMergedFile target ->
     target.info
-  sem set_MergedFile_info val =
+  sem set_MergedFile_info val +=
   | BadMergedFile target ->
     BadMergedFile
       { target
@@ -2313,12 +2318,12 @@ lang BadMergedTopAst =
   MergedBaseAst
   type BadMergedTopRecord =
     {info: Info}
-  syn MergedTop =
+  syn MergedTop +=
   | BadMergedTop BadMergedTopRecord
-  sem get_MergedTop_info =
+  sem get_MergedTop_info +=
   | BadMergedTop target ->
     target.info
-  sem set_MergedTop_info val =
+  sem set_MergedTop_info val +=
   | BadMergedTop target ->
     BadMergedTop
       { target
@@ -2330,12 +2335,12 @@ lang BadMergedAst =
   MergedBaseAst
   type BadMergedRecord =
     {info: Info}
-  syn Merged =
+  syn Merged +=
   | BadMerged BadMergedRecord
-  sem get_Merged_info =
+  sem get_Merged_info +=
   | BadMerged target ->
     target.info
-  sem set_Merged_info val =
+  sem set_Merged_info val +=
   | BadMerged target ->
     BadMerged
       { target
@@ -2347,12 +2352,12 @@ lang BadBinderAst =
   MergedBaseAst
   type BadBinderRecord =
     {info: Info}
-  syn Binder =
+  syn Binder +=
   | BadBinder BadBinderRecord
-  sem get_Binder_info =
+  sem get_Binder_info +=
   | BadBinder target ->
     target.info
-  sem set_Binder_info val =
+  sem set_Binder_info val +=
   | BadBinder target ->
     BadBinder
       { target
@@ -2537,15 +2542,15 @@ end
 lang TopsMergedFileOp =
   MergedFileOpBase
   + TopsMergedFileAst
-  syn MergedFileOp lstyle rstyle =
+  syn MergedFileOp lstyle rstyle +=
   | TopsMergedFileOp {tops: [MergedTop], __br_info: Info, __br_terms: [Info]}
-  sem getInfo_MergedFileOp =
+  sem getInfo_MergedFileOp +=
   | TopsMergedFileOp x ->
     x.__br_info
-  sem getTerms_MergedFileOp =
+  sem getTerms_MergedFileOp +=
   | TopsMergedFileOp x ->
     x.__br_terms
-  sem unsplit_MergedFileOp =
+  sem unsplit_MergedFileOp +=
   | AtomP {self = TopsMergedFileOp x} ->
     (x.__br_info, TopsMergedFile
       { tops =
@@ -2556,15 +2561,15 @@ end
 lang DefMergedTopOp =
   MergedTopOpBase
   + DefMergedTopAst
-  syn MergedTopOp lstyle rstyle =
+  syn MergedTopOp lstyle rstyle +=
   | DefMergedTopOp {b: [Binder], __br_info: Info, __br_terms: [Info]}
-  sem getInfo_MergedTopOp =
+  sem getInfo_MergedTopOp +=
   | DefMergedTopOp x ->
     x.__br_info
-  sem getTerms_MergedTopOp =
+  sem getTerms_MergedTopOp +=
   | DefMergedTopOp x ->
     x.__br_terms
-  sem unsplit_MergedTopOp =
+  sem unsplit_MergedTopOp +=
   | AtomP {self = DefMergedTopOp x} ->
     (x.__br_info, DefMergedTop
       { info =
@@ -2580,15 +2585,15 @@ end
 lang ExprMergedTopOp =
   MergedTopOpBase
   + ExprMergedTopAst
-  syn MergedTopOp lstyle rstyle =
+  syn MergedTopOp lstyle rstyle +=
   | ExprMergedTopOp {e: [Merged], __br_info: Info, __br_terms: [Info]}
-  sem getInfo_MergedTopOp =
+  sem getInfo_MergedTopOp +=
   | ExprMergedTopOp x ->
     x.__br_info
-  sem getTerms_MergedTopOp =
+  sem getTerms_MergedTopOp +=
   | ExprMergedTopOp x ->
     x.__br_terms
-  sem unsplit_MergedTopOp =
+  sem unsplit_MergedTopOp +=
   | AtomP {self = ExprMergedTopOp x} ->
     (x.__br_info, ExprMergedTop
       { info =
@@ -2604,15 +2609,15 @@ end
 lang IncludeMergedTopOp =
   MergedTopOpBase
   + IncludeMergedTopAst
-  syn MergedTopOp lstyle rstyle =
+  syn MergedTopOp lstyle rstyle +=
   | IncludeMergedTopOp {path: [{i: Info, v: String}], __br_info: Info, __br_terms: [Info]}
-  sem getInfo_MergedTopOp =
+  sem getInfo_MergedTopOp +=
   | IncludeMergedTopOp x ->
     x.__br_info
-  sem getTerms_MergedTopOp =
+  sem getTerms_MergedTopOp +=
   | IncludeMergedTopOp x ->
     x.__br_terms
-  sem unsplit_MergedTopOp =
+  sem unsplit_MergedTopOp +=
   | AtomP {self = IncludeMergedTopOp x} ->
     (x.__br_info, IncludeMergedTop
       { info =
@@ -2628,15 +2633,15 @@ end
 lang TypeBinderOp =
   BinderOpBase
   + TypeBinderAst
-  syn BinderOp lstyle rstyle =
+  syn BinderOp lstyle rstyle +=
   | TypeBinderOp {ident: [{i: Info, v: Name}], params: [{i: Info, v: Name}], tyIdent: [Merged], __br_info: Info, __br_terms: [Info]}
-  sem getInfo_BinderOp =
+  sem getInfo_BinderOp +=
   | TypeBinderOp x ->
     x.__br_info
-  sem getTerms_BinderOp =
+  sem getTerms_BinderOp +=
   | TypeBinderOp x ->
     x.__br_terms
-  sem unsplit_BinderOp =
+  sem unsplit_BinderOp +=
   | AtomP {self = TypeBinderOp x} ->
     (x.__br_info, TypeBinder
       { info =
@@ -2665,15 +2670,15 @@ end
 lang ConBinderOp =
   BinderOpBase
   + ConBinderAst
-  syn BinderOp lstyle rstyle =
+  syn BinderOp lstyle rstyle +=
   | ConBinderOp {ident: [{i: Info, v: Name}], tyIdent: [Merged], __br_info: Info, __br_terms: [Info]}
-  sem getInfo_BinderOp =
+  sem getInfo_BinderOp +=
   | ConBinderOp x ->
     x.__br_info
-  sem getTerms_BinderOp =
+  sem getTerms_BinderOp +=
   | ConBinderOp x ->
     x.__br_terms
-  sem unsplit_BinderOp =
+  sem unsplit_BinderOp +=
   | AtomP {self = ConBinderOp x} ->
     (x.__br_info, ConBinder
       { info =
@@ -2696,15 +2701,15 @@ end
 lang RecLetBinderOp =
   BinderOpBase
   + RecLetBinderAst
-  syn BinderOp lstyle rstyle =
+  syn BinderOp lstyle rstyle +=
   | RecLetBinderOp {bindings: [{body: Merged, ident: {i: Info, v: Name}, tyAnnot: Option Merged}], __br_info: Info, __br_terms: [Info]}
-  sem getInfo_BinderOp =
+  sem getInfo_BinderOp +=
   | RecLetBinderOp x ->
     x.__br_info
-  sem getTerms_BinderOp =
+  sem getTerms_BinderOp +=
   | RecLetBinderOp x ->
     x.__br_terms
-  sem unsplit_BinderOp =
+  sem unsplit_BinderOp +=
   | AtomP {self = RecLetBinderOp x} ->
     (x.__br_info, RecLetBinder
       { info =
@@ -2715,15 +2720,15 @@ end
 lang LetBinderOp =
   BinderOpBase
   + LetBinderAst
-  syn BinderOp lstyle rstyle =
+  syn BinderOp lstyle rstyle +=
   | LetBinderOp {body: [Merged], ident: [{i: Info, v: Name}], tyAnnot: [Merged], __br_info: Info, __br_terms: [Info]}
-  sem getInfo_BinderOp =
+  sem getInfo_BinderOp +=
   | LetBinderOp x ->
     x.__br_info
-  sem getTerms_BinderOp =
+  sem getTerms_BinderOp +=
   | LetBinderOp x ->
     x.__br_terms
-  sem unsplit_BinderOp =
+  sem unsplit_BinderOp +=
   | AtomP {self = LetBinderOp x} ->
     (x.__br_info, LetBinder
       { info =
@@ -2757,15 +2762,15 @@ end
 lang UseBinderOp =
   BinderOpBase
   + UseBinderAst
-  syn BinderOp lstyle rstyle =
+  syn BinderOp lstyle rstyle +=
   | UseBinderOp {n: [{i: Info, v: Name}], __br_info: Info, __br_terms: [Info]}
-  sem getInfo_BinderOp =
+  sem getInfo_BinderOp +=
   | UseBinderOp x ->
     x.__br_info
-  sem getTerms_BinderOp =
+  sem getTerms_BinderOp +=
   | UseBinderOp x ->
     x.__br_terms
-  sem unsplit_BinderOp =
+  sem unsplit_BinderOp +=
   | AtomP {self = UseBinderOp x} ->
     (x.__br_info, UseBinder
       { info =
@@ -2781,15 +2786,15 @@ end
 lang UtestBinderOp =
   BinderOpBase
   + UtestBinderAst
-  syn BinderOp lstyle rstyle =
+  syn BinderOp lstyle rstyle +=
   | UtestBinderOp {test: [Merged], tusing: [Merged], tonfail: [Merged], expected: [Merged], __br_info: Info, __br_terms: [Info]}
-  sem getInfo_BinderOp =
+  sem getInfo_BinderOp +=
   | UtestBinderOp x ->
     x.__br_info
-  sem getTerms_BinderOp =
+  sem getTerms_BinderOp +=
   | UtestBinderOp x ->
     x.__br_terms
-  sem unsplit_BinderOp =
+  sem unsplit_BinderOp +=
   | AtomP {self = UtestBinderOp x} ->
     (x.__br_info, UtestBinder
       { info =
@@ -2834,15 +2839,15 @@ end
 lang ExternalBinderOp =
   BinderOpBase
   + ExternalBinderAst
-  syn BinderOp lstyle rstyle =
+  syn BinderOp lstyle rstyle +=
   | ExternalBinderOp {ident: [{i: Info, v: Name}], effect: [Info], tyIdent: [Merged], __br_info: Info, __br_terms: [Info]}
-  sem getInfo_BinderOp =
+  sem getInfo_BinderOp +=
   | ExternalBinderOp x ->
     x.__br_info
-  sem getTerms_BinderOp =
+  sem getTerms_BinderOp +=
   | ExternalBinderOp x ->
     x.__br_terms
-  sem unsplit_BinderOp =
+  sem unsplit_BinderOp +=
   | AtomP {self = ExternalBinderOp x} ->
     (x.__br_info, ExternalBinder
       { info =
@@ -2876,15 +2881,15 @@ end
 lang ProjMergedOp =
   MergedOpBase
   + ProjMergedAst
-  syn MergedOp lstyle rstyle =
+  syn MergedOp lstyle rstyle +=
   | ProjMergedOp {label: [{i: Info, v: String}], __br_info: Info, __br_terms: [Info]}
-  sem getInfo_MergedOp =
+  sem getInfo_MergedOp +=
   | ProjMergedOp x ->
     x.__br_info
-  sem getTerms_MergedOp =
+  sem getTerms_MergedOp +=
   | ProjMergedOp x ->
     x.__br_terms
-  sem unsplit_MergedOp =
+  sem unsplit_MergedOp +=
   | PostfixP {self = ProjMergedOp x, leftChildAlts = [ l ] ++ _} ->
     match
       unsplit_MergedOp
@@ -2918,19 +2923,19 @@ end
 lang AppMergedOp =
   MergedOpBase
   + AppMergedAst
-  sem groupingsAllowed_MergedOp =
+  sem groupingsAllowed_MergedOp +=
   | (AppMergedOp _, AppMergedOp _) ->
     GLeft
       {}
-  syn MergedOp lstyle rstyle =
+  syn MergedOp lstyle rstyle +=
   | AppMergedOp {__br_info: Info, __br_terms: [Info]}
-  sem getInfo_MergedOp =
+  sem getInfo_MergedOp +=
   | AppMergedOp x ->
     x.__br_info
-  sem getTerms_MergedOp =
+  sem getTerms_MergedOp +=
   | AppMergedOp x ->
     x.__br_terms
-  sem unsplit_MergedOp =
+  sem unsplit_MergedOp +=
   | InfixP {self = AppMergedOp x, leftChildAlts = [ l ] ++ _, rightChildAlts = [ r ] ++ _} ->
     match
       (unsplit_MergedOp
@@ -2967,19 +2972,19 @@ end
 lang SemiMergedOp =
   MergedOpBase
   + SemiMergedAst
-  sem groupingsAllowed_MergedOp =
+  sem groupingsAllowed_MergedOp +=
   | (SemiMergedOp _, SemiMergedOp _) ->
     GLeft
       {}
-  syn MergedOp lstyle rstyle =
+  syn MergedOp lstyle rstyle +=
   | SemiMergedOp {__br_info: Info, __br_terms: [Info]}
-  sem getInfo_MergedOp =
+  sem getInfo_MergedOp +=
   | SemiMergedOp x ->
     x.__br_info
-  sem getTerms_MergedOp =
+  sem getTerms_MergedOp +=
   | SemiMergedOp x ->
     x.__br_terms
-  sem unsplit_MergedOp =
+  sem unsplit_MergedOp +=
   | InfixP {self = SemiMergedOp x, leftChildAlts = [ l ] ++ _, rightChildAlts = [ r ] ++ _} ->
     match
       (unsplit_MergedOp
@@ -3016,15 +3021,15 @@ end
 lang RecordAddMergedOp =
   MergedOpBase
   + RecordAddMergedAst
-  syn MergedOp lstyle rstyle =
+  syn MergedOp lstyle rstyle +=
   | RecordAddMergedOp {fields: [{ty: Option Merged, label: {i: Info, v: String}, value: Option Merged}], __br_info: Info, __br_terms: [Info]}
-  sem getInfo_MergedOp =
+  sem getInfo_MergedOp +=
   | RecordAddMergedOp x ->
     x.__br_info
-  sem getTerms_MergedOp =
+  sem getTerms_MergedOp +=
   | RecordAddMergedOp x ->
     x.__br_terms
-  sem unsplit_MergedOp =
+  sem unsplit_MergedOp +=
   | PostfixP {self = RecordAddMergedOp x, leftChildAlts = [ l ] ++ _} ->
     match
       unsplit_MergedOp
@@ -3053,15 +3058,15 @@ end
 lang RecordSubMergedOp =
   MergedOpBase
   + RecordSubMergedAst
-  syn MergedOp lstyle rstyle =
+  syn MergedOp lstyle rstyle +=
   | RecordSubMergedOp {fields: [{i: Info, v: String}], __br_info: Info, __br_terms: [Info]}
-  sem getInfo_MergedOp =
+  sem getInfo_MergedOp +=
   | RecordSubMergedOp x ->
     x.__br_info
-  sem getTerms_MergedOp =
+  sem getTerms_MergedOp +=
   | RecordSubMergedOp x ->
     x.__br_terms
-  sem unsplit_MergedOp =
+  sem unsplit_MergedOp +=
   | PostfixP {self = RecordSubMergedOp x, leftChildAlts = [ l ] ++ _} ->
     match
       unsplit_MergedOp
@@ -3090,15 +3095,15 @@ end
 lang RecordChangeMergedOp =
   MergedOpBase
   + RecordChangeMergedAst
-  syn MergedOp lstyle rstyle =
+  syn MergedOp lstyle rstyle +=
   | RecordChangeMergedOp {fields: [{ty: Option Merged, label: {i: Info, v: String}, value: Option Merged}], __br_info: Info, __br_terms: [Info]}
-  sem getInfo_MergedOp =
+  sem getInfo_MergedOp +=
   | RecordChangeMergedOp x ->
     x.__br_info
-  sem getTerms_MergedOp =
+  sem getTerms_MergedOp +=
   | RecordChangeMergedOp x ->
     x.__br_terms
-  sem unsplit_MergedOp =
+  sem unsplit_MergedOp +=
   | PostfixP {self = RecordChangeMergedOp x, leftChildAlts = [ l ] ++ _} ->
     match
       unsplit_MergedOp
@@ -3127,15 +3132,15 @@ end
 lang BindMergedOp =
   MergedOpBase
   + BindMergedAst
-  syn MergedOp lstyle rstyle =
+  syn MergedOp lstyle rstyle +=
   | BindMergedOp {binder: [Binder], __br_info: Info, __br_terms: [Info]}
-  sem getInfo_MergedOp =
+  sem getInfo_MergedOp +=
   | BindMergedOp x ->
     x.__br_info
-  sem getTerms_MergedOp =
+  sem getTerms_MergedOp +=
   | BindMergedOp x ->
     x.__br_terms
-  sem unsplit_MergedOp =
+  sem unsplit_MergedOp +=
   | PrefixP {self = BindMergedOp x, rightChildAlts = [ r ] ++ _} ->
     match
       unsplit_MergedOp
@@ -3169,15 +3174,15 @@ end
 lang LamMergedOp =
   MergedOpBase
   + LamMergedAst
-  syn MergedOp lstyle rstyle =
+  syn MergedOp lstyle rstyle +=
   | LamMergedOp {ident: [{i: Info, v: Name}], tyAnnot: [Merged], __br_info: Info, __br_terms: [Info]}
-  sem getInfo_MergedOp =
+  sem getInfo_MergedOp +=
   | LamMergedOp x ->
     x.__br_info
-  sem getTerms_MergedOp =
+  sem getTerms_MergedOp +=
   | LamMergedOp x ->
     x.__br_terms
-  sem unsplit_MergedOp =
+  sem unsplit_MergedOp +=
   | PrefixP {self = LamMergedOp x, rightChildAlts = [ r ] ++ _} ->
     match
       unsplit_MergedOp
@@ -3226,15 +3231,15 @@ end
 lang MatchMergedOp =
   MergedOpBase
   + MatchMergedAst
-  syn MergedOp lstyle rstyle =
+  syn MergedOp lstyle rstyle +=
   | MatchMergedOp {pat: [Merged], thn: [Merged], target: [Merged], __br_info: Info, __br_terms: [Info]}
-  sem getInfo_MergedOp =
+  sem getInfo_MergedOp +=
   | MatchMergedOp x ->
     x.__br_info
-  sem getTerms_MergedOp =
+  sem getTerms_MergedOp +=
   | MatchMergedOp x ->
     x.__br_terms
-  sem unsplit_MergedOp =
+  sem unsplit_MergedOp +=
   | PrefixP {self = MatchMergedOp x, rightChildAlts = [ r ] ++ _} ->
     match
       unsplit_MergedOp
@@ -3282,15 +3287,15 @@ end
 lang IfMergedOp =
   MergedOpBase
   + IfMergedAst
-  syn MergedOp lstyle rstyle =
+  syn MergedOp lstyle rstyle +=
   | IfMergedOp {thn: [Merged], target: [Merged], __br_info: Info, __br_terms: [Info]}
-  sem getInfo_MergedOp =
+  sem getInfo_MergedOp +=
   | IfMergedOp x ->
     x.__br_info
-  sem getTerms_MergedOp =
+  sem getTerms_MergedOp +=
   | IfMergedOp x ->
     x.__br_terms
-  sem unsplit_MergedOp =
+  sem unsplit_MergedOp +=
   | PrefixP {self = IfMergedOp x, rightChildAlts = [ r ] ++ _} ->
     match
       unsplit_MergedOp
@@ -3331,15 +3336,15 @@ end
 lang SwitchMergedOp =
   MergedOpBase
   + SwitchMergedAst
-  syn MergedOp lstyle rstyle =
+  syn MergedOp lstyle rstyle +=
   | SwitchMergedOp {fail: [Info], cases: [{pat: Merged, thn: Merged, keyword: Info}], target: [Merged], __br_info: Info, __br_terms: [Info]}
-  sem getInfo_MergedOp =
+  sem getInfo_MergedOp +=
   | SwitchMergedOp x ->
     x.__br_info
-  sem getTerms_MergedOp =
+  sem getTerms_MergedOp +=
   | SwitchMergedOp x ->
     x.__br_terms
-  sem unsplit_MergedOp =
+  sem unsplit_MergedOp +=
   | AtomP {self = SwitchMergedOp x} ->
     (x.__br_info, SwitchMerged
       { info =
@@ -3364,15 +3369,15 @@ end
 lang ConMergedOp =
   MergedOpBase
   + ConMergedAst
-  syn MergedOp lstyle rstyle =
+  syn MergedOp lstyle rstyle +=
   | ConMergedOp {ident: [{i: Info, v: Name}], __br_info: Info, __br_terms: [Info]}
-  sem getInfo_MergedOp =
+  sem getInfo_MergedOp +=
   | ConMergedOp x ->
     x.__br_info
-  sem getTerms_MergedOp =
+  sem getTerms_MergedOp +=
   | ConMergedOp x ->
     x.__br_terms
-  sem unsplit_MergedOp =
+  sem unsplit_MergedOp +=
   | AtomP {self = ConMergedOp x} ->
     (x.__br_info, ConMerged
       { info =
@@ -3388,15 +3393,15 @@ end
 lang VarMergedOp =
   MergedOpBase
   + VarMergedAst
-  syn MergedOp lstyle rstyle =
+  syn MergedOp lstyle rstyle +=
   | VarMergedOp {ident: [{i: Info, v: Name}], __br_info: Info, __br_terms: [Info]}
-  sem getInfo_MergedOp =
+  sem getInfo_MergedOp +=
   | VarMergedOp x ->
     x.__br_info
-  sem getTerms_MergedOp =
+  sem getTerms_MergedOp +=
   | VarMergedOp x ->
     x.__br_terms
-  sem unsplit_MergedOp =
+  sem unsplit_MergedOp +=
   | AtomP {self = VarMergedOp x} ->
     (x.__br_info, VarMerged
       { info =
@@ -3412,15 +3417,15 @@ end
 lang CharMergedOp =
   MergedOpBase
   + CharMergedAst
-  syn MergedOp lstyle rstyle =
+  syn MergedOp lstyle rstyle +=
   | CharMergedOp {val: [{i: Info, v: Char}], __br_info: Info, __br_terms: [Info]}
-  sem getInfo_MergedOp =
+  sem getInfo_MergedOp +=
   | CharMergedOp x ->
     x.__br_info
-  sem getTerms_MergedOp =
+  sem getTerms_MergedOp +=
   | CharMergedOp x ->
     x.__br_terms
-  sem unsplit_MergedOp =
+  sem unsplit_MergedOp +=
   | AtomP {self = CharMergedOp x} ->
     (x.__br_info, CharMerged
       { info =
@@ -3436,15 +3441,15 @@ end
 lang IntMergedOp =
   MergedOpBase
   + IntMergedAst
-  syn MergedOp lstyle rstyle =
+  syn MergedOp lstyle rstyle +=
   | IntMergedOp {val: [{i: Info, v: Int}], __br_info: Info, __br_terms: [Info]}
-  sem getInfo_MergedOp =
+  sem getInfo_MergedOp +=
   | IntMergedOp x ->
     x.__br_info
-  sem getTerms_MergedOp =
+  sem getTerms_MergedOp +=
   | IntMergedOp x ->
     x.__br_terms
-  sem unsplit_MergedOp =
+  sem unsplit_MergedOp +=
   | AtomP {self = IntMergedOp x} ->
     (x.__br_info, IntMerged
       { info =
@@ -3460,15 +3465,15 @@ end
 lang FloatMergedOp =
   MergedOpBase
   + FloatMergedAst
-  syn MergedOp lstyle rstyle =
+  syn MergedOp lstyle rstyle +=
   | FloatMergedOp {val: [{i: Info, v: Float}], __br_info: Info, __br_terms: [Info]}
-  sem getInfo_MergedOp =
+  sem getInfo_MergedOp +=
   | FloatMergedOp x ->
     x.__br_info
-  sem getTerms_MergedOp =
+  sem getTerms_MergedOp +=
   | FloatMergedOp x ->
     x.__br_terms
-  sem unsplit_MergedOp =
+  sem unsplit_MergedOp +=
   | AtomP {self = FloatMergedOp x} ->
     (x.__br_info, FloatMerged
       { info =
@@ -3484,15 +3489,15 @@ end
 lang TrueMergedOp =
   MergedOpBase
   + TrueMergedAst
-  syn MergedOp lstyle rstyle =
+  syn MergedOp lstyle rstyle +=
   | TrueMergedOp {__br_info: Info, __br_terms: [Info]}
-  sem getInfo_MergedOp =
+  sem getInfo_MergedOp +=
   | TrueMergedOp x ->
     x.__br_info
-  sem getTerms_MergedOp =
+  sem getTerms_MergedOp +=
   | TrueMergedOp x ->
     x.__br_terms
-  sem unsplit_MergedOp =
+  sem unsplit_MergedOp +=
   | AtomP {self = TrueMergedOp x} ->
     (x.__br_info, TrueMerged
       { info =
@@ -3501,15 +3506,15 @@ end
 lang FalseMergedOp =
   MergedOpBase
   + FalseMergedAst
-  syn MergedOp lstyle rstyle =
+  syn MergedOp lstyle rstyle +=
   | FalseMergedOp {__br_info: Info, __br_terms: [Info]}
-  sem getInfo_MergedOp =
+  sem getInfo_MergedOp +=
   | FalseMergedOp x ->
     x.__br_info
-  sem getTerms_MergedOp =
+  sem getTerms_MergedOp +=
   | FalseMergedOp x ->
     x.__br_terms
-  sem unsplit_MergedOp =
+  sem unsplit_MergedOp +=
   | AtomP {self = FalseMergedOp x} ->
     (x.__br_info, FalseMerged
       { info =
@@ -3518,15 +3523,15 @@ end
 lang NeverMergedOp =
   MergedOpBase
   + NeverMergedAst
-  syn MergedOp lstyle rstyle =
+  syn MergedOp lstyle rstyle +=
   | NeverMergedOp {__br_info: Info, __br_terms: [Info]}
-  sem getInfo_MergedOp =
+  sem getInfo_MergedOp +=
   | NeverMergedOp x ->
     x.__br_info
-  sem getTerms_MergedOp =
+  sem getTerms_MergedOp +=
   | NeverMergedOp x ->
     x.__br_terms
-  sem unsplit_MergedOp =
+  sem unsplit_MergedOp +=
   | AtomP {self = NeverMergedOp x} ->
     (x.__br_info, NeverMerged
       { info =
@@ -3535,15 +3540,15 @@ end
 lang StringMergedOp =
   MergedOpBase
   + StringMergedAst
-  syn MergedOp lstyle rstyle =
+  syn MergedOp lstyle rstyle +=
   | StringMergedOp {val: [{i: Info, v: String}], __br_info: Info, __br_terms: [Info]}
-  sem getInfo_MergedOp =
+  sem getInfo_MergedOp +=
   | StringMergedOp x ->
     x.__br_info
-  sem getTerms_MergedOp =
+  sem getTerms_MergedOp +=
   | StringMergedOp x ->
     x.__br_terms
-  sem unsplit_MergedOp =
+  sem unsplit_MergedOp +=
   | AtomP {self = StringMergedOp x} ->
     (x.__br_info, StringMerged
       { info =
@@ -3559,15 +3564,15 @@ end
 lang SequenceMergedOp =
   MergedOpBase
   + SequenceMergedAst
-  syn MergedOp lstyle rstyle =
+  syn MergedOp lstyle rstyle +=
   | SequenceMergedOp {tms: [Merged], __br_info: Info, __br_terms: [Info]}
-  sem getInfo_MergedOp =
+  sem getInfo_MergedOp +=
   | SequenceMergedOp x ->
     x.__br_info
-  sem getTerms_MergedOp =
+  sem getTerms_MergedOp +=
   | SequenceMergedOp x ->
     x.__br_terms
-  sem unsplit_MergedOp =
+  sem unsplit_MergedOp +=
   | AtomP {self = SequenceMergedOp x} ->
     (x.__br_info, SequenceMerged
       { info =
@@ -3578,15 +3583,15 @@ end
 lang RecordMergedOp =
   MergedOpBase
   + RecordMergedAst
-  syn MergedOp lstyle rstyle =
+  syn MergedOp lstyle rstyle +=
   | RecordMergedOp {fields: [{e: Option Merged, ty: Option Merged, label: {i: Info, v: String}}], __br_info: Info, __br_terms: [Info]}
-  sem getInfo_MergedOp =
+  sem getInfo_MergedOp +=
   | RecordMergedOp x ->
     x.__br_info
-  sem getTerms_MergedOp =
+  sem getTerms_MergedOp +=
   | RecordMergedOp x ->
     x.__br_terms
-  sem unsplit_MergedOp =
+  sem unsplit_MergedOp +=
   | AtomP {self = RecordMergedOp x} ->
     (x.__br_info, RecordMerged
       { info =
@@ -3597,15 +3602,15 @@ end
 lang NotMergedOp =
   MergedOpBase
   + NotMergedAst
-  syn MergedOp lstyle rstyle =
+  syn MergedOp lstyle rstyle +=
   | NotMergedOp {__br_info: Info, __br_terms: [Info]}
-  sem getInfo_MergedOp =
+  sem getInfo_MergedOp +=
   | NotMergedOp x ->
     x.__br_info
-  sem getTerms_MergedOp =
+  sem getTerms_MergedOp +=
   | NotMergedOp x ->
     x.__br_terms
-  sem unsplit_MergedOp =
+  sem unsplit_MergedOp +=
   | PrefixP {self = NotMergedOp x, rightChildAlts = [ r ] ++ _} ->
     match
       unsplit_MergedOp
@@ -3632,19 +3637,19 @@ end
 lang OrMergedOp =
   MergedOpBase
   + OrMergedAst
-  sem groupingsAllowed_MergedOp =
+  sem groupingsAllowed_MergedOp +=
   | (OrMergedOp _, OrMergedOp _) ->
     GLeft
       {}
-  syn MergedOp lstyle rstyle =
+  syn MergedOp lstyle rstyle +=
   | OrMergedOp {__br_info: Info, __br_terms: [Info]}
-  sem getInfo_MergedOp =
+  sem getInfo_MergedOp +=
   | OrMergedOp x ->
     x.__br_info
-  sem getTerms_MergedOp =
+  sem getTerms_MergedOp +=
   | OrMergedOp x ->
     x.__br_terms
-  sem unsplit_MergedOp =
+  sem unsplit_MergedOp +=
   | InfixP {self = OrMergedOp x, leftChildAlts = [ l ] ++ _, rightChildAlts = [ r ] ++ _} ->
     match
       (unsplit_MergedOp
@@ -3681,19 +3686,19 @@ end
 lang AndMergedOp =
   MergedOpBase
   + AndMergedAst
-  sem groupingsAllowed_MergedOp =
+  sem groupingsAllowed_MergedOp +=
   | (AndMergedOp _, AndMergedOp _) ->
     GLeft
       {}
-  syn MergedOp lstyle rstyle =
+  syn MergedOp lstyle rstyle +=
   | AndMergedOp {__br_info: Info, __br_terms: [Info]}
-  sem getInfo_MergedOp =
+  sem getInfo_MergedOp +=
   | AndMergedOp x ->
     x.__br_info
-  sem getTerms_MergedOp =
+  sem getTerms_MergedOp +=
   | AndMergedOp x ->
     x.__br_terms
-  sem unsplit_MergedOp =
+  sem unsplit_MergedOp +=
   | InfixP {self = AndMergedOp x, leftChildAlts = [ l ] ++ _, rightChildAlts = [ r ] ++ _} ->
     match
       (unsplit_MergedOp
@@ -3730,19 +3735,19 @@ end
 lang ConcatMergedOp =
   MergedOpBase
   + ConcatMergedAst
-  sem groupingsAllowed_MergedOp =
+  sem groupingsAllowed_MergedOp +=
   | (ConcatMergedOp _, ConcatMergedOp _) ->
     GLeft
       {}
-  syn MergedOp lstyle rstyle =
+  syn MergedOp lstyle rstyle +=
   | ConcatMergedOp {__br_info: Info, __br_terms: [Info]}
-  sem getInfo_MergedOp =
+  sem getInfo_MergedOp +=
   | ConcatMergedOp x ->
     x.__br_info
-  sem getTerms_MergedOp =
+  sem getTerms_MergedOp +=
   | ConcatMergedOp x ->
     x.__br_terms
-  sem unsplit_MergedOp =
+  sem unsplit_MergedOp +=
   | InfixP {self = ConcatMergedOp x, leftChildAlts = [ l ] ++ _, rightChildAlts = [ r ] ++ _} ->
     match
       (unsplit_MergedOp
@@ -3779,15 +3784,15 @@ end
 lang WildMergedOp =
   MergedOpBase
   + WildMergedAst
-  syn MergedOp lstyle rstyle =
+  syn MergedOp lstyle rstyle +=
   | WildMergedOp {__br_info: Info, __br_terms: [Info]}
-  sem getInfo_MergedOp =
+  sem getInfo_MergedOp +=
   | WildMergedOp x ->
     x.__br_info
-  sem getTerms_MergedOp =
+  sem getTerms_MergedOp +=
   | WildMergedOp x ->
     x.__br_terms
-  sem unsplit_MergedOp =
+  sem unsplit_MergedOp +=
   | AtomP {self = WildMergedOp x} ->
     (x.__br_info, WildMerged
       { info =
@@ -3796,19 +3801,19 @@ end
 lang ArrowMergedOp =
   MergedOpBase
   + ArrowMergedAst
-  sem groupingsAllowed_MergedOp =
+  sem groupingsAllowed_MergedOp +=
   | (ArrowMergedOp _, ArrowMergedOp _) ->
     GRight
       {}
-  syn MergedOp lstyle rstyle =
+  syn MergedOp lstyle rstyle +=
   | ArrowMergedOp {__br_info: Info, __br_terms: [Info]}
-  sem getInfo_MergedOp =
+  sem getInfo_MergedOp +=
   | ArrowMergedOp x ->
     x.__br_info
-  sem getTerms_MergedOp =
+  sem getTerms_MergedOp +=
   | ArrowMergedOp x ->
     x.__br_terms
-  sem unsplit_MergedOp =
+  sem unsplit_MergedOp +=
   | InfixP {self = ArrowMergedOp x, leftChildAlts = [ l ] ++ _, rightChildAlts = [ r ] ++ _} ->
     match
       (unsplit_MergedOp
@@ -3845,15 +3850,15 @@ end
 lang AllMergedOp =
   MergedOpBase
   + AllMergedAst
-  syn MergedOp lstyle rstyle =
+  syn MergedOp lstyle rstyle +=
   | AllMergedOp {rec: [Info], ident: [{i: Info, v: Name}], __br_info: Info, __br_terms: [Info]}
-  sem getInfo_MergedOp =
+  sem getInfo_MergedOp +=
   | AllMergedOp x ->
     x.__br_info
-  sem getTerms_MergedOp =
+  sem getTerms_MergedOp +=
   | AllMergedOp x ->
     x.__br_terms
-  sem unsplit_MergedOp =
+  sem unsplit_MergedOp +=
   | PrefixP {self = AllMergedOp x, rightChildAlts = [ r ] ++ _} ->
     match
       unsplit_MergedOp
@@ -3897,15 +3902,15 @@ lang AllMergedOp =
 end
 lang MergedGrouping =
   MergedOpBase
-  syn MergedOp lstyle rstyle =
+  syn MergedOp lstyle rstyle +=
   | MergedGrouping {inner: Merged, __br_info: Info, __br_terms: [Info]}
-  sem getInfo_MergedOp =
+  sem getInfo_MergedOp +=
   | MergedGrouping x ->
     x.__br_info
-  sem getTerms_MergedOp =
+  sem getTerms_MergedOp +=
   | MergedGrouping x ->
     x.__br_terms
-  sem unsplit_MergedOp =
+  sem unsplit_MergedOp +=
   | AtomP {self = MergedGrouping x} ->
     (x.__br_info, x.inner)
 end
@@ -3967,9 +3972,9 @@ lang ParseMerged =
   + UIdentTokenParser
   + OperatorTokenParser
   + MultilineCommentParser
-  sem groupingsAllowed_MergedFileOp =
-  sem groupingsAllowed_MergedTopOp =
-  sem groupingsAllowed_MergedOp =
+  sem groupingsAllowed_MergedFileOp +=
+  sem groupingsAllowed_MergedTopOp +=
+  sem groupingsAllowed_MergedOp +=
   | (AppMergedOp _, ProjMergedOp _) ->
     GRight
       {}
@@ -4096,7 +4101,7 @@ lang ParseMerged =
   | (AllMergedOp _, ArrowMergedOp _) ->
     GRight
       {}
-  sem groupingsAllowed_BinderOp =
+  sem groupingsAllowed_BinderOp +=
 end
 let _table =
   use ParseMerged

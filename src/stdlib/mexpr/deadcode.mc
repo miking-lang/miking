@@ -1,3 +1,4 @@
+include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/builtin.mc"
 include "mexpr/eq.mc"
@@ -7,8 +8,12 @@ include "mexpr/symbolize.mc"
 include "name.mc"
 include "map.mc"
 include "set.mc"
+include "basic-types.mc"
+include "int.mc"
+include "bool.mc"
+include "seq.mc"
 
-lang DeadcodeElimination
+lang DeadcodeElimination = Ast
   type NMapEntry = {
     -- The set of variables inside the let that points backwards.
     vars : Set Name,
@@ -66,26 +71,26 @@ end
 
 lang MExprDeadcodeEliminationVar = DeadcodeElimination + VarAst
   sem tmHasSideEffect : NMap -> Bool -> Expr -> Bool
-  sem tmHasSideEffect nmap acc =
+  sem tmHasSideEffect nmap acc +=
   | TmVar t ->
     if acc then true
     else match mapLookup t.ident nmap with Some {sideEffect = se} then se
     else false
 
   sem collectVars : Set Name -> Expr -> Set Name
-  sem collectVars free =
+  sem collectVars free +=
   | TmVar t ->
     setInsert t.ident free
 
   sem lamCounts : Int -> NMap -> Expr -> Int
-  sem lamCounts n nmap =
+  sem lamCounts n nmap +=
   | TmVar t ->
     match mapLookup t.ident nmap with Some {lambdaCount = lc} then
       addi n lc
     else n
 
   sem lambdasLeft : NMap -> Int -> Bool -> Expr -> (Int, Bool)
-  sem lambdasLeft nmap n se =
+  sem lambdasLeft nmap n se +=
   | TmVar t ->
     match mapLookup t.ident nmap with Some {sideEffect = se2, lambdaCount = nLambdas} then
       let left = maxi 0 (addi n nLambdas) in
@@ -94,20 +99,20 @@ lang MExprDeadcodeEliminationVar = DeadcodeElimination + VarAst
       (0, se)
 
   sem collectLets : (NMap, Set Name) -> Expr -> (NMap, Set Name)
-  sem collectLets acc =
+  sem collectLets acc +=
   | TmVar t ->
     match acc with (nmap, free) in
     (nmap, setInsert t.ident free)
 end
 
 lang MExprDeadcodeEliminationOpaque = DeadcodeElimination + OpaqueAst
-  sem removeLets nmap =
+  sem removeLets nmap +=
   | tm & TmOpaque _ -> tm
 end
 
 lang MExprDeadcodeEliminationApp = DeadcodeElimination + AppAst
   sem lambdasLeft : NMap -> Int -> Bool -> Expr -> (Int, Bool)
-  sem lambdasLeft nmap n se =
+  sem lambdasLeft nmap n se +=
   | TmApp t ->
     let tmSe = tmHasSideEffect nmap false t.rhs in
     lambdasLeft nmap (subi n 1) (or se tmSe) t.lhs
@@ -115,19 +120,19 @@ end
 
 lang MExprDeadcodeEliminationConst = DeadcodeElimination + ConstAst + ConstSideEffect
   sem tmHasSideEffect : NMap -> Bool -> Expr -> Bool
-  sem tmHasSideEffect nmap acc =
+  sem tmHasSideEffect nmap acc +=
   | TmConst t ->
     if acc then true else constHasSideEffect t.val
 end
 
 lang MExprDeadcodeEliminationLam = DeadcodeElimination + LamAst
   sem lamCounts : Int -> NMap -> Expr -> Int
-  sem lamCounts n nmap =
+  sem lamCounts n nmap +=
   | TmLam t ->
     lamCounts (addi n 1) nmap t.body
 
   sem collectInBody : Name -> NMap -> Set Name -> Expr -> (NMap, Set Name)
-  sem collectInBody s nmap free =
+  sem collectInBody s nmap free +=
   | TmLam t ->
     let vars = collectVars (setEmpty nameCmp) t.body in
     let se = tmHasSideEffect nmap false t.body in
@@ -142,13 +147,13 @@ end
 
 lang MExprDeadcodeEliminationDecl = DeadcodeElimination + DeclAst
   sem collectLets : (NMap, Set Name) -> Expr -> (NMap, Set Name)
-  sem collectLets acc =
+  sem collectLets acc +=
   | TmDecl t ->
     let acc = collectLetsDecl acc t.decl in
     collectLets acc t.inexpr
 
   sem removeLets : NMap -> Expr -> Expr
-  sem removeLets nmap =
+  sem removeLets nmap +=
   | TmDecl t ->
     match removeLetsDecl nmap t.decl with Some decl then
       TmDecl {t with decl = decl, inexpr = removeLets nmap t.inexpr}
@@ -158,13 +163,13 @@ end
 
 lang MExprDeadcodeEliminationLetDecl = DeadcodeElimination + LetDeclAst
   sem collectLetsDecl : (NMap, Set Name) -> Decl -> (NMap, Set Name)
-  sem collectLetsDecl acc =
+  sem collectLetsDecl acc +=
   | DeclLet t ->
     match acc with (nmap, free) in
     collectInBody t.ident nmap free t.body
 
-  sem removeLetsDecl : NMap -> Expr -> (Expr, Bool)
-  sem removeLetsDecl nmap =
+  sem removeLetsDecl : NMap -> Decl -> Option Decl
+  sem removeLetsDecl nmap +=
   | DeclLet t ->
     match mapFindExn t.ident nmap with {used = true} then
       Some (DeclLet t)
@@ -174,7 +179,7 @@ end
 
 lang MExprDeadcodeEliminationRecLetsDecl = DeadcodeElimination + RecLetsDeclAst
   sem collectLetsDecl : (NMap, Set Name) -> Decl -> (NMap, Set Name)
-  sem collectLetsDecl acc =
+  sem collectLetsDecl acc +=
   | DeclRecLets t ->
     let f = lam acc : (NMap, Set Name). lam bind : DeclLetRecord.
       match acc with (nmap, free) in
@@ -195,7 +200,7 @@ lang MExprDeadcodeEliminationRecLetsDecl = DeadcodeElimination + RecLetsDeclAst
     (nmap, free)
 
   sem removeLetsDecl : NMap -> Decl -> Option Decl
-  sem removeLetsDecl nmap =
+  sem removeLetsDecl nmap +=
   | DeclRecLets t ->
     let bindingIsUsed = lam bind.
       let entry = mapFindExn bind.ident nmap in
@@ -208,7 +213,7 @@ end
 
 lang MExprDeadcodeEliminationExtDecl = DeadcodeElimination + ExtDeclAst
   sem collectLetsDecl : (NMap, Set Name) -> Decl -> (NMap, Set Name)
-  sem collectLetsDecl acc =
+  sem collectLetsDecl acc +=
   | DeclExt t ->
     match acc with (nmap, free) in
     let entry = {
@@ -221,7 +226,7 @@ lang MExprDeadcodeEliminationExtDecl = DeadcodeElimination + ExtDeclAst
     (nmap, free)
 
   sem removeLetsDecl : NMap -> Decl -> Option Decl
-  sem removeLetsDecl nmap =
+  sem removeLetsDecl nmap +=
   | DeclExt t ->
     match mapFindExn t.ident nmap with {used = true} then
       Some (DeclExt t)
@@ -231,7 +236,7 @@ end
 
 lang MExprDeadcodeEliminationFunType = DeadcodeElimination + FunTypeAst
   sem lambdasInType : Type -> Int
-  sem lambdasInType =
+  sem lambdasInType +=
   | TyArrow t ->
     addi 1 (lambdasInType t.to)
 end
@@ -244,33 +249,33 @@ lang MExprDeadcodeElimination =
   MExprDeadcodeEliminationFunType + MExprDeadcodeEliminationOpaque
 
   sem tmHasSideEffect : NMap -> Bool -> Expr -> Bool
-  sem tmHasSideEffect nmap acc =
+  sem tmHasSideEffect nmap acc +=
   | t ->
     if acc then true else sfold_Expr_Expr (tmHasSideEffect nmap) acc t
 
   sem collectVars : Set Name -> Expr -> Set Name
-  sem collectVars free =
+  sem collectVars free +=
   | t ->
     sfold_Expr_Expr collectVars free t
 
   sem lamCounts : Int -> NMap -> Expr -> Int
-  sem lamCounts n nmap =
+  sem lamCounts n nmap +=
   | _ ->
     n
 
   sem lambdasLeft : NMap -> Int -> Bool -> Expr -> (Int, Bool)
-  sem lambdasLeft nmap n se =
+  sem lambdasLeft nmap n se +=
   | t ->
     let tmSe = tmHasSideEffect nmap false t in
     (maxi 0 n, or se tmSe)
 
   sem lambdasInType : Type -> Int
-  sem lambdasInType =
+  sem lambdasInType +=
   | _ ->
     0
 
   sem collectInBody : Name -> NMap -> Set Name -> Expr -> (NMap, Set Name)
-  sem collectInBody s nmap free =
+  sem collectInBody s nmap free +=
   | body ->
     match lambdasLeft nmap 0 false body with (lambdas, seFree) in
     let se = tmHasSideEffect nmap false body in
@@ -289,17 +294,17 @@ lang MExprDeadcodeElimination =
     (mapInsert s entry nmap, free)
 
   sem collectLetsDecl : (NMap, Set Name) -> Decl -> (NMap, Set Name)
-  sem collectLetsDecl acc =
+  sem collectLetsDecl acc +=
   | _ ->
     acc
 
   sem collectLets : (NMap, Set Name) -> Expr -> (NMap, Set Name)
-  sem collectLets acc =
+  sem collectLets acc +=
   | t ->
     sfold_Expr_Expr collectLets acc t
 
   sem markUsedLetsDfs : (Set Name, NMap) -> Name -> (Set Name, NMap)
-  sem markUsedLetsDfs acc =
+  sem markUsedLetsDfs acc +=
   | id ->
     match acc with (visited, nmap) in
     if setMem id visited then (visited, nmap)
@@ -312,17 +317,17 @@ lang MExprDeadcodeElimination =
         (visited, nmap)
 
   sem markUsedLets : NMap -> Set Name -> NMap
-  sem markUsedLets nmap =
+  sem markUsedLets nmap +=
   | free ->
     match setFold markUsedLetsDfs (setEmpty nameCmp, nmap) free with (_, usedLets) in
     usedLets
 
   sem removeLetsDecl : NMap -> Decl -> Option Decl
-  sem removeLetsDecl nmap =
+  sem removeLetsDecl nmap +=
   | t -> Some t
 
   sem removeLets : NMap -> Expr -> Expr
-  sem removeLets nmap =
+  sem removeLets nmap +=
   | t -> smap_Expr_Expr (removeLets nmap) t
 
   sem deadcodeElimination : Expr -> Expr

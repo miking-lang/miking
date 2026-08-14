@@ -16,6 +16,11 @@ include "symbolize.mc"
 include "eq.mc"
 include "pprint.mc"
 include "const-arity.mc"
+include "basic-types.mc"
+include "seq.mc"
+include "option.mc"
+include "stringid.mc"
+include "bool.mc"
 
 
 -------------
@@ -82,7 +87,7 @@ end
 -----------
 
 lang VarEval = Eval + VarAst
-  sem eval ctx =
+  sem eval ctx +=
   | TmVar r ->
     match evalEnvLookup r.ident ctx.env with Some t then t
     else
@@ -95,24 +100,24 @@ lang AppEval = Eval + AppAst
   sem apply ctx info =
   | (_, _) -> errorSingle [info] "Bad application"
 
-  sem eval ctx =
+  sem eval ctx +=
   | TmApp r -> apply ctx r.info (eval ctx r.lhs, eval ctx r.rhs)
 end
 
 lang ClosAst = Ast + Eval + PrettyPrint + Eq
-  syn Expr =
+  syn Expr +=
   | TmClos {ident : Name, body : Expr, env : Lazy EvalEnv, info : Info}
 
-  sem isAtomic =
+  sem isAtomic +=
   | TmClos _ -> true
 
-  sem infoTm =
+  sem infoTm +=
   | TmClos r -> r.info
 
-  sem withInfo info =
+  sem withInfo info +=
   | TmClos r -> TmClos { r with info = info }
 
-  sem pprintCode (indent : Int) (env : PprintEnv) =
+  sem pprintCode (indent : Int) (env : PprintEnv) +=
   | TmClos r ->
     match pprintVarName env r.ident with (env,ident) in
     match pprintCode (pprintIncr indent) env r.body with (env,body) in
@@ -123,36 +128,36 @@ lang ClosAst = Ast + Eval + PrettyPrint + Eq
       "}"
     ])
 
-  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) +=
   | TmClos _ -> error "eqExpr not implemented for TmClos!"
 end
 
 lang LamEval = Eval + LamAst + ClosAst + AppEval
-  sem apply ctx info =
+  sem apply ctx info +=
   | (TmClos t, arg) ->
     eval {ctx with env = evalEnvInsert t.ident arg (lazyForce t.env)} t.body
 
-  sem eval ctx =
+  sem eval ctx +=
   | TmLam t ->
     TmClos {ident = t.ident, body = t.body, env = lazy (lam. ctx.env), info = t.info}
   | TmClos t -> TmClos t
 end
 
 lang DeclEval = Eval + DeclAst
-  sem eval ctx =
+  sem eval ctx +=
   | TmDecl x ->
     let ctx = evalDecl ctx x.decl in
     eval ctx x.inexpr
 end
 
 lang LetEval = Eval + LetDeclAst
-  sem evalDecl ctx =
+  sem evalDecl ctx +=
   | DeclLet t ->
     {ctx with env = evalEnvInsert t.ident (eval ctx t.body) ctx.env}
 end
 
 lang RecordEval = Eval + RecordAst
-  sem eval ctx =
+  sem eval ctx +=
   | TmRecord t ->
     let bs = mapMap (eval ctx) t.bindings in
     TmRecord {t with bindings = bs}
@@ -169,7 +174,7 @@ lang RecLetsEval =
   Eval + RecLetsDeclAst + VarEval + RecordEval + LetEval + LamEval +
   UnknownTypeAst
 
-  sem evalDecl ctx =
+  sem evalDecl ctx +=
   | DeclRecLets t ->
     recursive let envPrime : () -> EvalEnv = lam.
       let wraplambda = lam v.
@@ -188,26 +193,26 @@ lang RecLetsEval =
 end
 
 lang ConstAppAst = ConstAst + PrettyPrint + Eq
-  syn Expr =
+  syn Expr +=
   | TmConstApp {
     const : Const,
     args : [Expr],
     info : Info
   }
 
-  sem infoTm =
+  sem infoTm +=
   | TmConstApp r -> r.info
 
-  sem withInfo info =
+  sem withInfo info +=
   | TmConstApp r -> TmConstApp { r with info = info }
 
-  sem isAtomic =
+  sem isAtomic +=
   | TmConstApp _ -> true
 
-  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) +=
   | TmConstApp _ -> error "eqExpr not implemented for TmConstApp!"
 
-  sem pprintCode (indent : Int) (env : PprintEnv) =
+  sem pprintCode (indent : Int) (env : PprintEnv) +=
   | TmConstApp r ->
     pprintCode indent env (appSeq_ (uconst_ r.const) r.args)
 end
@@ -220,18 +225,18 @@ lang ConstEvalNoDefault =
   Eval + ConstDelta + AppEval + ConstAppAst + SysAst + SeqAst + UnknownTypeAst +
   ConstArity + PrettyPrint
 
-  sem apply ctx info =
+  sem apply ctx info +=
   | (TmConst r, arg) -> delta info (r.val, [arg])
   | (TmConstApp r, arg) -> delta info (r.const, snoc r.args arg)
 
-  sem eval ctx =
+  sem eval ctx +=
   | TmConst {val = CArgv {}, info = info} ->
     TmSeq {tms = map str_ argv, ty = tyunknown_, info = info}
   | TmConst c -> TmConst c
 end
 
 lang ConstEval = ConstEvalNoDefault
-  sem delta info =
+  sem delta info +=
   | (const, args) ->
     if lti (length args) (constArity const) then
       TmConstApp {const = const, args = args, info = info}
@@ -243,15 +248,15 @@ lang ConstEval = ConstEvalNoDefault
 end
 
 lang TypeEval = Eval + TypeDeclAst
-  sem evalDecl ctx =
+  sem evalDecl ctx +=
   | DeclType _ -> ctx
 end
 
 lang DataEval = Eval + DataAst + DataDeclAst
-  sem eval ctx =
+  sem eval ctx +=
   | TmConApp t -> TmConApp {t with body = eval ctx t.body}
 
-  sem evalDecl ctx =
+  sem evalDecl ctx +=
   | DeclConDef t -> ctx
 end
 
@@ -260,13 +265,13 @@ lang MatchEvalBase = Eval
 end
 
 lang MatchEval = Eval + MatchAst + MatchEvalBase
-  sem eval ctx =
+  sem eval ctx +=
   | TmMatch t ->
     match tryMatch ctx.env (eval ctx t.target) t.pat with Some newEnv then
       eval {ctx with env = newEnv} t.thn
     else eval ctx t.els
 
-  sem tryMatch (env : EvalEnv) (t : Expr) =
+  sem tryMatch (env : EvalEnv) (t : Expr) +=
   | _ -> None ()
 end
 
@@ -274,7 +279,7 @@ lang UtestEval = Eval + Eq + AppEval + UtestDeclAst + BoolAst + SeqAst
   sem eq (e1 : Expr) =
   | _ -> errorSingle [infoTm e1] "Equality not defined for expression"
 
-  sem evalDecl ctx =
+  sem evalDecl ctx +=
   | DeclUtest r ->
     let v1 = eval ctx r.test in
     let v2 = eval ctx r.expected in
@@ -298,14 +303,14 @@ lang UtestEval = Eval + Eq + AppEval + UtestDeclAst + BoolAst + SeqAst
 end
 
 lang SeqEval = Eval + SeqAst
-  sem eval ctx =
+  sem eval ctx +=
   | TmSeq s ->
     let vs = map (eval ctx) s.tms in
     TmSeq {s with tms = vs}
 end
 
 lang NeverEval = Eval + NeverAst
-  sem eval ctx =
+  sem eval ctx +=
   | TmNever t ->
     errorSingle [t.info] (join [ "Reached a never term, which should be "
             , "impossible in a well-typed program."])
@@ -313,22 +318,22 @@ end
 
 -- TODO (oerikss, 2020-03-26): Eventually, this should be a rank 0 tensor.
 lang RefEval = Eval + PrettyPrint + Eq
-  syn Expr =
+  syn Expr +=
   | TmRef {ref : Ref Expr}
 
-  sem eval ctx =
+  sem eval ctx +=
   | TmRef r -> TmRef r
 
-  sem infoTm =
+  sem infoTm +=
   | TmRef _ -> NoInfo ()
 
-  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) +=
   | TmRef _ -> error "eqExpr not implemented for TmRef!"
 
-  sem isAtomic =
+  sem isAtomic +=
   | TmRef _ -> error "isAtomic not implemented for TmRef!"
 
-  sem pprintCode (indent : Int) (env : PprintEnv) =
+  sem pprintCode (indent : Int) (env : PprintEnv) +=
   | TmRef _ -> error "pprintCode not implemented for TmRef!"
 end
 
@@ -338,19 +343,19 @@ con TFloat : Tensor[Float] -> T
 con TExpr : use Ast in Tensor[Expr] -> T
 
 lang TensorEval = Eval + Eq + PrettyPrint
-  syn Expr =
+  syn Expr +=
   | TmTensor {val : T}
 
-  sem eval ctx =
+  sem eval ctx +=
   | TmTensor t -> TmTensor t
 
-  sem infoTm =
+  sem infoTm +=
   | TmTensor _ -> NoInfo ()
 
-  sem isAtomic =
+  sem isAtomic +=
   | TmTensor _ -> true
 
-  sem pprintCode (indent : Int) (env : PprintEnv) =
+  sem pprintCode (indent : Int) (env : PprintEnv) +=
   | TmTensor r ->
     switch r.val
       case TInt t then (env, tensor2string int2string t)
@@ -366,7 +371,7 @@ lang TensorEval = Eval + Eq + PrettyPrint
       (env, tensor2string (lam x. x) t2)
       end
 
-  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) +=
   | TmTensor r1 ->
     match lhs with TmTensor r2 then
       switch (r1.val, r2.val)
@@ -390,7 +395,7 @@ lang TensorEval = Eval + Eq + PrettyPrint
 end
 
 lang ExtEval = Eval + ExtDeclAst
-  sem evalDecl ctx =
+  sem evalDecl ctx +=
   | DeclExt r -> ctx -- nop
 end
 
@@ -401,12 +406,12 @@ end
 -- as needed.
 
 lang UnsafeCoerceEval = UnsafeCoerceAst + ConstEvalNoDefault + UnsafeCoerceArity
-  sem delta info =
+  sem delta info +=
   | (CUnsafeCoerce _, [arg]) -> arg
 end
 
 lang ArithIntEval = ArithIntAst + ConstEvalNoDefault + ArithIntArity
-  sem delta info =
+  sem delta info +=
   | (CAddi _, [TmConst {val = CInt n1}, TmConst (t & {val = CInt n2})]) ->
     TmConst {t with val = CInt {val = addi n1.val n2.val}}
   | (CSubi _, [TmConst {val = CInt n1}, TmConst (t & {val = CInt n2})]) ->
@@ -422,7 +427,7 @@ lang ArithIntEval = ArithIntAst + ConstEvalNoDefault + ArithIntArity
 end
 
 lang ShiftIntEval = ShiftIntAst + ConstEvalNoDefault + ShiftIntArity
-  sem delta info =
+  sem delta info +=
   | (CSlli _, [TmConst {val = CInt n1}, TmConst (t & {val = CInt n2})]) ->
     TmConst {t with val = CInt {val = slli n1.val n2.val}}
   | (CSrli _, [TmConst {val = CInt n1}, TmConst (t & {val = CInt n2})]) ->
@@ -432,7 +437,7 @@ lang ShiftIntEval = ShiftIntAst + ConstEvalNoDefault + ShiftIntArity
 end
 
 lang ArithFloatEval = ArithFloatAst + ConstEvalNoDefault + ArithFloatArity
-  sem delta info =
+  sem delta info +=
   | (CAddf _, [TmConst {val = CFloat f1}, TmConst (t & {val = CFloat f2})]) ->
     TmConst {t with val = CFloat {val = addf f1.val f2.val}}
   | (CSubf _, [TmConst {val = CFloat f1}, TmConst (t & {val = CFloat f2})]) ->
@@ -447,7 +452,7 @@ end
 
 lang FloatIntConversionEval =
   ConstDelta + FloatIntConversionAst + FloatIntConversionArity
-  sem delta info =
+  sem delta info +=
   | (CFloorfi _, [TmConst (t & {val = CFloat r})]) ->
     TmConst {t with val = CInt {val = floorfi r.val}}
   | (CCeilfi _, [TmConst (t & {val = CFloat r})]) ->
@@ -459,7 +464,7 @@ lang FloatIntConversionEval =
 end
 
 lang CmpIntEval = CmpIntAst + ConstEvalNoDefault + CmpIntArity
-  sem delta info =
+  sem delta info +=
   | (CEqi _, [TmConst {val = CInt n1}, TmConst (t & {val = CInt n2})]) ->
     TmConst {t with val = CBool {val = eqi n1.val n2.val}}
   | (CNeqi _, [TmConst {val = CInt n1}, TmConst (t & {val = CInt n2})]) ->
@@ -475,7 +480,7 @@ lang CmpIntEval = CmpIntAst + ConstEvalNoDefault + CmpIntArity
 end
 
 lang CmpCharEval = CmpCharAst + ConstEvalNoDefault + CmpCharArity
-  sem delta info =
+  sem delta info +=
   | (CEqc _, [TmConst {val = CChar c1}, TmConst (t & {val = CChar c2})]) ->
     TmConst {t with val = CBool {val = eqc c1.val c2.val}}
 end
@@ -483,7 +488,7 @@ end
 lang IntCharConversionEval =
   IntCharConversionAst + ConstEvalNoDefault + IntCharConversionArity
 
-  sem delta info =
+  sem delta info +=
   | (CInt2Char _, [TmConst (t & {val = CInt n})]) ->
     TmConst {t with val = CChar {val = int2char n.val}}
   | (CChar2Int _, [TmConst (t & {val = CChar c})]) ->
@@ -491,7 +496,7 @@ lang IntCharConversionEval =
 end
 
 lang CmpFloatEval = CmpFloatAst + ConstEvalNoDefault + CmpFloatArity
-  sem delta info =
+  sem delta info +=
   | (CEqf _, [TmConst {val = CFloat f1}, TmConst (t & {val = CFloat f2})]) ->
     TmConst {t with val = CBool {val = eqf f1.val f2.val}}
   | (CLtf _, [TmConst {val = CFloat f1}, TmConst (t & {val = CFloat f2})]) ->
@@ -507,7 +512,7 @@ lang CmpFloatEval = CmpFloatAst + ConstEvalNoDefault + CmpFloatArity
 end
 
 lang SymbEval = SymbAst + IntAst + RecordAst + ConstEvalNoDefault + SymbArity
-  sem delta info =
+  sem delta info +=
   | (CGensym _, [_]) ->
     TmConst {val = CSymb {val = gensym ()}, ty = tyunknown_, info = NoInfo ()}
   | (CSym2hash _, [TmConst (t & {val = CSymb s})]) ->
@@ -515,7 +520,7 @@ lang SymbEval = SymbAst + IntAst + RecordAst + ConstEvalNoDefault + SymbArity
 end
 
 lang CmpSymbEval = CmpSymbAst + ConstEvalNoDefault + CmpSymbArity
-  sem delta info =
+  sem delta info +=
   | (CEqsym _, [TmConst {val = CSymb s1}, TmConst (t & {val = CSymb s2})]) ->
     TmConst {t with val = CBool {val = eqsym s1.val s2.val}}
 end
@@ -523,7 +528,7 @@ end
 lang SeqOpEvalFirstOrder =
   SeqOpAst + IntAst + BoolAst + ConstEvalNoDefault + SeqOpArity
 
-  sem delta info =
+  sem delta info +=
   | (CHead _, [TmSeq s]) -> head s.tms
   | (CTail _, [TmSeq s]) -> TmSeq {s with tms = tail s.tms}
   | (CNull _, [TmSeq s]) -> TmConst {
@@ -557,7 +562,7 @@ lang SeqOpEvalFirstOrder =
 end
 
 lang SeqOpEval = SeqOpEvalFirstOrder
-  sem delta info =
+  sem delta info +=
   | (CMap _, [f, TmSeq s]) ->
     let f = lam x. apply (evalCtxEmpty ()) info (f, x) in
     TmSeq {s with tms = map f s.tms}
@@ -601,7 +606,7 @@ end
 lang FloatStringConversionEval =
   ConstDelta + FloatStringConversionAst + BoolAst + FloatStringConversionArity
 
-  sem delta info =
+  sem delta info +=
   | (CStringIsFloat _, [TmSeq {tms = tms}]) ->
     TmConst {
       val = CBool {val = stringIsFloat (_evalSeqOfCharsToString info tms)},
@@ -626,7 +631,7 @@ lang FileOpEval =
   ConstDelta + FileOpAst + SeqAst + BoolAst + CharAst + UnknownTypeAst +
   FileOpArity
 
-  sem delta info =
+  sem delta info +=
   | (CFileRead _, [TmSeq s]) ->
     let f = _evalSeqOfCharsToString info s.tms in
     str_ (readFile f)
@@ -647,7 +652,7 @@ lang FileOpEval =
 end
 
 lang IOEval = ConstDelta + IOAst + SeqAst + RecordAst + UnknownTypeAst + IOArity
-  sem delta info =
+  sem delta info +=
   | (CPrint _, [TmSeq s]) ->
     let s = _evalSeqOfCharsToString info s.tms in
     print s;
@@ -671,7 +676,7 @@ end
 lang RandomNumberGeneratorEval =
   ConstDelta + RandomNumberGeneratorAst + IntAst + RandomNumberGeneratorArity
 
-  sem delta info =
+  sem delta info +=
   | (CRandIntU _, [TmConst {val = CInt lo}, TmConst (t & {val = CInt hi})]) ->
     TmConst {t with val = CInt {val = randIntU lo.val hi.val}}
   | (CRandSetSeed _, [TmConst {val = CInt n}]) ->
@@ -680,7 +685,7 @@ lang RandomNumberGeneratorEval =
 end
 
 lang SysEval = ConstDelta + SysAst + SeqAst + IntAst + CharAst + SysArity
-  sem delta info =
+  sem delta info +=
   | (CError _, [TmSeq s]) ->
     errorSingle [info] (_evalSeqOfCharsToString info s.tms)
   | (CExit _, [TmConst {val = CInt n}]) -> exit n.val
@@ -697,7 +702,7 @@ lang SysEval = ConstDelta + SysAst + SeqAst + IntAst + CharAst + SysArity
 end
 
 lang TimeEval = ConstDelta + TimeAst + IntAst + TimeArity
-  sem delta info =
+  sem delta info +=
   | (CSleepMs _, [TmConst {val = CInt n}]) ->
     sleepMs n.val;
     uunit_
@@ -706,7 +711,7 @@ lang TimeEval = ConstDelta + TimeAst + IntAst + TimeArity
 end
 
 lang RefOpEval = ConstDelta + RefOpAst + RefEval + IntAst + RefOpArity
-  sem delta info =
+  sem delta info +=
   | (CRef _, [arg]) -> TmRef {ref = ref arg}
   | (CModRef _, [TmRef r, arg]) ->
     modref r.ref arg;
@@ -716,7 +721,7 @@ end
 
 lang ConTagEval =
   ConstDelta + ConTagAst + DataAst + IntAst + IntTypeAst + ConTagArity
-  sem delta info =
+  sem delta info +=
   | (CConstructorTag _, [TmConApp {ident = id}]) ->
     match nameGetSym id with Some sym then TmConst {
       val = CInt {val = sym2hash sym},
@@ -747,7 +752,7 @@ lang TensorOpEval =
     let tms = map (lam i. int_ i) is in
     seq_ tms
 
-  sem delta info =
+  sem delta info +=
   | (CTensorCreateUninitInt _, [shape]) ->
     TmTensor {val = TInt (tensorCreateUninitInt (_ofTmSeq info shape))}
   | (CTensorCreateUninitFloat _, [shape]) ->
@@ -980,17 +985,17 @@ lang BootParserEval =
   FloatTypeAst + CharAst + CharTypeAst + SeqAst + SeqTypeAst + BoolAst +
   RecordAst + BootParserArity + ConstPrettyPrint
 
-  syn Const =
+  syn Const +=
   | CBootParserTree {val : BootParseTree}
 
-  sem getConstStringCode (indent : Int) =
+  sem getConstStringCode (indent : Int) +=
   | CBootParserTree _ ->
     error "getConstStringCode not implemented for CBootParserTree!"
 
-  sem constArity =
+  sem constArity +=
   | CBootParserTree _ -> 0
 
-  sem delta info =
+  sem delta info +=
   | (CBootParserParseMExprString _, [
     TmRecord {bindings = bs}, TmSeq {tms = seq1}, TmSeq {tms = seq2}
   ]) ->
@@ -1183,13 +1188,13 @@ end
 --------------
 
 lang NamedPatEval = MatchEvalBase + NamedPat + Eval
-  sem tryMatch (env : EvalEnv) (t : Expr) =
+  sem tryMatch (env : EvalEnv) (t : Expr) +=
   | PatNamed {ident = PName name} -> Some (evalEnvInsert name t env)
   | PatNamed {ident = PWildcard ()} -> Some env
 end
 
 lang SeqTotPatEval = MatchEvalBase + SeqTotPat + SeqAst
-  sem tryMatch (env : EvalEnv) (t : Expr) =
+  sem tryMatch (env : EvalEnv) (t : Expr) +=
   | PatSeqTot {pats = pats} ->
     match t with TmSeq {tms = tms} then
       if eqi (length tms) (length pats) then
@@ -1202,7 +1207,7 @@ lang SeqTotPatEval = MatchEvalBase + SeqTotPat + SeqAst
 end
 
 lang SeqEdgePatEval = MatchEvalBase + SeqEdgePat + SeqAst + Eval
-  sem tryMatch (env : EvalEnv) (t : Expr) =
+  sem tryMatch (env : EvalEnv) (t : Expr) +=
   | PatSeqEdge {prefix = pre, middle = middle, postfix = post} ->
     match t with TmSeq (r & {tms = tms}) then
       if geqi (length tms) (addi (length pre) (length post)) then
@@ -1227,7 +1232,7 @@ lang SeqEdgePatEval = MatchEvalBase + SeqEdgePat + SeqAst + Eval
 end
 
 lang RecordPatEval = MatchEvalBase + RecordAst + RecordPat
-  sem tryMatch (env : EvalEnv) (t : Expr) =
+  sem tryMatch (env : EvalEnv) (t : Expr) +=
   | PatRecord r ->
     match t with TmRecord {bindings = bs} then
       let f : Option Pat -> Option Expr -> Option (EvalEnv -> Option EvalEnv) =
@@ -1246,7 +1251,7 @@ lang RecordPatEval = MatchEvalBase + RecordAst + RecordPat
 end
 
 lang DataPatEval = MatchEvalBase + DataAst + DataPat
-  sem tryMatch (env : EvalEnv) (t : Expr) =
+  sem tryMatch (env : EvalEnv) (t : Expr) +=
   | PatCon {ident = ident, subpat = subpat, info = info} ->
     match t with TmConApp cn then
       if nameEqSymUnsafe ident cn.ident then
@@ -1256,7 +1261,7 @@ lang DataPatEval = MatchEvalBase + DataAst + DataPat
 end
 
 lang IntPatEval = MatchEvalBase + IntAst + IntPat
-  sem tryMatch (env : EvalEnv) (t : Expr) =
+  sem tryMatch (env : EvalEnv) (t : Expr) +=
   | PatInt i ->
     match t with TmConst c then
       match c.val with CInt i2 then
@@ -1266,7 +1271,7 @@ lang IntPatEval = MatchEvalBase + IntAst + IntPat
 end
 
 lang CharPatEval = MatchEvalBase + CharAst + CharPat
-  sem tryMatch (env : EvalEnv) (t : Expr) =
+  sem tryMatch (env : EvalEnv) (t : Expr) +=
   | PatChar ch ->
     match t with TmConst c then
       match c.val with CChar ch2 then
@@ -1276,7 +1281,7 @@ lang CharPatEval = MatchEvalBase + CharAst + CharPat
 end
 
 lang BoolPatEval = MatchEvalBase + BoolAst + BoolPat
-  sem tryMatch (env : EvalEnv) (t : Expr) =
+  sem tryMatch (env : EvalEnv) (t : Expr) +=
   | PatBool b ->
     let xnor = lam x. lam y. or (and x y) (and (not x) (not y)) in
     match t with TmConst c then
@@ -1287,19 +1292,19 @@ lang BoolPatEval = MatchEvalBase + BoolAst + BoolPat
 end
 
 lang AndPatEval = MatchEvalBase + AndPat
-  sem tryMatch (env : EvalEnv) (t : Expr) =
+  sem tryMatch (env : EvalEnv) (t : Expr) +=
   | PatAnd {lpat = l, rpat = r} ->
     optionBind (tryMatch env t l) (lam env. tryMatch env t r)
 end
 
 lang OrPatEval = MatchEvalBase + OrPat
-  sem tryMatch (env : EvalEnv) (t : Expr) =
+  sem tryMatch (env : EvalEnv) (t : Expr) +=
   | PatOr {lpat = l, rpat = r} ->
     optionMapOrElse (lam. tryMatch env t r) (lam x. Some x) (tryMatch env t l)
 end
 
 lang NotPatEval = MatchEvalBase + NotPat
-  sem tryMatch (env : EvalEnv) (t : Expr) =
+  sem tryMatch (env : EvalEnv) (t : Expr) +=
   | PatNot {subpat = p} ->
     let res = tryMatch env t p in
     match res with None _ then Some env else
@@ -1307,7 +1312,7 @@ lang NotPatEval = MatchEvalBase + NotPat
 end
 
 lang PlaceholderEval = PlaceholderAst + Eval + IntAst + IntTypeAst
-  sem eval env =
+  sem eval env +=
   | TmPlaceholder {} ->
     TmConst {val = CInt {val = 0}, ty = TyInt {info = NoInfo ()}, info = NoInfo ()}
 end

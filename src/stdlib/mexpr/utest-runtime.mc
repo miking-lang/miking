@@ -2,6 +2,7 @@ include "bool.mc"
 include "common.mc"
 include "seq.mc"
 include "string.mc"
+include "char.mc"
 
 let numFailed = ref 0
 let numPassed = ref 0

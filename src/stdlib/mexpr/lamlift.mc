@@ -11,6 +11,16 @@ include "mexpr/pprint.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-check.mc"
 include "mexpr/utils.mc"
+include "map.mc"
+include "name.mc"
+include "common.mc"
+include "basic-types.mc"
+include "option.mc"
+include "error.mc"
+include "seq.mc"
+include "mexpr/info.mc"
+include "either.mc"
+include "string.mc"
 
 -- We store a 'solution' for each let-bound lambda: the set of free
 -- variables it uses, all of which will need to become new parameters
@@ -297,13 +307,6 @@ lang LambdaLiftFindFreeVariables =
 end
 
 lang LambdaLiftInsertFreeVariables = MExprAst + UpdateDefinitionsAndUses
-  type TmVarRec =
-    { ident : Name
-    , ty: Type
-    , info: Info
-    , frozen: Bool
-    }
-
   sem insertFreeVariablesH
     : Map Name LambdaLiftSolution
     -> Map Name (TmVarRec -> Expr)

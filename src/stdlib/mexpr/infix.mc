@@ -14,9 +14,14 @@ include "parser.mc"
 include "info.mc"
 include "pprint.mc"
 include "ast-builder.mc"
+include "basic-types.mc"
+include "mexpr/symbolize.mc"
+include "seq.mc"
+include "bool.mc"
+include "char.mc"
 
 -- Fragment for constructing constant binary operators. Used by InfixArithParser
-lang MExprMakeConstBinOp = ArithIntAst + AppAst + UnknownTypeAst
+lang MExprMakeConstBinOp = ArithIntAst + AppAst + UnknownTypeAst + ExprInfixParser
   sem makeConstBinOp (n: Int) (p: Pos) (xs: String)
                      (assoc: Associativity) (prec: Int) =
   | op ->
@@ -34,7 +39,7 @@ end
 
 -- Demonstrates the use of infix operators. The syntax is not part of basic MCore.
 lang ExprInfixArithParser =  ExprInfixParser + ArithIntAst + MExprMakeConstBinOp 
-  sem parseInfixImp (p: Pos) =
+  sem parseInfixImp (p: Pos) +=
   | "+" ++ xs -> makeConstBinOp 1 p xs (LeftAssoc ()) 10 (CAddi {})
   | "-" ++ xs -> makeConstBinOp 1 p xs (LeftAssoc ()) 10 (CSubi {})
   | "*" ++ xs -> makeConstBinOp 1 p xs (LeftAssoc ()) 20 (CMuli {})
@@ -54,7 +59,7 @@ let makeTestBinOp = lam op. lam p. lam xs. lam assoc. lam prec.
   
 -- Test fragment for testing infix operations
 lang ExprInfixTestParser = ExprInfixParser + SeqOpAst + ArithIntAst + AppAst
-   sem parseInfixImp (p: Pos) =
+   sem parseInfixImp (p: Pos) +=
   | "il1" ++ xs -> makeTestBinOp "-il1-" p xs (LeftAssoc ()) 1 
   | "il2" ++ xs -> makeTestBinOp "-il2-" p xs (LeftAssoc ()) 2 
   | "il3" ++ xs -> makeTestBinOp "-il3-" p xs (LeftAssoc ()) 3 

@@ -9,7 +9,7 @@ lang Desugar = Ast + OpaqueAst
 end
 
 lang DesugarLoader = Ast + MCoreLoader + OpaqueAst
-  syn Hook =
+  syn Hook +=
   | DesugarHook ()
 
   sem desugarDecl : Loader -> Decl -> (Loader, Decl)
@@ -28,6 +28,6 @@ lang DesugarLoader = Ast + MCoreLoader + OpaqueAst
 
     addHook loader (DesugarHook ())
 
-  sem _postTypecheck loader decl = | DesugarHook _ ->
+  sem _postTypecheck loader decl += | DesugarHook _ ->
     desugarDecl loader decl
 end

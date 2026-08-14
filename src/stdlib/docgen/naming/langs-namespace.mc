@@ -2,6 +2,13 @@ include "../global/util.mc"
 include "../global/logger.mc"
 include "../global/objects.mc"
 include "./generic-namespace-set.mc"
+include "basic-types.mc"
+include "option.mc"
+include "seq.mc"
+include "bool.mc"
+include "string.mc"
+include "hashmap.mc"
+include "docgen/global/source-code.mc"
 
 type LangId = Int
 

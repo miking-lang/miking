@@ -4,6 +4,8 @@ include "effect.mc"
 include "ast.mc"
 include "eq.mc"
 include "boot-parser.mc"
+include "name.mc"
+include "basic-types.mc"
 
 /-
 
@@ -92,11 +94,11 @@ lang TestLang = AstEffect + Writer + Failure + BootParser + MExprEq
 end
 
 lang TestLangImpl = TestLang
-  syn Failure = | IFail Int
-  syn Log = | CLog Char
+  syn Failure += | IFail Int
+  syn Log += | CLog Char
 
-  sem iFail = | i -> IFail i
-  sem cLog = | c -> CLog c
+  sem iFail += | i -> IFail i
+  sem cLog += | c -> CLog c
 end
 
 mexpr

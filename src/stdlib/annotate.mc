@@ -2,6 +2,8 @@ include "option.mc"
 include "mexpr/info.mc"
 include "map.mc"
 include "stringid.mc"
+include "string.mc"
+include "seq.mc"
 
 lang Annotator
   type Annotation = String
@@ -179,10 +181,10 @@ let _escapeHtmlChar = lam c.
   end
 
 lang HtmlAnnotator = Annotator
-  sem escapeContent = | str -> join (map _escapeHtmlChar str)
-  sem escapeAnnot = | str -> join (map _escapeHtmlChar str)
+  sem escapeContent += | str -> join (map _escapeHtmlChar str)
+  sem escapeAnnot += | str -> join (map _escapeHtmlChar str)
 
-  sem annotate annot = | str -> join
+  sem annotate annot += | str -> join
     [ "<span class=\"tagged\"><div class=\"tag\">"
     , annot
     , "</div>"
@@ -190,9 +192,9 @@ lang HtmlAnnotator = Annotator
     , "</span>"
     ]
 
-  sem document title = | str ->
+  sem document title += | str ->
     join ["<h1>", title, "</h1>\n", str, "\n\n"]
 
-  sem finalize = | str ->
+  sem finalize += | str ->
     join [_templateBefore, str, _templateAfter]
 end

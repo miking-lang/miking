@@ -14,6 +14,12 @@ include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/call-graph.mc"
 include "mexpr/const-arity.mc"
+include "map.mc"
+include "name.mc"
+include "option.mc"
+include "bool.mc"
+include "digraph.mc"
+include "seq.mc"
 
 type SideEffectEnv = {
   -- A set containing the identifiers that are considered to have
@@ -61,7 +67,7 @@ lang ConstSideEffectBase = ConstAst
 end
 
 lang ConstSideEffect = ConstSideEffectBase + MExprAst
-  sem constHasSideEffect =
+  sem constHasSideEffect +=
   | CUnsafeCoerce _ -> false
   | CTypeOf _ -> false
   | CInt _ | CFloat _ | CBool _ | CChar _ -> false
@@ -108,7 +114,7 @@ end
 lang MExprSideEffect =
   SideEffect + ConstSideEffect + MExprAst + MExprArity + MExprCallGraph
 
-  sem exprHasSideEffectH env lambdaCounting acc =
+  sem exprHasSideEffectH env lambdaCounting acc +=
   | TmVar t ->
     if acc then true
     else if and lambdaCounting (geqi (identArity env t.ident) 1) then false

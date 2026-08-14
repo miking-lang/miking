@@ -5,6 +5,8 @@
 -- environments and similar.
 
 include "seq.mc"
+include "basic-types.mc"
+include "option.mc"
 
 type AssocSeq k v = [(k, v)]
 type AssocTraits k = {eq: k -> k -> Bool}

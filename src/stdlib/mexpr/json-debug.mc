@@ -7,6 +7,16 @@ include "mexpr/pprint.mc"
 include "mexpr/ast.mc"
 include "mexpr/type.mc"
 include "mlang/ast.mc"
+include "seq.mc"
+include "mexpr/info.mc"
+include "basic-types.mc"
+include "name.mc"
+include "option.mc"
+include "map.mc"
+include "string.mc"
+include "stringid.mc"
+include "set.mc"
+include "mexpr/ast-builder.mc"
 
 lang AstToJson = Ast + DeclAst
   sem exprToJson : Expr -> JsonValue
@@ -42,7 +52,7 @@ lang AstToJson = Ast + DeclAst
 end
 
 lang VarToJson = AstToJson + VarAst
-  sem exprToJson =
+  sem exprToJson +=
   | TmVar x -> JsonObject (mapFromSeq cmpString
     [ ("con", JsonString "TmVar")
     , ("ident", nameToJson x.ident)
@@ -53,7 +63,7 @@ lang VarToJson = AstToJson + VarAst
 end
 
 lang AppToJson = AstToJson + AppAst
-  sem exprToJson =
+  sem exprToJson +=
   | TmApp x -> JsonObject (mapFromSeq cmpString
     [ ("con", JsonString "TmApp")
     , ("lhs", exprToJson x.lhs)
@@ -64,7 +74,7 @@ lang AppToJson = AstToJson + AppAst
 end
 
 lang LamToJson = AstToJson + LamAst
-  sem exprToJson =
+  sem exprToJson +=
   | TmLam x -> JsonObject (mapFromSeq cmpString
     [ ("con", JsonString "TmLam")
     , ("ident", nameToJson x.ident)
@@ -77,7 +87,7 @@ lang LamToJson = AstToJson + LamAst
 end
 
 lang DeclToJson = AstToJson + DeclAst
-  sem exprToJson =
+  sem exprToJson +=
   | tm & TmDecl x ->
     recursive let work = lam acc. lam tm.
       match tm with TmDecl x
@@ -94,7 +104,7 @@ lang DeclToJson = AstToJson + DeclAst
 end
 
 lang ConstToJson = AstToJson + ConstAst + ConstPrettyPrint
-  sem exprToJson =
+  sem exprToJson +=
   | TmConst x -> JsonObject (mapFromSeq cmpString
     [ ("con", JsonString "TmConst")
     , ("const", JsonString (getConstStringCode 0 x.val))
@@ -104,7 +114,7 @@ lang ConstToJson = AstToJson + ConstAst + ConstPrettyPrint
 end
 
 lang SeqToJson = AstToJson + SeqAst
-  sem exprToJson =
+  sem exprToJson +=
   | TmSeq x -> JsonObject (mapFromSeq cmpString
     [ ("con", JsonString "TmSeq")
     , ("tms", JsonArray (map exprToJson x.tms))
@@ -114,7 +124,7 @@ lang SeqToJson = AstToJson + SeqAst
 end
 
 lang RecordToJson = AstToJson + RecordAst
-  sem exprToJson =
+  sem exprToJson +=
   | TmRecord x -> JsonObject (mapFromSeq cmpString
     [ ("con", JsonString "TmRecord")
     , ("bindings", JsonObject
@@ -135,7 +145,7 @@ lang RecordToJson = AstToJson + RecordAst
 end
 
 lang ConAppToJson = AstToJson + DataAst
-  sem exprToJson =
+  sem exprToJson +=
   | TmConApp x -> JsonObject (mapFromSeq cmpString
     [ ("con", JsonString "TmConApp")
     , ("ident", nameToJson x.ident)
@@ -146,7 +156,7 @@ lang ConAppToJson = AstToJson + DataAst
 end
 
 lang MatchToJson = AstToJson + MatchAst
-  sem exprToJson =
+  sem exprToJson +=
   | TmMatch x -> JsonObject (mapFromSeq cmpString
     [ ("con", JsonString "TmMatch")
     , ("target", exprToJson x.target)
@@ -159,7 +169,7 @@ lang MatchToJson = AstToJson + MatchAst
 end
 
 lang OpaqueToJson = AstToJson + OpaqueAst
-  sem exprToJson =
+  sem exprToJson +=
   | TmOpaque x -> JsonObject (mapFromSeq cmpString
     [ ("con", JsonString "TmOpaque")
     , ("body", exprToJson x.body)
@@ -169,7 +179,7 @@ lang OpaqueToJson = AstToJson + OpaqueAst
 end
 
 lang NeverToJson = AstToJson + NeverAst
-  sem exprToJson =
+  sem exprToJson +=
   | TmNever x -> JsonObject (mapFromSeq cmpString
     [ ("con", JsonString "TmNever")
     , ("ty", typeToJson x.ty)
@@ -178,7 +188,7 @@ lang NeverToJson = AstToJson + NeverAst
 end
 
 lang NamedPatToJson = AstToJson + NamedPat
-  sem patToJson =
+  sem patToJson +=
   | PatNamed x -> JsonObject (mapFromSeq cmpString
     [ ("con", JsonString "PatNamed")
     , ("ident", patNameToJson x.ident)
@@ -188,7 +198,7 @@ lang NamedPatToJson = AstToJson + NamedPat
 end
 
 lang SeqTotPatToJson = AstToJson + SeqTotPat
-  sem patToJson =
+  sem patToJson +=
   | PatSeqTot x -> JsonObject (mapFromSeq cmpString
     [ ("con", JsonString "PatSeqTot")
     , ("pats", JsonArray (map patToJson x.pats))
@@ -198,7 +208,7 @@ lang SeqTotPatToJson = AstToJson + SeqTotPat
 end
 
 lang SeqEdgePatToJson = AstToJson + SeqEdgePat
-  sem patToJson =
+  sem patToJson +=
   | PatSeqEdge x -> JsonObject (mapFromSeq cmpString
     [ ("con", JsonString "PatSeqEdge")
     , ("prefix", JsonArray (map patToJson x.prefix))
@@ -210,7 +220,7 @@ lang SeqEdgePatToJson = AstToJson + SeqEdgePat
 end
 
 lang RecordPatToJson = AstToJson + RecordPat
-  sem patToJson =
+  sem patToJson +=
   | PatRecord x -> JsonObject (mapFromSeq cmpString
     [ ("con", JsonString "PatRecord")
     , ("bindings", JsonObject
@@ -223,7 +233,7 @@ lang RecordPatToJson = AstToJson + RecordPat
 end
 
 lang DataPatToJson = AstToJson + DataPat
-  sem patToJson =
+  sem patToJson +=
   | PatCon x -> JsonObject (mapFromSeq cmpString
     [ ("con", JsonString "PatCon")
     , ("ident", nameToJson x.ident)
@@ -234,7 +244,7 @@ lang DataPatToJson = AstToJson + DataPat
 end
 
 lang IntPatToJson = AstToJson + IntPat
-  sem patToJson =
+  sem patToJson +=
   | PatInt x -> JsonObject (mapFromSeq cmpString
     [ ("con", JsonString "PatInt")
     , ("val", JsonInt x.val)
@@ -244,7 +254,7 @@ lang IntPatToJson = AstToJson + IntPat
 end
 
 lang CharPatToJson = AstToJson + CharPat
-  sem patToJson =
+  sem patToJson +=
   | PatChar x -> JsonObject (mapFromSeq cmpString
     [ ("con", JsonString "PatChar")
     , ("val", JsonString [x.val])
@@ -254,7 +264,7 @@ lang CharPatToJson = AstToJson + CharPat
 end
 
 lang BoolPatToJson = AstToJson + BoolPat
-  sem patToJson =
+  sem patToJson +=
   | PatBool x -> JsonObject (mapFromSeq cmpString
     [ ("con", JsonString "PatBool")
     , ("val", JsonBool x.val)
@@ -264,7 +274,7 @@ lang BoolPatToJson = AstToJson + BoolPat
 end
 
 lang AndPatToJson = AstToJson + AndPat
-  sem patToJson =
+  sem patToJson +=
   | PatAnd x -> JsonObject (mapFromSeq cmpString
     [ ("con", JsonString "PatAnd")
     , ("lpat", patToJson x.lpat)
@@ -275,7 +285,7 @@ lang AndPatToJson = AstToJson + AndPat
 end
 
 lang OrPatToJson = AstToJson + OrPat
-  sem patToJson =
+  sem patToJson +=
   | PatOr x -> JsonObject (mapFromSeq cmpString
     [ ("con", JsonString "PatOr")
     , ("lpat", patToJson x.lpat)
@@ -286,7 +296,7 @@ lang OrPatToJson = AstToJson + OrPat
 end
 
 lang NotPatToJson = AstToJson + NotPat
-  sem patToJson =
+  sem patToJson +=
   | PatNot x -> JsonObject (mapFromSeq cmpString
     [ ("con", JsonString "PatNot")
     , ("subpat", patToJson x.subpat)
@@ -296,7 +306,7 @@ lang NotPatToJson = AstToJson + NotPat
 end
 
 lang UnknownTypeToJson = AstToJson + UnknownTypeAst
-  sem typeToJson =
+  sem typeToJson +=
   | TyUnknown x -> JsonObject (mapFromSeq cmpString
     [ ("con", JsonString "TyUnknown")
     , ("info", infoToJson x.info)
@@ -304,7 +314,7 @@ lang UnknownTypeToJson = AstToJson + UnknownTypeAst
 end
 
 lang BoolTypeToJson = AstToJson + BoolTypeAst
-  sem typeToJson =
+  sem typeToJson +=
   | TyBool x -> JsonObject (mapFromSeq cmpString
     [ ("con", JsonString "TyBool")
     , ("info", infoToJson x.info)
@@ -312,7 +322,7 @@ lang BoolTypeToJson = AstToJson + BoolTypeAst
 end
 
 lang IntTypeToJson = AstToJson + IntTypeAst
-  sem typeToJson =
+  sem typeToJson +=
   | TyInt x -> JsonObject (mapFromSeq cmpString
     [ ("con", JsonString "TyInt")
     , ("info", infoToJson x.info)
@@ -320,7 +330,7 @@ lang IntTypeToJson = AstToJson + IntTypeAst
 end
 
 lang FloatTypeToJson = AstToJson + FloatTypeAst
-  sem typeToJson =
+  sem typeToJson +=
   | TyFloat x -> JsonObject (mapFromSeq cmpString
     [ ("con", JsonString "TyFloat")
     , ("info", infoToJson x.info)
@@ -328,7 +338,7 @@ lang FloatTypeToJson = AstToJson + FloatTypeAst
 end
 
 lang CharTypeToJson = AstToJson + CharTypeAst
-  sem typeToJson =
+  sem typeToJson +=
   | TyChar x -> JsonObject (mapFromSeq cmpString
     [ ("con", JsonString "TyChar")
     , ("info", infoToJson x.info)
@@ -336,7 +346,7 @@ lang CharTypeToJson = AstToJson + CharTypeAst
 end
 
 lang FunTypeToJson = AstToJson + FunTypeAst
-  sem typeToJson =
+  sem typeToJson +=
   | TyArrow x -> JsonObject (mapFromSeq cmpString
     [ ("con", JsonString "TyArrow")
     , ("from", typeToJson x.from)
@@ -346,7 +356,7 @@ lang FunTypeToJson = AstToJson + FunTypeAst
 end
 
 lang SeqTypeToJson = AstToJson + SeqTypeAst
-  sem typeToJson =
+  sem typeToJson +=
   | TySeq x -> JsonObject (mapFromSeq cmpString
     [ ("con", JsonString "TySeq")
     , ("ty", typeToJson x.ty)
@@ -355,7 +365,7 @@ lang SeqTypeToJson = AstToJson + SeqTypeAst
 end
 
 lang TensorTypeToJson = AstToJson + TensorTypeAst
-  sem typeToJson =
+  sem typeToJson +=
   | TyTensor x -> JsonObject (mapFromSeq cmpString
     [ ("con", JsonString "TyTensor")
     , ("ty", typeToJson x.ty)
@@ -364,7 +374,7 @@ lang TensorTypeToJson = AstToJson + TensorTypeAst
 end
 
 lang RecordTypeToJson = AstToJson + RecordTypeAst
-  sem typeToJson =
+  sem typeToJson +=
   | TyRecord x -> JsonObject (mapFromSeq cmpString
     [ ("con", JsonString "TyRecord")
     , ("fields", JsonObject
@@ -376,7 +386,7 @@ lang RecordTypeToJson = AstToJson + RecordTypeAst
 end
 
 lang VariantTypeToJson = AstToJson + VariantTypeAst
-  sem typeToJson =
+  sem typeToJson +=
   | TyVariant x -> JsonObject (mapFromSeq cmpString
     [ ("con", JsonString "TyVariant")
     , ("constrs", JsonArray
@@ -387,7 +397,7 @@ lang VariantTypeToJson = AstToJson + VariantTypeAst
 end
 
 lang ConTypeToJson = AstToJson + ConTypeAst
-  sem typeToJson =
+  sem typeToJson +=
   | TyCon x -> JsonObject (mapFromSeq cmpString
     [ ("con", JsonString "TyCon")
     , ("ident", nameToJson x.ident)
@@ -397,7 +407,7 @@ lang ConTypeToJson = AstToJson + ConTypeAst
 end
 
 lang DataTypeToJson = AstToJson + DataTypeAst
-  sem typeToJson =
+  sem typeToJson +=
   | TyData x -> JsonObject (mapFromSeq cmpString
     [ ("con", JsonString "TyData")
     , ("universe", JsonArray
@@ -410,7 +420,7 @@ lang DataTypeToJson = AstToJson + DataTypeAst
 end
 
 lang VarTypeToJson = AstToJson + VarTypeAst
-  sem typeToJson =
+  sem typeToJson +=
   | TyVar x -> JsonObject (mapFromSeq cmpString
     [ ("con", JsonString "TyVar")
     , ("ident", nameToJson x.ident)
@@ -419,7 +429,7 @@ lang VarTypeToJson = AstToJson + VarTypeAst
 end
 
 lang AllTypeToJson = AstToJson + AllTypeAst
-  sem typeToJson =
+  sem typeToJson +=
   | TyAll x -> JsonObject (mapFromSeq cmpString
     [ ("con", JsonString "TyAll")
     , ("ident", nameToJson x.ident)
@@ -430,7 +440,7 @@ lang AllTypeToJson = AstToJson + AllTypeAst
 end
 
 lang AppTypeToJson = AstToJson + AppTypeAst
-  sem typeToJson =
+  sem typeToJson +=
   | TyApp x -> JsonObject (mapFromSeq cmpString
     [ ("con", JsonString "TyApp")
     , ("lhs", typeToJson x.lhs)
@@ -440,7 +450,7 @@ lang AppTypeToJson = AstToJson + AppTypeAst
 end
 
 lang AliasTypeToJson = AstToJson + AliasTypeAst
-  sem typeToJson =
+  sem typeToJson +=
   | TyAlias x -> JsonObject (mapFromSeq cmpString
     [ ("con", JsonString "TyAlias")
     , ("display", typeToJson x.display)
@@ -449,17 +459,17 @@ lang AliasTypeToJson = AstToJson + AliasTypeAst
 end
 
 lang PolyKindToJson = AstToJson + PolyKindAst
-  sem kindToJson =
+  sem kindToJson +=
   | Poly _ -> JsonString "Poly"
 end
 
 lang MonoKindToJson = AstToJson + MonoKindAst
-  sem kindToJson =
+  sem kindToJson +=
   | Mono _ -> JsonString "Mono"
 end
 
 lang RecordKindToJson = AstToJson + RecordKindAst
-  sem kindToJson =
+  sem kindToJson +=
   | Record x -> JsonObject (mapFromSeq cmpString
     [ ("con", JsonString "Record")
     , ("bindings", JsonObject
@@ -470,7 +480,7 @@ lang RecordKindToJson = AstToJson + RecordKindAst
 end
 
 lang DataKindToJson = AstToJson + DataKindAst
-  sem kindToJson =
+  sem kindToJson +=
   | Data x -> JsonObject (mapFromSeq cmpString
     [ ("con", JsonString "Data")
     , ("types",
@@ -489,7 +499,7 @@ lang UseToJson = AstToJson + UseDeclAst
   -- TODO(vipa, 2024-05-17): This should probably actually be a Decl,
   -- it's just not a good idea to do a `use` on the top-level right
   -- now because of how includes work.
-  sem declToJson =
+  sem declToJson +=
   | DeclUse x -> JsonObject (mapFromSeq cmpString
     [ ("con", JsonString "DeclUse")
     , ("ident", nameToJson x.ident)
@@ -498,7 +508,7 @@ lang UseToJson = AstToJson + UseDeclAst
 end
 
 lang LetToJson = LetDeclAst + AstToJson
-  sem declToJson =
+  sem declToJson +=
   | DeclLet x -> JsonObject (mapFromSeq cmpString
     [ ("con", JsonString "DeclLet")
     , ("ident", nameToJson x.ident)
@@ -511,7 +521,7 @@ end
 
 -- DeclType --
 lang TypeToJson = TypeDeclAst + AstToJson
-  sem declToJson =
+  sem declToJson +=
   | DeclType x -> JsonObject (mapFromSeq cmpString
     [ ("con", JsonString "DeclType")
     , ("ident", nameToJson x.ident)
@@ -523,7 +533,7 @@ end
 
 -- DeclRecLets --
 lang RecLetsToJson = RecLetsDeclAst + RecLetsDeclAst + AstToJson
-  sem declToJson =
+  sem declToJson +=
   | DeclRecLets x -> JsonObject (mapFromSeq cmpString
     [ ("con", JsonString "DeclRecLets")
     , ( "bindings"
@@ -542,7 +552,7 @@ end
 
 -- DeclConDef --
 lang DataToJson = DataDeclAst + AstToJson
-  sem declToJson =
+  sem declToJson +=
   | DeclConDef x -> JsonObject (mapFromSeq cmpString
     [ ("con", JsonString "DeclConDef")
     , ("ident", nameToJson x.ident)
@@ -553,7 +563,7 @@ end
 
 -- DeclUtest --
 lang UtestToJson = UtestDeclAst + AstToJson
-  sem declToJson =
+  sem declToJson +=
   | DeclUtest x -> JsonObject (mapFromSeq cmpString
     [ ("con", JsonString "DeclUtest")
     , ("test", exprToJson x.test)
@@ -565,7 +575,7 @@ end
 
 -- DeclExt --
 lang ExtToJson = ExtDeclAst + AstToJson
-  sem declToJson =
+  sem declToJson +=
   | DeclExt x -> JsonObject (mapFromSeq cmpString
     [ ("con", JsonString "DeclExt")
     , ("ident", nameToJson x.ident)
@@ -584,7 +594,7 @@ lang MLangProgramToJson = MLangTopLevel + AstToJson
 end
 
 lang MetaVarToJson = AstToJson + MetaVarTypeAst
-  sem typeToJson =
+  sem typeToJson +=
   | TyMetaVar x ->
     let contents = switch deref x.contents
       case Unbound u then

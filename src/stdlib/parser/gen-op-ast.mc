@@ -1,4 +1,14 @@
 include "gen-ast.mc"
+include "mexpr/ast.mc"
+include "name.mc"
+include "basic-types.mc"
+include "map.mc"
+include "mexpr/ast-builder.mc"
+include "mexpr/info.mc"
+include "mlang/ast.mc"
+include "bool.mc"
+include "seq.mc"
+include "common.mc"
 
 type OperatorUnsplitter
 con AtomUnsplit : use Ast in

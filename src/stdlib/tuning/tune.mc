@@ -17,6 +17,30 @@ include "mexpr/shallow-patterns.mc"
 include "ocaml/mcore.mc"
 include "ocaml/pprint.mc"
 include "mexpr/type-annot.mc"
+include "basic-types.mc"
+include "tuning/ast.mc"
+include "tuning/graph-coloring.mc"
+include "tuning/dependency-analysis.mc"
+include "tuning/instrumentation.mc"
+include "tuning/name-info.mc"
+include "option.mc"
+include "seq.mc"
+include "float.mc"
+include "graph.mc"
+include "set.mc"
+include "tuning/data-frame.mc"
+include "mexpr/mexpr.mc"
+include "tuning/hole-cfa.mc"
+include "tuning/nested.mc"
+include "mexpr/boot-parser.mc"
+include "mexpr/symbolize.mc"
+include "mexpr/pprint.mc"
+include "mexpr/eval.mc"
+include "mexpr/type-check.mc"
+include "mexpr/keywords.mc"
+include "ocaml/compile.mc"
+include "mexpr/eq.mc"
+include "mexpr/ast-builder.mc"
 
 -- Performs tuning of a context expanded program with holes.
 
@@ -105,13 +129,9 @@ end
 --------------------------------
 
 lang TuneLocalSearch = TuneBase + LocalSearchBase
-  syn LSData =
+  syn LSData +=
 
   sem initMeta : LSData -> SearchMethod -> MetaState
-
-  sem debugSearch : SearchState -> ()
-
-  sem debugMeta : MetaState -> ()
 
   sem updateSearchState : SearchState -> SearchState
 
@@ -170,7 +190,7 @@ lang TuneLocalSearch = TuneBase + LocalSearchBase
   -- Entry point for tuning
   sem _tune (options : TuneOptions) (run : Runner) (env : CallCtxEnv)
            (dep : DependencyGraph) (inst : InstrumentedResult)
-           (tuneFile : String) (onFailure : () -> ()) (defaultTable: LookupTable) =
+           (tuneFile : String) (onFailure : () -> ()) (defaultTable: LookupTable) +=
   | t ->
     match _tuneDebug options run env dep inst tuneFile onFailure defaultTable t
     with (table, _) in table
@@ -264,18 +284,18 @@ end
 -----------------------------
 
 lang TuneDep = TuneLocalSearch + Database + TuneStats
-  syn LSData =
+  syn LSData +=
   | TuneData { options : TuneOptions, run : Runner, env : CallCtxEnv,
                dep : DependencyGraph, inst : InstrumentedResult,
                database : Database, searchSpace : SearchSpaceSize }
 
-  syn Assignment =
+  syn Assignment +=
   | Table { table : LookupTable }
 
-  syn Cost =
+  syn Cost +=
   | Runtime { time : TimingResult, profiles : [String] }
 
-  sem debugSearch =
+  sem debugSearch +=
   | searchState ->
     let searchState : SearchState = searchState in
     match searchState
@@ -309,7 +329,7 @@ lang TuneDep = TuneLocalSearch + Database + TuneStats
     else never
 
   sem initData (options : TuneOptions) (run : Runner) (env : CallCtxEnv)
-               (dep : DependencyGraph) (instrumentedResult : InstrumentedResult) =
+               (dep : DependencyGraph) (instrumentedResult : InstrumentedResult) +=
   | t ->
     -- Compute size of the search space
     let searchSpace =
@@ -336,7 +356,7 @@ lang TuneDep = TuneLocalSearch + Database + TuneStats
       searchSpace = searchSpace
     }
 
-  sem reduceSearchSpace costF t =
+  sem reduceSearchSpace costF t +=
   | TuneData d ->
     -- Do a number of measurement with randomized tables
     let data =
@@ -392,7 +412,7 @@ lang TuneDep = TuneLocalSearch + Database + TuneStats
     data
 
   -- Check if the search space is empty
-  sem emptySearchSpace =
+  sem emptySearchSpace +=
   | TuneData d ->
     eqf d.searchSpace.sizeReduced 0.
 
@@ -421,7 +441,7 @@ lang TuneDep = TuneLocalSearch + Database + TuneStats
     let newDb = databaseAddRun table profile d.dep.offset d.database in
     { searchState with data = Some (TuneData {d with database = newDb}) }
 
-  sem updateSearchState =
+  sem updateSearchState +=
   | state ->
     let state : SearchState = state in
     -- Update search state with database
@@ -430,7 +450,7 @@ lang TuneDep = TuneLocalSearch + Database + TuneStats
     else error "Unexpected search state"
 
   -- Check for exhausted search space
-  sem stopCondState =
+  sem stopCondState +=
   | state ->
     let state : SearchState = state in
     match state with {data = Some (TuneData {database = db, searchSpace = ss})}
@@ -439,7 +459,7 @@ lang TuneDep = TuneLocalSearch + Database + TuneStats
 
   sem costFun (run : Runner) (tuneFile : String) (options : TuneOptions)
               (input : [String]) (data : LSData) (onFailure : () -> ())
-              (inc : Option Solution) =
+              (inc : Option Solution) +=
   | Table { table = table } ->
     match data with TuneData {inst = inst, env = env} in
     let f = lam i. measure env table run tuneFile options (None ()) onFailure i in
@@ -454,11 +474,11 @@ lang TuneDep = TuneLocalSearch + Database + TuneStats
     Runtime {time = Success {ms = totalMs}, profiles = profiles}
 
   -- Disable comparison (optimality is computed from database)
-  sem cmpCost (cost : Cost) =
+  sem cmpCost (cost : Cost) +=
   | _ -> 0
 
   sem mkStartState (costF : Option Solution -> Assignment -> Cost)
-                   (table : LookupTable) =
+                   (table : LookupTable) +=
   | TuneData d ->
     let a = (Table { table = table }) in
     let cost = costF (None ()) a in
@@ -474,16 +494,16 @@ lang TuneDep = TuneLocalSearch + Database + TuneStats
       databaseOptimal 0.0 dep ss db
     else error "Expected tune data"
 
-  sem optimalLookupTable =
+  sem optimalLookupTable +=
   | searchState ->
     match optimalAssignment searchState with (table, _) in table
 end
 
 lang TuneDepExhaustive = TuneDep + SearchSpace
-  syn MetaState =
+  syn MetaState +=
   | MetaExhaustive { tables : DataFrame (Option Expr) }
 
-  sem initMeta data =
+  sem initMeta data +=
   | Exhaustive {} ->
     match data with TuneData d in
     let df: DataFrame (Option Expr) = searchSpaceExhaustive d.options.stepSize d.env d.dep in
@@ -497,7 +517,7 @@ lang TuneDepExhaustive = TuneDep + SearchSpace
     let df = dataFrameSetRow 0 row0 df in
     MetaExhaustive {tables = df}
 
-  sem initialTable (defaultTable : LookupTable) =
+  sem initialTable (defaultTable : LookupTable) +=
   | MetaExhaustive {tables = tables} ->
     let res =
     mapi (lam i. lam v.
@@ -509,7 +529,7 @@ lang TuneDepExhaustive = TuneDep + SearchSpace
     in
     res
 
-  sem step (searchState : SearchState) =
+  sem step (searchState : SearchState) +=
   | MetaExhaustive { tables = tables } ->
     match searchState with { iter = iter, cost = cost, data = data } in
     match data with Some (TuneData {env = env, options = options}) then

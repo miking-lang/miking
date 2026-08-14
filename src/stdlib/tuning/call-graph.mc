@@ -6,6 +6,12 @@ include "mexpr/ast-builder.mc" -- for tests
 include "digraph.mc"
 
 include "name-info.mc"
+include "name.mc"
+include "mexpr/info.mc"
+include "map.mc"
+include "common.mc"
+include "string.mc"
+include "eqset.mc"
 
 -- Call graph creation for programs with holes.
 

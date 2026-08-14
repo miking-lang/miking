@@ -1,6 +1,8 @@
 include "assoc.mc"
 include "option.mc"
 include "ext/toml-ext.mc"
+include "basic-types.mc"
+include "string.mc"
 
 type SearchMethod
 con Exhaustive         : () -> SearchMethod
