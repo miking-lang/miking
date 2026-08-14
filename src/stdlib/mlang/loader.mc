@@ -1305,8 +1305,7 @@ mexpr
 
 use ComposedMLangLoader in
 
-let input  = "/home/vipa/repositories/miking/build/test.mc" in
-let output = "/home/vipa/repositories/miking/build/temp" in
+match argv with [_, input] ++ _ in
 
 let loader = mkLoader typcheckEnvDefault [] in
 let loader = (includeFileTypeExn (FMCore {includeMExpr = true}) "." input loader).1 in
