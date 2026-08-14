@@ -659,23 +659,20 @@ lang MLangLoader = LoaderImpl + BootParserMLang
         case (None _, Some _) then
           Some {superset = otherId, subset = id}
         case (None _, None _) then
-          errorMulti
+          errorExtra thisInfo "This pattern matches exactly the same values as a previous pattern:"
             [ (info, "In 'sem' defined here:")
-            , (otherInfo, "Pattern 1:")
-            , (thisInfo, "Pattern 2:")
+            , (otherInfo, "Previous pattern:")
             ]
-            "These patterns match exactly the same values."
         case (Some this, Some other) then
           let env = pprintEnvEmpty in
           match getPatStringCode 0 env (npatToPat jointProof) with (env, jointProof) in
           match getPatStringCode 0 env (npatToPat this) with (env, this) in
           match getPatStringCode 0 env (npatToPat other) with (env, other) in
-          errorMulti
-            [ (info, "In 'sem' defined here:")
-            , (otherInfo, join ["Pattern 1 (matches '", other, "'):"])
+          errorExtra info
+            (join ["This 'sem' has overlapping patterns (e.g., both match '", jointProof, "'), but neither is more specific than the other."])
+            [ (otherInfo, join ["Pattern 1 (matches '", other, "'):"])
             , (thisInfo, join ["Pattern 2 (matches '", this, "'):"])
             ]
-            (join ["These patterns overlap (e.g., both match '", jointProof, "'), but neither is more specific than the other."])
         end
       else None () in
     let cache = mapFromSeq subi (create id (lam other. (other, Left (computeOrder other)))) in
@@ -764,15 +761,13 @@ lang MLangLoader = LoaderImpl + BootParserMLang
         then nameEq ln rn
         else false in
       if definitionsAgree then l else
-      let merge = match info with Some info
-        then [(info, "Merged here:")]
-        else [] in
-      let definitions =
+      let msg = join ["Conflicting/duplicate definition of ", kind, " '", nameGetStr ln, "'"] in
+      match info with Some info
+      then errorExtra info (concat msg " in language composition:")
         [ (li, "Definition 1:")
         , (ri, "Definition 2:")
-        ] in
-      errorMulti (concat merge definitions)
-        (join ["Conflicting/duplicate definition of ", kind, " '", nameGetStr ln, "'"]) in
+        ]
+      else errorExtra ri msg [(li, "Original definition here:")] in
     { varEnv = mapUnionWith (cmp "value") l.varEnv r.varEnv
     , conEnv = mapUnionWith (cmp "constructor") l.conEnv r.conEnv
     , tyConEnv = mapUnionWith (cmp "type constructor") l.tyConEnv r.tyConEnv
@@ -1204,7 +1199,9 @@ lang MLangSem = MLangLoader + SemDeclAst + LetSym + PatTypeCheck + SubstituteUnk
       match x.impl with Some impl then
         let mergePreMatch = lam l. lam r.
           if eqi l.0 r.0 then l else
-          errorMulti [(l.1, ""), (r.1, "")] "Different number of pre-match arguments in sem." in
+          errorExtra r.1
+            (join ["This 'sem' has ", int2string r.0, " pre-match argument(s), expected ", int2string l.0, ":"])
+            [(l.1, join ["Previous definition (with ", int2string l.0, " pre-match argument(s)):"])] in
         let preMatchArguments = optionOrWith mergePreMatch
           semGlobalData.preMatchArguments
           (Some (length impl.params, x.info)) in
