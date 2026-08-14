@@ -306,15 +306,28 @@ let _single = lam f. lam infos. lam msg.
   f (errorMsg (map mkSection (_partitionInfosByFile infos)) {single = msg, multi = ""})
 let errorSingle : all a. [Info] -> String -> a
   = lam x. _single _die x
-let warnSingle : all a. [Info] -> String -> ()
+let warnSingle : [Info] -> String -> ()
   = lam x. _single _warn x
 
 let _multi = lam f. lam sections. lam msg.
   f (errorMsg (map (lam sec. {errorDefault with info = sec.0, msg = sec.1}) sections) {single = msg, multi = ""})
 let errorMulti : all a. [(Info, String)] -> String -> a
   = lam x. _multi _die x
-let warnMulti : all a. [(Info, String)] -> String -> ()
+let warnMulti : [(Info, String)] -> String -> ()
   = lam x. _multi _warn x
+
+let _extra
+  : all a. ((Info, String) -> a) -> Info -> String -> [(Info, String)] -> a
+  = lam f. lam info. lam msg. lam extras.
+    let highlightExtra = lam extra.
+      match _highlightSection {errorDefault with msg = extra.1, info = extra.0} with (info, str) in
+      infoInfoString info str in
+    match _highlightSection {errorDefault with msg = msg, info = info} with (info, str) in
+    f (info, strJoin "\n" (cons str (map highlightExtra extras)))
+let errorExtra : all a. Info -> String -> [(Info, String)] -> a
+  = lam x. _extra _die x
+let warnExtra : Info -> String -> [(Info, String)] -> ()
+  = lam x. _extra _warn x
 
 mexpr
 
