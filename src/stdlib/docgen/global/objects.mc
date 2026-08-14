@@ -1,6 +1,13 @@
 include "mexpr/ast.mc"
 include "./logger.mc"
 include "./source-code.mc"
+include "bool.mc"
+include "basic-types.mc"
+include "seq.mc"
+include "docgen/global/util.mc"
+include "stdlib.mc"
+include "string.mc"
+include "hashmap.mc"
 
 -- Interface declaring all semantics for Objects
 -- NOTE: Object does not represent the syntax AST.
@@ -232,34 +239,34 @@ end
 ----------------------------------------------------------------------
 lang ObjProgram = ObjectInterface
 
-    syn Object =
+    syn Object +=
     | ObjProgram { children: ObjectChildren, datas: ObjectDatas}
 
-    sem objDatas =
+    sem objDatas +=
     | ObjProgram { datas = datas } -> datas
 
-    sem objChildren =
+    sem objChildren +=
     | ObjProgram { children = children } -> children
 
-    sem objSetDatas =
+    sem objSetDatas +=
     | ObjProgram f -> lam datas. ObjProgram { f with datas = datas }
 
-    sem objSetChildren =
+    sem objSetChildren +=
     | ObjProgram f -> lam children. ObjProgram{ f with children = children }
 
-    sem objToString =
+    sem objToString +=
     | ObjProgram {} -> "ObjProgram"
 
-    sem objGetFirstWord =
+    sem objGetFirstWord +=
     | ObjProgram {} -> ""
 
-    sem objHasUrl =
+    sem objHasUrl +=
     | ObjProgram {} -> true
 
-    sem objHasLink =
+    sem objHasLink +=
     | ObjProgram {} -> true
 
-    sem objHasName =
+    sem objHasName +=
     | ObjProgram {} -> false
 
 end
@@ -269,13 +276,13 @@ end
 ----------------------------------------------------------------------
 lang ObjInclude = ObjectInterface
 
-    syn Object =
+    syn Object +=
     | ObjInclude { pathInFile: String, datas: ObjectDatas, child: Option Object }
 
-    sem objSetDatas =
+    sem objSetDatas +=
     | ObjInclude f -> lam datas. ObjInclude { f with datas = datas}
 
-    sem objSetChildren =
+    sem objSetChildren +=
     | ObjInclude f & obj -> lam children.
       let l = length children in
       switch l
@@ -284,26 +291,26 @@ lang ObjInclude = ObjectInterface
       case _ then warn (join ["Include nodes must have zero or one child; received ", int2string l, "."]) ; obj
       end
 
-    sem objChildren =
+    sem objChildren +=
     | ObjInclude { child = Some child } -> [child]
     | ObjInclude { child = None {} } -> []    
 
-    sem objDatas =
+    sem objDatas +=
     | ObjInclude { datas = datas } -> datas
 
-    sem objToString =
+    sem objToString +=
     | ObjInclude { pathInFile = p } -> join ["ObjInclude, path = ", p]
     
-    sem objGetFirstWord =
+    sem objGetFirstWord +=
     | ObjInclude {} -> ""
 
-    sem objHasUrl =
+    sem objHasUrl +=
     | ObjInclude {} -> false
 
-    sem objHasName =
+    sem objHasName +=
     | ObjInclude {} -> false
 
-    sem objHasLink =
+    sem objHasLink +=
     | ObjInclude {} -> true
 
 end
@@ -313,31 +320,31 @@ end
 ----------------------------------------------------------------------
 lang ObjLet = ObjectInterface
 
-    syn Object =
+    syn Object +=
     | ObjLet { ty: Option Type, datas: ObjectDatas }
 
-    sem objDatas =
+    sem objDatas +=
     | ObjLet { datas = datas } -> datas
 
-    sem objSetDatas =
+    sem objSetDatas +=
     | ObjLet f -> lam datas. ObjLet { f with datas = datas}
 
-    sem objToString =
+    sem objToString +=
     | ObjLet { ty = ty } -> "ObjLet"
 
-    sem objGetFirstWord =
+    sem objGetFirstWord +=
     | ObjLet {} -> "let"
 
-    sem objHasUrl =
+    sem objHasUrl +=
     | ObjLet {} -> true
 
-    sem objHasLink =
+    sem objHasLink +=
     | ObjLet {} -> true
 
-    sem objSetType =
+    sem objSetType +=
     | ObjLet d -> lam ty. ObjLet { d with ty = ty }
 
-    sem objHasTests =
+    sem objHasTests +=
     | ObjLet {} -> true
 
 end
@@ -347,32 +354,32 @@ end
 ----------------------------------------------------------------------
 lang ObjLang = ObjectInterface
 
-    syn Object =
+    syn Object +=
     | ObjLang { parents : [String], datas : ObjectDatas, children: ObjectChildren }
 
-    sem objSetDatas =
+    sem objSetDatas +=
     | ObjLang f -> lam datas. ObjLang { f with datas = datas}
 
-    sem objSetChildren =
+    sem objSetChildren +=
     | ObjLang f -> lam children. ObjLang { f with children = children }
 
-    sem objDatas =
+    sem objDatas +=
     | ObjLang { datas = datas } -> datas
 
-    sem objChildren =
+    sem objChildren +=
     | ObjLang { children = children } -> children
 
-    sem objToString =
+    sem objToString +=
     | ObjLang { parents = parents } ->
             join ["ObjLang, parents: ", strJoin ", " parents]
 
-    sem objGetFirstWord =
+    sem objGetFirstWord +=
     | ObjLang {} -> "lang"
 
-    sem objHasUrl =
+    sem objHasUrl +=
     | ObjLang {} -> true
 
-    sem objHasLink =
+    sem objHasLink +=
     | ObjLang {} -> true
 
 end
@@ -382,29 +389,29 @@ end
 ----------------------------------------------------------------------
 lang ObjType = ObjectInterface
 
-    syn Object =
+    syn Object +=
     | ObjType { t: Option Type, datas: ObjectDatas }
 
-    sem objDatas =
+    sem objDatas +=
     | ObjType { datas = datas } -> datas
 
-    sem objSetDatas =
+    sem objSetDatas +=
     | ObjType f -> lam datas. ObjType { f with datas = datas }
 
-    sem objToString =
+    sem objToString +=
     | ObjType {} ->
         "ObjType"
 
-    sem objGetFirstWord =
+    sem objGetFirstWord +=
     | ObjType {} -> "type"
 
-    sem objHasUrl =
+    sem objHasUrl +=
     | ObjType {} -> true
 
-    sem objHasLink =
+    sem objHasLink +=
     | ObjType {} -> true
 
-    sem objMerge =
+    sem objMerge +=
     | ObjType {} & obj1 -> lam obj2.
             match obj2 with ObjType {} then obj1
             else objMergeFailed obj1 obj2
@@ -419,47 +426,47 @@ lang ObjSem = ObjectInterface
     -- This is the string of the expression of the pattern.
     type SemVariant = String 
 
-    syn Object =
+    syn Object +=
     | ObjSem { langName: String, ty: Option Type, variants: [SemVariant], datas: ObjectDatas }
 
-    sem objMergeIsRelevant =
+    sem objMergeIsRelevant +=
     | (ObjSem { variants = v1 } & o1, ObjSem { variants = v2 } & o2) ->
         let v = if lti (length v1) (length v2) then v2 else v1 in
         match objMerge o1 o2 with ObjSem { variants = v3 } in
         gti (length v3) (length v)
 
-    sem objVariantsAreCoveredBy =
+    sem objVariantsAreCoveredBy +=
     | (ObjSem { variants = v1 } & o1, ObjSem { variants = v2 } & o2) ->
         if lti (length v2) (length v1) then false else
         match objMerge o1 o2 with ObjSem { variants = v3 } in
         lti (length v3) (length v2)
 
-    sem objToString =
+    sem objToString +=
     | ObjSem { langName = langName } ->
             join ["ObjSem, langName = ", langName]
 
-    sem objDatas =
+    sem objDatas +=
     | ObjSem { datas = datas } -> datas
 
-    sem objSetDatas =
+    sem objSetDatas +=
     | ObjSem f -> lam datas. ObjSem { f with datas = datas }
 
-    sem objGetFirstWord =
+    sem objGetFirstWord +=
     | ObjSem {} -> "sem"
 
-    sem objHasUrl =
+    sem objHasUrl +=
     | ObjSem {} -> true
 
-    sem objHasLink =
+    sem objHasLink +=
     | ObjSem {} -> true
 
-    sem objLangName =
+    sem objLangName +=
     | ObjSem { langName = langName } -> langName
 
-    sem objSetType =
+    sem objSetType +=
     | ObjSem d -> lam ty. ObjSem { d with ty = ty }    
 
-    sem objMerge =
+    sem objMerge +=
     | (ObjSem d1) & obj1 -> lam obj2.
             match obj2 with ObjSem d2 then
                 let variants = foldl
@@ -483,45 +490,45 @@ lang ObjSyn = ObjectInterface
         doc: String
     }
 
-    syn Object =
+    syn Object +=
     | ObjSyn { langName: String, variants: [SynVariant], datas: ObjectDatas }    
 
-    sem objMergeIsRelevant =
+    sem objMergeIsRelevant +=
     | (ObjSyn { variants = v1 } & o1, ObjSyn { variants = v2 } & o2) ->
         let v = if lti (length v1) (length v2) then v2 else v1 in
         match objMerge o1 o2 with ObjSyn { variants = v3 } in
         gti (length v3) (length v)
 
-    sem objVariantsAreCoveredBy =
+    sem objVariantsAreCoveredBy +=
     | (ObjSyn { variants = v1 } & o1, ObjSyn { variants = v2 } & o2) ->
         if lti (length v2) (length v1) then false else
         match objMerge o1 o2 with ObjSyn { variants = v3 } in
         lti (length v3) (length v2)
 
 
-    sem objDatas =
+    sem objDatas +=
     | ObjSyn { datas = datas } -> datas
 
-    sem objSetDatas =
+    sem objSetDatas +=
     | ObjSyn f -> lam datas. ObjSyn { f with datas = datas }
 
-    sem objToString =
+    sem objToString +=
     | ObjSyn { langName = langName } ->
             join ["ObjSyn, langName = ", langName]
 
-    sem objGetFirstWord =
+    sem objGetFirstWord +=
     | ObjSyn {} -> "syn"
 
-    sem objHasUrl =
+    sem objHasUrl +=
     | ObjSyn {} -> true
 
-    sem objLangName =
+    sem objLangName +=
     | ObjSyn { langName = langName } -> langName
 
-    sem objHasLink =
+    sem objHasLink +=
     | ObjSyn {} -> true
 
-    sem objMerge =
+    sem objMerge +=
     | (ObjSyn d1) & obj1 -> lam obj2.
             match obj2 with ObjSyn d2 then
                 let variants = foldl
@@ -539,28 +546,28 @@ end
 ----------------------------------------------------------------------
 lang ObjCon = ObjectInterface
 
-    syn Object =
+    syn Object +=
     | ObjCon { t: Type, parentType: String, datas: ObjectDatas }
 
-    sem objDatas =
+    sem objDatas +=
     | ObjCon { datas = datas } -> datas
 
-    sem objSetDatas =
+    sem objSetDatas +=
     | ObjCon f -> lam datas. ObjCon { f with datas = datas }
 
-    sem objToString =
+    sem objToString +=
     | ObjCon { t = t, parentType = parentType } -> join ["ObjCon with parent: ", parentType]
 
-    sem objGetFirstWord =
+    sem objGetFirstWord +=
     | ObjCon {} -> "con"
 
-    sem objHasUrl =
+    sem objHasUrl +=
     | ObjCon {} -> true
 
-    sem objHasLink =
+    sem objHasLink +=
     | ObjCon {} -> true
 
-    sem objMerge =
+    sem objMerge +=
     | ObjCon {} & obj1 -> lam obj2.
             match obj2 with ObjCon {} then obj1
             else objMergeFailed obj1 obj2
@@ -572,28 +579,28 @@ end
 ----------------------------------------------------------------------
 lang ObjMexpr = ObjectInterface
 
-    syn Object =
+    syn Object +=
     | ObjMexpr ObjectDatas
 
-    sem objDatas =
+    sem objDatas +=
     | ObjMexpr datas -> datas
 
-    sem objSetDatas =
+    sem objSetDatas +=
     | ObjMexpr _ -> lam datas. ObjMexpr datas
 
-    sem objToString =
+    sem objToString +=
     | ObjMexpr {} -> "ObjMexpr"
 
-    sem objGetFirstWord =
+    sem objGetFirstWord +=
     | ObjMexpr {} -> "mexpr"
 
-    sem objHasUrl =
+    sem objHasUrl +=
     | ObjMexpr {} -> false
 
-    sem objHasLink =
+    sem objHasLink +=
     | ObjMexpr {} -> false
 
-    sem objHasName =
+    sem objHasName +=
     | ObjMexpr {} -> false
 
 end
@@ -603,28 +610,28 @@ end
 ----------------------------------------------------------------------
 lang ObjUtest = ObjectInterface
 
-    syn Object =
+    syn Object +=
     | ObjUtest ObjectDatas
 
-    sem objDatas =
+    sem objDatas +=
     | ObjUtest datas -> datas
 
-    sem objSetDatas =
+    sem objSetDatas +=
     | ObjUtest _ -> lam datas. ObjUtest datas
 
-    sem objToString =
+    sem objToString +=
     | ObjUtest {} -> "ObjUtest"
 
-    sem objGetFirstWord =
+    sem objGetFirstWord +=
     | ObjUtest {} -> "utest"
 
-    sem objHasUrl =
+    sem objHasUrl +=
     | ObjUtest {} -> false
 
-    sem objHasLink =
+    sem objHasLink +=
     | ObjUtest {} -> false
 
-    sem objHasName =
+    sem objHasName +=
     | ObjUtest {} -> false
 
 end

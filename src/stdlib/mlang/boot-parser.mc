@@ -21,6 +21,12 @@ include "name.mc"
 include "seq.mc"
 include "option.mc"
 include "result.mc"
+include "mexpr/info.mc"
+include "common.mc"
+include "mexpr/ast-builder.mc"
+include "basic-types.mc"
+include "mexpr/eq.mc"
+include "string.mc"
 
 lang BootParserMLang = BootParser + MLangAst -- + CosemDeclAst
   sem parseMLangFile : all a. String -> Result a (Info, String) MLangProgram
@@ -232,7 +238,7 @@ lang BootParserMLang = BootParser + MLangAst -- + CosemDeclAst
              effect = neqi (gint d 0) 0,
              info = ginfo d 0}
 
-  sem matchTerm t =
+  sem matchTerm t +=
   | 116 -> TmDecl
     { decl = DeclUse {ident = gname t 0, info = ginfo t 0}
     , inexpr = gterm t 0
@@ -240,7 +246,7 @@ lang BootParserMLang = BootParser + MLangAst -- + CosemDeclAst
     , ty = tyunknown_
     }
 
-  sem matchType t =
+  sem matchType t +=
   | 214 ->
     TyUse {ident = gname t 0,
            info = ginfo t 0,

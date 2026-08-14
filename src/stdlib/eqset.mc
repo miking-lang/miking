@@ -6,6 +6,7 @@
 
 include "common.mc"
 include "seq.mc"
+include "bool.mc"
 
 -- `true` if `x` is a member of `xs`, where equality is defined by `eq`,
 -- otherwise `false`.

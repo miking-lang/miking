@@ -6,6 +6,11 @@ include "stringid.mc"
 
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
+include "basic-types.mc"
+include "option.mc"
+include "name.mc"
+include "mexpr/info.mc"
+include "int.mc"
 
 lang NormPat = Ast
   syn SimpleCon =
@@ -63,23 +68,23 @@ lang NormPat = Ast
 end
 
 lang NPatImpl = NormPat
-  syn NPat =
+  syn NPat +=
   | SNPat SNPat
   | NPatNot (Set SimpleCon)
 
-  sem npatCmpH =
+  sem npatCmpH +=
   | (SNPat a, SNPat b) ->
     snpatCmp (a, b)
   | (NPatNot a, NPatNot b) ->
     setCmp a b
 
-  sem npatComplement =
+  sem npatComplement +=
   | SNPat snp    -> snpatComplement snp
   | NPatNot cons ->
     setFold (lam ks. lam k. snoc ks (SNPat (simpleConComplement k)))
       [] cons
 
-  sem npatIntersect =
+  sem npatIntersect +=
   | (SNPat a, SNPat b) ->
     snpatIntersect (a, b)
   | (NPatNot cons, SNPat sp & pat)
@@ -90,7 +95,7 @@ lang NPatImpl = NormPat
   | (NPatNot cons1, NPatNot cons2) ->
     [NPatNot (setUnion cons1 cons2)]
 
-  sem npatToPat =
+  sem npatToPat +=
   | SNPat a -> snpatToPat a
   | NPatNot cons ->
     if setIsEmpty cons then
@@ -127,18 +132,18 @@ end
 
 
 lang NormPatImpl = NPatImpl
-  sem normpatComplement =
+  sem normpatComplement +=
   | [] -> [wildpat ()]
   | np ->
     foldl1 normpatIntersect (map npatComplement np)
 
-  sem normpatIntersect np1 =
+  sem normpatIntersect np1 +=
   | np2 ->
     join
       (seqLiftA2 (lam x. lam y. npatIntersect (x, y))
          np1 np2)
 
-  sem normpatJointProof as = | bs ->
+  sem normpatJointProof as += | bs ->
     recursive let work = lam as. lam local.
       switch (as, local)
       case ([a] ++ _, [b] ++ local) then
@@ -152,161 +157,161 @@ lang NormPatImpl = NPatImpl
       end
     in work as bs
 
-  sem normpatToPat =
+  sem normpatToPat +=
   | [] -> pnot_ pvarw_
   | np ->
     foldl1 por_ (map npatToPat np)
 end
 
 lang IntNormPat = NPatImpl + IntPat
-  syn SimpleCon =
+  syn SimpleCon +=
   | IntCon Int
 
-  syn SNPat =
+  syn SNPat +=
   | NPatInt Int
 
-  sem simpleConCmpH =
+  sem simpleConCmpH +=
   | (IntCon a, IntCon b) -> subi a b
 
-  sem simpleConComplement =
+  sem simpleConComplement +=
   | IntCon a -> NPatInt a
 
-  sem simpleConToPat =
+  sem simpleConToPat +=
   | IntCon a -> pint_ a
 
-  sem snpatCmp =
+  sem snpatCmp +=
   | (NPatInt a, NPatInt b) -> subi a b
 
-  sem snpatToSimpleCon =
+  sem snpatToSimpleCon +=
   | NPatInt a -> Some (IntCon a)
 
-  sem snpatComplement =
+  sem snpatComplement +=
   | NPatInt a ->
     [notpatSimple (IntCon a)]
 
-  sem snpatIntersect =
+  sem snpatIntersect +=
   | (NPatInt a & p, NPatInt b) ->
     if eqi a b
     then [SNPat p]
     else []
 
-  sem snpatToPat =
+  sem snpatToPat +=
   | NPatInt a -> pint_ a
 
-  sem patToNormpat =
+  sem patToNormpat +=
   | PatInt a ->
     [SNPat (NPatInt a.val)]
 end
 
 lang CharNormPat = NPatImpl + CharPat
-  syn SimpleCon =
+  syn SimpleCon +=
   | CharCon Char
 
-  syn SNPat =
+  syn SNPat +=
   | NPatChar Char
 
-  sem simpleConCmpH =
+  sem simpleConCmpH +=
   | (CharCon a, CharCon b) -> subi (char2int a) (char2int b)
 
-  sem simpleConComplement =
+  sem simpleConComplement +=
   | CharCon a -> NPatChar a
 
-  sem simpleConToPat =
+  sem simpleConToPat +=
   | CharCon a -> pchar_ a
 
-  sem snpatCmp =
+  sem snpatCmp +=
   | (NPatChar a, NPatChar b) -> subi (char2int a) (char2int b)
 
-  sem snpatToSimpleCon =
+  sem snpatToSimpleCon +=
   | NPatChar a -> Some (CharCon a)
 
-  sem snpatComplement =
+  sem snpatComplement +=
   | NPatChar a ->
     [notpatSimple (CharCon a)]
 
-  sem snpatIntersect =
+  sem snpatIntersect +=
   | (NPatChar a & p, NPatChar b) ->
     if eqc a b
     then [SNPat p]
     else []
 
-  sem snpatToPat =
+  sem snpatToPat +=
   | NPatChar a -> pchar_ a
 
-  sem patToNormpat =
+  sem patToNormpat +=
   | PatChar a ->
     [SNPat (NPatChar a.val)]
 end
 
 lang BoolNormPat = NPatImpl + BoolPat
-  syn SimpleCon =
+  syn SimpleCon +=
   | BoolCon Bool
 
-  syn SNPat =
+  syn SNPat +=
   | NPatBool Bool
 
-  sem simpleConCmpH =
+  sem simpleConCmpH +=
   | (BoolCon a, BoolCon b) ->
     subi (if a then 1 else 0) (if b then 1 else 0)
 
-  sem simpleConComplement =
+  sem simpleConComplement +=
   | BoolCon a -> NPatBool a
 
-  sem simpleConToPat =
+  sem simpleConToPat +=
   | BoolCon a -> pbool_ a
 
-  sem snpatCmp =
+  sem snpatCmp +=
   | (NPatBool a, NPatBool b) ->
     subi (if a then 1 else 0) (if b then 1 else 0)
 
-  sem snpatToSimpleCon =
+  sem snpatToSimpleCon +=
   | NPatBool a -> Some (BoolCon a)
 
-  sem snpatComplement =
+  sem snpatComplement +=
   | NPatBool a ->
     [notpatSimple (BoolCon a)]
 
-  sem snpatIntersect =
+  sem snpatIntersect +=
   | (NPatBool a & p, NPatBool b) ->
     if eqi (if a then 1 else 0) (if b then 1 else 0)
     then [SNPat p]
     else []
 
-  sem snpatToPat =
+  sem snpatToPat +=
   | NPatBool a -> pbool_ a
 
-  sem patToNormpat =
+  sem patToNormpat +=
   | PatBool a ->
     [SNPat (NPatBool a.val)]
 end
 
 lang ConNormPat = NPatImpl + DataPat
-  syn SimpleCon =
+  syn SimpleCon +=
   | ConCon Name
 
-  syn SNPat =
+  syn SNPat +=
   | NPatCon { ident : Name, subpat : NPat }
 
-  sem simpleConCmpH =
+  sem simpleConCmpH +=
   | (ConCon a, ConCon b) -> nameCmp a b
 
-  sem simpleConComplement =
+  sem simpleConComplement +=
   | ConCon a ->
     NPatCon { ident = a, subpat = wildpat () }
 
-  sem simpleConToPat =
+  sem simpleConToPat +=
   | ConCon a -> npcon_ a pvarw_
 
-  sem snpatCmp =
+  sem snpatCmp +=
   | (NPatCon a, NPatCon b) ->
     let nameRes = nameCmp a.ident b.ident in
     if eqi 0 nameRes then npatCmp a.subpat b.subpat
     else nameRes
 
-  sem snpatToSimpleCon =
+  sem snpatToSimpleCon +=
   | NPatCon a -> Some (ConCon a.ident)
 
-  sem snpatComplement =
+  sem snpatComplement +=
   | NPatCon {ident = c, subpat = p} ->
     cons
       (notpatSimple (ConCon c))
@@ -314,7 +319,7 @@ lang ConNormPat = NPatImpl + DataPat
          (lam p. SNPat (NPatCon {ident = c, subpat = p}))
          (npatComplement p))
 
-  sem snpatIntersect =
+  sem snpatIntersect +=
   | (NPatCon {ident = c1, subpat = p1},
      NPatCon {ident = c2, subpat = p2}) ->
     if nameEq c1 c2 then
@@ -324,11 +329,11 @@ lang ConNormPat = NPatImpl + DataPat
     else
       []
 
-  sem snpatToPat =
+  sem snpatToPat +=
   | NPatCon {ident = c, subpat = p} ->
     npcon_ c (npatToPat p)
 
-  sem patToNormpat =
+  sem patToNormpat +=
   | PatCon {ident = c, subpat = p} ->
     map
       (lam p. SNPat (NPatCon {ident = c, subpat = p}))
@@ -336,14 +341,14 @@ lang ConNormPat = NPatImpl + DataPat
 end
 
 lang RecordNormPat = NPatImpl + RecordPat
-  syn SNPat =
+  syn SNPat +=
   | NPatRecord (Map SID NPat)
 
-  sem snpatCmp =
+  sem snpatCmp +=
   | (NPatRecord a, NPatRecord b) ->
     mapCmp npatCmp a b
 
-  sem snpatComplement =
+  sem snpatComplement +=
   | NPatRecord pats ->
     match unzip (mapBindings pats) with (labels, pats) in
     seqComplement
@@ -351,7 +356,7 @@ lang RecordNormPat = NPatImpl + RecordPat
         SNPat (NPatRecord (mapFromSeq cmpSID (zip labels pats))))
       pats
 
-  sem snpatIntersect =
+  sem snpatIntersect +=
   | (NPatRecord pats1, NPatRecord pats2) ->
     let merged =
       mapMerge
@@ -367,7 +372,7 @@ lang RecordNormPat = NPatImpl + RecordPat
       seqMapM (lam kv. map (lam v. (kv.0, v)) kv.1) (mapBindings merged) in
     map (lam bs. SNPat (NPatRecord (mapFromSeq cmpSID bs))) bindings
 
-  sem snpatToPat =
+  sem snpatToPat +=
   | NPatRecord pats ->
     PatRecord {
       bindings = mapMap npatToPat pats,
@@ -375,7 +380,7 @@ lang RecordNormPat = NPatImpl + RecordPat
       ty = tyunknown_
     }
 
-  sem patToNormpat =
+  sem patToNormpat +=
   | PatRecord { bindings = bs } ->
     let nested = mapMap (lam p. patToNormpat p) bs in
     let bindings =
@@ -384,11 +389,11 @@ lang RecordNormPat = NPatImpl + RecordPat
 end
 
 lang SeqNormPat = NPatImpl + SeqTotPat + SeqEdgePat
-  syn SNPat =
+  syn SNPat +=
   | NPatSeqTot [NPat]
   | NPatSeqEdge { prefix : [NPat], disallowed : Set Int, postfix : [NPat] }
 
-  sem snpatCmp =
+  sem snpatCmp +=
   | (NPatSeqTot a, NPatSeqTot b) ->
     seqCmp npatCmp a b
   | (NPatSeqEdge a, NPatSeqEdge b) ->
@@ -399,7 +404,7 @@ lang SeqNormPat = NPatImpl + SeqTotPat + SeqEdgePat
       else midRes
     else preRes
 
-  sem snpatComplement =
+  sem snpatComplement +=
   | NPatSeqTot pats ->
     cons (SNPat (NPatSeqEdge { prefix = []
                              , disallowed = setOfSeq subi [length pats]
@@ -425,7 +430,7 @@ lang SeqNormPat = NPatImpl + SeqTotPat + SeqEdgePat
     in
     join [complementedProduct, shortTotPats, disTotPats]
 
-  sem snpatIntersect =
+  sem snpatIntersect +=
   | (NPatSeqTot pats1, NPatSeqTot pats2) ->
     match eqi (length pats1) (length pats2) with false
     then []
@@ -507,7 +512,7 @@ lang SeqNormPat = NPatImpl + SeqTotPat + SeqEdgePat
                 (join [pre, make (subi (subi patLen preLen) postLen) (wildpat ()), post])
                 pats))
 
-  sem snpatToPat =
+  sem snpatToPat +=
   | NPatSeqTot pats -> pseqtot_ (map npatToPat pats)
   | NPatSeqEdge {prefix = pre, disallowed = dis, postfix = post} ->
     let edgepat = pseqedgew_ (map npatToPat pre) (map npatToPat post) in
@@ -515,7 +520,7 @@ lang SeqNormPat = NPatImpl + SeqTotPat + SeqEdgePat
       pand_ edgepat
         (pnot_ (foldl1 por_ (map (lam n. pseqtot_ (make n pvarw_)) (setToSeq dis))))
 
-  sem patToNormpat =
+  sem patToNormpat +=
   | PatSeqTot { pats = ps } ->
     map (lam x. SNPat (NPatSeqTot x))
       (seqMapM (lam x. x) (map patToNormpat ps))
@@ -530,24 +535,24 @@ lang SeqNormPat = NPatImpl + SeqTotPat + SeqEdgePat
 end
 
 lang NamedNormPat = NPatImpl + NamedPat
-  sem patToNormpat =
+  sem patToNormpat +=
   | PatNamed _ -> [wildpat ()]
 end
 
 lang AndNormPat = NPatImpl + AndPat
-  sem patToNormpat =
+  sem patToNormpat +=
   | PatAnd {lpat = l, rpat = r} ->
     normpatIntersect (patToNormpat l) (patToNormpat r)
 end
 
 lang OrNormPat = NPatImpl + OrPat
-  sem patToNormpat =
+  sem patToNormpat +=
   | PatOr {lpat = l, rpat = r} ->
     concat (patToNormpat l) (patToNormpat r)
 end
 
 lang NotNormPat = NPatImpl + NotPat
-  sem patToNormpat =
+  sem patToNormpat +=
   | PatNot {subpat = p} ->
     normpatComplement (patToNormpat p)
 end
@@ -579,30 +584,30 @@ lang NormPatMatch = NPatImpl + VarAst
 end
 
 lang IntNormPatMatch = NormPatMatch + IntAst + IntNormPat
-  sem exprToSimpleCon =
+  sem exprToSimpleCon +=
   | TmConst { val = CInt i } -> Some (IntCon i.val)
 
-  sem matchSNPat =
+  sem matchSNPat +=
   | (TmConst {val = CInt i}, NPatInt j) ->
     if eqi i.val j then Some (mapEmpty nameCmp)
     else None ()
 end
 
 lang CharNormPatMatch = NormPatMatch + CharAst + CharNormPat
-  sem exprToSimpleCon =
+  sem exprToSimpleCon +=
   | TmConst { val = CChar i } -> Some (CharCon i.val)
 
-  sem matchSNPat =
+  sem matchSNPat +=
   | (TmConst {val = CChar i}, NPatChar j) ->
     if eqc i.val j then Some (mapEmpty nameCmp)
     else None ()
 end
 
 lang BoolNormPatMatch = NormPatMatch + BoolAst + BoolNormPat
-  sem exprToSimpleCon =
+  sem exprToSimpleCon +=
   | TmConst { val = CBool i } -> Some (BoolCon i.val)
 
-  sem matchSNPat =
+  sem matchSNPat +=
   | (TmConst {val = CBool i}, NPatBool j) ->
     if eqi (if i.val then 1 else 0) (if j then 1 else 0)
     then Some (mapEmpty nameCmp)
@@ -610,10 +615,10 @@ lang BoolNormPatMatch = NormPatMatch + BoolAst + BoolNormPat
 end
 
 lang ConNormPatMatch = NormPatMatch + DataAst + ConNormPat
-  sem exprToSimpleCon =
+  sem exprToSimpleCon +=
   | TmConApp { ident = cident } -> Some (ConCon cident)
 
-  sem matchSNPat =
+  sem matchSNPat +=
   | (TmConApp {ident = cident, body = b}, NPatCon {ident = pident, subpat = p}) ->
     if nameEq cident pident
     then matchNPat (b, p)
@@ -621,7 +626,7 @@ lang ConNormPatMatch = NormPatMatch + DataAst + ConNormPat
 end
 
 lang RecordNormPatMatch = NormPatMatch + RecordAst + RecordNormPat
-  sem matchSNPat =
+  sem matchSNPat +=
   | (TmRecord {bindings = bs}, NPatRecord pbs) ->
     mapFoldlOption
       (lam acc. lam. lam m. optionMap (mapUnionWith normpatIntersect acc) m)
@@ -630,7 +635,7 @@ lang RecordNormPatMatch = NormPatMatch + RecordAst + RecordNormPat
 end
 
 lang SeqNormPatMatch = NormPatMatch + SeqAst + SeqNormPat
-  sem matchSNPat =
+  sem matchSNPat +=
   | (TmSeq {tms = tms}, NPatSeqTot pats) ->
     if eqi (length tms) (length pats) then
       optionFoldlM

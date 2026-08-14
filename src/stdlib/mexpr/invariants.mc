@@ -1,4 +1,7 @@
 include "mexpr/attribute-grammar.mc"
+include "common.mc"
+include "seq.mc"
+include "map.mc"
 
 lang Invariant = AttributeGrammar
   sem printInvariantSummary : Attr Loc -> ()

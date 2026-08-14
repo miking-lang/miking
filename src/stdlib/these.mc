@@ -11,6 +11,7 @@ include "option.mc"
 include "seq.mc"
 include "tuple.mc"
 include "basic-types.mc"
+include "bool.mc"
 
 -- Construct These types
 let theseThis : all a. all b. a -> These a b = lam a. This a

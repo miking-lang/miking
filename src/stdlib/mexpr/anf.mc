@@ -14,6 +14,11 @@ include "eq.mc"
 include "info.mc"
 include "error.mc"
 include "map.mc"
+include "option.mc"
+include "basic-types.mc"
+include "seq.mc"
+include "string.mc"
+include "common.mc"
 
 lang ANF = LetDeclAst + VarAst + UnknownTypeAst
 
@@ -58,7 +63,7 @@ end
 
 lang VarANF = ANF + VarAst
 
-  sem normalize (k : Expr -> Expr) =
+  sem normalize (k : Expr -> Expr) +=
   | TmVar t -> k (TmVar t)
 
 end
@@ -67,7 +72,7 @@ end
 -- intermediate closure to a variable.
 lang AppANF = ANF + AppAst
 
-  sem normalize (k : Expr -> Expr) =
+  sem normalize (k : Expr -> Expr) +=
   | TmApp t -> normalizeNames k (TmApp t)
 
   sem normalizeNames (k : Expr -> Expr) =
@@ -83,7 +88,7 @@ end
 -- Version that lifts out each individual application
 lang AppANFAll = ANF + AppAst
 
-  sem normalize (k : Expr -> Expr) =
+  sem normalize (k : Expr -> Expr) +=
   | TmApp t ->
     normalizeName (lam l.
       normalizeName (lam r.
@@ -102,10 +107,10 @@ end
 -- Version analogous to AppANF, where each individual lambda is not name-bound.
 lang LamANF = ANF + NormalizeLams + LamAst
 
-  sem normalize (k : Expr -> Expr) =
+  sem normalize (k : Expr -> Expr) +=
   | TmLam _ & t -> k (normalizeLams t)
 
-  sem normalizeLams =
+  sem normalizeLams +=
   | TmLam t -> TmLam { t with body = normalizeLams t.body }
   | t -> normalizeTerm t
 
@@ -114,10 +119,10 @@ end
 -- Version where each individual lambda is name-bound.
 lang LamANFAll = ANF + NormalizeLams + LamAst
 
-  sem normalize (k : Expr -> Expr) =
+  sem normalize (k : Expr -> Expr) +=
   | TmLam _ & t -> k (normalizeLams t)
 
-  sem normalizeLams =
+  sem normalizeLams +=
   | TmLam t -> TmLam { t with body = normalizeTerm t.body }
 
 end
@@ -125,7 +130,7 @@ end
 -- Records and record updates can be seen as sequences of applications.
 lang RecordANF = ANF + RecordAst
 
-  sem normalize (k : Expr -> Expr) =
+  sem normalize (k : Expr -> Expr) +=
   | TmRecord t ->
     mapMapK
       (lam e. lam k. normalizeName k e)
@@ -145,14 +150,14 @@ lang RecordANF = ANF + RecordAst
 end
 
 lang DeclANF = ANF + DeclAst
-  sem normalize k =
+  sem normalize k +=
   | TmDecl x ->
     TmDecl {x with inexpr = normalizeName k x.inexpr}
 end
 
 lang LetANF = ANF + LetDeclAst
 
-  sem normalize (k : Expr -> Expr) =
+  sem normalize (k : Expr -> Expr) +=
   | TmDecl (x & { decl = DeclLet t, inexpr = inexpr }) ->
     normalize
       (lam n1. TmDecl {x with decl = DeclLet {t with body = n1}, inexpr = normalizeName k inexpr})
@@ -162,7 +167,7 @@ end
 
 lang RecLetsANFBase = ANF + NormalizeLams + RecLetsDeclAst + LamAst
 
-  sem normalize (k : Expr -> Expr) =
+  sem normalize (k : Expr -> Expr) +=
   -- We do not allow lifting things outside of reclets, since they might
   -- inductively depend on what is being defined.
   | TmDecl (x & { decl = DeclRecLets t, inexpr = inexpr }) ->
@@ -184,14 +189,14 @@ lang RecLetsANFAll = RecLetsANFBase + LamANFAll end
 
 lang ConstANF = ANF + ConstAst
 
-  sem normalize (k : Expr -> Expr) =
+  sem normalize (k : Expr -> Expr) +=
   | TmConst t -> k (TmConst t)
 
 end
 
 lang DataANF = ANF + DataAst
 
-  sem normalize (k : Expr -> Expr) =
+  sem normalize (k : Expr -> Expr) +=
   | TmConApp t ->
     normalizeName
       (lam b. k (TmConApp {t with body = b})) t.body
@@ -200,7 +205,7 @@ end
 
 lang MatchANF = ANF + MatchAst
 
-  sem normalize (k : Expr -> Expr) =
+  sem normalize (k : Expr -> Expr) +=
   | TmMatch t ->
     normalizeName
       (lam t2. k (TmMatch {{{t with target = t2}
@@ -212,7 +217,7 @@ end
 
 lang UtestANF = ANF + UtestDeclAst
 
-  sem normalize (k : Expr -> Expr) =
+  sem normalize (k : Expr -> Expr) +=
   | TmDecl (x & { decl = DeclUtest t, inexpr = inexpr }) ->
     let tusing = optionMap normalizeTerm t.tusing in
     normalizeName
@@ -252,7 +257,7 @@ end
 
 lang SeqANF = ANF + SeqAst
 
-  sem normalize (k : Expr -> Expr) =
+  sem normalize (k : Expr -> Expr) +=
   | TmSeq t ->
     mapK (lam e. lam k. normalizeName k e) t.tms (lam ts. k (TmSeq {t with tms = ts}))
 
@@ -260,14 +265,14 @@ end
 
 lang NeverANF = ANF + NeverAst
 
-  sem normalize (k : Expr -> Expr) =
+  sem normalize (k : Expr -> Expr) +=
   | TmNever t -> k (TmNever t)
 
 end
 
 lang ExtANF = ANF + ExtDeclAst + FunTypeAst + UnknownTypeAst + LamAst + AppAst + FunArity
 
-  sem normalize (k : Expr -> Expr) =
+  sem normalize (k : Expr -> Expr) +=
   | TmDecl (x & {decl = d & DeclExt t, inexpr = inexpr}) ->
     -- NOTE(dlunde,2022-06-14): Externals must always be fully applied
     -- (otherwise the parser throws an error). To make this compatible with
@@ -353,7 +358,7 @@ lang MExprANF =
   ConstANF + DataANF + MatchANF + UtestANF + SeqANF + NeverANF + ExtANF +
   DeclANF
 
-  sem liftANF =
+  sem liftANF +=
   | TmLam _ -> false
   | TmConst _ -> false
   | TmNever _ -> false

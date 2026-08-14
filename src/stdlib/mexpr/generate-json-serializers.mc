@@ -15,6 +15,12 @@ include "json.mc"
 include "stdlib.mc"
 include "stringid.mc"
 include "map.mc"
+include "basic-types.mc"
+include "name.mc"
+include "mexpr/ast-builder.mc"
+include "seq.mc"
+include "common.mc"
+include "option.mc"
 
 let constructorKey = "__constructor__"
 let dataKey = "__data__"
@@ -62,27 +68,28 @@ lang GenerateJsonSerializers =
 
   }
 
-  sem addJsonSerializers: [Type] -> Expr -> (GJSRes, Expr, GJSEnv)
-  sem addJsonSerializers tys =
-  | expr ->
-    match generateJsonSerializers tys expr with (acc, res, env) in
-    let lib = env.lib in
-    let eta = lam expr.
-      match expr with TmLam _ then expr
-      else let n = nameSym "x" in nulam_ n (app_ expr (nvar_ n))
-    in
-    let bs = join (map (lam s.
-        [(s.serializerName,
-          match s.serializer with Some s then eta s else error "Empty serializer"),
-         (s.deserializerName,
-          match s.deserializer with Some d then eta d else error "Empty deserializer")])
-      (mapValues acc))
-    in
-    let rl = nureclets_ bs in
-    let expr = bind_ expr lib in
-    let expr = bind_ expr rl in
-    let expr = eliminateDuplicateCode expr in
-    (res,expr,env)
+  -- NOTE(vipa, 2026-08-18): This appears to be dead code, and has a type error
+  -- sem addJsonSerializers: [Type] -> Expr -> (GJSRes, Expr, GJSEnv)
+  -- sem addJsonSerializers tys =
+  -- | expr ->
+  --   match generateJsonSerializers tys expr with (acc, res, env) in
+  --   let lib = env.lib in
+  --   let eta = lam expr.
+  --     match expr with TmLam _ then expr
+  --     else let n = nameSym "x" in nulam_ n (app_ expr (nvar_ n))
+  --   in
+  --   let bs = join (map (lam s.
+  --       [(s.serializerName,
+  --         match s.serializer with Some s then eta s else error "Empty serializer"),
+  --        (s.deserializerName,
+  --         match s.deserializer with Some d then eta d else error "Empty deserializer")])
+  --     (mapValues acc))
+  --   in
+  --   let rl = nureclets_ bs in
+  --   let expr = bind_ expr lib in
+  --   let expr = bind_ expr rl in
+  --   let expr = eliminateDuplicateCode expr in
+  --   (res,expr,env)
 
   -- Generate JSON serializers and deserializers. Returns an accumulator of
   -- generated functions and a map from types to serializers/deserializers
@@ -388,7 +395,7 @@ lang GenerateJsonSerializers =
 end
 
 lang JsonSerializationLoader = MCoreLoader + GenerateJsonSerializers
-  syn Hook =
+  syn Hook +=
   | JsonSerializationHook
     { gjsAcc : Ref (Map Name GJSNamedSerializer) -- No implementations, only names (implementations have already been inserted in the program)
     , baseEnv : GJSEnv -- Only the library names matter, everything else is populated later

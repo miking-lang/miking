@@ -38,15 +38,29 @@ include "tensor.mc"
 include "ast.mc"
 include "const-dep.mc"
 include "context-expansion.mc"
+include "set.mc"
+include "tuning/graph-coloring.mc"
+include "map.mc"
+include "mexpr/pprint.mc"
+include "seq.mc"
+include "string.mc"
+include "basic-types.mc"
+include "error.mc"
+include "mexpr/ast.mc"
+include "tuning/prefix-tree.mc"
+include "tuning/name-info.mc"
+include "mexpr/boot-parser.mc"
+include "mexpr/anf.mc"
+include "mexpr/keywords.mc"
 
 lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
 
-  syn AbsVal =
+  syn AbsVal +=
   | AVDHole { id : IName, contexts : Set Int }
   | AVEHole { id : IName, contexts : Set Int }
   | AVConstHole { const : Const, args : [IName] }
 
-  syn GraphData =
+  syn GraphData +=
   | HoleCtxEnv { env: CallCtxEnv }
   | HoleCtxInfo { contextMap : Map IName (Set Int),
                   prefixMap : Map IName (Map IName (Set Int)) }
@@ -55,7 +69,7 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
   | AVDHole _ -> "d"
   | AVEHole _ -> "e"
 
-  sem absValToString im (env : PprintEnv) =
+  sem absValToString im (env : PprintEnv) +=
   | ( AVDHole {id = id, contexts = contexts}
     | AVEHole {id = id, contexts = contexts} ) & av ->
     match pprintVarIName im env id with (env,id) in
@@ -68,10 +82,10 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
     match mapAccumL (pprintVarIName im) env args with (env, args) in
     (env, join [const, "(", strJoin ", " args, ")"])
 
-  sem isDirect =
+  sem isDirect +=
   | AVEHole _ -> false
 
-  sem directTransition (graph: CFAGraph) (rhs: Int) =
+  sem directTransition (graph: CFAGraph) (rhs: Int) +=
   | AVDHole ({id = id, contexts = contexts} & av) ->
     match graph with {graphData = graphData} in
     match graphData with Some (HoleCtxInfo c) then
@@ -82,7 +96,7 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
       else AVDHole av
     else error "Expected context information in CFA graph"
 
-  sem cmpAbsValH =
+  sem cmpAbsValH +=
   | ( (AVDHole {id = id1, contexts = ctxs1},
        AVDHole {id = id2, contexts = ctxs2})
     | (AVEHole {id = id1, contexts = ctxs1},
@@ -95,7 +109,7 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
     if eqi 0 cmp then seqCmp subi lhs.args rhs.args
     else cmp
 
-  syn Constraint =
+  syn Constraint +=
     -- {dhole} ⊆ lhs ⇒ {dhole} ⊆ rhs
   | CstrHoleDirectData { lhs: IName, rhs: IName }
     -- {dhole} ⊆ lhs ⇒ {ehole} ⊆ rhs
@@ -117,7 +131,7 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
     -- lhs \ {dhole : dhole ∈ rhs} ⊆ res
   | CstrHoleIndependent { lhs: IName, rhs: IName, res: IName }
 
-  sem cmpConstraintH =
+  sem cmpConstraintH +=
   | (CstrHoleDirectData l, CstrHoleDirectData r) ->
     let d = subi l.lhs r.lhs in
     if eqi d 0 then subi l.rhs r.rhs
@@ -149,7 +163,7 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
       else d
     else d
 
-  sem initConstraint (graph : CFAGraph) =
+  sem initConstraint (graph : CFAGraph) +=
   | CstrHoleApp r & cstr -> initConstraintName r.lhs graph cstr
   | CstrHoleDirectData r & cstr -> initConstraintName r.lhs graph cstr
   | CstrHoleDirectExe r & cstr -> initConstraintName r.lhs graph cstr
@@ -157,7 +171,7 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
   | CstrHoleMatch r & cstr -> initConstraintName r.lhs graph cstr
   | CstrHoleIndependent r & cstr -> initConstraintName r.lhs graph cstr
 
-  sem propagateConstraint (update : (IName, AbsVal)) (graph : CFAGraph) =
+  sem propagateConstraint (update : (IName, AbsVal)) (graph : CFAGraph) +=
   | CstrHoleDirectData { lhs = lhs, rhs = rhs } ->
     match update.1 with AVDHole _ & av then addData graph av rhs else graph
   | CstrHoleDirectExe { lhs = lhs, rhs = rhs } ->
@@ -259,7 +273,7 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
       else errorSingle [infoTm t.rhs] "Not a TmVar in independent annotation"
     else errorSingle [infoTm t.lhs] "Not a TmVar in independent annotation"
 
-  sem constraintToString im (env: PprintEnv) =
+  sem constraintToString im (env: PprintEnv) +=
   | CstrHoleDirectData { lhs = lhs, rhs = rhs } ->
     match pprintVarIName im env rhs with (env,rhs) in
     match pprintVarIName im env lhs with (env,lhs) in
@@ -326,7 +340,7 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
   -- are used in the graph coloring. By construction, these references
   -- operations are free from holes, so it is safe to assume no constraints.
   -- However, the analysis does not support references in the general case.
-  sem generateConstraintsConst graph info ident =
+  sem generateConstraintsConst graph info ident +=
   | CModRef _ -> graph
 
   sem generateHoleMatchConstraints (ia: IndexAcc) (id: Int) (target: Int) =
@@ -446,9 +460,6 @@ lang MExprHoleCFA = HoleAst + MExprCFA + MExprArity
 end
 
 lang Test = MExprHoleCFA + BootParser + MExprANFAll + MExprSym + GraphColoring
-end
-
-lang MExpr
 end
 
 mexpr

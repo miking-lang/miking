@@ -5,6 +5,7 @@
 
 include "ast.mc"
 include "ast-builder.mc"
+include "bool.mc"
 
 lang NonExpansive = Ast
   -- We define non-expansive and "guarded" non-expansive terms,
@@ -28,22 +29,22 @@ lang NonExpansive = Ast
 end
 
 lang VarNonExpansive = NonExpansive + VarAst
-  sem nonExpansive (guarded : Guarded) =
+  sem nonExpansive (guarded : Guarded) +=
   | TmVar t -> not (and guarded t.frozen)
 end
 
 lang AppNonExpansive = NonExpansive + AppAst
-  sem nonExpansive (guarded : Guarded) =
+  sem nonExpansive (guarded : Guarded) +=
   | TmApp t -> false
 end
 
 lang LamNonExpansive = NonExpansive + LamAst
-  sem nonExpansive (guarded : Guarded) =
+  sem nonExpansive (guarded : Guarded) +=
   | TmLam t -> true
 end
 
 lang DeclNonExpansive = NonExpansive + DeclAst
-  sem nonExpansive guarded =
+  sem nonExpansive guarded +=
   | TmDecl x ->
     if nonExpansiveDecl x.decl
     then nonExpansive guarded x.inexpr
@@ -51,12 +52,12 @@ lang DeclNonExpansive = NonExpansive + DeclAst
 end
 
 lang UtestNonExpansive = NonExpansive + UtestDeclAst
-  sem nonExpansiveDecl =
+  sem nonExpansiveDecl +=
   | DeclUtest _ -> true
 end
 
 lang MatchNonExpansive = NonExpansive + MatchAst
-  sem nonExpansive (guarded : Guarded) =
+  sem nonExpansive (guarded : Guarded) +=
   | TmMatch t ->
     if nonExpansive false t.target then
       if nonExpansive guarded t.thn then

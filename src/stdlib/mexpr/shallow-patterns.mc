@@ -3,6 +3,16 @@ include "mexpr/ast-builder.mc"
 include "mexpr/pprint.mc"
 include "mexpr/type.mc"
 include "result.mc"
+include "map.mc"
+include "name.mc"
+include "basic-types.mc"
+include "option.mc"
+include "bool.mc"
+include "error.mc"
+include "mexpr/info.mc"
+include "string.mc"
+include "char.mc"
+include "stringid.mc"
 /-
 
 NOTE(vipa, 2022-05-20): This file decomposes nested patterns into a
@@ -205,10 +215,6 @@ lang ShallowBase = Ast + NamedPat + DeclAst + UnknownTypeAst
   | Right (SPatWild _) -> (FKClosed (), FSLit "_")
   | Left ([SPatWild _] ++ _) -> (FKClosed (), FSLit "!_")
 
-  sem spatSubtract : (SPat, SPat) -> Option SPat
-  sem spatSubtract =
-  | (l, r) -> if eqi 0 (shallowCmp l r) then None () else Some l
-
   -- The singular SPat is just there to choose the implementation,
   -- its contents should be ignored; it's also present in the set.
   sem processSPats : Set SPat -> SPat -> [SPat]
@@ -350,7 +356,7 @@ lang ShallowBase = Ast + NamedPat + DeclAst + UnknownTypeAst
 end
 
 lang DedupBranchesAndInformativeNever = ShallowBase + NeverAst + AppAst + SeqAst + CharAst + FunTypeAst
-  sem lowerToExpr env scrutinee branches = | fallthrough ->
+  sem lowerToExpr env scrutinee branches += | fallthrough ->
     let inconsistentError = lam info. lam name.
       errorSingle [info] (join ["Inconsistent pattern; '", nameGetStr name, "' is not always bound."]) in
     let resultTy =
@@ -455,7 +461,7 @@ lang DedupBranchesAndInformativeNever = ShallowBase + NeverAst + AppAst + SeqAst
 end
 
 lang ShallowAnd = ShallowBase + AndPat
-  sem decompose name =
+  sem decompose name +=
   | (shallow, PatAnd x) ->
     match decompose name (shallow, x.lpat) with (lPass, lFail) in
     match decompose name (shallow, x.rpat) with (rPass, rFail) in
@@ -466,7 +472,7 @@ lang ShallowAnd = ShallowBase + AndPat
 end
 
 lang ShallowOr = ShallowBase + OrPat
-  sem decompose name =
+  sem decompose name +=
   | (shallow, PatOr x) ->
     match decompose name (shallow, x.lpat) with (lPass, lFail) in
     match decompose name (shallow, x.rpat) with (rPass, rFail) in
@@ -480,7 +486,7 @@ lang ShallowOr = ShallowBase + OrPat
 end
 
 lang ShallowNot = ShallowBase + NotPat + OrPat + AndPat
-  sem decompose name =
+  sem decompose name +=
   | (shallow, PatNot {subpat = PatNot x}) ->
     decompose name (shallow, x.subpat)
   | (shallow, PatNot {subpat = PatOr x}) ->
@@ -567,29 +573,29 @@ lang ShallowNot = ShallowBase + NotPat + OrPat + AndPat
 
     (negSubPatterns, failPat)
 
-  sem collectNames =
+  sem collectNames +=
   | PatNot _ -> _empty ()
 end
 
 lang ShallowInt = ShallowBase + IntPat
-  syn SPat =
+  syn SPat +=
   | SPatInt {val : Int, info : Info}
 
-  sem decompose name =
+  sem decompose name +=
   | (SPatInt i, pat & PatInt x) ->
     -- TODO(vipa, 2022-05-20): Ideally we'd have a guard instead here
     if eqi i.val x.val
     then ([(_empty (), _empty ())], None ())
     else defaultDecomposition pat
 
-  sem collectShallows =
+  sem collectShallows +=
   | PatInt x -> _ssingleton (SPatInt {val = x.val, info = x.info})
 
-  sem mkMatch scrutinee t e =
+  sem mkMatch scrutinee t e +=
   | SPatInt i ->
     withType (tyTm t) (match_ (withType tyint_ (nvar_ scrutinee)) (withTypePat tyint_ (withInfoPat i.info (pint_ i.val))) t e)
 
-  sem spatErrorFormat env lookup scrutinee =
+  sem spatErrorFormat env lookup scrutinee +=
   | Right (SPatInt i) -> (FKClosed (), FSLit (int2string i.val))
   | Left ([SPatInt x] ++ i) ->
     match env.int2string with Some int2string then
@@ -598,25 +604,25 @@ lang ShallowInt = ShallowBase + IntPat
     let spatToInt = lam spat. match spat with SPatInt i in FSLit (concat " | " (int2string i.val)) in
     (FKClosed (), foldl1 fsAppend [FSLit "!(", foldl fsAppend (FSLit (int2string x.val)) (map spatToInt i), FSLit ")"])
 
-  sem shallowCmp =
+  sem shallowCmp +=
   | (SPatInt l, SPatInt r) -> subi l.val r.val
 end
 
 lang ShallowChar = ShallowBase + CharPat
-  syn SPat =
+  syn SPat +=
   | SPatChar {val : Char, info : Info}
 
-  sem decompose name =
+  sem decompose name +=
   | (SPatChar i, pat & PatChar x) ->
     -- TODO(vipa, 2022-05-20): Ideally we'd have a guard instead here
     if eqc i.val x.val
     then ([(_empty (), _empty ())], None ())
     else defaultDecomposition pat
 
-  sem collectShallows =
+  sem collectShallows +=
   | PatChar x -> _ssingleton (SPatChar {val = x.val, info = x.info})
 
-  sem spatErrorFormat env lookup scrutinee =
+  sem spatErrorFormat env lookup scrutinee +=
   | Right (SPatChar c) -> (FKChar (), FSLit (escapeChar c.val))
   | Left ([SPatChar x] ++ c) ->
     match env.escapeChar with Some escapeChar then
@@ -625,39 +631,39 @@ lang ShallowChar = ShallowBase + CharPat
     let spatToChar = lam spat. match spat with SPatChar c in FSLit (concat " | " (escapeChar c.val)) in
     (FKClosed (), foldl1 fsAppend [FSLit "!(", foldl fsAppend (FSLit (escapeChar x.val)) (map spatToChar c), FSLit ")"])
 
-  sem mkMatch scrutinee t e =
+  sem mkMatch scrutinee t e +=
   | SPatChar v ->
     withType (tyTm t) (match_ (withType tychar_ (nvar_ scrutinee)) (withTypePat tychar_ (withInfoPat v.info (pchar_ v.val))) t e)
 
-  sem shallowCmp =
+  sem shallowCmp +=
   | (SPatChar l, SPatChar r) -> cmpChar l.val r.val
 end
 
 lang ShallowBool = ShallowBase + BoolPat
-  syn SPat =
+  syn SPat +=
   | SPatBool {val : Bool, info : Info}
 
-  sem decompose name =
+  sem decompose name +=
   | (SPatBool i, pat & PatBool x) ->
     -- TODO(vipa, 2022-05-20): Ideally we'd have a guard instead here
     if not (xor i.val x.val)
     then ([(_empty (), _empty ())], None ())
     else defaultDecomposition pat
 
-  sem collectShallows =
+  sem collectShallows +=
   | PatBool x -> _ssingleton (SPatBool {val = x.val, info = x.info})
 
-  sem spatErrorFormat env lookup scrutinee =
+  sem spatErrorFormat env lookup scrutinee +=
   | Right (SPatBool c) -> (FKClosed (), FSLit (bool2string c.val))
   | Left ([SPatBool {val = true}]) -> (FKClosed (), FSLit "false")
   | Left ([SPatBool {val = false}]) -> (FKClosed (), FSLit "true")
   | Left ([SPatBool _] ++ _) -> (FKClosed (), FSLit "!_")
 
-  sem mkMatch scrutinee t e =
+  sem mkMatch scrutinee t e +=
   | SPatBool v ->
     withType (tyTm t) (match_ (withType tybool_ (nvar_ scrutinee)) (withTypePat tybool_ (withInfoPat v.info (pbool_ v.val))) t e)
 
-  sem shallowCmp =
+  sem shallowCmp +=
   | (SPatBool {val = true}, SPatBool {val = true}) -> 0
   | (SPatBool {val = true}, SPatBool {val = false}) -> negi 1
   | (SPatBool {val = false}, SPatBool {val = true}) -> 1
@@ -665,10 +671,10 @@ lang ShallowBool = ShallowBase + BoolPat
 end
 
 lang ShallowRecord = ShallowBase + RecordPat + RecordTypeAst + PrettyPrint
-  syn SPat =
+  syn SPat +=
   | SPatRecord { bindings : Map SID Name, ty : Type, info : Info }
 
-  sem decompose name =
+  sem decompose name +=
   | (SPatRecord sx, PatRecord x) ->
     -- NOTE(vipa, 2022-05-20): This can only break if there's a
     -- missing name in SPatRecord, but we should have all the fields
@@ -676,14 +682,14 @@ lang ShallowRecord = ShallowBase + RecordPat + RecordTypeAst + PrettyPrint
     let fields = map (lam pair. (mapFindExn pair.0 sx.bindings, pair.1)) (mapBindings x.bindings)
     in ([(mapFromSeq nameCmp fields, _empty ())], None ())
 
-  sem collectShallows =
+  sem collectShallows +=
   | PatRecord px ->
     match inspectType px.ty with TyRecord x then
       _ssingleton (SPatRecord { bindings = mapMap (lam. nameSym "field") x.fields, ty = px.ty, info = px.info })
     else errorSingle [px.info]
       (join ["I can't immediately see the record type of this pattern, it's a ", type2str px.ty])
 
-  sem spatErrorFormat env lookup scrutinee =
+  sem spatErrorFormat env lookup scrutinee +=
   | Right (SPatRecord x) ->
     let bindings = mapMap (lam x. pfToFs (lookup x)) x.bindings in
     match record2tuple bindings with Some subs then
@@ -704,7 +710,7 @@ lang ShallowRecord = ShallowBase + RecordPat + RecordTypeAst + PrettyPrint
       )
   | Left ([SPatRecord _] ++ _) -> (FKClosed (), FSLit "!_")
 
-  sem mkMatch scrutinee t e =
+  sem mkMatch scrutinee t e +=
   | SPatRecord x ->
     let fields = match inspectType x.ty with TyRecord tr then tr.fields
       else errorSingle [x.info]
@@ -716,7 +722,7 @@ lang ShallowRecord = ShallowBase + RecordPat + RecordTypeAst + PrettyPrint
       } in
     withInfo x.info (withType (tyTm t) (match_ (withType x.ty (nvar_ scrutinee)) pat t (withType (tyTm t) never_)))
 
-  sem shallowIsInfallible =
+  sem shallowIsInfallible +=
   | SPatRecord _ -> true
 end
 
@@ -734,7 +740,7 @@ let _getSliceName
     name
 
 lang ShallowSeq = ShallowBase + SeqTotPat + SeqEdgePat + SeqTypeAst
-  syn SPat =
+  syn SPat +=
   | SPatSeqTot {elements : [Name], slices : Ref (Map (Int, Int) Name), ty : Type, info : Info}
   -- NOTE(vipa, 2022-05-26): The translation strategy used matches
   -- sequence patterns longest first, i.e., if the compared pattern
@@ -742,7 +748,7 @@ lang ShallowSeq = ShallowBase + SeqTotPat + SeqEdgePat + SeqTypeAst
   -- pattern is dead.
   | SPatSeqGE {minLength : Int, prefix : Ref [Name], postfix : Ref [Name], slices : Ref (Map (Int, Int) Name), ty : Type, info : Info}
 
-  sem decompose name =
+  sem decompose name +=
   | (SPatSeqTot tot, pat & PatSeqTot x) ->
     if neqi (length tot.elements) (length x.pats) then defaultDecomposition pat else
     ([(mapFromSeq nameCmp (zip tot.elements x.pats), _empty ())], None ())
@@ -787,12 +793,12 @@ lang ShallowSeq = ShallowBase + SeqTotPat + SeqEdgePat + SeqTypeAst
       else None ()
     in (success, fail)
 
-  sem shallowMinusIsEmpty =
+  sem shallowMinusIsEmpty +=
   | (SPatSeqTot es, SPatSeqGE x) -> leqi x.minLength (length es.elements)
   | (SPatSeqGE _, SPatSeqTot _) -> false
   | (SPatSeqGE x1, SPatSeqGE x2) -> geqi x1.minLength x2.minLength
 
-  sem processSPats spats =
+  sem processSPats spats +=
   | SPatSeqTot {ty = ty, info = info} | SPatSeqGE {ty = ty, info = info} ->
     let getTotLen = lam acc. lam v.
       match v with SPatSeqTot es then setInsert (length es.elements) acc else acc in
@@ -818,7 +824,7 @@ lang ShallowSeq = ShallowBase + SeqTotPat + SeqEdgePat + SeqTypeAst
     -- patterns first
     sort (lam l. lam r. subi (getLen r) (getLen l)) spats
 
-  sem collectShallows =
+  sem collectShallows +=
   | PatSeqTot x -> _ssingleton (SPatSeqTot
     { elements = map (lam. nameSym "elem") x.pats
     , slices = ref _emptySlices
@@ -833,7 +839,7 @@ lang ShallowSeq = ShallowBase + SeqTotPat + SeqEdgePat + SeqTypeAst
     , info = x.info
     })
 
-  sem spatErrorFormat env lookup scrutinee =
+  sem spatErrorFormat env lookup scrutinee +=
   | Right (SPatSeqTot x) ->
     let elements = map (lam x. pfToFs (lookup x)) x.elements in
     (FKClosed (), foldl1 fsAppend (join [[FSLit "["], intersperse (FSLit ", ") elements, [FSLit "]"]]))
@@ -900,14 +906,14 @@ lang ShallowSeq = ShallowBase + SeqTotPat + SeqEdgePat + SeqTypeAst
     -- interpretation that is type correct anyway.
     else (FKClosed (), fsString (withType tystr_ (bind_ decl (setFold lenCase (withType tystr_ (str_ default)) toCheck))))
 
-  sem collectNames =
+  sem collectNames +=
   | pat & PatSeqEdge x ->
     let here = match x.middle with PName name
       then _singleton name x.ty
       else _empty () in
     sfold_Pat_Pat (lam acc. lam p. mapUnion acc (collectNames p)) here pat
 
-  sem mkMatch scrutinee t e =
+  sem mkMatch scrutinee t e +=
   | SPatSeqTot x ->
     match unwrapType x.ty with TySeq {ty = elemTy} in
     let scrutineeVar = withType x.ty (nvar_ scrutinee) in
@@ -981,31 +987,31 @@ lang ShallowSeq = ShallowBase + SeqTotPat + SeqEdgePat + SeqTypeAst
         (bindall_ (join [pres, len, slices, posts]) t)
         e)
 
-  sem shallowIsInfallible =
+  sem shallowIsInfallible +=
   | SPatSeqGE x -> eqi x.minLength 0
 
-  sem shallowCmp =
+  sem shallowCmp +=
   | (SPatSeqTot l, SPatSeqTot r) -> subi (length l.elements) (length r.elements)
   | (SPatSeqGE l, SPatSeqGE r) -> subi l.minLength r.minLength
 end
 
 lang ShallowCon = ShallowBase + DataPat
-  syn SPat =
+  syn SPat +=
   | SPatCon {conName : Name, subName : Name, ty : Type, argTy : Type, info : Info}
 
-  sem decompose name =
+  sem decompose name +=
   | (SPatCon shallow, pat & PatCon x) ->
     if nameEq shallow.conName x.ident then
       ([(_singleton shallow.subName x.subpat, _empty ())], None ())
     else defaultDecomposition pat
 
-  sem collectShallows =
+  sem collectShallows +=
   | PatCon x -> _ssingleton (SPatCon
     { conName = x.ident, subName = nameSym "carried"
     , ty = x.ty, argTy = tyPat x.subpat, info = x.info
     })
 
-  sem spatErrorFormat env lookup scrutinee =
+  sem spatErrorFormat env lookup scrutinee +=
   | Right (SPatCon x) ->
     let fs = switch lookup x.subName
       case (FKApp _, fs) then foldl1 fsAppend [FSLit "(", fs, FSLit ")"]
@@ -1032,13 +1038,13 @@ lang ShallowCon = ShallowBase + DataPat
       (FKApp (), fsString (foldl cCase (withType tystr_ (str_ "!_")) toCheck))
     end
 
-  sem mkMatch scrutinee t e =
+  sem mkMatch scrutinee t e +=
   | SPatCon x -> withType (tyTm t)
     (match_ (withType x.ty (nvar_ scrutinee))
       (withTypePat x.ty (withInfoPat x.info (npcon_ x.conName (withTypePat x.argTy (npvar_ x.subName)))))
       t e)
 
-  sem shallowCmp =
+  sem shallowCmp +=
   | (SPatCon l, SPatCon r) -> nameCmp l.conName r.conName
 end
 

@@ -1,4 +1,9 @@
 include "./docgen-options.mc"
+include "docgen/global/format.mc"
+include "docgen/global/format-language.mc"
+include "basic-types.mc"
+include "sys.mc"
+include "seq.mc"
 
 -- Parse the list of command-line arguments into an `DocGenOptions` record.
 -- Exits with an error if the arguments are invalid.

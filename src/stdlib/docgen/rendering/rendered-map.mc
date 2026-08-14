@@ -1,6 +1,7 @@
 include "hashmap.mc"
 
 include "../global/objects.mc"
+include "docgen/global/util.mc"
 
 type RenderedMap = HashMap String ()
 

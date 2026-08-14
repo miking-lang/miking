@@ -3,9 +3,19 @@ include "pprint.mc"
 include "type-check.mc"
 include "symbolize.mc"
 include "mlang/loader.mc"
+include "mexpr/info.mc"
+include "name.mc"
+include "seq.mc"
+include "mexpr/json-debug.mc"
+include "json.mc"
+include "map.mc"
+include "string.mc"
+include "mexpr/ast-builder.mc"
+include "mexpr/type.mc"
+include "mexpr/unify.mc"
 
 lang UncurriedAst = Ast
-    syn Expr =
+    syn Expr +=
   | TmUncurriedApp
     { f : Expr
     , positional : [Expr]
@@ -19,36 +29,36 @@ lang UncurriedAst = Ast
     , ty : Type
     }
 
-  sem infoTm =
+  sem infoTm +=
   | TmUncurriedApp x -> x.info
-  sem tyTm =
+  sem tyTm +=
   | TmUncurriedApp x -> x.ty
-  sem withInfo info =
+  sem withInfo info +=
   | TmUncurriedApp x -> TmUncurriedApp {x with info = info}
-  sem withType ty =
+  sem withType ty +=
   | TmUncurriedApp x -> TmUncurriedApp {x with ty = ty}
 
-  sem smapAccumL_Expr_Expr f acc =
+  sem smapAccumL_Expr_Expr f acc +=
   | TmUncurriedApp x ->
     match f acc x.f with (acc, newF) in
     match mapAccumL f acc x.positional with (acc, positional) in
     (acc, TmUncurriedApp {x with f = newF, positional = positional})
 
-  sem infoTm =
+  sem infoTm +=
   | TmUncurriedLam x -> x.info
-  sem tyTm =
+  sem tyTm +=
   | TmUncurriedLam x -> x.ty
-  sem withInfo info =
+  sem withInfo info +=
   | TmUncurriedLam x -> TmUncurriedLam {x with info = info}
-  sem withType ty =
+  sem withType ty +=
   | TmUncurriedLam x -> TmUncurriedLam {x with ty = ty}
 
-  sem smapAccumL_Expr_Expr f acc =
+  sem smapAccumL_Expr_Expr f acc +=
   | TmUncurriedLam x ->
     match f acc x.body with (acc, body) in
     (acc, TmUncurriedLam {x with body = body})
 
-  sem smapAccumL_Expr_Type f acc =
+  sem smapAccumL_Expr_Type f acc +=
   | TmUncurriedLam x ->
     let f = lam acc. lam param.
       match f acc param.tyAnnot with (acc, tyAnnot) in
@@ -56,7 +66,7 @@ lang UncurriedAst = Ast
     match mapAccumL f acc x.positional with (acc, positional) in
     (acc, TmUncurriedLam {x with positional = positional})
 
-  sem smapAccumL_Expr_TypeLabel f acc =
+  sem smapAccumL_Expr_TypeLabel f acc +=
   | TmUncurriedLam x ->
     match f acc x.ty with (acc, ty) in
     let f = lam acc. lam param.
@@ -65,19 +75,19 @@ lang UncurriedAst = Ast
     match mapAccumL f acc x.positional with (acc, positional) in
     (acc, TmUncurriedLam {x with positional = positional, ty = ty})
 
-  syn Type =
+  syn Type +=
   | TyUncurriedArrow
     { positional : [Type]
     , ret : Type
     , info : Info
     }
 
-  sem infoTy =
+  sem infoTy +=
   | TyUncurriedArrow x -> x.info
-  sem tyWithInfo info =
+  sem tyWithInfo info +=
   | TyUncurriedArrow x -> TyUncurriedArrow {x with info = info}
 
-  sem smapAccumL_Type_Type f acc =
+  sem smapAccumL_Type_Type f acc +=
   | TyUncurriedArrow x ->
     match mapAccumL f acc x.positional with (acc, positional) in
     match f acc x.ret with (acc, ret) in
@@ -85,7 +95,7 @@ lang UncurriedAst = Ast
 end
 
 lang UncurriedToJson = AstToJson + UncurriedAst
-  sem exprToJson =
+  sem exprToJson +=
   | TmUncurriedApp x -> JsonObject (mapFromSeq cmpString
     [ ("con", JsonString "TmUncurriedApp")
     , ("positional", JsonArray (map exprToJson x.positional))
@@ -108,7 +118,7 @@ lang UncurriedToJson = AstToJson + UncurriedAst
     , ("info", infoToJson x.info)
     ] )
 
-  sem typeToJson =
+  sem typeToJson +=
   | TyUncurriedArrow x -> JsonObject (mapFromSeq cmpString
     [ ("con", JsonString "TyUncurriedArrow")
     , ("positional", JsonArray (map typeToJson x.positional))
@@ -167,20 +177,20 @@ lang LowerUncurried = UncurriedAst + LamAst + OpaqueAst
 end
 
 lang LowerUncurryLoader = LowerUncurried + MCoreLoader
-  syn Hook =
+  syn Hook +=
   | LowerUncurryHook ()
 
-  sem _postTypecheck loader decl = | LowerUncurryHook _ ->
+  sem _postTypecheck loader decl += | LowerUncurryHook _ ->
     let decl = smap_Decl_Expr lowerUncurried decl in
     let decl = smap_Decl_Type lowerUncurriedType decl in
     (loader, decl)
 end
 
 lang UncurriedPrettyPrint = PrettyPrint + UncurriedAst
-  sem typePrecedence =
+  sem typePrecedence +=
   | TyUncurriedArrow _ -> 0
 
-  sem getTypeStringCode indent env =
+  sem getTypeStringCode indent env +=
   | TyUncurriedArrow x ->
     match mapAccumL (getTypeStringCode indent) env x.positional with (env, positional) in
     match printTypeParen indent 1 env x.ret with (env, ret) in
@@ -188,7 +198,7 @@ lang UncurriedPrettyPrint = PrettyPrint + UncurriedAst
 end
 
 lang SymUncurried = Sym + UncurriedAst + VarSym
-  sem symbolizeExpr env =
+  sem symbolizeExpr env +=
   | TmUncurriedLam x ->
     let f = lam varEnv. lam param.
       match setSymbol varEnv param.ident with (varEnv, ident) in
@@ -199,7 +209,7 @@ lang SymUncurried = Sym + UncurriedAst + VarSym
 end
 
 lang UncurriedTypeCheck = TypeCheck + UncurriedAst + ResolveType + SubstituteUnknown + SubstituteNewReprs
-  sem typeCheckExpr env =
+  sem typeCheckExpr env +=
   | TmUncurriedLam x ->
     let f = lam env. lam param.
       let tyAnnot = resolveType param.info env false param.tyAnnot in
@@ -230,10 +240,10 @@ lang UncurriedTypeCheck = TypeCheck + UncurriedAst + ResolveType + SubstituteUnk
 end
 
 lang UnifyUncurried = Unify + UncurriedAst
-  syn UnifyError =
+  syn UnifyError +=
   | NumArguments (Int, Int)
 
-  sem unifyBase u env =
+  sem unifyBase u env +=
   | (TyUncurriedArrow a, TyUncurriedArrow b) ->
     let aLen = length a.positional in
     let bLen = length b.positional in
@@ -247,13 +257,13 @@ lang UnifyUncurried = Unify + UncurriedAst
 end
 
 lang PprintUnifyErrorNumArguments = UnifyUncurried + TCUnify
-  sem pprintUnifyError env =
+  sem pprintUnifyError env +=
   | NumArguments (l, r) ->
     (env, join ["different number of arguments, ", int2string l, " != ", int2string r])
 end
 
 lang UnifyUncurriedMixed = Unify + UncurriedAst + UnifyUncurried + FunTypeAst
-  sem unifyBase u env =
+  sem unifyBase u env +=
   | (TyArrow a, b & TyUncurriedArrow _) ->
     unifyBase u env (TyUncurriedArrow {positional = [a.from], ret = a.to, info = a.info}, b)
   | (a & TyUncurriedArrow _, TyArrow b) ->

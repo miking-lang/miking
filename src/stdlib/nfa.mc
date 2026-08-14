@@ -1,6 +1,10 @@
 include "graph.mc"
 include "char.mc"
 include "string.mc"
+include "digraph.mc"
+include "bool.mc"
+include "eqset.mc"
+include "seq.mc"
 
 -- Represents a nondeterministic finite automaton
 -- Equality and print functions are required for

@@ -1,3 +1,9 @@
+include "basic-types.mc"
+include "bool.mc"
+include "seq.mc"
+include "option.mc"
+include "mexpr/info.mc"
+include "string.mc"
 -- Miking is licensed under the MIT license.
 -- Copyright (C) David Broman. See file LICENSE.txt
 --

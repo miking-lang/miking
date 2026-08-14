@@ -10,6 +10,8 @@ include "map.mc"
 include "ast-builder.mc"
 include "ast.mc"
 include "option.mc"
+include "mexpr/info.mc"
+include "basic-types.mc"
 
 -- Add info for both term and type in const tms
 let _constWithInfos: Info -> use Ast in Expr -> use Ast in Expr =

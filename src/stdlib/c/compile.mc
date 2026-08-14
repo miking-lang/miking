@@ -30,6 +30,18 @@ include "pprint.mc"
 
 -- Externals (these should be automatically parsed eventually)
 include "ext/math-ext.ext-c.mc"
+include "assoc-seq.mc"
+include "basic-types.mc"
+include "error.mc"
+include "mexpr/cmp.mc"
+include "c/externals.mc"
+include "seq.mc"
+include "string.mc"
+include "mexpr/info.mc"
+include "stringid.mc"
+include "option.mc"
+include "mexpr/pprint.mc"
+include "common.mc"
 
 ----------------------
 -- HELPER FUNCTIONS --
@@ -1303,7 +1315,7 @@ end
 lang MExprCCompileAlloc = MExprCCompile
 
   -- Name -> CType -> [{ ty: CType, id: Option Name, init: Option CInit }]
-  sem alloc (name: Name) =
+  sem alloc (name: Name) +=
   | CTyPtr { ty = CTyVar { id = ident } & ty } & ptrTy ->
     [
       -- Define name as pointer to allocated struct
@@ -1318,7 +1330,7 @@ lang MExprCCompileAlloc = MExprCCompile
     ]
   | ty -> print "\n\n"; dprint ty; error "Incorrect type in alloc"
 
-  sem free =
+  sem free +=
   | name -> error "free currently unused"
 
 end

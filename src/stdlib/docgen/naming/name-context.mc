@@ -2,6 +2,12 @@ include "./langs-namespace.mc"
 include "./name-map.mc"
 include "./types-namespace.mc"
 include "../global/objects.mc"
+include "docgen/global/format.mc"
+include "seq.mc"
+include "string.mc"
+include "docgen/global/util.mc"
+include "docgen/naming/generic-namespace-set.mc"
+include "basic-types.mc"
 
 let buildUrl : use Formats in String -> String -> Format -> Bool -> Bool -> String -> String -> String =
     use Formats in

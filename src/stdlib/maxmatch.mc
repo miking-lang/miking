@@ -4,6 +4,10 @@
 
 include "math.mc"
 include "common.mc"
+include "seq.mc"
+include "basic-types.mc"
+include "option.mc"
+include "bool.mc"
 
 type Slack = {
   val : Int,                    -- value of slack

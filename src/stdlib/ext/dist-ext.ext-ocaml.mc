@@ -2,6 +2,8 @@
 
 include "map.mc"
 include "ocaml/ast.mc"
+include "string.mc"
+include "mexpr/ast-builder.mc"
 
 let distExtMap =
   use OCamlTypeAst in

@@ -1,4 +1,8 @@
 include "mexpr/ast.mc"
+include "mexpr/info.mc"
+include "name.mc"
+include "map.mc"
+include "stringid.mc"
 
 -- NOTE(vipa, 2023-06-12): We assume a certain collection size and
 -- explicitly evaluate the cost expression
@@ -28,59 +32,59 @@ end
 
 
 lang TyWildAst = Ast
-  syn Type =
+  syn Type +=
   | TyWild { info : Info }
 
-  sem tyWithInfo info =
+  sem tyWithInfo info +=
   | TyWild x -> TyWild {x with info = info}
 
-  sem infoTy =
+  sem infoTy +=
   | TyWild x -> x.info
 end
 
 lang ReprTypeAst = Ast
- syn Type =
+ syn Type +=
  | TyRepr { info : Info, arg : Type, repr : ReprVar }
 
- sem tyWithInfo info =
+ sem tyWithInfo info +=
  | TyRepr x -> TyRepr {x with info = info}
 
- sem infoTy =
+ sem infoTy +=
  | TyRepr x -> x.info
 
- sem smapAccumL_Type_Type f acc =
+ sem smapAccumL_Type_Type f acc +=
  | TyRepr x ->
    match f acc x.arg with (acc, arg) in
    (acc, TyRepr { x with arg = arg })
 end
 
 lang ReprSubstAst = Ast
-  syn Type =
+  syn Type +=
   | TySubst { info : Info, arg : Type, subst : Name }
 
-  sem tyWithInfo info =
+  sem tyWithInfo info +=
   | TySubst x -> TySubst {x with info = info}
 
-  sem infoTy =
+  sem infoTy +=
   | TySubst x -> x.info
 
-  sem smapAccumL_Type_Type f acc =
+  sem smapAccumL_Type_Type f acc +=
   | TySubst x ->
    match f acc x.arg with (acc, arg) in
    (acc, TySubst { x with arg = arg })
 end
 
 lang OpDeclAst = Ast
-  syn Decl =
+  syn Decl +=
   | DeclOp { info : Info, ident : Name, tyAnnot : Type }
 
-  sem declWithInfo info =
+  sem declWithInfo info +=
   | DeclOp x -> DeclOp {x with info = info}
 
-  sem infoDecl =
+  sem infoDecl +=
   | DeclOp x -> x.info
 
-  sem smapAccumL_Decl_Type f acc =
+  sem smapAccumL_Decl_Type f acc +=
   | DeclOp x ->
     match f acc x.tyAnnot with (env, tyAnnot) in
     (env, DeclOp {x with tyAnnot = tyAnnot})
@@ -99,18 +103,18 @@ lang OpImplAst = Ast
     , delayedReprUnifications : [(ReprVar, ReprVar)]
     , info : Info
     }
-  syn Decl =
+  syn Decl +=
   | DeclOpImpl DeclOpImplRec
 
-  sem infoDecl =
+  sem infoDecl +=
   | DeclOpImpl x -> x.info
 
-  sem smapAccumL_Decl_Expr f acc =
+  sem smapAccumL_Decl_Expr f acc +=
   | DeclOpImpl x ->
     match f acc x.body with (acc, body) in
     (acc, DeclOpImpl {x with body = body})
 
-  sem smapAccumL_Decl_Type f acc =
+  sem smapAccumL_Decl_Type f acc +=
   | DeclOpImpl x ->
     match f acc x.specType with (acc, specType) in
     (acc, DeclOpImpl {x with specType = specType})
@@ -118,24 +122,24 @@ end
 
 lang OpVarAst = Ast
   type TmOpVarRec = {ident : Name, ty : Type, info : Info, frozen : Bool, scaling : OpCost}
-  syn Expr =
+  syn Expr +=
   | TmOpVar TmOpVarRec
 
-  sem tyTm =
+  sem tyTm +=
   | TmOpVar x -> x.ty
 
-  sem withType ty =
+  sem withType ty +=
   | TmOpVar x -> TmOpVar {x with ty = ty}
 
-  sem infoTm =
+  sem infoTm +=
   | TmOpVar x -> x.info
 
-  sem withInfo info =
+  sem withInfo info +=
   | TmOpVar x -> TmOpVar {x with info = info}
 end
 
 lang ReprDeclAst = Ast
-  syn Decl =
+  syn Decl +=
   | DeclRepr
     { ident : Name
     , vars : [Name]
@@ -144,13 +148,13 @@ lang ReprDeclAst = Ast
     , info : Info
     }
 
-  sem infoDecl =
+  sem infoDecl +=
   | DeclRepr x -> x.info
 
-  sem declWithInfo info =
+  sem declWithInfo info +=
   | DeclRepr x -> DeclRepr {x with info = info}
 
-  sem smapAccumL_Decl_Type f acc =
+  sem smapAccumL_Decl_Type f acc +=
   | DeclRepr x ->
     match f acc x.pat with (acc, pat) in
     match f acc x.repr with (acc, repr) in

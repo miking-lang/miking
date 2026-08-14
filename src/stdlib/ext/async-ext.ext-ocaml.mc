@@ -1,4 +1,7 @@
 include "ocaml/ast.mc"
+include "map.mc"
+include "string.mc"
+include "mexpr/ast-builder.mc"
 
 let asyncExtMap =
   use OCamlTypeAst in

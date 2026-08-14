@@ -20,6 +20,9 @@ include "name.mc"
 include "option.mc"
 include "string.mc"
 include "bool.mc"
+include "basic-types.mc"
+include "map.mc"
+include "stringid.mc"
 
 
 

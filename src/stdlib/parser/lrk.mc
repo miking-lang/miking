@@ -27,6 +27,13 @@ include "ocaml/mcore.mc"
 
 include "grammar.mc"
 include "lexer.mc"
+include "basic-types.mc"
+include "string.mc"
+include "mexpr/pprint.mc"
+include "int.mc"
+include "mexpr/symbolize.mc"
+include "mexpr/keywords.mc"
+include "ocaml/compile.mc"
 
 lang LRParser = ContextFreeGrammar + TokenReprEOF + MExprAst + MExprCmp
   type LRStateItem = {

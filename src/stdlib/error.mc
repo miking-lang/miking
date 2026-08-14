@@ -1,3 +1,6 @@
+include "bool.mc"
+include "basic-types.mc"
+include "string.mc"
 /-
 
 This module provides functions for highlighting sections of a file,

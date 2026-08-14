@@ -1,5 +1,6 @@
 
 include "option.mc"
+include "basic-types.mc"
 
 type WriteChannel
 type ReadChannel

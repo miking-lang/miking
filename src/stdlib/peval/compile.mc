@@ -12,6 +12,15 @@ include "error.mc"
 include "set.mc"
 
 include "mexpr/ast.mc"
+include "mexpr/ast-builder.mc"
+include "peval/peval.mc"
+include "mexpr/lamlift.mc"
+include "basic-types.mc"
+include "bool.mc"
+include "mexpr/eq.mc"
+include "mexpr/symbolize.mc"
+include "mexpr/type-check.mc"
+include "mexpr/pprint.mc"
 
 lang SpecializeCompile = SpecializeAst + MExprPEval + MExprAst
                     + SpecializeInclude + SpecializeLiftMExpr

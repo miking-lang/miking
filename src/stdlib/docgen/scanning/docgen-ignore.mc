@@ -2,6 +2,10 @@ include "./scanning-output.mc"
 include "../global/logger.mc"
 include "../global/util.mc"
 include "../global/ext-utils.mc"
+include "basic-types.mc"
+include "string.mc"
+include "seq.mc"
+include "bool.mc"
 
 let docgenIgnorePath = ".docgen-ignore"
 

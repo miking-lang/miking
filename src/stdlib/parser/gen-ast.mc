@@ -1,6 +1,16 @@
 include "mlang/ast.mc"
 include "mexpr/eq.mc"
 include "common.mc"
+include "mexpr/ast.mc"
+include "basic-types.mc"
+include "name.mc"
+include "mexpr/pprint.mc"
+include "mexpr/ast-builder.mc"
+include "mexpr/info.mc"
+include "seq.mc"
+include "option.mc"
+include "string.mc"
+include "set.mc"
 
 
 /-
@@ -472,13 +482,13 @@ let _mkFieldStubs
     [getf, setf, mapAccumf, mapf]
 
 lang CarriedTarget = CarriedTypeBase + Eq + Ast
-  syn CarriedType =
+  syn CarriedType +=
   | TargetType {targetable : Bool, ty : Type}
 
-  sem carriedRepr =
+  sem carriedRepr +=
   | TargetType {ty = ty} -> ty
 
-  sem carriedSMapAccumL f targetTy =
+  sem carriedSMapAccumL f targetTy +=
   | TargetType {targetable = false} -> None ()
   | TargetType {targetable = true, ty = ty} ->
     if eqType ty targetTy
@@ -487,13 +497,13 @@ lang CarriedTarget = CarriedTypeBase + Eq + Ast
 end
 
 lang CarriedSeq = CarriedTypeBase
-  syn CarriedType =
+  syn CarriedType +=
   | SeqType CarriedType
 
-  sem carriedRepr =
+  sem carriedRepr +=
   | SeqType ty -> tyseq_ (carriedRepr ty)
 
-  sem carriedSMapAccumL f targetTy =
+  sem carriedSMapAccumL f targetTy +=
   | SeqType ty ->
     match carriedSMapAccumL f targetTy ty with Some mkNew then Some
       (lam accName. lam valName.
@@ -511,13 +521,13 @@ lang CarriedSeq = CarriedTypeBase
 end
 
 lang CarriedOption = CarriedTypeBase
-  syn CarriedType =
+  syn CarriedType +=
   | OptionType CarriedType
 
-  sem carriedRepr =
+  sem carriedRepr +=
   | OptionType ty -> tyapp_ (tycon_ "Option") (carriedRepr ty)
 
-  sem carriedSMapAccumL f targetTy =
+  sem carriedSMapAccumL f targetTy +=
   | OptionType ty ->
     match carriedSMapAccumL f targetTy ty with Some mkNew then Some
       (lam accName. lam valName.
@@ -535,16 +545,16 @@ lang CarriedOption = CarriedTypeBase
 end
 
 lang CarriedRecord = CarriedTypeBase
-  syn CarriedType =
+  syn CarriedType +=
   | RecordType [(String, CarriedType)]
 
-  sem carriedRepr =
+  sem carriedRepr +=
   | RecordType tys -> tyrecord_
     (map
       (lam x. (x.0, carriedRepr x.1))
       tys)
 
-  sem carriedSMapAccumL f targetTy =
+  sem carriedSMapAccumL f targetTy +=
   | RecordType fields ->
     let mappingFields = mapOption
       (lam x. optionMap (lam y. (x.0, y)) (carriedSMapAccumL f targetTy x.1))

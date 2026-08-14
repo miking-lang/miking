@@ -2,6 +2,7 @@
 
 include "math.mc"
 include "tensor.mc"
+include "float.mc"
 
 external externalMatrixExponential : Tensor[Float] -> Tensor[Float]
 let matrixExponential = lam m. externalMatrixExponential m

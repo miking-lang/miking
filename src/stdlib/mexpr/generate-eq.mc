@@ -5,6 +5,15 @@ include "ast.mc"
 include "type-check.mc"
 
 include "mlang/loader.mc"
+include "name.mc"
+include "map.mc"
+include "mexpr/ast-builder.mc"
+include "stringid.mc"
+include "seq.mc"
+include "mexpr/unify.mc"
+include "basic-types.mc"
+include "error.mc"
+include "set.mc"
 
 lang GenerateEq = Ast
   type GEqEnv =
@@ -25,35 +34,35 @@ lang GenerateEq = Ast
 end
 
 lang GenerateEqInt = GenerateEq + IntTypeAst + CmpIntAst
-  sem _getEqFunction env =
+  sem _getEqFunction env +=
   | TyInt _ -> (env, uconst_ (CEqi ()))
 end
 
 lang GenerateEqFloat = GenerateEq + FloatTypeAst + CmpFloatAst
-  sem _getEqFunction env =
+  sem _getEqFunction env +=
   | TyFloat _ -> (env, uconst_ (CEqf ()))
 end
 
 lang GenerateEqBool = GenerateEq + BoolTypeAst
-  sem _getEqFunction env =
+  sem _getEqFunction env +=
   | TyBool _ -> (env, nvar_ env.eqBool)
 end
 
 lang GenerateEqSeq = GenerateEq + SeqTypeAst
-  sem _getEqFunction env =
+  sem _getEqFunction env +=
   | TySeq x ->
     match getEqFunction env x.ty with (env, elemF) in
     (env, app_ (nvar_ env.eqSeq) elemF)
 end
 
 lang GenerateEqChar = GenerateEq + CharTypeAst + CmpCharAst
-  sem _getEqFunction env =
+  sem _getEqFunction env +=
   | TyChar _ ->
     (env, uconst_ (CEqc ()))
 end
 
 lang GenerateEqRecord = GenerateEq + RecordTypeAst
-  sem _getEqFunction env =
+  sem _getEqFunction env +=
   | ty & TyRecord x ->
     if mapIsEmpty x.fields then (env, ulam_ "" (ulam_ "" true_)) else
 
@@ -74,7 +83,7 @@ lang GenerateEqRecord = GenerateEq + RecordTypeAst
 end
 
 lang GenerateEqApp = GenerateEq + AppTypeAst
-  sem _getEqFunction env =
+  sem _getEqFunction env +=
   | TyApp x ->
     match getEqFunction env x.lhs with (env, lhs) in
     match getEqFunction env x.rhs with (env, rhs) in
@@ -82,7 +91,7 @@ lang GenerateEqApp = GenerateEq + AppTypeAst
 end
 
 lang GenerateEqCon = GenerateEq + ConTypeAst + Generalize + UnifyPure
-  sem _getEqFunction env =
+  sem _getEqFunction env +=
   | ty & TyCon x ->
     -- TODO(vipa, 2025-01-27): Invalidate old eq functions if
     -- we've introduced constructors to pre-existing types
@@ -137,7 +146,7 @@ lang GenerateEqVar = GenerateEq + VarTypeAst
   -- arbitrarily say "equal" or "not equal", but that seems error
   -- prone, or we could somehow ask surrounding code to be rewritten
   -- to carry an extra eq function for the polymorphic type.
-  sem _getEqFunction env =
+  sem _getEqFunction env +=
   | TyVar x ->
     match mapLookup x.ident env.varFunctions with Some fname
     then (env, nvar_ fname)
@@ -157,7 +166,7 @@ lang MExprGenerateEq
 end
 
 lang GenerateEqLoader = MCoreLoader + GenerateEq
-  syn Hook =
+  syn Hook +=
   | EqHook
     { baseEnv : GEqEnv
     , functions : Ref (Map Name Name)  -- Names for TyCon related Eq functions

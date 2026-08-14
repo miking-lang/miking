@@ -4,6 +4,13 @@ include "./utils.mc"
 include "./doc-parser.mc"
 include "./ast-stream.mc"
 include "./syn-variants.mc"
+include "./pos.mc"
+include "docgen/parsing/token-readers.mc"
+include "docgen/global/logger.mc"
+include "seq.mc"
+include "basic-types.mc"
+include "docgen/global/util.mc"
+include "docgen/global/source-code.mc"
 
 type ParseLangRes =  use Objects in { stream: String, obj: Object, newPos: Pos }
 
@@ -84,7 +91,7 @@ let parseLang : use AstStream in String -> Pos -> LangDatabase -> String -> Bool
             lam stream.
             match skipString "lang" stream with Some stream then stream
             else parsingWarn "Language definition does not start with the `lang` keyword."; stream
-        in        
+        in
 
         let getName = getNextWord in
         let skipEqual = skipString "=" in
@@ -103,7 +110,7 @@ let parseLang : use AstStream in String -> Pos -> LangDatabase -> String -> Bool
         let stream = skipLang stream in
         match getName stream with Some { word = name, stream = stream } then
             let parents =
-                match skipEqual stream with Some stream then getParents stream [] 
+                match skipEqual stream with Some stream then getParents stream []
                 else { stream = stream, parents = [] }
             in
             match parents with { parents = parents, stream = stream } in
@@ -112,7 +119,7 @@ let parseLang : use AstStream in String -> Pos -> LangDatabase -> String -> Bool
             let obj = objWithName obj name in
 
             { obj = obj, stream = stream }
-                
+
         else parsingWarn "Failed to parse the language name.";
              { obj = ObjLang { parents = [], datas = objDefaultDatas (), children = [] }, stream = stream }
     in
@@ -123,7 +130,7 @@ let parseLang : use AstStream in String -> Pos -> LangDatabase -> String -> Bool
 
         match posVec with [] | [_] then return ()
         else match posVec with [p1, p2] ++ _ in
-        
+
         match gotoFirstWord stream [] pos with Some { doc = doc, rest = rest, pos = pos, isLang = isLang } then -- Yet again, we don't need the position here.
 
             let objWithDoc =
@@ -160,7 +167,7 @@ let parseLang : use AstStream in String -> Pos -> LangDatabase -> String -> Bool
             in
 
             let code = strToSourceCode code in
-            
+
             let obj = objWithSourceCode obj code in
             let obj = objWithName obj name in
             let obj = objWithIsStdlib obj isStdlib in
@@ -175,7 +182,7 @@ let parseLang : use AstStream in String -> Pos -> LangDatabase -> String -> Bool
             else parsingWarn "Failed to parse the declaration kind (type/syn/sem)."; return ()
             else parsingWarn "Failed to parse the declaration name."; return ()
         else
-            parsingWarn "Failed to locate the next declaration in the language body."; return ()    
+            parsingWarn "Failed to locate the next declaration in the language body."; return ()
     in
 
     match splitStream stream [] pos 0 with { stream = rest, newPos = newPos, tokens = tokens } in

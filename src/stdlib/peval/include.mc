@@ -10,6 +10,8 @@
 include "stdlib.mc"
 include "mexpr/load-runtime.mc"
 include "mexpr/duplicate-code-elimination.mc"
+include "map.mc"
+include "string.mc"
 
 
 let includesLoc = "/peval/peval-runtime.mc"

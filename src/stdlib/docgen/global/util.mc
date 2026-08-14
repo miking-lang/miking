@@ -5,6 +5,11 @@ include "hashmap.mc"
 include "sys.mc"
 include "stdlib.mc"
 include "common.mc"
+include "basic-types.mc"
+include "seq.mc"
+include "option.mc"
+include "char.mc"
+include "bool.mc"
 
 -- Changes the extension of a file.
 -- If the file has an extension, it s replaced; if not, the extension is added.

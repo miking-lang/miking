@@ -1,5 +1,6 @@
 include "string.mc"
 include "sys.mc"
+include "seq.mc"
 
 type CompileOptions = {
   optimize : Bool,

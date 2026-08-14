@@ -7,6 +7,7 @@ include "thread.mc"
 include "atomic.mc"
 include "channel.mc"
 include "map.mc"
+include "basic-types.mc"
 
 type Async a = ARef (Option a)
 

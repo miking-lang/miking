@@ -7,6 +7,7 @@ include "option.mc"
 include "seq.mc"
 include "string.mc"
 include "basic-types.mc"
+include "bool.mc"
 
 --  *-
 --  * .brief Checks equality between two Either values.

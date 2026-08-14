@@ -33,6 +33,21 @@ include "mexpr/duplicate-code-elimination.mc"
 include "mexpr/eval.mc"
 include "mexpr/utils.mc"
 include "mexpr/load-runtime.mc"
+include "basic-types.mc"
+include "name.mc"
+include "string.mc"
+include "info.mc"
+include "stringid.mc"
+include "map.mc"
+include "seq.mc"
+include "mexpr/type-check.mc"
+include "set.mc"
+include "error.mc"
+include "option.mc"
+include "common.mc"
+include "mexpr/ast-builder.mc"
+include "mexpr/pprint.mc"
+include "mexpr/eq.mc"
 
 let _utestRuntimeLoc = "/mexpr/utest-runtime.mc"
 
@@ -215,9 +230,11 @@ lang UtestBase =
   -- all sequence and tensor types are considered equal. This is because we
   -- reuse the polymorphic functions for printing and equality for all sequence
   -- and tensor types.
-  sem cmpTypeH =
-  | (TySeq _, TySeq _) -> 0
-  | (TyTensor _, TyTensor _) -> 0
+  sem cmpTypeH +=
+  | (TySeq {ty = TySeq _}, TySeq _) -> 0
+  | (TySeq {ty = !TySeq _}, TySeq _) -> 0
+  | (TyTensor {ty = TyTensor _}, TyTensor _) -> 0
+  | (TyTensor {ty = !TyTensor _}, TyTensor _) -> 0
 
   type UtestEnv = {
     -- Maps a type to the identifier of its pretty-print or equality function,
@@ -448,7 +465,7 @@ end
 
 lang GeneratePrettyPrintBase = UtestBase + UtestRuntime + MExprAst
   sem prettyPrintId : Info -> UtestEnv -> Type -> (UtestEnv, Name)
-  sem prettyPrintId info env =
+  sem prettyPrintId info env +=
   | ty ->
     let id = prettyPrintIdH info env ty in
     ({env with pprint = mapInsert ty id env.pprint}, id)
@@ -458,7 +475,7 @@ lang GeneratePrettyPrintBase = UtestBase + UtestRuntime + MExprAst
   | ty -> defaultPrettyPrintName ()
 
   sem generatePrettyPrintBody : Info -> UtestEnv -> Type -> (Name, Expr)
-  sem generatePrettyPrintBody info env =
+  sem generatePrettyPrintBody info env +=
   | ty ->
     match mapLookup ty env.pprint with Some id then
       (id, generatePrettyPrintBodyH info env ty)
@@ -472,30 +489,30 @@ lang GeneratePrettyPrintBase = UtestBase + UtestRuntime + MExprAst
 end
 
 lang BoolPrettyPrint = GeneratePrettyPrintBase + UtestRuntime
-  sem prettyPrintIdH info env =
+  sem prettyPrintIdH info env +=
   | TyBool _ -> ppBoolName ()
 end
 
 lang IntPrettyPrint = GeneratePrettyPrintBase + UtestRuntime
-  sem prettyPrintIdH info env =
+  sem prettyPrintIdH info env +=
   | TyInt _ -> ppIntName ()
 end
 
 lang FloatPrettyPrint = GeneratePrettyPrintBase + UtestRuntime
-  sem prettyPrintIdH info env =
+  sem prettyPrintIdH info env +=
   | TyFloat _ -> ppFloatName ()
 end
 
 lang CharPrettyPrint = GeneratePrettyPrintBase + UtestRuntime
-  sem prettyPrintIdH info env =
+  sem prettyPrintIdH info env +=
   | TyChar _ -> ppCharName ()
 end
 
 lang SeqPrettyPrint = GeneratePrettyPrintBase + UtestRuntime
-  sem prettyPrintIdH info env =
+  sem prettyPrintIdH info env +=
   | TySeq _ -> _ppSeqName
 
-  sem generatePrettyPrintBodyH info env =
+  sem generatePrettyPrintBodyH info env +=
   | TySeq t ->
     let ppElem = nameSym "ppElem" in
     let target = nameSym "s" in
@@ -507,10 +524,10 @@ lang SeqPrettyPrint = GeneratePrettyPrintBase + UtestRuntime
 end
 
 lang TensorPrettyPrint = GeneratePrettyPrintBase + UtestRuntime
-  sem prettyPrintIdH info env =
+  sem prettyPrintIdH info env +=
   | TyTensor _ -> _ppTensorName
 
-  sem generatePrettyPrintBodyH info env =
+  sem generatePrettyPrintBodyH info env +=
   | TyTensor t ->
     let ppElem = nameSym "ppElem" in
     let target = nameSym "t" in
@@ -522,12 +539,12 @@ lang TensorPrettyPrint = GeneratePrettyPrintBase + UtestRuntime
 end
 
 lang RecordPrettyPrint = GeneratePrettyPrintBase + UtestRuntime
-  sem prettyPrintIdH info env =
+  sem prettyPrintIdH info env +=
   | TyRecord _ & ty ->
     match mapLookup ty env.pprint with Some id then id
     else newRecordPprintName ()
 
-  sem generatePrettyPrintBodyH info env =
+  sem generatePrettyPrintBodyH info env +=
   | TyRecord {fields = fields} & ty ->
     recursive let intersperseComma : [Expr] -> [Expr] = lam strExprs.
       match strExprs with [] | [_] then
@@ -569,14 +586,14 @@ lang RecordPrettyPrint = GeneratePrettyPrintBase + UtestRuntime
 end
 
 lang VariantPrettyPrint = GeneratePrettyPrintBase + UtestRuntime
-  sem prettyPrintIdH info env =
+  sem prettyPrintIdH info env +=
   | (TyApp _ | TyCon _) & ty ->
     match mapLookup ty env.pprint with Some id then id
     else
       match collectTypeArguments [] ty with (id, argTypes) in
       nameSym (concat (concat "pp" (nameGetStr id)) (strJoin "" (map type2str argTypes)))
 
-  sem generatePrettyPrintBodyH info env =
+  sem generatePrettyPrintBodyH info env +=
   | (TyApp _ | TyCon _) & ty ->
     match collectTypeArguments [] ty with (id, tyArgs) in
     if nameEq id (mapFindExn "Symbol" builtinTypeNames) then
@@ -637,7 +654,7 @@ end
 
 lang GenerateEqualityBase = UtestBase + MExprAst + PrettyPrint
   sem equalityId : Info -> UtestEnv -> Type -> (UtestEnv, Name)
-  sem equalityId info env =
+  sem equalityId info env +=
   | ty ->
     let id = equalityIdH info env ty in
     ({env with eq = mapInsert ty id env.eq}, id)
@@ -651,7 +668,7 @@ lang GenerateEqualityBase = UtestBase + MExprAst + PrettyPrint
     errorSingle [info] msg
 
   sem generateEqualityBody : Info -> UtestEnv -> Type -> (Name, Expr)
-  sem generateEqualityBody info env =
+  sem generateEqualityBody info env +=
   | ty ->
     match mapLookup ty env.eq with Some id then
       (id, generateEqualityBodyH info env ty)
@@ -667,42 +684,42 @@ lang GenerateEqualityBase = UtestBase + MExprAst + PrettyPrint
 end
 
 lang BoolEquality = GenerateEqualityBase + UtestRuntime
-  sem equalityIdH info env =
+  sem equalityIdH info env +=
   | TyBool _ -> eqBoolName ()
 
-  sem generateEqualityBodyH info env =
+  sem generateEqualityBodyH info env +=
   | TyBool _ -> _unit
 end
 
 lang IntEquality = GenerateEqualityBase + UtestRuntime
-  sem equalityIdH info env =
+  sem equalityIdH info env +=
   | TyInt _ -> eqIntName ()
 
-  sem generateEqualityBodyH info env =
+  sem generateEqualityBodyH info env +=
   | TyInt _ -> _unit
 end
 
 lang FloatEquality = GenerateEqualityBase + UtestRuntime
-  sem equalityIdH info env =
+  sem equalityIdH info env +=
   | TyFloat _ -> eqFloatName ()
 
-  sem generateEqualityBodyH info env =
+  sem generateEqualityBodyH info env +=
   | TyFloat _ -> _unit
 end
 
 lang CharEquality = GenerateEqualityBase + UtestRuntime
-  sem equalityIdH info env =
+  sem equalityIdH info env +=
   | TyChar _ -> eqCharName ()
 
-  sem generateEqualityBodyH info env =
+  sem generateEqualityBodyH info env +=
   | TyChar _ -> _unit
 end
 
 lang SeqEquality = GenerateEqualityBase + UtestRuntime
-  sem equalityIdH info env =
+  sem equalityIdH info env +=
   | TySeq _ -> _eqSeqName
 
-  sem generateEqualityBodyH info env =
+  sem generateEqualityBodyH info env +=
   | TySeq t ->
     let eqElem = nameSym "eqElem" in
     let larg = nameSym "l" in
@@ -715,10 +732,10 @@ lang SeqEquality = GenerateEqualityBase + UtestRuntime
 end
 
 lang TensorEquality = GenerateEqualityBase + UtestRuntime
-  sem equalityIdH info env =
+  sem equalityIdH info env +=
   | TyTensor _ -> _eqTensorName
 
-  sem generateEqualityBodyH info env =
+  sem generateEqualityBodyH info env +=
   | TyTensor t ->
     let eqElem = nameSym "eqElem" in
     let larg = nameSym "l" in
@@ -731,12 +748,12 @@ lang TensorEquality = GenerateEqualityBase + UtestRuntime
 end
 
 lang RecordEquality = GenerateEqualityBase + UtestRuntime
-  sem equalityIdH info env =
+  sem equalityIdH info env +=
   | TyRecord _ & ty ->
     match mapLookup ty env.eq with Some id then id
     else newRecordEqualityName ()
 
-  sem generateEqualityBodyH info env =
+  sem generateEqualityBodyH info env +=
   | TyRecord {fields = fields} & ty ->
     let larg = nameSym "l" in
     let rarg = nameSym "r" in
@@ -753,14 +770,14 @@ lang RecordEquality = GenerateEqualityBase + UtestRuntime
 end
 
 lang VariantEquality = GenerateEqualityBase + UtestRuntime
-  sem equalityIdH info env =
+  sem equalityIdH info env +=
   | (TyApp _ | TyCon _) & ty ->
     match mapLookup ty env.eq with Some id then id
     else
       match collectTypeArguments [] ty with (id, argTypes) in
       nameSym (concat (concat "eq" (nameGetStr id)) (strJoin "" (map type2str argTypes)))
 
-  sem generateEqualityBodyH info env =
+  sem generateEqualityBodyH info env +=
   | (TyCon _ | TyApp _) & ty ->
     match collectTypeArguments [] ty with (id, tyArgs) in
     if nameEq id (mapFindExn "Symbol" builtinTypeNames) then

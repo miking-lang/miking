@@ -9,6 +9,11 @@ include "either.mc"
 include "common.mc"
 include "error.mc"
 include "name.mc"
+include "mexpr/info.mc"
+include "seq.mc"
+include "basic-types.mc"
+include "bool.mc"
+include "option.mc"
 
 type Dyn
 
@@ -76,6 +81,7 @@ lang ParserBase = TokenParser + EOFTokenParser
   | (NtSpec l, NtSpec r) -> nameCmp l r
   | (l, r) -> subi (constructorTag l) (constructorTag r)
 
+  sem symSpecToStr : all state. all prodLabel. SpecSymbol Token TokenRepr state prodLabel -> String
   sem symSpecToStr =
   | TokSpec t -> tokReprToStr t
   | LitSpec t -> snoc (cons '\'' t.lit) '\''
@@ -83,13 +89,16 @@ lang ParserBase = TokenParser + EOFTokenParser
 end
 
 lang ParserSpec = ParserBase
+  sem ntSym : all tok. all repr. all state. all prodLabel. Name -> SpecSymbol tok repr state prodLabel
   sem ntSym =
   | nt -> NtSpec nt
+  sem litSym : all tok. all repr. all state. all prodLabel. String -> SpecSymbol tok repr state prodLabel
   sem litSym =
   | str ->
     let res: NextTokenResult = nextToken {str = str, pos = posVal (concat "lit: " str) 1 1} in
     match (res.stream.str, res.lit) with ("", !"") then LitSpec {lit = str}
     else error (join ["A literal token does not lex as a single token: \"", str,"\" leaves \"", res.stream.str, "\""])
+  sem tokSym : all tok. all repr. all state. all prodLabel. repr -> SpecSymbol tok repr state prodLabel
   sem tokSym =
   | repr -> TokSpec repr
 end
@@ -130,6 +139,7 @@ lang ParserConcrete = ParserBase
   | TokParsed t -> TokSpec (tokToRepr t)
   | LitParsed x -> LitSpec {lit = x.lit}
 
+  sem parsedMatchesSpec : all state. all prodLabel. SpecSymbol Token TokenRepr state prodLabel -> ParsedSymbol Token -> Bool
   sem parsedMatchesSpec spec =
   | TokParsed t -> match spec with TokSpec repr then tokKindEq repr t else false
   | LitParsed x -> match spec with LitSpec s then eqString x.lit s.lit else false

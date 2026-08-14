@@ -1,5 +1,6 @@
 
 include "string.mc"
+include "seq.mc"
 
 -- This file contains an implementation of pure arrays, a way to use
 -- random access in arrays in a pure setting. The operations have low

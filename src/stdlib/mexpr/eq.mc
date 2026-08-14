@@ -9,6 +9,13 @@ include "map.mc"
 
 include "ast.mc"
 include "symbolize.mc"
+include "seq.mc"
+include "basic-types.mc"
+include "option.mc"
+include "stringid.mc"
+include "char.mc"
+include "set.mc"
+include "mexpr/ast-builder.mc"
 
 
 -----------------
@@ -148,7 +155,7 @@ lang Eq = ConstAst
 end
 
 lang OpaqueEq = Eq + OpaqueAst
-  sem eqExprH env free lhs =
+  sem eqExprH env free lhs +=
   | TmOpaque l ->
     match lhs with TmOpaque r then
       eqExprH env free l.body r.body
@@ -156,7 +163,7 @@ lang OpaqueEq = Eq + OpaqueAst
 end
 
 lang VarEq = Eq + VarAst
-  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) +=
   | TmVar r ->
     match lhs with TmVar l then
       match (env,free) with ({varEnv = varEnv},{varEnv = freeVarEnv}) in
@@ -167,7 +174,7 @@ lang VarEq = Eq + VarAst
 end
 
 lang AppEq = Eq + AppAst
-  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) +=
   | TmApp r ->
     match lhs with TmApp l then
       match eqExprH env free l.lhs r.lhs with Some free then
@@ -177,7 +184,7 @@ lang AppEq = Eq + AppAst
 end
 
 lang LamEq = Eq + LamAst
-  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) +=
   | TmLam r ->
     match env with {varEnv = varEnv} then
       match lhs with TmLam l then
@@ -188,7 +195,7 @@ lang LamEq = Eq + LamAst
 end
 
 lang RecordEq = Eq + RecordAst
-  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) +=
   | TmRecord r ->
     match lhs with TmRecord l then
       if eqi (mapLength l.bindings) (mapLength r.bindings) then
@@ -212,7 +219,7 @@ lang RecordEq = Eq + RecordAst
 end
 
 lang DeclEq = Eq + DeclAst
-  sem eqExprH env free lhs =
+  sem eqExprH env free lhs +=
   | TmDecl {decl = d2, inexpr = e2} ->
     match lhs with TmDecl {decl = d1, inexpr = e1} then
       match eqDeclH env free d1 d2 with Some (env, free) then
@@ -222,7 +229,7 @@ lang DeclEq = Eq + DeclAst
 end
 
 lang LetEq = Eq + LetDeclAst
-  sem eqDeclH (env : EqEnv) (free : EqEnv) lhs =
+  sem eqDeclH (env : EqEnv) (free : EqEnv) lhs +=
   | DeclLet {ident = i2, body = b2} ->
     match lhs with DeclLet {ident = i1, body = b1} then
       match eqExprH env free b1 b2 with Some free then
@@ -232,7 +239,7 @@ lang LetEq = Eq + LetDeclAst
 end
 
 lang RecLetsEq = Eq + RecLetsDeclAst
-  sem eqDeclH (env : EqEnv) (free : EqEnv) (lhs : Decl) =
+  sem eqDeclH (env : EqEnv) (free : EqEnv) (lhs : Decl) +=
   | DeclRecLets {bindings = bs2} ->
     -- NOTE(dlunde,2020-09-25): This requires the bindings to occur in the same
     -- order. Do we want to allow equality of differently ordered (but equal)
@@ -261,7 +268,7 @@ lang RecLetsEq = Eq + RecLetsDeclAst
 end
 
 lang ConstEq = Eq + ConstAst
-  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) +=
   | TmConst {val = v2} ->
     match lhs with TmConst {val = v1} then
       if eqConst v1 v2 then Some free else None ()
@@ -269,12 +276,12 @@ lang ConstEq = Eq + ConstAst
 end
 
 lang TypeEq = Eq + TypeDeclAst
-  sem eqDeclH (env : EqEnv) (free : EqEnv) (lhs : Decl) =
+  sem eqDeclH (env : EqEnv) (free : EqEnv) (lhs : Decl) +=
   | DeclType _ -> error "eqDecl not implemented for DeclType!"
 end
 
 lang DataEq = Eq + DataDeclAst + DataAst
-  sem eqDeclH env free lhs =
+  sem eqDeclH env free lhs +=
   | DeclConDef {ident = i2, tyIdent = ty2} ->
     match env with {conEnv = conEnv} then
       match lhs with DeclConDef {ident = i1, tyIdent = ty1} then
@@ -283,7 +290,7 @@ lang DataEq = Eq + DataDeclAst + DataAst
       else None ()
     else never
 
-  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) +=
   | TmConApp {ident = i2, body = b2, ty = ty2} ->
     match lhs with TmConApp {ident = i1, body = b1, ty = ty1} then
       match (env,free) with ({conEnv = conEnv},{conEnv = freeConEnv}) then
@@ -298,7 +305,7 @@ lang MatchEq = Eq + MatchAst
   sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : BiNameMap) (lhs : Pat) =
   -- Intentionally left blank
 
-  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) +=
   | TmMatch {target = t2, pat = p2, thn = thn2, els = els2, ty = ty2} ->
     match lhs with TmMatch {target = t1, pat = p1, thn = thn1, els = els1, ty = ty1} then
       match eqExprH env free t1 t2 with Some free then
@@ -319,7 +326,7 @@ lang MatchEq = Eq + MatchAst
 end
 
 lang UtestEq = Eq + UtestDeclAst
-  sem eqDeclH (env : EqEnv) (free : EqEnv) (lhs : Decl) =
+  sem eqDeclH (env : EqEnv) (free : EqEnv) (lhs : Decl) +=
   | DeclUtest {test = t2, expected = e2, tusing = u2, tonfail = o2} ->
     match lhs with
       DeclUtest {test = t1, expected = e1, tusing = u1, tonfail = o1}
@@ -354,7 +361,7 @@ lang UtestEq = Eq + UtestDeclAst
 end
 
 lang SeqEq = Eq + SeqAst
-  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) +=
   | TmSeq {tms = ts2, ty = ty2} ->
     match lhs with TmSeq {tms = ts1, ty = ty1} then
       if eqi (length ts1) (length ts2) then
@@ -365,12 +372,12 @@ lang SeqEq = Eq + SeqAst
 end
 
 lang NeverEq = Eq + NeverAst
-  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) +=
   | TmNever _ -> match lhs with TmNever _ then Some free else None ()
 end
 
 lang ExtEq = Eq + ExtDeclAst
-  sem eqDeclH (env : EqEnv) (free : EqEnv) (lhs : Decl) =
+  sem eqDeclH (env : EqEnv) (free : EqEnv) (lhs : Decl) +=
   | DeclExt {ident = i2} ->
     match lhs with DeclExt {ident = i1} then
       match env with {varEnv = varEnv} in
@@ -386,27 +393,27 @@ end
 ---------------
 
 lang IntEq = Eq + IntAst
-  sem eqConstH =
+  sem eqConstH +=
   | (CInt l, CInt r) -> eqi l.val r.val
 end
 
 lang FloatEq = Eq + FloatAst
-  sem eqConstH =
+  sem eqConstH +=
   | (CFloat l, CFloat r) -> eqf l.val r.val
 end
 
 lang BoolEq = Eq + BoolAst
-  sem eqConstH =
+  sem eqConstH +=
   | (CBool l, CBool r) -> eqBool l.val r.val
 end
 
 lang CharEq = Eq + CharAst
-  sem eqConstH =
+  sem eqConstH +=
   | (CChar l, CChar r) -> eqChar l.val r.val
 end
 
 lang SymbEq = Eq + SymbAst
-  sem eqConstH =
+  sem eqConstH +=
   | (CSymb l, CSymb r) -> eqsym l.val r.val
 end
 
@@ -429,7 +436,7 @@ let _eqpatname : BiNameMap -> EqEnv -> PatName -> PatName -> Option (EqEnv, BiNa
     else None ()
 
 lang NamedPatEq = MatchEq + NamedPat
-  sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : BiNameMap) (lhs : Pat) =
+  sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : BiNameMap) (lhs : Pat) +=
   | PatNamed {ident = p2} ->
     match lhs with PatNamed {ident = p1} then
       _eqpatname patEnv free p1 p2
@@ -437,7 +444,7 @@ lang NamedPatEq = MatchEq + NamedPat
 end
 
 lang SeqTotPatEq = MatchEq + SeqTotPat
-  sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : BiNameMap) (lhs : Pat) =
+  sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : BiNameMap) (lhs : Pat) +=
   | PatSeqTot {pats = ps2} ->
     match lhs with PatSeqTot {pats = ps1} then
       if eqi (length ps2) (length ps1) then
@@ -452,7 +459,7 @@ lang SeqTotPatEq = MatchEq + SeqTotPat
 end
 
 lang SeqEdgePatEq = MatchEq + SeqEdgePat
-  sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : BiNameMap) (lhs : Pat) =
+  sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : BiNameMap) (lhs : Pat) +=
   | PatSeqEdge {prefix = pre2, middle = mid2, postfix = post2} ->
     match lhs with PatSeqEdge {prefix = pre1, middle = mid1, postfix = post1} then
       match _eqpatname patEnv free mid1 mid2 with Some n then
@@ -481,7 +488,7 @@ lang SeqEdgePatEq = MatchEq + SeqEdgePat
 end
 
 lang RecordPatEq = MatchEq + RecordPat
-  sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : BiNameMap) (lhs : Pat) =
+  sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : BiNameMap) (lhs : Pat) +=
   | PatRecord {bindings = bs2} ->
     match lhs with PatRecord {bindings = bs1} then
       if eqi (mapLength bs1) (mapLength bs2) then
@@ -498,7 +505,7 @@ lang RecordPatEq = MatchEq + RecordPat
 end
 
 lang DataPatEq = MatchEq + DataPat
-  sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : BiNameMap) (lhs : Pat) =
+  sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : BiNameMap) (lhs : Pat) +=
   | PatCon {ident = i2, subpat = s2} ->
     match lhs with PatCon {ident = i1, subpat = s1} then
       match (env,free) with ({conEnv = conEnv},{conEnv = freeConEnv}) then
@@ -510,7 +517,7 @@ lang DataPatEq = MatchEq + DataPat
 end
 
 lang IntPatEq = MatchEq + IntPat
-  sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : BiNameMap) (lhs : Pat) =
+  sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : BiNameMap) (lhs : Pat) +=
   | PatInt {val = i2} ->
     match lhs with PatInt {val = i1} then
       if eqi i1 i2 then Some (free,patEnv) else None ()
@@ -518,7 +525,7 @@ lang IntPatEq = MatchEq + IntPat
 end
 
 lang CharPatEq = MatchEq + CharPat
-  sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : BiNameMap) (lhs : Pat) =
+  sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : BiNameMap) (lhs : Pat) +=
   | PatChar {val = c2} ->
     match lhs with PatChar {val = c1} then
       if eqChar c1 c2 then Some (free,patEnv) else None ()
@@ -526,7 +533,7 @@ lang CharPatEq = MatchEq + CharPat
 end
 
 lang BoolPatEq = MatchEq + BoolPat
-  sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : BiNameMap) (lhs : Pat) =
+  sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : BiNameMap) (lhs : Pat) +=
   | PatBool {val = b2} ->
     match lhs with PatBool {val = b1} then
       if eqBool b1 b2 then Some (free,patEnv) else None ()
@@ -534,7 +541,7 @@ lang BoolPatEq = MatchEq + BoolPat
 end
 
 lang AndPatEq = MatchEq + AndPat
-  sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : BiNameMap) (lhs : Pat) =
+  sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : BiNameMap) (lhs : Pat) +=
   | PatAnd {lpat = l2, rpat = r2} ->
     match lhs with PatAnd {lpat = l1, rpat = r1} then
       match eqPat env free patEnv l1 l2 with Some envs then
@@ -547,7 +554,7 @@ lang AndPatEq = MatchEq + AndPat
 end
 
 lang OrPatEq = MatchEq + OrPat
-  sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : BiNameMap) (lhs : Pat) =
+  sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : BiNameMap) (lhs : Pat) +=
   | PatOr {lpat = l2, rpat = r2} ->
     match lhs with PatOr {lpat = l1, rpat = r1} then
       match eqPat env free patEnv l1 l2 with Some envs then
@@ -560,7 +567,7 @@ lang OrPatEq = MatchEq + OrPat
 end
 
 lang NotPatEq = MatchEq + NotPat
-  sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : BiNameMap) (lhs : Pat) =
+  sem eqPat (env : EqEnv) (free : EqEnv) (patEnv : BiNameMap) (lhs : Pat) +=
   | PatNot {subpat = p2} ->
     match lhs with PatNot {subpat = p1} then
       eqPat env free patEnv p1 p2
@@ -572,42 +579,42 @@ end
 -----------
 
 lang UnknownTypeEq = Eq + UnknownTypeAst
-  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) +=
   | TyUnknown _ ->
     match unwrapType lhs with TyUnknown _ then Some free
     else None ()
 end
 
 lang BoolTypeEq = Eq + BoolTypeAst
-  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) +=
   | TyBool _ ->
     match unwrapType lhs with TyBool _ then Some free
     else None ()
 end
 
 lang IntTypeEq = Eq + IntTypeAst
-  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) +=
   | TyInt _ ->
     match unwrapType lhs with TyInt _ then Some free
     else None ()
 end
 
 lang FloatTypeEq = Eq + FloatTypeAst
-  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) +=
   | TyFloat _ ->
     match unwrapType lhs with TyFloat _ then Some free
     else None ()
 end
 
 lang CharTypeEq = Eq + CharTypeAst
-  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) +=
   | TyChar _ ->
     match unwrapType lhs with TyChar _ then Some free
     else None ()
 end
 
 lang FunTypeEq = Eq + FunTypeAst
-  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) +=
   | TyArrow r ->
     match unwrapType lhs with TyArrow l then
       match eqTypeH typeEnv free l.from r.from with Some free then
@@ -617,7 +624,7 @@ lang FunTypeEq = Eq + FunTypeAst
 end
 
 lang SeqTypeEq = Eq + SeqTypeAst
-  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) +=
   | TySeq r ->
     match unwrapType lhs with TySeq l then
       eqTypeH typeEnv free l.ty r.ty
@@ -625,7 +632,7 @@ lang SeqTypeEq = Eq + SeqTypeAst
 end
 
 lang TensorTypeEq = Eq + TensorTypeAst
-  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) +=
   | TyTensor r ->
     match unwrapType lhs with TyTensor l then
       eqTypeH typeEnv free l.ty r.ty
@@ -633,7 +640,7 @@ lang TensorTypeEq = Eq + TensorTypeAst
 end
 
 lang RecordTypeEq = Eq + RecordTypeAst
-  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) +=
   | TyRecord r ->
     match unwrapType lhs with TyRecord l then
       if eqi (mapLength l.fields) (mapLength r.fields) then
@@ -648,7 +655,7 @@ lang RecordTypeEq = Eq + RecordTypeAst
 end
 
 lang VariantTypeEq = Eq + VariantTypeAst
-  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) +=
   | TyVariant r ->
     match unwrapType lhs with TyVariant l then
       if eqi (mapLength l.constrs) (mapLength r.constrs) then
@@ -663,7 +670,7 @@ lang VariantTypeEq = Eq + VariantTypeAst
 end
 
 lang ConTypeEq = Eq + ConTypeAst
-  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) +=
   | rhs & TyCon r ->
     match unwrapType lhs with TyCon l then
       if nameEq l.ident r.ident then eqTypeH typeEnv free l.data r.data
@@ -672,7 +679,7 @@ lang ConTypeEq = Eq + ConTypeAst
 end
 
 lang DataTypeEq = Eq + DataTypeAst
-  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) +=
   | rhs & TyData r ->
     match unwrapType lhs with TyData l then
       if mapEq setEq (computeData l) (computeData r) then Some free
@@ -681,7 +688,7 @@ lang DataTypeEq = Eq + DataTypeAst
 end
 
 lang VarTypeEq = Eq + VarTypeAst
-  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) +=
   | TyVar r ->
     match lhs with TyVar l then
       optionMap
@@ -691,7 +698,7 @@ lang VarTypeEq = Eq + VarTypeAst
 end
 
 lang AllTypeEq = Eq + AllTypeAst
-  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) +=
   | TyAll r ->
     match unwrapType lhs with TyAll l then
       optionBind (eqKind typeEnv free (l.kind, r.kind))
@@ -703,7 +710,7 @@ lang AllTypeEq = Eq + AllTypeAst
 end
 
 lang AppTypeEq = Eq + AppTypeAst
-  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) +=
   | TyApp r ->
     match unwrapType lhs with TyApp l then
       match eqTypeH typeEnv free l.lhs r.lhs with Some free then
@@ -713,12 +720,12 @@ lang AppTypeEq = Eq + AppTypeAst
 end
 
 lang AliasTypeEq = Eq + AliasTypeAst
-  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) +=
   | TyAlias t -> eqTypeH typeEnv free lhs t.content
 end
 
 lang RecordKindEq = Eq + RecordKindAst
-  sem eqKind (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) =
+  sem eqKind (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) +=
   | (Record l, Record r) ->
       if eqi (mapSize l.fields) (mapSize r.fields) then
         mapFoldlOption
@@ -731,7 +738,7 @@ lang RecordKindEq = Eq + RecordKindAst
 end
 
 lang DataKindEq = Eq + DataKindAst
-  sem eqKind (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) =
+  sem eqKind (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) +=
   | (Data l, Data r) ->
     let recEq = lam r1. lam r2.
       if setEq r1.lower r2.lower then optionEq setEq r1.upper r2.upper

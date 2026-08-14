@@ -8,6 +8,18 @@ include "../util.mc"
 include "../../global/ext-utils.mc"
 
 include "sys.mc"
+include "docgen/rendering/renderers/headers/search.mc"
+include "string.mc"
+include "docgen/global/util.mc"
+include "docgen/rendering/rendering-options.mc"
+include "docgen/rendering/renderers/headers/mdx-style.mc"
+include "bool.mc"
+include "fileutils.mc"
+include "seq.mc"
+include "docgen/global/source-code.mc"
+include "basic-types.mc"
+include "option.mc"
+include "docgen/rendering/rendering-data.mc"
 
 let componentFileName = "MikingDocGen"
 let searchFileName = searchPath ""
@@ -35,7 +47,7 @@ lang MdxRenderer = RendererInterface
     ----------------- Renderer Implementation -----------------
 
     -- Create the MDX components file (TSX/JSX) in the output folder.
-    sem renderSetup =
+    sem renderSetup +=
     | { fmt = Mdx {} } & opt ->
         let srcPath = renderingOptionsSrcPath opt in
         let path = mdxGetComponentPath opt.fmtLang srcPath componentFileName in
@@ -48,7 +60,7 @@ lang MdxRenderer = RendererInterface
 
 
     -- Emit import line for MDX components used by the page.
-    sem renderHeader obj =
+    sem renderHeader obj +=
     | { fmt = Mdx {} } & opt ->
         let formatPath = lam path.
             --  strip .tsx/.jsx extension from the import path if present
@@ -79,11 +91,11 @@ lang MdxRenderer = RendererInterface
           "<Search />\n\n"
         ]
 
-    sem renderSearchPath (path: String) =
+    sem renderSearchPath (path: String) +=
     | { fmt = Mdx {} } & opt ->
         mdxGetComponentPath (Js {}) path searchFileName
 
-    sem renderSearchFile (searchDatas: [SearchDictObj]) = 
+    sem renderSearchFile (searchDatas: [SearchDictObj]) += 
     | { fmt = Mdx {} } & opt ->
         let path = renderSearchPath (renderingOptionsSrcPath opt) opt in
         let content = searchReact searchDatas in
@@ -91,42 +103,42 @@ lang MdxRenderer = RendererInterface
 
 
     -- Reuse Markdown escaping for code.
-    sem renderRemoveCodeForbidenChars (s: String) =
+    sem renderRemoveCodeForbidenChars (s: String) +=
     | { fmt = Mdx {} } & opt -> renderRemoveCodeForbidenChars s { opt with fmt = Md {} }
 
     -- Reuse Markdown escaping for docs.
-    sem renderRemoveDocForbidenChars (s: String) =
+    sem renderRemoveDocForbidenChars (s: String) +=
     | { fmt = Mdx {} } & opt -> mdxEscape s
 
     -- Delegate headings to Markdown renderer.
-    sem renderTitle size s =
+    sem renderTitle size s +=
     | { fmt = Mdx {} } & opt -> renderTitle size s { opt with fmt = Md {} }
 
     -- Delegate bold text to Markdown renderer.
-    sem renderBold (text : String) =
+    sem renderBold (text : String) +=
     | { fmt = Mdx {} } & opt -> renderBold text { opt with fmt = Md {} }
 
     -- Delegate italic text to Markdown renderer.
-    sem renderItalic (text : String) =
+    sem renderItalic (text : String) +=
     | { fmt = Mdx {} } & opt -> renderItalic text { opt with fmt = Md {} }
 
     -- Delegate newline rendering to Markdown renderer ("  \n").
-    sem renderNewLine =
+    sem renderNewLine +=
     | { fmt = Mdx {} } & opt -> renderNewLine { opt with fmt = Md {} }
 
     -- Render object description as an MDX <Description> block (omit empty default).
-    sem renderDocDescription desc =
+    sem renderDocDescription desc +=
     | { fmt = Mdx {} } & opt ->
       let desc = renderDocDescription desc { opt with fmt = Md {} } in
       let desc = if eqString desc "No documentation available here." then "" else desc in
       if eqString "" desc then "" else join ["\n<Description>\n", desc, "\n</Description>\n"]
         
     -- The goto link is directly handled in mdx component, so we always return empty string.    
-    sem renderGotoLink (link: String) =
+    sem renderGotoLink (link: String) +=
     | { fmt = Mdx {} } & opt -> ""
     
     -- Render a single link, removing the trailing ".md" for Docusaurus routes.
-    sem renderLink (title : String) (link : String) =
+    sem renderLink (title : String) (link : String) +=
     | { fmt = Mdx {} } & opt ->
           let linkLength = length link in
           let link =
@@ -136,7 +148,7 @@ lang MdxRenderer = RendererInterface
           join ["<a href={\"", link, "\"} className=\"link\">", title, "</a>"]
     
     -- Render a list of links by delegating to raw rendering, then add a newline.
-    sem renderLinkList (objects: [Object]) =
+    sem renderLinkList (objects: [Object]) +=
     | { fmt = Mdx {} } & opt ->
         renderWithRaw opt "" renderLinkList objects (renderNewLine opt)
 
@@ -163,7 +175,7 @@ lang MdxRenderer = RendererInterface
 
 
     -- Render a list of links by delegating to raw rendering, then add a newline.
-    sem renderSourceCode (code: SourceCode) (obj: Option Object) =
+    sem renderSourceCode (code: SourceCode) (obj: Option Object) +=
     | { fmt = Mdx {} } & opt ->
         if optionIsNone obj then
             let code = sourceCodeToStr code in
@@ -176,11 +188,11 @@ lang MdxRenderer = RendererInterface
             let code = strToSourceCode code in
             renderWithRaw opt "" (renderSourceCode code) obj ""
 
-    sem renderHidenCode (hidden: String) (shown: String) (code: String) (jumpLine: Bool) =
+    sem renderHidenCode (hidden: String) (shown: String) (code: String) (jumpLine: Bool) +=
     | { fmt = Mdx {} } & opt ->
       join ["\n<ToggleWrapper shownText=\"", shown, "\" hiddenText=\"", hidden, "\">\n", code, "\n</ToggleWrapper>", if jumpLine then "\n" else ""]
 
-    sem renderDocSignature (obj: Object) =
+    sem renderDocSignature (obj: Object) +=
     | { fmt = Mdx {} } & opt ->
         let sign = renderPureDocSignature obj opt in
         let sign = mdxEscape sign in
@@ -192,7 +204,7 @@ lang MdxRenderer = RendererInterface
         mdxRenderSpan sign "doc-signature"
 
     -- Render the full code (trim trailing comments/empties), escaped for MDX.
-    sem renderCodeWithoutPreview (data: RenderingData) =
+    sem renderCodeWithoutPreview (data: RenderingData) +=
     | { fmt = Mdx {} } & opt ->
         let split = strSplit "\n" data.code in
         match splitOnR (lam l.
@@ -205,7 +217,7 @@ lang MdxRenderer = RendererInterface
 
 
     -- Render a full documentation block (title, signature, desc, code, optional tests).
-    sem renderDocBloc (data: RenderingData) (asChildren: Bool) =
+    sem renderDocBloc (data: RenderingData) (asChildren: Bool) +=
     | { fmt = Mdx {} } & opt ->
         let link = objGetMyLink data.obj opt in
         let linkLength = length link in
@@ -219,7 +231,7 @@ lang MdxRenderer = RendererInterface
         let right = "\n</DocBlock>\n\n" in
         renderWithRaw opt left (renderDocBloc data) asChildren right
 
-    sem renderCreateTests (tests: [RenderingData]) =
+    sem renderCreateTests (tests: [RenderingData]) +=
     | { fmt = Mdx {} } & opt ->
         let tests = strJoin "\n\n" (map
             (lam t. sourceCodeToStr (objSourceCode t.obj)) tests)
@@ -242,39 +254,39 @@ lang MdxRenderer = RendererInterface
           "</span>"
         ]
 
-    sem renderType (content : String) =
+    sem renderType (content : String) +=
     | { fmt = Mdx {} } & opt -> mdxRenderSpan content "tp"
 
-    sem renderVar (content : String) =
+    sem renderVar (content : String) +=
     | { fmt = Mdx {} } & opt -> content
 
-    sem renderKeyword (content : String) =
+    sem renderKeyword (content : String) +=
     | { fmt = Mdx {} } & opt -> mdxRenderSpan content "kw"
 
-    sem renderComment (content : String) =
+    sem renderComment (content : String) +=
     | { fmt = Mdx {} } & opt -> mdxRenderSpan content "comment"
 
-    sem renderString (content : String) =
+    sem renderString (content : String) +=
     | { fmt = Mdx {} } & opt -> mdxRenderSpan content "string"
 
-    sem renderMultiLineComment (content : String) =
+    sem renderMultiLineComment (content : String) +=
     | { fmt = Mdx {} } & opt -> mdxRenderSpan content "multi"
 
-    sem renderNumber (content : String) =
+    sem renderNumber (content : String) +=
     | { fmt = Mdx {} } & opt -> mdxRenderSpan content "number"
 
-    sem renderStdlibConstLink (file: String) =
+    sem renderStdlibConstLink (file: String) +=
     | { fmt = Mdx {} } & opt -> normalizePath (join ["/", opt.stdlibFolder, "/", opt.urlPrefix, "/", file])
 
-    sem renderSynVariants (obj: Object) (variants: [SynVariant]) =
+    sem renderSynVariants (obj: Object) (variants: [SynVariant]) +=
     | { fmt = Mdx {} } & opt ->
         renderWithRaw opt "<div class=\"variants\">" (renderSynVariants obj) variants "</div>"
 
-    sem renderTypeConstructors (obj: Object) =
+    sem renderTypeConstructors (obj: Object) +=
     | { fmt = Mdx {} } & opt ->
         renderWithRaw opt "<div className=\"variants\">" renderTypeConstructors obj "</div>"
 
-    sem renderOneVariant (obj: Object) (v: SynVariant) =
+    sem renderOneVariant (obj: Object) (v: SynVariant) +=
     | { fmt = Mdx {} } & opt ->
         renderWithRaw opt "<div className=\"variant\">" (renderOneVariant obj) v "</div>"
 

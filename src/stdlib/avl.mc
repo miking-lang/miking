@@ -5,6 +5,7 @@ include "seq.mc"
 include "bool.mc"
 include "option.mc"
 include "string.mc"
+include "char.mc"
 
 lang AVLTreeImpl
   syn AVL k v =

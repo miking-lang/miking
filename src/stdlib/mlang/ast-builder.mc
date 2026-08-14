@@ -3,6 +3,9 @@
 
 include "mexpr/ast-builder.mc"
 include "ast.mc"
+include "mexpr/info.mc"
+include "name.mc"
+include "basic-types.mc"
 
 
 -- Extended expressions --
@@ -41,7 +44,7 @@ let decl_nlangin_ = use MLangAst in
 
 let decl_nlangi_ = use MLangAst in
   lam n. lam incls. lam decls.
-  decl_nlangin_ n (map nameNoSym incls) decls
+  decl_nlangin_ n (map (lam x. (nameNoSym x, NoInfo ())) incls) decls
 
 let decl_langin_ = use MLangAst in
   lam s. lam nincls. lam decls.
@@ -90,18 +93,18 @@ let decl_syn_params_ = use MLangAst in
   DeclSyn {ident = nameNoSym s,
            defs = map (lam t. {ident = nameNoSym t.0,
                                tyIdent = t.1,
-                               tyName = nameNoSym (concat s "Type")}) defs,
+                               info = NoInfo ()}) defs,
            params = map nameNoSym ss,
-           includes = [],
            info = NoInfo {},
-           declKind = SynBase ()}
+           kind = SynBase ()}
 
 let decl_nsemty_ = use MLangAst in
   lam n. lam ty.
   DeclSem {ident = n, tyAnnot = ty,
-           tyBody = tyunknown_, includes = [],
-           args = None (), cases = [], info = NoInfo {},
-           declKind = SemBase ()}
+           tyBody = tyunknown_,
+           impl = Some {params = [], cases = []},
+           info = NoInfo {},
+           kind = SemBase ()}
 
 let decl_semty_ = use MLangAst in
   lam s. lam ty.
@@ -111,21 +114,20 @@ let decl_semty_cases_ = use MLangAst in
   lam s. lam ty. lam cases.
   let n = nameNoSym s in
   DeclSem {ident = n, tyAnnot = ty,
-           tyBody = tyunknown_, includes = [],
-           args = Some [],
-           cases = map (lam t. {pat = t.0, thn = t.1}) cases,
+           tyBody = tyunknown_,
+           impl = Some {params = [], cases = map (lam t. {pat = t.0, body = t.1, info = NoInfo ()}) cases},
            info = NoInfo {},
-           declKind = SemBase ()}
+           kind = SemBase ()}
 
 let decl_sem_args_ty_cases_ = use MLangAst in
   lam s : String. lam args : [(String, Type)]. lam ty : Type. lam cases.
   let n = nameNoSym s in
   DeclSem {ident = n, tyAnnot = ty,
-           tyBody = tyunknown_, includes = [],
-           args = Some (map (lam t. {ident = nameNoSym t.0, tyAnnot = t.1}) args),
-           cases = map (lam t. {pat = t.0, thn = t.1}) cases,
+           tyBody = tyunknown_,
+           impl = Some {params = map (lam t. {ident = nameNoSym t.0, tyAnnot = t.1, tyParam = tyunknown_, info = NoInfo ()}) args,
+                        cases = map (lam t. {pat = t.0, body = t.1, info = NoInfo ()}) cases},
            info = NoInfo {},
-           declKind = SemBase ()}
+           kind = SemBase ()}
 
 let decl_nsem_ = use MLangAst in
   lam kind. lam n. lam nargs: [(Name, Type)]. lam cases: [(Pat, Expr)]. DeclSem

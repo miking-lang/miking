@@ -21,6 +21,29 @@ include "mexpr/symbolize.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/keyword-maker.mc"
 include "mexpr/utils.mc"
+include "mexpr/ast.mc"
+include "mexpr/ast-builder.mc"
+include "tuning/graph-coloring.mc"
+include "mexpr/info.mc"
+include "name.mc"
+include "tuning/prefix-tree.mc"
+include "tuning/name-info.mc"
+include "map.mc"
+include "tuning/context-expansion.mc"
+include "error.mc"
+include "bool.mc"
+include "basic-types.mc"
+include "seq.mc"
+include "string.mc"
+include "tuning/hole-cfa.mc"
+include "tuning/nested.mc"
+include "mexpr/pprint.mc"
+include "mexpr/anf.mc"
+include "mexpr/eval.mc"
+include "mexpr/type-check.mc"
+include "mexpr/keywords.mc"
+include "assoc.mc"
+include "float.mc"
 
 type InstrumentedResult = {
   -- The filename to where the profiling data is written
@@ -33,7 +56,7 @@ type InstrumentedResult = {
 let _instrumentationHeader = "id,nbrRuns,totalMs"
 
 lang Instrumentation = MExprAst + HoleAst + TailPositions
-  sem tailPositionBaseCase =
+  sem tailPositionBaseCase +=
   | TmHole _ -> true
   | TmIndependent t ->
     tailPositionBaseCase t.lhs

@@ -1,5 +1,6 @@
 include "./theme-variables.mc"
 include "string.mc"
+include "seq.mc"
 
 let searchHtml: String = 
 "<div id=\"search-container\">
