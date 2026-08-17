@@ -394,7 +394,7 @@ lang GenerateJsonSerializers =
 
 end
 
-lang JsonSerializationLoader = MCoreLoader + GenerateJsonSerializers
+lang JsonSerializationLoader = LoaderInterface + GenerateJsonSerializers
   syn Hook +=
   | JsonSerializationHook
     { gjsAcc : Ref (Map Name GJSNamedSerializer) -- No implementations, only names (implementations have already been inserted in the program)
@@ -481,7 +481,7 @@ lang JsonSerializationLoader = MCoreLoader + GenerateJsonSerializers
   sem _serializationPairsFor tys loader =
   | _ -> None ()
   | JsonSerializationHook hook ->
-    let tcEnv = _getTCEnv loader in
+    let tcEnv = (_withTCEnv (lam tcEnv. (tcEnv, tcEnv)) loader).1 in
     -- OPT(vipa, 2024-12-13): This reconstruction for each request is
     -- potentially a bit expensive
     let namedTypes = mapMap (lam x. {params = x.1, tyIdent = x.2}) tcEnv.tyConEnv in

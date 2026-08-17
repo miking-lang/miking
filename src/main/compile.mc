@@ -24,6 +24,7 @@ include "tuning/tune-file.mc"
 include "jvm/compile.mc"
 include "peval/compile.mc"
 include "mexpr/generate-pprint.mc"
+include "mexpr/generate-utest.mc"
 
 include "mexpr/invariants/in-scope.mc"
 include "mexpr/invariants/definitions.mc"
@@ -44,6 +45,7 @@ lang MCoreCompile =
   OldDPrintViaPprint + MExprGeneratePprint + GeneratePprintMissingCase +
   PprintTyAnnot + HtmlAnnotator +
   MExprToJson +
+  ComposedMLangLoader + DPrintViaPprintLoader + StripUtestLoader + UtestLoader +
 
   UnboundErrorAttr + DefinedAttr + WithoutInfoAttr
   sem mkInvariantAttrs : () -> [Attr Loc]
@@ -156,6 +158,82 @@ let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
     endPhaseStatsExpr log "backend" ast;
     res
 
+let compileViaLoader = lam options : Options. lam sourcePath.
+  use MCoreCompile in
+  let log = mkPhaseLogState options.debugDumpPhases options.debugPhases mkInvariantAttrs in
+
+  let loader = mkLoader typcheckEnvDefault [] in
+  endPhaseStatsProg log "mkLoader" {decls = getDecls loader, expr = unit_};
+
+  let loader =
+    if options.runTests then
+      let filename = stdlibResolveFileOr (lam x. error x) "." sourcePath in
+      let keepUtestIf = lam x.
+        if x.static
+        then match x.info with Info x
+          then eqString x.filename filename
+          else true
+        else true in
+      enableUtestGeneration keepUtestIf loader
+    else addHook loader (StripUtestHook ()) in
+  endPhaseStatsProg log
+    (if options.runTests then "enable utests" else "disable utests")
+    {decls = getDecls loader, expr = unit_};
+
+  let loader = if options.debugDprint
+    then enableDPrintViaPprint loader
+    else loader in
+  endPhaseStatsProg log
+    (if options.debugDprint then "enable dprint-via-pprint" else "disable dprint-via-pprint")
+    {decls = getDecls loader, expr = unit_};
+
+  -- TODO(vipa, 2026-08-14): Original parsing also can prune external utests and do something about mexprExtendedKeywords
+  -- TODO(vipa, 2026-08-14): makeKeywords?
+  -- TODO(vipa, 2026-08-14): insertTunedOrDefaults?
+  -- TODO(vipa, 2026-08-14): Print AST if options.debugParse?
+
+  -- TODO(vipa, 2026-08-14): if options.debugProfile, insert instrumentation for profiling
+
+  let loader = (includeFileTypeExn (FMCore {includeMExpr = true}) "." sourcePath loader).1 in
+  endPhaseStatsProg log "includeFileExn" {decls = getDecls loader, expr = unit_};
+
+  let ast = buildFullAst loader in
+  endPhaseStatsExpr log "buildFullAst" ast;
+
+  -- TODO(vipa, 2026-08-14): if options.debugTypeCheck, output annotateMExpr
+  -- TODO(vipa, 2026-08-14): compileSpecialize
+  -- TODO(vipa, 2026-08-14): if options.runtimeChecks, injectRuntimeChecks
+  -- TODO(vipa, 2026-08-14): if options.enableConstantFold and not options.disableOptimizations, constantFold
+  -- TODO(vipa, 2026-08-14): if options.debugConstantFold, print ast
+
+  let ast = lowerAll ast in
+  endPhaseStatsExpr log "pattern-lowering" ast;
+  (if options.debugShallow then
+    printLn (expr2str ast) else ());
+
+  let res =
+    if options.toJVM then compileMCoreToJVM ast else
+    if options.toJavaScript then compileMCoreToJS
+      { compileJSOptionsEmpty with
+        targetPlatform = parseJSTarget options.jsTarget
+      , output = options.output
+      , generalOptimizations = not options.disableJsGeneralOptimizations
+      , tailCallOptimizations = not options.disableJsTCO
+      } ast sourcePath
+    else
+      -- let ast = typeAnnot ast in
+      -- endPhaseStatsExpr log "type-annot" ast;
+      -- -- If option --debug-type-annot, then pretty-print the AST
+      -- (if options.debugTypeAnnot then printLn (expr2str ast) else ());
+      compileMCore ast
+      { debugGenerate = lam ocamlProg. if options.debugGenerate then printLn ocamlProg else ()
+      , exitBefore = lam. if options.exitBefore then exit 0 else ()
+      , postprocessOcamlTops = lam tops. if options.runtimeChecks then wrapInTryWith tops else tops
+      , compileOcaml = ocamlCompile options sourcePath
+      } in
+  endPhaseStatsExpr log "backend" ast;
+  res
+
 -- Main function for compiling a program
 -- files: a list of files
 -- options: the options structure to the main program
@@ -165,8 +243,7 @@ let compile = lam files. lam options : Options. lam args.
 
   if options.mlangPipeline then
     printLn " * WARNING: You are using an experimental, unstable pipeline.";
-    error "TODO"
-    -- iter (compileMLangToOcaml options compileWithUtests) files
+    iter (lam x. compileViaLoader options x; ()) files
   else
     let compileFile = lam file.
       let log = mkPhaseLogState options.debugDumpPhases options.debugPhases mkInvariantAttrs in
