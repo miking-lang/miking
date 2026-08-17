@@ -165,7 +165,7 @@ lang MExprGenerateEq
   + GenerateEqVar
 end
 
-lang GenerateEqLoader = MCoreLoader + GenerateEq
+lang GenerateEqLoader = LoaderInterface + GenerateEq
   syn Hook +=
   | EqHook
     { baseEnv : GEqEnv
@@ -198,13 +198,18 @@ lang GenerateEqLoader = MCoreLoader + GenerateEq
   sem _eqFunctionsFor tys loader =
   | _ -> None ()
   | EqHook hook ->
-    match mapAccumL getEqFunction {hook.baseEnv with conFunctions = deref hook.functions, tcEnv = _getTCEnv loader} tys
-      with (env, printFs) in
+    let f = lam tcEnv.
+      let env = {hook.baseEnv with conFunctions = deref hook.functions, tcEnv = tcEnv} in
+      (tcEnv, mapAccumL getEqFunction env tys) in
+    match _withTCEnv f loader with (loader, (env, printFs)) in
 
     modref hook.functions env.conFunctions;
     let loader = if null env.newFunctions
       then loader
-      else _addDeclExn loader (nureclets_ env.newFunctions) in
+      -- NOTE(vipa, 2026-08-17): We don't need to capture the
+      -- definitions in a SymEnv, because they're already registered
+      -- in the GEqEnv
+      else (_addDeclExn _symEnvEmpty loader (nureclets_ env.newFunctions)).1 in
     Some (loader, printFs)
 
   sem eqFunctionsFor : [Type] -> Loader -> (Loader, [Expr])

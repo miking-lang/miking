@@ -231,10 +231,6 @@ lang UtestBase =
   -- reuse the polymorphic functions for printing and equality for all sequence
   -- and tensor types.
   sem cmpTypeH +=
-  | (TySeq {ty = TySeq _}, TySeq _) -> 0
-  | (TySeq {ty = !TySeq _}, TySeq _) -> 0
-  | (TyTensor {ty = TyTensor _}, TyTensor _) -> 0
-  | (TyTensor {ty = !TyTensor _}, TyTensor _) -> 0
 
   type UtestEnv = {
     -- Maps a type to the identifier of its pretty-print or equality function,

@@ -176,7 +176,7 @@ lang LowerUncurried = UncurriedAst + LamAst + OpaqueAst
     foldr tyarrow_ x.ret params
 end
 
-lang LowerUncurryLoader = LowerUncurried + MCoreLoader
+lang LowerUncurryLoader = LowerUncurried + LoaderInterface
   syn Hook +=
   | LowerUncurryHook ()
 

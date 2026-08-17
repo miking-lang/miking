@@ -8,15 +8,15 @@ include "name.mc"
 include "mexpr/info.mc"
 include "basic-types.mc"
 
-lang StripUtestLoader = MCoreLoader + UtestDeclAst + OpaqueAst
+lang StripUtestLoader = LoaderInterface + UtestDeclAst + OpaqueAst
   syn Hook +=
   | StripUtestHook ()
 
-  sem stripUtests : Expr -> Expr
-  sem stripUtests =
-  | TmDecl (t & {decl = DeclUtest _}) -> stripUtests t.inexpr
+  sem _stripUtests : Expr -> Expr
+  sem _stripUtests =
+  | TmDecl (t & {decl = DeclUtest _}) -> _stripUtests t.inexpr
   | t & TmOpaque _ -> t
-  | t -> smap_Expr_Expr stripUtests t
+  | t -> smap_Expr_Expr _stripUtests t
 
   sem _postTypecheck loader decl += | StripUtestHook _ ->
     let decl = match decl with DeclUtest x
@@ -27,11 +27,11 @@ lang StripUtestLoader = MCoreLoader + UtestDeclAst + OpaqueAst
         , body = unit_
         , info = x.info
         }
-      else smap_Decl_Expr stripUtests decl
+      else smap_Decl_Expr _stripUtests decl
     in (loader, decl)
 end
 
-lang UtestLoader = MCoreLoader + GenerateEqLoader + GeneratePprintLoader + StripUtestLoader
+lang UtestLoader = LoaderInterface + GenerateEqLoader + GeneratePprintLoader + StripUtestLoader
   syn Hook +=
   | UtestHook
     { defaultOnFail : Name
@@ -72,12 +72,14 @@ lang UtestLoader = MCoreLoader + GenerateEqLoader + GeneratePprintLoader + Strip
       , body = app_ (nvar_ (hook.exitOnFailure)) unit_
       , info = NoInfo ()
       } in
-    _addDeclExn loader decl
+    -- NOTE(vipa, 2026-08-17): The decl is added purely for
+    -- side-effects; we don't need to capture it in a SymEnv
+    (_addDeclExn _symEnvEmpty loader decl).1
 
   sem _postTypecheck loader decl += | UtestHook hook ->
     match decl with DeclUtest d then
       if hook.includeUtestIf {static = true, info = d.info} then
-        match replaceUtests hook true loader (bind_ decl unit_) with (loader, expr) in
+        match _replaceUtests hook true loader (bind_ decl unit_) with (loader, expr) in
         let decl = DeclLet
           { ident = nameNoSym ""
           , tyAnnot = tyunit_
@@ -96,12 +98,12 @@ lang UtestLoader = MCoreLoader + GenerateEqLoader + GeneratePprintLoader + Strip
           } in
         (loader, noop)
     else
-      smapAccumL_Decl_Expr (replaceUtests hook true) loader decl
+      smapAccumL_Decl_Expr (_replaceUtests hook true) loader decl
 
-  sem replaceUtests hook static loader =
-  | tm & TmLam _ -> smapAccumL_Expr_Expr (replaceUtests hook false) loader tm
+  sem _replaceUtests hook static loader =
+  | tm & TmLam _ -> smapAccumL_Expr_Expr (_replaceUtests hook false) loader tm
   | tm & TmOpaque _ -> (loader, tm)
-  | tm -> smapAccumL_Expr_Expr (replaceUtests hook static) loader tm
+  | tm -> smapAccumL_Expr_Expr (_replaceUtests hook static) loader tm
   | TmDecl (x & {decl = DeclUtest t}) ->
     if hook.includeUtestIf {static = static, info = t.info} then
       let infoStr = str_ (info2str t.info) in
@@ -122,9 +124,9 @@ lang UtestLoader = MCoreLoader + GenerateEqLoader + GeneratePprintLoader + Strip
       -- in `using` or `else`, which is consistent with the old
       -- implementation, but maybe not ideal? It should be *very* rare
       -- that it matters though.
-      match replaceUtests hook static loader t.test with (loader, test) in
-      match replaceUtests hook static loader t.expected with (loader, expected) in
-      match replaceUtests hook static loader x.inexpr with (loader, inexpr) in
+      match _replaceUtests hook static loader t.test with (loader, test) in
+      match _replaceUtests hook static loader t.expected with (loader, expected) in
+      match _replaceUtests hook static loader x.inexpr with (loader, inexpr) in
 
       let test = appSeq_ (nvar_ hook.runner) [infoStr, usingStr, onFailFn, eqFn, test, expected] in
       let tm = TmDecl
@@ -141,5 +143,5 @@ lang UtestLoader = MCoreLoader + GenerateEqLoader + GeneratePprintLoader + Strip
         } in
       (loader, tm)
     else
-      replaceUtests hook static loader x.inexpr
+      _replaceUtests hook static loader x.inexpr
 end

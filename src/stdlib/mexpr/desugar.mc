@@ -8,7 +8,7 @@ lang Desugar = Ast + OpaqueAst
   | tm -> smap_Expr_Expr desugarExpr tm
 end
 
-lang DesugarLoader = Ast + MCoreLoader + OpaqueAst
+lang DesugarLoader = Ast + LoaderInterface + OpaqueAst
   syn Hook +=
   | DesugarHook ()
 
