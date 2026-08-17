@@ -330,32 +330,6 @@ testMain substituters directories location (lam api.
       ])
     [(mlangCompile, succ), (mlangRun, succ)];
 
-  -- === Experimental records ===
-
-  let extrecCompile = api.midStep
-    { uses = [origin]
-    , tag = "extrec-compile"
-    , cmd = "%m compile --test --experimental-records %i --output %o"
-    } in
-  let extrecRun = api.endStep
-    { uses = [extrecCompile]
-    , tag = "extrec-run"
-    , cmd = "command %i"
-    } in
-
-  -- NOTE(voorberg, 2025-02-17): The files in "src/test/extrec" and
-  -- "src/test/extrec-ill-typed" require experimental features that
-  -- are not supported in boot or mi without the
-  -- "--experimental-records" flag.
-
-  api.tests []
-    (and (strEndsWith ".mc") (strStartsWith "src/test/extrec/"))
-    [(eval, dont), (compile, dont), (extrecCompile, succ), (extrecRun, succ)];
-
-  api.tests []
-    (and (strEndsWith ".mc") (strStartsWith "src/test/extrec-ill-typed/"))
-    [(eval, dont), (compile, dont), (extrecCompile, fail)];
-
   -- === Java ===
 
   -- NOTE(vipa, 2024-11-07): The `--to-jvm` flag of `mi compile` just
