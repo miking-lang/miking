@@ -105,7 +105,7 @@ testMain substituters directories location (lam api.
     then DepAvailable ()
     else DepUnavailable ()) in
 
-  -- === Basic tests of `.mc` files ===
+  -- === Basic tests of `.mc` files, including mlang-pipeline ===
 
   -- All `.mc` tests are interpreted and compiled, unless otherwise
   -- stated later
@@ -124,9 +124,21 @@ testMain substituters directories location (lam api.
     , tag = "run"
     , cmd = "command %i"
     } in
+
+  let mlangCompile = api.midStep
+    { uses = [origin]
+    , tag = "mlang-exe"
+    , cmd = "%m compile --test --mlang-pipeline %i --output %o"
+    } in
+  let mlangRun = api.endStep
+    { uses = [mlangCompile]
+    , tag = "mlang-run"
+    , cmd = "command %i"
+    } in
+
   api.tests []
     (strEndsWith ".mc")
-    [(eval, succ), (compile, succ), (run, succ)];
+    [(eval, succ), (compile, succ), (run, succ), (mlangCompile, succ), (mlangRun, succ)];
 
   -- The compiler itself is tested through the bootstrap process, so
   -- skip it here
@@ -137,7 +149,7 @@ testMain substituters directories location (lam api.
   -- Python is only supported in boot
   api.tests []
     (elem ["src/stdlib/python/python.mc", "src/test/py/python.mc"])
-    [(eval, fail), (compile, fail)];
+    [(eval, fail), (compile, fail), (mlangCompile, fail)];
 
   -- Inconveniently slow when interpreting, so we skip that part
   api.tests []
@@ -157,7 +169,7 @@ testMain substituters directories location (lam api.
       , "src/test/examples/utest/utest-with-onfail.mc"
       , "src/test/examples/test-prune-utests.mc"
       ])
-    [(eval, fail), (run, fail)];
+    [(eval, fail), (run, fail), (mlangRun, fail)];
 
   -- Files using externals not available in the interpreter
   api.tests []
@@ -209,26 +221,26 @@ testMain substituters directories location (lam api.
       , "src/test/examples/external/ext-parse.mc"
       , "src/test/examples/external/multiple-ext-parse-error.mc"
       ])
-    [(eval, fail), (compile, fail)];
+    [(eval, fail), (compile, fail), (mlangCompile, fail)];
 
   -- TODO(vipa, 2024-11-08): Files that fail to compile, but I
   -- don't know why
   api.tests []
     (eqString "src/test/examples/external/ext-removal.mc")
-    [(eval, fail), (compile, fail)];
+    [(eval, fail), (compile, fail), (mlangCompile, fail)];
 
   -- TODO(vipa, 2024-11-08): Files that fail to run, but I
   -- don't know why
   api.tests []
     (eqString "src/test/examples/peval/pow.mc")
-    [(eval, fail), (run, fail)];
+    [(eval, fail), (run, fail), (mlangRun, fail)];
 
   -- This tests more fancy name-spacing stuff (e.g., include
   -- "test:path/in/test"), which isn't supported in this testing
   -- system
   api.tests []
     (eqString "src/test/mlang/include.mc")
-    [(eval, fail), (compile, fail)];
+    [(eval, fail), (compile, fail), (mlangCompile, fail)];
 
   -- === Microbenchmark ===
 
@@ -245,17 +257,17 @@ testMain substituters directories location (lam api.
   -- owl, so we might be able to be a bit more specific
   api.tests [owl]
     (and (strStartsWith "src/test/microbenchmark/") (strEndsWith ".mc"))
-    [(eval, dont), (run, dont), (runBench, succ)];
+    [(eval, dont), (run, dont), (mlangRun, dont), (runBench, succ)];
 
   api.tests []
     (eqString "src/test/examples/json/perftest-mc.mc")
-    [(eval, dont), (run, dont), (runBench, dont)];
+    [(eval, dont), (run, dont), (mlangRun, dont), (runBench, dont)];
 
   -- === Constraint programming ===
 
   api.tests [minizinc]
     (and (strStartsWith "src/stdlib/cp/") (strEndsWith ".mc"))
-    [(eval, succ), (compile, succ), (run, succ)];
+    [(eval, succ), (compile, succ), (run, succ), (mlangCompile, succ), (mlangRun, succ)];
 
   -- === Tuning ===
 
@@ -271,7 +283,7 @@ testMain substituters directories location (lam api.
     } in
   api.tests []
     (and (strStartsWith "src/test/examples/tuning/") (strEndsWith ".mc"))
-    [(eval, dont), (compile, dont), (tuneCompile, succ), (tuneRun, succ)];
+    [(eval, dont), (compile, dont), (mlangCompile, dont), (tuneCompile, succ), (tuneRun, succ)];
 
   -- === Javascript ===
 
@@ -298,37 +310,11 @@ testMain substituters directories location (lam api.
   -- leave them
   api.tests [node]
     (and (or (strStartsWith "src/test/js/benchmarks/") (strStartsWith "src/test/js/web/")) (strEndsWith ".mc"))
-    [(eval, dont), (compile, dont)];
+    [(eval, dont), (compile, dont), (mlangCompile, dont)];
 
   api.tests [node]
     (and (dirIs "src/test/js") (strEndsWith ".mc"))
     [(jsCompile, succ), (jsRun, succ), (jsDiff, succ)];
-
-  -- === MLang pipeline ===
-
-  let mlangCompile = api.midStep
-    { uses = [origin]
-    , tag = "mlang-exe"
-    , cmd = "%m compile --test --mlang-pipeline %i --output %o"
-    } in
-  let mlangRun = api.endStep
-    { uses = [mlangCompile]
-    , tag = "mlang-run"
-    , cmd = "command %i"
-    } in
-
-  api.tests []
-    (elem
-      [ "src/stdlib/bool.mc"
-      , "src/stdlib/option.mc"
-      , "src/stdlib/char.mc"
-      , "src/stdlib/seq.mc"
-      , "src/stdlib/map.mc"
-      -- TODO(vipa, 2024-11-14): This one should work, it does in
-      -- the original, but doesn't here for some reason
-      -- , "stdlib/mexpr/symbolize.mc"
-      ])
-    [(mlangCompile, succ), (mlangRun, succ)];
 
   -- === Java ===
 
@@ -344,7 +330,7 @@ testMain substituters directories location (lam api.
   -- fix.
   api.tests [javac]
     (and (strStartsWith "src/stdlib/jvm/") (strEndsWith ".mc"))
-    [(eval, dont), (compile, succ), (run, succ)];
+    [(eval, dont), (compile, succ), (run, succ), (mlangCompile, succ), (mlangRun, succ)];
 
   -- === Constructor types ===
 
@@ -363,7 +349,7 @@ testMain substituters directories location (lam api.
   -- syntax, thus we exclude it from normal testing
   api.tests []
     (eqString "src/test/mexpr/types.mc")
-    [(eval, dont), (compile, dont)];
+    [(eval, dont), (compile, dont), (mlangCompile, dont)];
 
   api.tests []
     (and
@@ -382,16 +368,16 @@ testMain substituters directories location (lam api.
 
   api.tests []
     (and (strStartsWith "src/test/meta/") (strEndsWith ".mc"))
-    [(eval, fail), (compile, fail)];
+    [(eval, fail), (compile, fail), (mlangCompile, fail)];
   api.tests []
     (eqString "src/test/meta/recursive-let.mc")
-    [(eval, fail), (compile, succ), (run, succ)];
+    [(eval, fail), (compile, succ), (run, succ), (mlangCompile, succ), (mlangRun, succ)];
 
   -- === Sundials ===
 
   api.tests [sundials]
     (and (strStartsWith "src/stdlib/sundials/") (strEndsWith ".mc"))
-    [(eval, succ), (compile, succ), (run, succ)];
+    [(eval, succ), (compile, succ), (run, succ), (mlangCompile, succ), (mlangRun, succ)];
   api.tests [sundials]
     (elem
       [ "src/stdlib/sundials/cvode.mc"
@@ -404,13 +390,13 @@ testMain substituters directories location (lam api.
 
   api.tests [lwt]
     (eqString "src/stdlib/ext/async-ext.mc")
-    [(eval, fail), (compile, succ), (run, succ)];
+    [(eval, fail), (compile, succ), (run, succ), (mlangCompile, succ), (mlangRun, succ)];
 
   -- NOTE(vipa, 2024-11-25): This doesn't terminate in a reasonable
   -- amount of time
   api.tests [lwt]
     (eqString "src/test/examples/async/tick.mc")
-    [(eval, dont), (compile, succ), (run, dont)];
+    [(eval, dont), (compile, succ), (run, dont), (mlangCompile, succ), (mlangRun, dont)];
 
   -- === Owl ===
 
@@ -423,7 +409,7 @@ testMain substituters directories location (lam api.
       , "src/stdlib/ext/mat-ext.mc"
       , "src/stdlib/ext/vec-ext.mc"
       ])
-    [(eval, fail), (compile, succ), (run, succ)];
+    [(eval, fail), (compile, succ), (run, succ), (mlangCompile, succ), (mlangRun, succ)];
 
   -- === toml ===
 
@@ -432,7 +418,7 @@ testMain substituters directories location (lam api.
       [ "src/stdlib/ext/toml-ext.mc"
       , "src/stdlib/tuning/tune-options.mc"
       ])
-    [(eval, fail), (compile, succ), (run, succ)];
+    [(eval, fail), (compile, succ), (run, succ), (mlangCompile, succ), (mlangRun, succ)];
 
   -- === LR(k) ===
 
@@ -459,7 +445,7 @@ testMain substituters directories location (lam api.
 
   api.tests []
     (and (strStartsWith "src/test/examples/parser/") (strEndsWith ".mc"))
-    [(eval, dont), (compile, dont), (lrkCompile, succ), (lrkGen, succ), (lrkGenCompile, succ)];
+    [(eval, dont), (compile, dont), (mlangCompile, dont), (lrkCompile, succ), (lrkGen, succ), (lrkGenCompile, succ)];
 
   ()
 );
