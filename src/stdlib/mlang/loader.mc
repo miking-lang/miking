@@ -362,7 +362,9 @@ lang MLangLoader = LoaderImpl + BootParserMLang
     -- included to be able to resymbolize when we include it in a
     -- materialized `sem`.
     { pat : Pat
-    , body : Expr
+    -- NOTE(vipa, 2026-08-19): The function maps global sem names to
+    -- local ones.
+    , body : (Name -> Name) -> Expr
     , params : {params : [Name], tyParams : [Name]}
     -- NOTE(vipa, 2026-07-13): Caches to not have to recompute pattern
     -- analysis.
@@ -390,8 +392,8 @@ lang MLangLoader = LoaderImpl + BootParserMLang
       else dig in
     mapFoldWithKey addOrder (digraphAddVertex cache.id dig) orders
 
-  sem mkBranch : [Branch] -> {params : [Name], tyParams : [Name]} -> Pat -> Expr -> Branch
-  sem mkBranch older params pat = | body ->
+  sem mkBranch : Map Name Name -> [Branch] -> {params : [Name], tyParams : [Name]} -> Pat -> Expr -> Branch
+  sem mkBranch currLocalToGlobal older params pat = | rawBody ->
     let id = length older in
     let posPat = lazy (lam. patToNormpat pat) in
     let negPat = lazy (lam. normpatComplement (lazyForce posPat)) in
@@ -425,6 +427,14 @@ lang MLangLoader = LoaderImpl + BootParserMLang
         end
       else None () in
     let cache = mapFromSeq subi (create id (lam other. (other, Left (computeOrder other)))) in
+    let body = lam newGlobalToLocal.
+      recursive let work = lam tm.
+        match tm with TmVar x then
+          match mapLookup x.ident currLocalToGlobal with Some glob
+          then TmVar {x with ident = newGlobalToLocal glob}
+          else tm
+        else smap_Expr_Expr work tm
+      in work rawBody in
     { pat = pat
     , body = body
     , params = params
@@ -481,7 +491,6 @@ lang MLangLoader = LoaderImpl + BootParserMLang
       { branches : [Branch]
       , preMatchArguments : Option (Int, Info)
       }
-    , localToGlobalSems : Map Name Name
     , langs : Map Name (LangEnv, LangData)
     }
   syn Hook +=
@@ -523,7 +532,8 @@ lang MLangLoader = LoaderImpl + BootParserMLang
   -- decls in a `lang` before their respective main phase is run for
   -- *any* of them. Used to properly support mutual recursion withing
   -- a `lang`, amongst other things.
-  sem _langPreSymbolize : Ref LangState -> LangEnv -> SymEnv -> Loader -> Decl -> (LangEnv, SymEnv, Option Decl, Loader)
+  type LangPreSymbolizeAcc = {langEnv : LangEnv, symEnv : SymEnv, localToGlobalSems : Map Name Name}
+  sem _langPreSymbolize : Ref LangState -> LangPreSymbolizeAcc -> Loader -> Decl -> (LangPreSymbolizeAcc, Option Decl, Loader)
   sem _langSymbolize : LangEnv -> SymEnv -> Loader -> Decl -> (LangEnv, SymEnv, Option Decl, Loader)
   sem _langSymbolize langEnv symEnv loader = | decl ->
     match symbolizeDecl symEnv decl with (symEnv, decl) in
@@ -539,16 +549,15 @@ lang MLangLoader = LoaderImpl + BootParserMLang
 
   -- NOTE(vipa, 2026-07-15): This runs after typechecking is done for
   -- all decls in a lang
-  sem _langAddDecl : Ref LangState -> LangData -> Loader -> Decl -> (LangData, Loader)
+  sem _langAddDecl : Ref LangState -> Map Name Name -> LangData -> Loader -> Decl -> (LangData, Loader)
   -- NOTE(vipa, 2026-07-15): This runs after all decls have been
   -- typechecked and added, and should emit, e.g., fully composed
   -- `sem`s.
   sem _langEmit : Loader -> Ref LangState -> LangData -> Loader
   sem _langEmit loader stateRef = | langData ->
     let state = deref stateRef in
-    let resymEnv = mapMap
-      (lam global. optionMapOr global (lam x. x.local) (mapLookup global langData.sems))
-      state.localToGlobalSems in
+    -- NOTE(vipa, 2026-08-19): Base (global) identity -> this
+    -- language's local identity, for every `sem` reachable from here.
     let mkSem : Name -> LocalSemData -> DeclLetRecord = lam base. lam local.
       let global = mapLookupOrElse (lam. error "Compiler error: missing data in state.sems")
         base state.sems in
@@ -565,20 +574,25 @@ lang MLangLoader = LoaderImpl + BootParserMLang
         -- amount of work per language fragment until we know the
         -- function will actually be used.
         let addBranch = lam branch. lam acc.
-          match acc with (resymEnv, tm) in
-          let tm = withType (tyTm branch.body) (match_ (withType (tyPat branch.pat) (nvar_ scrutName))
+          match acc with (paramMap, tm) in
+          let branchBody = branch.body (lam n. (mapFindExn n langData.sems).local) in
+          let tm = withType (tyTm branchBody) (match_ (withType (tyPat branch.pat) (nvar_ scrutName))
             branch.pat
-            branch.body
+            branchBody
             tm) in
-          let resymEnv = foldl2 (lam resymEnv. lam prev. lam new. mapInsert prev new resymEnv)
-            resymEnv
+          let paramMap = foldl2 (lam paramMap. lam prev. lam new. mapInsert prev new paramMap)
+            paramMap
             branch.params.params
             paramNames in
-          (resymEnv, tm) in
+          (paramMap, tm) in
         let never_ = app_ (withInfo local.info never_) (str_ (concat " in " (nameGetStr base))) in
         let default = match_ (nvar_ scrutName) pvarw_ never_ never_ in
-        match foldr addBranch (resymEnv, default) branches with (resymEnv, body) in
-        resymbolizeExpr resymEnv body in
+        -- NOTE(vipa, 2026-08-19): This second resymbolize pass only
+        -- ever sees a map of branch-local parameter names to the
+        -- shared parameter names of the composed `sem`; `sem`
+        -- redirection has already happened via `branch.body` above.
+        match foldr addBranch (mapEmpty nameCmp, default) branches with (paramMap, body) in
+        resymbolizeExpr paramMap body in
       let body = foldr nulam_ (prepBody ()) (snoc paramNames scrutName) in
       let ty = (_withTCEnv
         (lam tcEnv. (tcEnv, mapLookupOrElse (lam. error "Compiler error: missing signature for base") base tcEnv.varEnv))
@@ -603,7 +617,6 @@ lang MLangLoader = LoaderImpl + BootParserMLang
       let stateRef = ref
         { sems = mapEmpty nameCmp
         , langs = mapEmpty nameCmp
-        , localToGlobalSems = mapEmpty nameCmp
         } in
       (stateRef, addHook loader (MLangHook stateRef))
     with (stateRef, loader) in
@@ -658,10 +671,12 @@ lang MLangLoader = LoaderImpl + BootParserMLang
       let decls = concat incDecls (mergeDecls [] x.decls) in
 
       let symPre = lam acc. lam decl.
-        match acc with (langEnv, symEnv, loader) in
-        match _langPreSymbolize stateRef langEnv symEnv loader decl with (langEnv, symEnv, decl, loader) in
-        ((langEnv, symEnv, loader), decl) in
-      match mapAccumL symPre (langEnv, symEnv, loader) decls with ((langEnv, symEnv, loader), decls) in
+        match acc with (acc, loader) in
+        match _langPreSymbolize stateRef acc loader decl with (acc, decl, loader) in
+        ((acc, loader), decl) in
+      let acc = {langEnv = langEnv, symEnv = symEnv, localToGlobalSems = mapEmpty nameCmp} in
+      match mapAccumL symPre (acc, loader) decls
+        with (({langEnv = langEnv, symEnv = symEnv, localToGlobalSems = localToGlobalSems}, loader), decls) in
       let decls = filterOption decls in
 
       let symNormal = lam acc. lam decl.
@@ -696,7 +711,7 @@ lang MLangLoader = LoaderImpl + BootParserMLang
 
       let add = lam acc. lam decl.
         match acc with (langData, loader) in
-        _langAddDecl stateRef langData loader decl in
+        _langAddDecl stateRef localToGlobalSems langData loader decl in
       match foldl add (langData, loader) decls with (langData, loader) in
 
       let loader = _langEmit loader stateRef langData in
@@ -748,8 +763,8 @@ lang MLangLoader = LoaderImpl + BootParserMLang
 end
 
 lang MLangTypeAlias = MLangLoader + TypeDeclAst
-  sem _langPreSymbolize stateRef langEnv symEnv loader += | decl & DeclType {tyIdent = !TyVariant _} ->
-    (langEnv, symEnv, Some decl, loader)
+  sem _langPreSymbolize stateRef acc loader += | decl & DeclType {tyIdent = !TyVariant _} ->
+    (acc, Some decl, loader)
 
   sem _langSymbolize langEnv symEnv loader += | decl & DeclType {tyIdent = !TyVariant _} ->
     match symbolizeDecl symEnv decl with (symEnv, decl & DeclType x) in
@@ -760,17 +775,17 @@ lang MLangTypeAlias = MLangLoader + TypeDeclAst
 end
 
 lang MLangSyn = MLangLoader + SynDeclAst
-  sem _langPreSymbolize stateRef langEnv symEnv loader += | DeclSyn x ->
+  sem _langPreSymbolize stateRef acc loader += | DeclSyn x ->
     match
       switch x.kind
       case SynBase _ then (nameSetNewSym x.ident, x.kind)
       case SynSum {base = base} then
-        match mapLookup (nameGetStr base) langEnv.tyConEnv with Some (n, _, LDSyn _)
+        match mapLookup (nameGetStr base) acc.langEnv.tyConEnv with Some (n, _, LDSyn _)
         then (n, SynSum {base = n})
         else errorSingle [x.info] (join ["There is no previously defined syn '", nameGetStr x.ident, "'."])
       end
     with (ident, kind) in
-    let langEnv = mergeLangEnvExn (None ()) langEnv
+    let langEnv = mergeLangEnvExn (None ()) acc.langEnv
       {emptyLangEnv () with tyConEnv = mapSingleton cmpString (nameGetStr x.ident) (ident, x.info, LDSyn ())} in
     let f = lam acc. lam def.
       match acc with (langEnv, conEnv) in
@@ -778,9 +793,9 @@ lang MLangSyn = MLangLoader + SynDeclAst
       let langEnv = mergeLangEnvExn (None ()) langEnv
         {emptyLangEnv () with conEnv = mapSingleton cmpString (nameGetStr ident) (ident, def.info, LDCon ())} in
       ((langEnv, conEnv), {def with ident = ident}) in
-    match mapAccumL f (langEnv, symEnv.currentEnv.conEnv) x.defs with ((langEnv, conEnv), defs) in
-    let tyConEnv = mapInsert (nameGetStr ident) ident symEnv.currentEnv.tyConEnv in
-    let symEnv = symbolizeUpdateConEnv (symbolizeUpdateTyConEnv symEnv tyConEnv) conEnv in
+    match mapAccumL f (langEnv, acc.symEnv.currentEnv.conEnv) x.defs with ((langEnv, conEnv), defs) in
+    let tyConEnv = mapInsert (nameGetStr ident) ident acc.symEnv.currentEnv.tyConEnv in
+    let symEnv = symbolizeUpdateConEnv (symbolizeUpdateTyConEnv acc.symEnv tyConEnv) conEnv in
     let loader = match kind with SynBase _
       then _addSymbolizedDeclExn loader (DeclType
         { ident = ident
@@ -789,7 +804,7 @@ lang MLangSyn = MLangLoader + SynDeclAst
         , tyIdent = tyWithInfo x.info (tyvariant_ [])
         })
       else loader in
-    (langEnv, symEnv, Some (DeclSyn {x with ident = ident, kind = kind, defs = defs}), loader)
+    ({acc with langEnv = langEnv, symEnv = symEnv}, Some (DeclSyn {x with ident = ident, kind = kind, defs = defs}), loader)
 
   sem _langSymbolize langEnv symEnv loader += | DeclSyn x ->
     let f = lam loader. lam def.
@@ -825,28 +840,30 @@ lang MLangSem = MLangLoader + SemDeclAst + LetSym + PatTypeCheck + SubstituteUnk
       else None ()
     else None ()
 
-  sem _langPreSymbolize stateRef langEnv symEnv loader += | DeclSem x ->
-    match setSymbol symEnv.currentEnv.varEnv x.ident with (varEnv, ident) in
-    let symEnv = symbolizeUpdateVarEnv symEnv varEnv in
+  sem _langPreSymbolize stateRef acc loader += | DeclSem x ->
+    match setSymbol acc.symEnv.currentEnv.varEnv x.ident with (varEnv, ident) in
+    let symEnv = symbolizeUpdateVarEnv acc.symEnv varEnv in
 
     match
       switch x.kind
       case SemBase _ then
-        ( mergeLangEnvExn (None ()) langEnv
+        ( mergeLangEnvExn (None ()) acc.langEnv
           {emptyLangEnv () with varEnv = mapSingleton cmpString (nameGetStr ident) (ident, x.info, LDSem ())}
         , ident
         , SemBase ()
         )
       case SemSum {base = base} then
-        match mapLookup (nameGetStr base) langEnv.varEnv with Some (baseIdent, _, LDSem _) then
-          (langEnv, baseIdent, SemSum {base = baseIdent})
+        match mapLookup (nameGetStr base) acc.langEnv.varEnv with Some (baseIdent, _, LDSem _) then
+          (acc.langEnv, baseIdent, SemSum {base = baseIdent})
         else errorSingle [x.info] (join ["There is no previously defined sem '", nameGetStr base, "'."])
       end
     with (langEnv, baseIdent, kind) in
-    let state = deref stateRef in
-    modref stateRef {state with localToGlobalSems = mapInsert ident baseIdent state.localToGlobalSems};
+    let localToGlobalSems = mapInsert ident baseIdent acc.localToGlobalSems in
 
-    (langEnv, symEnv, Some (DeclSem {x with ident = ident, kind = kind}), loader)
+    ( {acc with langEnv = langEnv, symEnv = symEnv, localToGlobalSems = localToGlobalSems}
+    , Some (DeclSem {x with ident = ident, kind = kind})
+    , loader
+    )
 
   sem _langSymbolize langEnv symEnv loader += | DeclSem x ->
     match symbolizeTyAnnot symEnv x.tyAnnot with (tyVarEnv, tyAnnot) in
@@ -937,7 +954,7 @@ lang MLangSem = MLangLoader + SemDeclAst + LetSym + PatTypeCheck + SubstituteUnk
     let decl = (_withTCEnv f loader).1 in
     (loader, Some decl)
 
-  sem _langAddDecl stateRef langData loader +=
+  sem _langAddDecl stateRef localToGlobalSems langData loader +=
   | DeclSem x ->
     let state = deref stateRef in
     let base = switch x.kind
@@ -962,7 +979,7 @@ lang MLangSem = MLangLoader + SemDeclAst + LetSym + PatTypeCheck + SubstituteUnk
           } in
         let addBranch = lam branches. lam c.
           let id = length branches in
-          (snoc branches (mkBranch branches params c.pat c.body), id) in
+          (snoc branches (mkBranch localToGlobalSems branches params c.pat c.body), id) in
         match mapAccumL addBranch semGlobalData.branches impl.cases with (branches, newBranches) in
         let semGlobalData = {semGlobalData with branches = branches, preMatchArguments = preMatchArguments} in
         (semGlobalData, newBranches)
