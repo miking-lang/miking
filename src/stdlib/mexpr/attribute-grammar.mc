@@ -47,8 +47,9 @@ include "basic-types.mc"
 include "seq.mc"
 include "error.mc"
 include "mexpr/ast-builder.mc"
+include "mexpr/type.mc"
 
-lang AttributeGrammar = Ast + DeclAst + PrettyPrint
+lang AttributeGrammar = Ast + DeclAst + PrettyPrint + MetaVarTypeAst
   -- Each `Attr` is expected to contain exactly a `Thunk` of whatever
   -- the carried value is
   syn Attr loc =
@@ -497,7 +498,45 @@ lang AttributeGrammar = Ast + DeclAst + PrettyPrint
     for_ toCall (lam f. f ())
 
   sem processType : InvEnv Loc -> Type -> ()
-  sem processType env = | ty ->
+  sem processType env =
+  | TyMetaVar x ->
+    switch deref x.contents
+    case Link ty then processType env ty
+    case Unbound u then
+      -- NOTE(vipa, 2026-08-19): Disconnect the TyMetaVar from others,
+      -- which means that `smapAccumL_Type_Type` won't mutate what's
+      -- visible elsewhere.
+      let ty = TyMetaVar {x with contents = ref (Unbound u)} in
+      let loc = LocType ty in
+      -- NOTE(vipa, 2026-02-25): Prepare, insert environments in place
+      -- of expressions, prepare closures for the recursive calls
+      let toCall = [] in
+
+      let prepareType = lam toCall. lam x.
+        let localEnv = ref (mapEmpty subi) in
+        ( snoc toCall (lam. processType (deref localEnv) x)
+        , TyWithEnv {label = lazy (lam. type2str x), env = localEnv}
+        ) in
+      match smapAccumL_Type_Type prepareType toCall ty with (toCall, ty) in
+
+      -- NOTE(vipa, 2026-02-25): Do processing of attributes here
+      let st = {willWrite = []} in
+      let fsPerAttr = mapMap (lam attr. processAttrType env st loc (ty, attr)) env in
+
+      -- NOTE(vipa, 2026-02-25): Record connections between thunks and
+      -- their update functions
+      let f = lam pair.
+        match pair with (st, f) in
+        let f = lam.
+          for_ st.willWrite (lam ww. ww.blackhole ());
+          f () in
+        for_ st.willWrite (lam ww. ww.lazy f) in
+      mapMap f fsPerAttr;
+
+      -- NOTE(vipa, 2026-02-25): Do recursive calls
+      for_ toCall (lam f. f ())
+    end
+  | ty ->
     let loc = LocType ty in
     -- NOTE(vipa, 2026-02-25): Prepare, insert environments in place
     -- of expressions, prepare closures for the recursive calls
