@@ -189,7 +189,6 @@ let compileViaLoader = lam options : Options. lam sourcePath.
     {decls = getDecls loader, expr = unit_};
 
   -- TODO(vipa, 2026-08-14): Original parsing also can prune external utests and do something about mexprExtendedKeywords
-  -- TODO(vipa, 2026-08-14): makeKeywords?
   -- TODO(vipa, 2026-08-14): insertTunedOrDefaults?
   -- TODO(vipa, 2026-08-14): Print AST if options.debugParse?
 
@@ -201,12 +200,14 @@ let compileViaLoader = lam options : Options. lam sourcePath.
   let ast = buildFullAst loader in
   endPhaseStatsExpr log "buildFullAst" ast;
 
+  let ast = removeMetaVarExpr ast in
+  endPhaseStatsExpr log "removeMetaVarExpr" ast;
+
   (if options.debugTypeCheck then
     printLn (use TyAnnotFull in annotateMExpr ast);
     endPhaseStatsExpr log "debug-type-check" ast
    else ());
 
-  -- TODO(vipa, 2026-08-14): if options.debugTypeCheck, output annotateMExpr
   -- TODO(vipa, 2026-08-14): compileSpecialize
   -- TODO(vipa, 2026-08-14): if options.runtimeChecks, injectRuntimeChecks
   -- TODO(vipa, 2026-08-14): if options.enableConstantFold and not options.disableOptimizations, constantFold

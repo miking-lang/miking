@@ -340,6 +340,7 @@ lang MLangLoader = LoaderImpl + BootParserMLang
   + BuiltinLoader
   + Resymbolize
   + NormPat
+  + KeywordMakerBase
 
   syn FileType +=
   | FMCore {includeMExpr : Bool}
@@ -724,6 +725,11 @@ lang MLangLoader = LoaderImpl + BootParserMLang
         errorMulti errs (join ["Parse error while parsing '", path, "'"])
       end in
 
+    let prog =
+      { decls = map makeDeclKeywords prog.decls
+      , expr = makeKeywords prog.expr
+      } in
+
     match includeBuiltinEnv loader with (env, loader) in
     match foldl (lam acc. _addDeclExn acc.0 acc.1) (env, loader) prog.decls with (env, loader) in
     if includeMExpr
@@ -1000,7 +1006,7 @@ end
 
 lang ComposedMLangLoader
   = MLangTypeAlias + MLangSyn + MLangSem + MExprResymbolize + MExprSym + DeclUseSym + TyUseSym
-  + MExprTypeCheck + MExprPatAnalysis + IncludeLoader
+  + MExprTypeCheck + MExprPatAnalysis + IncludeLoader + MCoreKeywordMaker
 end
 
 mexpr
