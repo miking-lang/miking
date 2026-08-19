@@ -379,7 +379,7 @@ mexpr
 
 let m = mapEmpty subi in
 
-utest mapChoose m with None () in
+utest let m : Map Int Int = m in mapChoose m with None () in
 utest mapGetMin m with None () in
 
 utest mapLookupOrElse (lam. 2) 1 m with 2 in

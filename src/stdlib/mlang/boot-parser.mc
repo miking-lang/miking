@@ -75,56 +75,12 @@ lang BootParserMLang = BootParser + MLangAst -- + CosemDeclAst
     {decls = concat includes decls,
      expr = matchTerm unparsedExpr (bootParserGetId unparsedExpr)}
 
-  -- -- Semantic function declaration can be split into a type annotation and args
-  -- -- + cases. This function merges sems into a single declaration.
-  -- sem mergeSems : [Decl] -> [Decl]
-  -- sem mergeSems =| decls ->
-  --   let work = lam acc : ([Decl], Map String Decl). lam decl : Decl.
-  --     match acc with (res, m) in
-  --     match decl with DeclSem s1 then
-  --       let str = nameGetStr s1.ident in
-  --       match mapLookup str m with Some (DeclSem s2) then
-  --         match s1.tyAnnot with TyUnknown _ then
-  --           let m = mapRemove str m in
-  --           (res, mapInsert str (DeclSem {s1 with tyAnnot = s2.tyAnnot}) m)
-  --         else
-  --           let m = mapRemove str m in
-  --           (res, mapInsert str (DeclSem {s1 with args = s2.args, cases = s2.cases}) m)
-  --       else
-  --         (res, mapInsert str decl m)
-  --     else
-  --       (cons decl res, m)
-  --   in
-  --   match foldl work ([], mapEmpty cmpString) decls with (res, m) in
-  --   concat res (mapValues m)
-
-  -- sem mergeCosems : [Decl] -> [Decl]
-  -- sem mergeCosems =| decls ->
-  --   let work = lam acc : ([Decl], Map String Decl). lam decl : Decl.
-  --     match acc with (res, m) in
-  --     match decl with DeclCosem s1 then
-  --       let str = nameGetStr s1.ident in
-  --       match mapLookup str m with Some (DeclCosem s2) then
-  --         match s1.tyAnnot with TyUnknown _ then
-  --           let m = mapRemove str m in
-  --           (res, mapInsert str (DeclCosem {s1 with tyAnnot = s2.tyAnnot}) m)
-  --         else
-  --           let m = mapRemove str m in
-  --           (res, mapInsert str (DeclCosem {s1 with args = s2.args, cases = s2.cases}) m)
-  --       else
-  --         (res, mapInsert str decl m)
-  --     else
-  --       (cons decl res, m)
-  --   in
-  --   match foldl work ([], mapEmpty cmpString) decls with (res, m) in
-  --   concat res (mapValues m)
-
 
   sem matchDecl : Unknown -> Int -> Decl
   sem matchDecl d =
   | 702 ->
     let nCons = glistlen d 0 in
-    let nParams = if eqi nCons 0 then 0 else glistlen d 1 in
+    let nParams = glistlen d 1 in
     let info = ginfo d 0 in
 
     let parseCon = lam i.
@@ -141,7 +97,9 @@ lang BootParserMLang = BootParser + MLangAst -- + CosemDeclAst
 
     DeclSyn {ident = gname d 0,
              defs = map parseCon (range 0 nCons 1),
-             params = map (lam i. gname d (addi (addi 1 nCons) i)) (range 0 nParams 1),
+             params = if eqi nCons 0
+               then make nParams (nameNoSym "p")
+               else map (lam i. gname d (addi (addi 1 nCons) i)) (range 0 nParams 1),
              info = info,
              kind = kind}
   | 703 ->
