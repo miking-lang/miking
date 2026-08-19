@@ -25,6 +25,7 @@ include "jvm/compile.mc"
 include "peval/compile.mc"
 include "mexpr/generate-pprint.mc"
 include "mexpr/generate-utest.mc"
+include "mexpr/deadcode.mc"
 
 include "mexpr/invariants/in-scope.mc"
 include "mexpr/invariants/definitions.mc"
@@ -46,7 +47,7 @@ lang MCoreCompile =
   PprintTyAnnot + HtmlAnnotator +
   MExprToJson +
   ComposedMLangLoader + DPrintViaPprintLoader + StripUtestLoader + UtestLoader +
-  MExprGenerateEq +
+  MExprGenerateEq + MExprDeadcodeElimination +
 
   UnboundErrorAttr + DefinedAttr + WithoutInfoAttr
   sem mkInvariantAttrs : () -> [Attr Loc]
@@ -217,6 +218,9 @@ let compileViaLoader = lam options : Options. lam sourcePath.
   endPhaseStatsExpr log "pattern-lowering" ast;
   (if options.debugShallow then
     printLn (expr2str ast) else ());
+
+  let ast = deadcodeElimination ast in
+  endPhaseStatsExpr log "deadcodeElimination" ast;
 
   let res =
     if options.toJVM then compileMCoreToJVM ast else
