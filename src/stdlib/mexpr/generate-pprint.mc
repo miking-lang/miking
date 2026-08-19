@@ -22,7 +22,7 @@ lang GeneratePprint = Ast + PrettyPrint
   type GPprintEnv =
     { conFunctions : Map Name Name  -- For TyCons
     , varFunctions : Map Name Name  -- For TyVars
-    , newFunctions : [(Name, Expr)]  -- To be defined
+    , newFunctions : [(Name, Type, Expr)]  -- To be defined
 
     , tcEnv : TCEnv -- Current typechecking environment
 
@@ -140,16 +140,15 @@ lang GeneratePprintCon = GeneratePprint + ConTypeAst + Generalize + UnifyPure
     let params = match mapLookup x.ident env.tcEnv.tyConEnv with Some (_, params, _)
       then params
       else errorSingle [x.info] (concat "Typecheck environment does not contain information about type " (nameGetStr x.ident)) in
-    let paramFNames = foldl (lam acc. lam n. mapInsert n (nameSetNewSym n) acc) (mapEmpty nameCmp) params in
+    let paramFNames = map (lam n. {f = nameSetNewSym n, tyvar = nameSetNewSym n}) params in
+    let fullType = tyapps_ ty (map (lam x. ntyvar_ x.tyvar) paramFNames) in
+    let prevVarFunctions = env.varFunctions in
+    let env = {env with varFunctions = foldl (lam m. lam p. mapInsert p.tyvar p.f m) env.varFunctions paramFNames} in
 
     let constructors = mapIntersectWith
       (lam. lam pair. pair.1)
       (mapLookupOr (setEmpty nameCmp) x.ident env.tcEnv.conDeps)
       env.tcEnv.conEnv in
-
-    let fullType = tyapps_ ty (map ntyvar_ (mapKeys paramFNames)) in
-    let prevVarFunctions = env.varFunctions in
-    let env = {env with varFunctions = mapUnion env.varFunctions paramFNames} in
 
     let targetName = nameSym "_target" in
     let addMatch = lam acc. lam c. lam t.
@@ -167,9 +166,17 @@ lang GeneratePprintCon = GeneratePprint + ConTypeAst + Generalize + UnifyPure
       else error "Unification should always be possible here" in
     match mapFoldWithKey addMatch (env, str_ (join ["<missing case for ", nameGetStr x.ident, ">"])) constructors with (env, matchChain) in
     let matchChain = nulam_ targetName matchChain in
-    let body = foldr (lam pname. lam body. nulam_ (mapFindExn pname paramFNames) body) matchChain params in
+    let body = foldr (lam p. lam body. nulam_ p.f body) matchChain paramFNames in
+    let tyAnnot = foldr
+      (lam p. lam ty. tyarrow_ (tyarrows_ [ntyvar_ p.tyvar, tystr_]) ty)
+      (tyarrows_ [fullType, tystr_])
+      paramFNames in
+    let tyAnnot = foldr
+      (lam p. lam ty. ntyall_ p.tyvar ty)
+      tyAnnot
+      paramFNames in
 
-    let env = {env with varFunctions = prevVarFunctions, newFunctions = snoc env.newFunctions (fname, body)} in
+    let env = {env with varFunctions = prevVarFunctions, newFunctions = snoc env.newFunctions (fname, tyAnnot, body)} in
     (env, nvar_ fname)
 end
 
@@ -272,7 +279,7 @@ lang GeneratePprintLoader = LoaderInterface + GeneratePprint
       -- NOTE(vipa, 2026-08-17): We don't need to capture the
       -- definitions in a SymEnv, because they're already registered
       -- in the GPprintEnv
-      else (_addDeclExn _symEnvEmpty loader (nureclets_ env.newFunctions)).1 in
+      else (_addDeclExn _symEnvEmpty loader (nreclets_ env.newFunctions)).1 in
     Some (loader, printFs)
 
   sem pprintFunctionsFor : [Type] -> Loader -> (Loader, [Expr])
@@ -366,6 +373,6 @@ lang OldDPrintViaPprint = GeneratePprint + AppTypeUtils
     -- functions right here, which might duplicate code and such,
     -- becasue it is significantly easier than finding a good location
     -- to insert it
-    bind_ (nureclets_ env.newFunctions) (ulam_ "x" (semi_ (print_ (app_ fn (var_ "x"))) (flushStdout_ unit_)))
+    bind_ (nreclets_ env.newFunctions) (ulam_ "x" (semi_ (print_ (app_ fn (var_ "x"))) (flushStdout_ unit_)))
   | tm -> smap_Expr_Expr (_dprintToPprint env) tm
 end

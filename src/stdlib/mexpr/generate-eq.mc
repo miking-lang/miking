@@ -19,7 +19,7 @@ lang GenerateEq = Ast
   type GEqEnv =
     { conFunctions : Map Name Name  -- For TyCons
     , varFunctions : Map Name Name  -- For TyVars
-    , newFunctions : [(Name, Expr)]  -- To be defined
+    , newFunctions : [(Name, Type, Expr)]  -- To be defined
 
     , tcEnv : TCEnv -- Current typechecking environment
 
@@ -105,10 +105,10 @@ lang GenerateEqCon = GenerateEq + ConTypeAst + Generalize + UnifyPure
     let params = match mapLookup x.ident env.tcEnv.tyConEnv with Some (_, params, _)
       then params
       else errorSingle [x.info] (concat "Typecheck environment does not contain information about type " (nameGetStr x.ident)) in
-    let paramFNames = foldl (lam acc. lam n. mapInsert n (nameSetNewSym n) acc) (mapEmpty nameCmp) params in
-    let fullType = tyapps_ ty (map ntyvar_ (mapKeys paramFNames)) in
+    let paramFNames = map (lam n. {f = nameSetNewSym n, tyvar = nameSetNewSym n}) params in
+    let fullType = tyapps_ ty (map (lam x. ntyvar_ x.tyvar) paramFNames) in
     let prevVarFunctions = env.varFunctions in
-    let env = {env with varFunctions = mapUnion env.varFunctions paramFNames} in
+    let env = {env with varFunctions = foldl (lam m. lam p. mapInsert p.tyvar p.f m) env.varFunctions paramFNames} in
 
     let constructors = mapIntersectWith
       (lam. lam pair. pair.1)
@@ -122,7 +122,8 @@ lang GenerateEqCon = GenerateEq + ConTypeAst + Generalize + UnifyPure
       match inst (infoTy t) 0 t with TyArrow {from = from, to = to} in
       let uni = emptyUnification () in
       match unifyPure uni to fullType with Some uni then
-        match getEqFunction env t with (env, subf) in
+        let from = pureApplyUniToType uni from in
+        match getEqFunction env from with (env, subf) in
         let subl = nameSym "subl" in
         let subr = nameSym "subr" in
         let tm = match_ (nvar_ lName) (npcon_ c (npvar_ subl))
@@ -134,9 +135,17 @@ lang GenerateEqCon = GenerateEq + ConTypeAst + Generalize + UnifyPure
       else error "Unification should always be possible here" in
     match mapFoldWithKey addMatch (env, never_) constructors with (env, matchChain) in
     let matchChain = nulam_ lName (nulam_ rName matchChain) in
-    let body = foldr (lam pname. lam body. nulam_ (mapFindExn pname paramFNames) body) matchChain params in
+    let body = foldr (lam p. lam body. nulam_ p.f body) matchChain paramFNames in
+    let tyAnnot = foldr
+      (lam p. lam ty. tyarrow_ (tyarrows_ [ntyvar_ p.tyvar, ntyvar_ p.tyvar, tybool_]) ty)
+      (tyarrows_ [fullType, fullType, tybool_])
+      paramFNames in
+    let tyAnnot = foldr
+      (lam p. lam ty. ntyall_ p.tyvar ty)
+      tyAnnot
+      paramFNames in
 
-    let env = {env with varFunctions = prevVarFunctions, newFunctions = snoc env.newFunctions (fname, body)} in
+    let env = {env with varFunctions = prevVarFunctions, newFunctions = snoc env.newFunctions (fname, tyAnnot, body)} in
     (env, nvar_ fname)
 end
 
@@ -209,7 +218,7 @@ lang GenerateEqLoader = LoaderInterface + GenerateEq
       -- NOTE(vipa, 2026-08-17): We don't need to capture the
       -- definitions in a SymEnv, because they're already registered
       -- in the GEqEnv
-      else (_addDeclExn _symEnvEmpty loader (nureclets_ env.newFunctions)).1 in
+      else (_addDeclExn _symEnvEmpty loader (nreclets_ env.newFunctions)).1 in
     Some (loader, printFs)
 
   sem eqFunctionsFor : [Type] -> Loader -> (Loader, [Expr])
