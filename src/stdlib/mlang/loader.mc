@@ -732,8 +732,17 @@ lang MLangLoader = LoaderImpl + BootParserMLang
 
     match includeBuiltinEnv loader with (env, loader) in
     match foldl (lam acc. _addDeclExn acc.0 acc.1) (env, loader) prog.decls with (env, loader) in
-    if includeMExpr
-    then (_addDeclExn env loader (declWithInfo (infoTm prog.expr) (ulet_ "" prog.expr))).1
+    if includeMExpr then
+      -- NOTE(vipa, 2026-08-19): There are features that handle
+      -- top-level definitions better than local ones, so we unwrap
+      -- the `mexpr` part into a sequence of decls and add them
+      -- individually here, rather than just as a single `DeclLet`
+      -- with an expr.
+      recursive let work = lam acc. lam tm.
+        match tm with TmDecl x
+        then work (_addDeclExn acc.0 acc.1 x.decl) x.inexpr
+        else (_addDeclExn acc.0 acc.1 (declWithInfo (infoTm tm) (ulet_ "" tm))).1
+      in work (env, loader) prog.expr
     else loader
 end
 
