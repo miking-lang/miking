@@ -24,7 +24,7 @@ lang Resymbolize = Ast
 
   sem resymbolizeExpr : Map Name Name -> Expr -> Expr
   sem resymbolizeDecl : Map Name Name -> Decl -> (Map Name Name, Decl)
-  sem resymbolizePat  : Map Name Name -> Pat -> (Map Name Name, Pat)
+  sem resymbolizePat  : Map Name Name -> Map Name Name -> Pat -> (Map Name Name, Pat)
   sem resymbolizeType : Map Name Name -> Type -> Type
 end
 
@@ -78,7 +78,8 @@ lang ResymbolizeMatch = Resymbolize + MatchAst
   sem resymbolizeExpr nameMap +=
   | TmMatch t ->
     let target = resymbolizeExpr nameMap t.target in
-    match resymbolizePat nameMap t.pat with (thnNameMap, pat) in
+    match resymbolizePat nameMap (mapEmpty nameCmp) t.pat with (thnNameMap, pat) in
+    let thnNameMap = mapUnion nameMap thnNameMap in
     TmMatch {t with target = target, pat = pat,
                     thn = resymbolizeExpr thnNameMap t.thn,
                     els = resymbolizeExpr nameMap t.els,
@@ -153,28 +154,37 @@ lang ResymbolizeConDefDecl = Resymbolize + DataDeclAst
 end
 
 lang ResymbolizeNamedPat = Resymbolize + NamedPat
-  sem resymbolizePat : Map Name Name -> Pat -> (Map Name Name, Pat)
-  sem resymbolizePat nameMap +=
+  sem resymbolizePat : Map Name Name -> Map Name Name -> Pat -> (Map Name Name, Pat)
+  sem resymbolizePat nameMap patNames +=
   | PatNamed (t & {ident = PName id}) ->
-    let newId = nameSetNewSym id in
-    (mapInsert id newId nameMap, PatNamed {t with ident = PName newId})
+    match mapLookup id patNames with Some id then
+      (patNames, PatNamed {t with ident = PName id})
+    else
+      let newId = nameSetNewSym id in
+      (mapInsert id newId patNames, PatNamed {t with ident = PName newId})
 end
 
 lang ResymbolizeSeqEdgePat = Resymbolize + SeqEdgePat
   sem resymbolizePat : Map Name Name -> Pat -> (Map Name Name, Pat)
-  sem resymbolizePat nameMap +=
+  sem resymbolizePat nameMap patNames +=
   | PatSeqEdge (t & {middle = PName id}) ->
-    let newId = nameSetNewSym id in
-    (mapInsert id newId nameMap, PatSeqEdge {t with middle = PName newId})
+    match
+      match mapLookup id patNames with Some id
+      then (patNames, id)
+      else let newId = nameSetNewSym id in (mapInsert id newId patNames, newId)
+    with (patNames, id) in
+    match mapAccumL (resymbolizePat nameMap) patNames t.prefix with (patNames, prefix) in
+    match mapAccumL (resymbolizePat nameMap) patNames t.postfix with (patNames, postfix) in
+    (patNames, PatSeqEdge {t with prefix = prefix, middle = PName id, postfix = postfix})
 end
 
 lang ResymbolizePatCon = Resymbolize + DataPat
   sem resymbolizePat : Map Name Name -> Pat -> (Map Name Name, Pat)
-  sem resymbolizePat nameMap +=
+  sem resymbolizePat nameMap patNames +=
   | PatCon t ->
-    match mapLookup t.ident nameMap with Some newId then
-      (nameMap, PatCon {t with ident = newId})
-    else (nameMap, PatCon t)
+    let id = mapLookupOr t.ident t.ident nameMap in
+    match resymbolizePat nameMap patNames t.subpat with (patNames, subpat) in
+    (patNames, PatCon {t with ident = id, subpat = subpat})
 end
 
 lang ResymbolizeConType = Resymbolize + ConTypeAst
@@ -232,8 +242,8 @@ lang MExprResymbolize =
   | d -> (nameMap, smap_Decl_Expr (resymbolizeExpr nameMap) d)
 
   sem resymbolizePat : Map Name Name -> Pat -> (Map Name Name, Pat)
-  sem resymbolizePat nameMap +=
-  | p -> smapAccumL_Pat_Pat resymbolizePat nameMap p
+  sem resymbolizePat nameMap patNames +=
+  | p -> smapAccumL_Pat_Pat (resymbolizePat nameMap) patNames p
 
   sem resymbolizeType : Map Name Name -> Type -> Type
   sem resymbolizeType nameMap +=

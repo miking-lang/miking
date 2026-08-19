@@ -571,8 +571,8 @@ lang MLangLoader = LoaderImpl + BootParserMLang
             tm) in
           let resymEnv = foldl2 (lam resymEnv. lam prev. lam new. mapInsert prev new resymEnv)
             resymEnv
-            paramNames
-            branch.params.params in
+            branch.params.params
+            paramNames in
           (resymEnv, tm) in
         let default = match_ (nvar_ scrutName) pvarw_ never_ never_ in
         match foldr addBranch (resymEnv, default) branches with (resymEnv, body) in
@@ -913,7 +913,7 @@ lang MLangSem = MLangLoader + SemDeclAst + LetSym + PatTypeCheck + SubstituteUnk
         {c with pat = pat, body = body} in
       let cases = map tcCase impl.cases in
 
-      (tcEnv, DeclSem {x with impl = Some impl}) in
+      (tcEnv, DeclSem {x with impl = Some {impl with params = params, cases = cases}}) in
 
     -- NOTE(vipa, 2026-07-16): We intentionally drop tcEnv, because it
     -- was only relevant for the body, not after
@@ -1030,6 +1030,7 @@ mexpr
 
 use ComposedMLangLoader in
 
+(match argv with [_] then exit 0 else ());
 match argv with [_, input] ++ _ in
 
 let loader = mkLoader typcheckEnvDefault [] in
