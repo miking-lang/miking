@@ -165,7 +165,7 @@ lang ResymbolizeNamedPat = Resymbolize + NamedPat
 end
 
 lang ResymbolizeSeqEdgePat = Resymbolize + SeqEdgePat
-  sem resymbolizePat : Map Name Name -> Pat -> (Map Name Name, Pat)
+  sem resymbolizePat : Map Name Name -> Map Name Name -> Pat -> (Map Name Name, Pat)
   sem resymbolizePat nameMap patNames +=
   | PatSeqEdge (t & {middle = PName id}) ->
     match
@@ -179,7 +179,7 @@ lang ResymbolizeSeqEdgePat = Resymbolize + SeqEdgePat
 end
 
 lang ResymbolizePatCon = Resymbolize + DataPat
-  sem resymbolizePat : Map Name Name -> Pat -> (Map Name Name, Pat)
+  sem resymbolizePat : Map Name Name -> Map Name Name -> Pat -> (Map Name Name, Pat)
   sem resymbolizePat nameMap patNames +=
   | PatCon t ->
     let id = mapLookupOr t.ident t.ident nameMap in
@@ -241,7 +241,7 @@ lang MExprResymbolize =
   sem resymbolizeDecl nameMap +=
   | d -> (nameMap, smap_Decl_Expr (resymbolizeExpr nameMap) d)
 
-  sem resymbolizePat : Map Name Name -> Pat -> (Map Name Name, Pat)
+  sem resymbolizePat : Map Name Name -> Map Name Name -> Pat -> (Map Name Name, Pat)
   sem resymbolizePat nameMap patNames +=
   | p -> smapAccumL_Pat_Pat (resymbolizePat nameMap) patNames p
 
