@@ -34,12 +34,8 @@ lang WithoutInfoAttr = Invariant
     let timeMs = subf (wallTimeMs ()) start in
     let numMissing = length x in
     let example =
-      match x with [example] ++ _ then
-        let lines = strSplit "\n" (loc2str example) in
-        let lines = match lines with [l1, l2, l3, _, _] ++ _ ++ [r1, r2, r3]
-          then [l1, l2, l3, "...elided...", r1, r2, r3]
-          else lines in
-        join [" Example:\n    ", strJoin "\n    " lines]
+      match x with [example] ++ _
+      then concat " Example:" (invariantLoc2Str "    " example)
       else "" in
     printLn (join
       [ "  NoInfo: ", int2string numMissing, " missing Info fields ("

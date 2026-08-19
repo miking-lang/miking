@@ -37,14 +37,17 @@ lang DefinedAttr = Invariant + MExprAst + DeclaredHereAttr
     let start = wallTimeMs () in
     let x = x.read () in
     let timeMs = subf (wallTimeMs ()) start in
-    let numNoSym =
-      mapFoldWithKey (lam n. lam k. lam. if nameHasSym k then n else addi n 1) 0 x in
-    let numMultiDef = mapFoldWithKey
-      (lam n. lam. lam defs. match defs with [_, _] ++ _ then addi n 1 else n) 0 x in
+    let noSym =
+      mapFoldWithKey (lam ex. lam k. lam. if nameHasSym k then ex else exampleAdd k ex) (exampleSeqEmpty 3) x in
+    let multiDef = mapFoldWithKey
+      (lam ex. lam n. lam defs. match defs with [_, _] ++ _ then exampleAdd (n, defs) ex else ex) (exampleSeqEmpty 3) x in
+    let multiDefToStr = lam pair.
+      match pair with (n, defs) in
+      join [nameGetStr n, "", strJoin "\n" (map (invariantLoc2Str "      ") defs)] in
     printLn (join
-      [ "  Definitions: ", int2string numNoSym, " names without symbols, "
-      , int2string numMultiDef, " with multiple definitions ("
-      , float2string timeMs, "ms)."
+      [ "  Definitions: ", int2string (exampleCount noSym), " names without symbols", examplesToShortStr nameGetStr noSym, ", "
+      , int2string (exampleCount multiDef), " with multiple definitions ("
+      , float2string timeMs, "ms).", examplesToLongStr "Multi-def examples:" multiDefToStr multiDef
       ])
 
   sem openDefinedAttr : all loc. Attr loc -> Thunk (DefinedAttr loc)
