@@ -575,6 +575,7 @@ lang MLangLoader = LoaderImpl + BootParserMLang
             branch.params.params
             paramNames in
           (resymEnv, tm) in
+        let never_ = app_ (withInfo local.info never_) (str_ (concat " in " (nameGetStr base))) in
         let default = match_ (nvar_ scrutName) pvarw_ never_ never_ in
         match foldr addBranch (resymEnv, default) branches with (resymEnv, body) in
         resymbolizeExpr resymEnv body in
