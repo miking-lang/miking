@@ -834,16 +834,17 @@ lang MLangSem = MLangLoader + SemDeclAst + LetSym + PatTypeCheck + SubstituteUnk
       case SemBase _ then
         ( mergeLangEnvExn (None ()) langEnv
           {emptyLangEnv () with varEnv = mapSingleton cmpString (nameGetStr ident) (ident, x.info, LDSem ())}
+        , ident
         , SemBase ()
         )
       case SemSum {base = base} then
         match mapLookup (nameGetStr base) langEnv.varEnv with Some (baseIdent, _, LDSem _) then
-          let state = deref stateRef in
-          modref stateRef {state with localToGlobalSems = mapInsert ident baseIdent state.localToGlobalSems};
-          (langEnv, SemSum {base = baseIdent})
+          (langEnv, baseIdent, SemSum {base = baseIdent})
         else errorSingle [x.info] (join ["There is no previously defined sem '", nameGetStr base, "'."])
       end
-    with (langEnv, kind) in
+    with (langEnv, baseIdent, kind) in
+    let state = deref stateRef in
+    modref stateRef {state with localToGlobalSems = mapInsert ident baseIdent state.localToGlobalSems};
 
     (langEnv, symEnv, Some (DeclSem {x with ident = ident, kind = kind}), loader)
 
