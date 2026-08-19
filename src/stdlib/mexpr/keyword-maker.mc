@@ -21,7 +21,7 @@ include "name.mc"
 -- The base fragment that includes the keyword maker, but
 -- no checks for incorrect bindings in e.g. let or lam.
 -- See the separate fragments to include this.
-lang KeywordMakerBase = VarAst + AppAst + ConTypeAst + AppTypeAst
+lang KeywordMakerBase = VarAst + AppAst + ConTypeAst + AppTypeAst + DeclAst
   sem isKeyword =
   | _ -> false
 
@@ -64,7 +64,13 @@ lang KeywordMakerBase = VarAst + AppAst + ConTypeAst + AppTypeAst
          else makeKeywordError r.info noArgs (length args) ident
        else never
      else TmVar r
+  | TmDecl x ->
+     TmDecl {x with decl = makeDeclKeywords x.decl, inexpr = makeExprKeywords [] x.inexpr}
   | expr -> smap_Expr_Expr (makeExprKeywords []) expr
+
+  sem makeDeclKeywords : Decl -> Decl
+  sem makeDeclKeywords =
+  | decl -> smap_Decl_Expr (makeExprKeywords []) decl
 
   sem makeTypeKeywords : [Type] -> Type -> Type
   sem makeTypeKeywords args =
@@ -98,22 +104,24 @@ lang KeywordMakerData = KeywordMakerBase + DataAst + DataDeclAst
          else makeKeywordError r.info noArgs (length args) ident
        else never
      else TmConApp {r with body = body}
-  | TmDecl (x & {decl = DeclConDef r}) ->
+
+  sem makeDeclKeywords +=
+  | DeclConDef r ->
      let ident = nameGetStr r.ident in
      match matchKeywordString r.info ident with Some _ then
        errorSingle [r.info] (join ["Keyword '", ident,
        "' cannot be used in a constructor definition."])
-     else TmDecl {x with inexpr = makeExprKeywords [] x.inexpr}
+     else DeclConDef r
 end
 
 lang KeywordMakerType = KeywordMakerBase + TypeDeclAst
-  sem makeExprKeywords (args: [Expr]) +=
-  | TmDecl (x & {decl = DeclType r}) ->
+  sem makeDeclKeywords +=
+  | DeclType r ->
      let ident = nameGetStr r.ident in
      match matchTypeKeywordString r.info ident with Some _ then
        errorSingle [r.info] (join ["Type keyword '", ident,
        "' cannot be used in a type definition."])
-     else TmDecl {x with inexpr = makeExprKeywords [] x.inexpr}
+     else DeclType r
 end
 
 -- Includes a check that a keyword cannot be used as a binding variable in a lambda
@@ -129,16 +137,12 @@ end
 
 -- Includes a check that a keyword cannot be used as a binding variable in a let expression
 lang KeywordMakerLet = KeywordMakerBase + LetDeclAst
-  sem makeExprKeywords (args: [Expr]) +=
-  | TmDecl (x & {decl = DeclLet r}) ->
+  sem makeDeclKeywords +=
+  | DeclLet r ->
      let ident = nameGetStr r.ident in
      match matchKeywordString r.info ident with Some _ then
        errorSingle [r.info] (join ["Keyword '", ident, "' cannot be used in a let expressions."])
-     else
-       TmDecl
-       {x with decl = DeclLet {r with body = makeExprKeywords [] r.body}
-       , inexpr = makeExprKeywords [] x.inexpr
-       }
+     else DeclLet {r with body = makeExprKeywords [] r.body}
 end
 
 
