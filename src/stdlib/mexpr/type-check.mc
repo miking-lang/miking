@@ -1537,21 +1537,15 @@ lang UtestTypeCheck = TypeCheck + UtestDeclAst
     let expected = typeCheckExpr env t.expected in
     let tusing = optionMap (typeCheckExpr env) t.tusing in
     let tonfail = optionMap (typeCheckExpr env) t.tonfail in
-    (switch (tusing, tonfail)
-     case (Some tu, Some to) then
-       unify env [infoTm tu]
-         (tyarrows_ [tyTm test, tyTm expected, tybool_]) (tyTm tu);
-       unify env [infoTm to]
-         (tyarrows_ [tyTm test, tyTm expected, tystr_]) (tyTm to)
-     case (Some tu, None _) then
+    (match tusing with Some tu then
        unify env [infoTm tu]
          (tyarrows_ [tyTm test, tyTm expected, tybool_]) (tyTm tu)
-     case (None _, Some to) then
+     else
+       unify env [infoTm test, infoTm expected] (tyTm test) (tyTm expected));
+    (match tonfail with Some to then
        unify env [infoTm to]
          (tyarrows_ [tyTm test, tyTm expected, tystr_]) (tyTm to)
-     case (None _, None _) then
-       unify env [infoTm test, infoTm expected] (tyTm test) (tyTm expected)
-     end);
+     else ());
     ( env
     , DeclUtest
       {t with test = test
