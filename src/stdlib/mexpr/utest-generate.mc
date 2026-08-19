@@ -226,12 +226,6 @@ lang UtestBase =
   AppTypeCmp + AllTypeCmp + SeqTypeAst + TensorTypeAst + TypeCheck +
   DataKindAst
 
-  -- NOTE(larshum, 2022-12-26): We customize the comparison of types such that
-  -- all sequence and tensor types are considered equal. This is because we
-  -- reuse the polymorphic functions for printing and equality for all sequence
-  -- and tensor types.
-  sem cmpTypeH +=
-
   type UtestEnv = {
     -- Maps a type to the identifier of its pretty-print or equality function,
     -- respectively.

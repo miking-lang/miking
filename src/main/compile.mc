@@ -46,6 +46,7 @@ lang MCoreCompile =
   PprintTyAnnot + HtmlAnnotator +
   MExprToJson +
   ComposedMLangLoader + DPrintViaPprintLoader + StripUtestLoader + UtestLoader +
+  MExprGenerateEq +
 
   UnboundErrorAttr + DefinedAttr + WithoutInfoAttr
   sem mkInvariantAttrs : () -> [Attr Loc]
@@ -199,6 +200,11 @@ let compileViaLoader = lam options : Options. lam sourcePath.
 
   let ast = buildFullAst loader in
   endPhaseStatsExpr log "buildFullAst" ast;
+
+  (if options.debugTypeCheck then
+    printLn (use TyAnnotFull in annotateMExpr ast);
+    endPhaseStatsExpr log "debug-type-check" ast
+   else ());
 
   -- TODO(vipa, 2026-08-14): if options.debugTypeCheck, output annotateMExpr
   -- TODO(vipa, 2026-08-14): compileSpecialize

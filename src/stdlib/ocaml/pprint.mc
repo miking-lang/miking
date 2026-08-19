@@ -265,6 +265,8 @@ lang OCamlPrettyPrint =
   | CFlushStdout _ -> intrinsicOpIO "flush_stdout"
   | CFlushStderr _ -> intrinsicOpIO "flush_stderr"
   | CReadLine _ -> intrinsicOpIO "read_line"
+  | CReadBytesAsString _ -> "(fun _ -> Printf.eprintf \"CReadBytesAsString unimplemented\"; exit 1)"
+  | CTypeOf _ -> "(fun _ -> Printf.eprintf \"CTypeOf unimplemented\"; exit 1)"
   | CArgv _ -> intrinsicOpSys "argv"
   | CFileRead _ -> intrinsicOpFile "read"
   | CFileWrite _ -> intrinsicOpFile "write"
