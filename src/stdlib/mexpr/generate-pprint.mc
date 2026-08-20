@@ -194,10 +194,11 @@ lang GeneratePprintVar = GeneratePprint + VarTypeAst
     else (env, ulam_ "" (str_ (join ["<poly (", nameGetStr x.ident, ")>"])))
 end
 
-lang GeneratePprintTensor = GeneratePprint + TensorTypeAst
+lang GeneratePprintTensor = GeneratePprint + TensorTypeAst + TensorOpAst
   sem _getPprintFunction env +=
   | TyTensor x ->
-    (env, ulam_ "" (str_ "<tensor>"))
+    match getPprintFunction env x.ty with (env, elemF) in
+    (env, app_ (uconst_ (CTensorToString ())) elemF)
 end
 
 lang GeneratePprintMissingCase = GeneratePprint
