@@ -68,7 +68,7 @@ lang AstParserBase = Lexer + Ast + DeclAst
 
   sem constructInfixExpr: (BrkOpExpr LOpen ROpen, Expr, Expr) -> Expr
   sem constructInfixType: (BrkOpType LOpen ROpen, Type, Type) -> Type
-  sem constructInfixPat:  (BrkOpPat  LOpen ROpen, Pat,  pat)  -> Pat
+  sem constructInfixPat:  (BrkOpPat  LOpen ROpen, Pat,  Pat)  -> Pat
 
   sem constructPostfixExpr: (BrkOpExpr LOpen RClosed, Expr) -> Expr
   sem constructPostfixType: (BrkOpType LOpen RClosed, Type) -> Type
@@ -174,7 +174,7 @@ lang AstParserBase = Lexer + Ast + DeclAst
 
   sem finalizeParsePat state =
   | cur ->
-    match breakableFinalizeParse (configType ()) state with Some sppf then
+    match breakableFinalizeParse (configPat ()) state with Some sppf then
       let config: BreakableErrorHighlightConfig BrkOpPat = {
         parenAllowed = #frozen"parenAllowedPat",
         topAllowed = #frozen"topAllowedPat",
@@ -308,6 +308,61 @@ lang AstParserBase = Lexer + Ast + DeclAst
   | OpPatAtom pat -> infoPat pat
 end
 
+lang WithKeyword = Lexer
+  sem identIsKeyword =
+  | "with" -> true
+end
+
+lang LetKeyword = Lexer
+  sem identIsKeyword =
+  | "let" -> true
+end
+
+lang InKeyword = Lexer
+  sem identIsKeyword =
+  | "in" -> true
+end
+
+lang ThenKeyword = Lexer
+  sem identIsKeyword =
+  | "then" -> true
+end
+
+lang ElseKeyword = Lexer
+  sem identIsKeyword =
+  | "else" -> true
+end
+
+lang TrueKeyword = Lexer
+  sem identIsKeyword =
+  | "true" -> true
+end
+
+lang FalseKeyword = Lexer
+  sem identIsKeyword =
+  | "false" -> true
+end
+
+lang RecursiveKeyword = Lexer
+  sem identIsKeyword =
+  | "recursive" -> true
+end
+
+lang LamKeyword = Lexer
+  sem identIsKeyword =
+  | "lam" -> true
+end
+
+lang MatchKeyword = Lexer
+  sem identIsKeyword =
+  | "match" -> true
+end
+
+lang NeverKeyword = Lexer
+  sem identIsKeyword =
+  | "never" -> true
+end
+
 lang IntParser = AstParserBase + IntAst + IntPat
   sem canStartAppArgExpr =
   | { token = IntTok { } } -> true
@@ -335,7 +390,7 @@ lang IntParser = AstParserBase + IntAst + IntPat
   | { token = IntTok { val = val } } & cur ->
     let pat = PatInt {
       val = val,
-      ty = ityunknown_ cur.info,
+      ty = tyint_,
       info = cur.info
     } in
     let state = breakableAddAtom (configPat ()) (OpPatAtom pat) state in
@@ -405,7 +460,7 @@ lang NegParser = AstParserBase + IntAst + FloatAst + IntPat
       let info = mergeInfo tokneg.info cur.info in
       let pat = PatInt {
         val = negi val,
-        ty = ityunknown_ info,
+        ty = tyint_,
         info = info
       } in
       let state = breakableAddAtom (configPat ()) (OpPatAtom pat) state in
@@ -510,6 +565,11 @@ lang AppParser = AstParserBase + AppAst + AppTypeAst
         parseErr (cur.info, "Breakable add infix error")
     else
       finalizeParseType state cur
+
+  sem parsePatRClosed state =
+  | cur ->
+    -- patterns can not be applied
+    finalizeParsePat state cur
 
   sem constructInfixExpr =
   | (OpExprApp info, lhs, rhs) ->
@@ -755,10 +815,7 @@ lang TupleParser = ParenParser + RecordAst + RecordTypeAst
 
 end
 
-lang BoolParser = AstParserBase + BoolAst + BoolPat
-  sem identIsKeyword =
-  | "true" | "false" -> true
-
+lang BoolParser = AstParserBase + BoolAst + BoolPat + TrueKeyword + FalseKeyword
   sem canStartAppArgExpr =
   | { token = KeywordTok { val = "true" | "false" } } -> true
 
@@ -793,7 +850,7 @@ lang BoolParser = AstParserBase + BoolAst + BoolPat
   | { token = KeywordTok { val = "true" } } & cur ->
     let pat = PatBool {
       val = true,
-      ty = ityunknown_ cur.info,
+      ty = tybool_,
       info = cur.info
     } in
     let state = breakableAddAtom (configPat ()) (OpPatAtom pat) state in
@@ -801,7 +858,7 @@ lang BoolParser = AstParserBase + BoolAst + BoolPat
   | { token = KeywordTok { val = "false" } } & cur ->
     let pat = PatBool {
       val = false,
-      ty = ityunknown_ cur.info,
+      ty = tybool_,
       info = cur.info
     } in
     let state = breakableAddAtom (configPat ()) (OpPatAtom pat) state in
@@ -835,7 +892,7 @@ lang CharParser = AstParserBase + CharAst + CharPat
   | { token = CharTok { val = val } } & cur ->
     let pat = PatChar {
       val = val,
-      ty = ityunknown_ cur.info,
+      ty = tychar_,
       info = cur.info
     } in
     let state = breakableAddAtom (configPat ()) (OpPatAtom pat) state in
@@ -874,7 +931,7 @@ lang StringParser = AstParserBase + SeqAst + CharAst + SeqTotPat + CharPat
     let pat = PatSeqTot {
       pats = map (lam ch. PatChar {
         val = ch,
-        ty = ityunknown_ cur.info,
+        ty = tychar_,
         info = cur.info
       }) val,
       ty = ityunknown_ cur.info,
@@ -967,10 +1024,7 @@ lang BraceParser = AstParserBase
     beginParseTypeInBrace state open (nextToken open.stream)
 end
 
-lang RecordParser = BraceParser + RecordAst + RecordTypeAst
-  sem identIsKeyword =
-  | "with" -> true
-
+lang RecordParser = BraceParser + RecordAst + RecordTypeAst + WithKeyword
   sem beginParseExprInBrace state open =
   | { token = RBraceTok {} } & close ->
     -- this is a empty record
@@ -1131,10 +1185,7 @@ lang RecordParser = BraceParser + RecordAst + RecordTypeAst
     )
 end
 
-lang LetDeclParser = AstParserBase + LetDeclAst
-  sem identIsKeyword =
-  | "let" | "in" -> true
-
+lang LetDeclParser = AstParserBase + LetDeclAst + LetKeyword + InKeyword
   sem parseExprROpen state =
   | { token = KeywordTok { val = "let" } } & toklet ->
     result.bind (parseDecl toklet) (lam decl.
@@ -1190,10 +1241,7 @@ lang LetDeclParser = AstParserBase + LetDeclAst
       parseErr (cur.info, "Missing identifier")
 end
 
-lang RecLetsDeclParser = AstParserBase + RecLetsDeclAst
-  sem identIsKeyword =
-  | "recursive" | "let" | "in" -> true
-
+lang RecLetsDeclParser = AstParserBase + RecLetsDeclAst + RecursiveKeyword + LetKeyword + InKeyword
   sem parseExprROpen state =
   | { token = KeywordTok { val = "recursive" } } & rokrec ->
     recursive let parseItems = lam acc. lam cur.
@@ -1227,15 +1275,12 @@ lang RecLetsDeclParser = AstParserBase + RecLetsDeclAst
     )
 end
 
-lang LamParser = AstParserBase + LamAst + FunTypeAst
+lang LamParser = AstParserBase + LamAst + FunTypeAst + LamKeyword
   syn BrkOpExpr lstyle rstyle =
   | OpExprLam (Info, String, Type, Type)
 
   syn BrkOpType lstyle rstyle =
   | OpTypeArrow Info
-
-  sem identIsKeyword =
-  | "lam" -> true
 
   sem getInfoExpr =
   | OpExprLam (info, _, _, _) -> info
@@ -1303,10 +1348,79 @@ lang LamParser = AstParserBase + LamAst + FunTypeAst
     }
 end
 
-lang NeverParser = AstParserBase + NeverAst
-  sem identIsKeyword =
-  | "never" -> true
+lang MatchParser = AstParserBase + MatchAst + NeverAst + MatchKeyword + WithKeyword + ThenKeyword + ElseKeyword + InKeyword
+  syn BrkOpExpr lstyle rstyle =
+  | OpExprMatchIn (Info, Expr, Pat)
+  | OpExprMatchElse (Info, Expr, Pat, Expr)
 
+  sem parseExprROpen state =
+  | { token = KeywordTok { val = "match" } } & tokmatch ->
+    let cur = nextToken tokmatch.stream in
+    let target = parseExpr cur in
+    result.bind target (lam target.
+      match target with (target, cur) in
+      match cur with { token = KeywordTok { val = "with" } } & tokwith then
+        let cur = nextToken tokwith.stream in
+        let pat = parsePat cur in
+        result.bind pat (lam pat.
+          match pat with (pat, cur) in
+          switch cur
+            -- match .. with .. then .. else ..
+            case { token = KeywordTok { val = "then" } } & tokthen then
+              let cur = nextToken tokthen.stream in
+              let thn = parseExpr cur in
+              result.bind thn (lam thn.
+                match thn with (thn, cur) in
+                match cur with { token = KeywordTok { val = "else" } } & tokelse then
+                  let cur = nextToken tokelse.stream in
+                  let info = mergeInfo tokmatch.info tokelse.info in
+                  let state = breakableAddPrefix (configExpr ()) (OpExprMatchElse (info, target, pat, thn)) state in
+                  parseExprROpen state cur
+                else
+                  parseErr (cur.info, "Expected else keyword")
+              )
+
+            -- match .. with .. in ..
+            case { token = KeywordTok { val = "in" } } & tokin then
+              let cur = nextToken tokin.stream in
+              let info = mergeInfo tokmatch.info tokin.info in
+              let state = breakableAddPrefix (configExpr ()) (OpExprMatchIn (info, target, pat)) state in
+              parseExprROpen state cur
+
+            case _ then
+              parseErr (cur.info, "Expected with or in keyword")
+          end
+        )        
+      else
+        parseErr (cur.info, "Expected with keyword")
+    )
+  
+  sem constructPrefixExpr =
+  | (OpExprMatchIn (info, target, pat), inexpr) ->
+    TmMatch {
+      target = target,
+      pat = pat,
+      thn = inexpr,
+      els = TmNever {
+        ty = ityunknown_ info,
+        info = info
+      },
+      ty = ityunknown_ info,
+      info = info
+    }
+
+  | (OpExprMatchElse (info, target, pat, thn), elsexpr) ->
+    TmMatch {
+      target = target,
+      pat = pat,
+      thn = thn,
+      els = elsexpr,
+      ty = ityunknown_ info,
+      info = info
+    }
+end
+
+lang NeverParser = AstParserBase + NeverAst + NeverKeyword
   sem parseExprROpen state =
   | { token = KeywordTok { val = "never" } } & cur ->
     let expr = TmNever {
@@ -1325,11 +1439,11 @@ lang AndParser = AstParserBase + AndPat
   | OpPatAnd info -> info
 
   sem parsePatRClosed state =
-  | { token = OperatorTok { val = "&" } } & cur ->
-    match breakableAddInfix (configPat ()) (OpPatAnd cur.info) state with Some(state) then
-      parsePatROpen state cur
+  | { token = OperatorTok { val = "&" } } & tokop ->
+    match breakableAddInfix (configPat ()) (OpPatAnd tokop.info) state with Some(state) then
+      parsePatROpen state (nextToken tokop.stream)
     else
-      parseErr (cur.info, "Breakable add infix error")
+      parseErr (tokop.info, "Breakable add infix error")
 
   sem constructInfixPat =
   | (OpPatAnd info, lhs, rhs) ->
@@ -1350,11 +1464,11 @@ lang OrParser = AstParserBase + OrPat
   | OpPatOr info -> info
 
   sem parsePatRClosed state =
-  | { token = OperatorTok { val = "|" } } & cur ->
-    match breakableAddInfix (configPat ()) (OpPatOr cur.info) state with Some(state) then
-      parsePatROpen state cur
+  | { token = OperatorTok { val = "|" } } & tokop ->
+    match breakableAddInfix (configPat ()) (OpPatOr tokop.info) state with Some(state) then
+      parsePatROpen state (nextToken tokop.stream)
     else
-      parseErr (cur.info, "Breakable add infix error")
+      parseErr (tokop.info, "Breakable add infix error")
 
   sem constructInfixPat =
   | (OpPatOr info, lhs, rhs) ->
@@ -1374,12 +1488,10 @@ lang NotParser = AstParserBase + NotPat
   sem getInfoPat =
   | OpPatNot info -> info
 
-  sem parsePatRClosed state =
-  | { token = OperatorTok { val = "!" } } & cur ->
-    match breakableAddPrefix (configPat ()) (OpPatNot cur.info) state with Some(state) then
-      parsePatROpen state cur
-    else
-      parseErr (cur.info, "Breakable add infix error")
+  sem parsePatROpen state =
+  | { token = OperatorTok { val = "!" } } & tokop ->
+    let state = breakableAddPrefix (configPat ()) (OpPatNot tokop.info) state in
+    parsePatROpen state (nextToken tokop.stream)
 
   sem constructPrefixPat =
   | (OpPatNot info, rhs) ->
@@ -1463,6 +1575,7 @@ lang AstParser =
   + LetDeclParser
   + RecLetsDeclParser
   + LamParser
+  + MatchParser
   + NeverParser
   + AndParser
   + OrParser
@@ -1533,7 +1646,7 @@ let printAst = lam str.
   end
 in
 
--- let str = "let a: Option b c = Option 1 2 in a" in
+-- let str = "match a with 1 then b else c" in
 -- printLn "\nBoot:";
 -- printAstBoot str;
 -- printLn "Native:";
@@ -1629,5 +1742,12 @@ utest compareWithoutInfo "Test {}" with true in
 utest compareWithoutInfo "Test {a = 1, b = 2}" with true in
 
 utest compareWithoutInfo "let o: Option a b c = Option 1 2 3 in ()" with true in
+
+utest compareWithoutInfo "match a with 1 in b" with true in
+utest compareWithoutInfo "match a with true in b" with true in
+utest compareWithoutInfo "match a with 'a' in b" with true in
+utest compareWithoutInfo "match a with \"test\" in b" with true in
+
+utest compareWithoutInfo "match a with 1 then b else c" with true in
 
 ()
