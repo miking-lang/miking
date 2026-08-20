@@ -58,6 +58,10 @@ let stdlibMCoreLibs =
 
 let stdlibLoc = mapFindExn "stdlib" stdlibMCoreLibs
 
+let stdlibMkExplicitPreferLocal : String -> String = lam path.
+  match path with "/" ++ _ | "./" ++ _ | "../" ++ _ then path
+  else match strSplit "::" path with [_, _] ++ _ then path
+  else join ["./", path]
 
 -- Resolves a path specified in a file in directory
 -- `relativeTo`. Applies path normalization. The `doError` function
