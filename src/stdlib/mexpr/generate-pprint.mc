@@ -259,7 +259,7 @@ lang GeneratePprintLoader = LoaderInterface + GeneratePprint
   | _ -> None ()
   | PprintHook hook ->
     let pprintName = nameSym (concat "pprint" (nameGetStr tyConName)) in
-    let loader = _addDeclExn loader (nulet_ pprintName f) in
+    let loader = (_addDeclExn _symEnvEmpty loader (nulet_ pprintName f)).1 in
     Some (loader, modref hook.functions (mapInsert tyConName pprintName (deref hook.functions)))
 
   sem registerCustomPprintFunction : Name -> Expr -> Loader -> Loader

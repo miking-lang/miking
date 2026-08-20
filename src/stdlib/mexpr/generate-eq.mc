@@ -225,6 +225,18 @@ lang GenerateEqLoader = LoaderInterface + GenerateEq
       } in
     addHook loader hook
 
+  sem _registerCustomEqFunction : Name -> Expr -> Loader -> Hook -> Option (Loader, ())
+  sem _registerCustomEqFunction tyConName f loader =
+  | _ -> None ()
+  | EqHook hook ->
+    let eqName = nameSym (concat "eq" (nameGetStr tyConName)) in
+    let loader = (_addDeclExn _symEnvEmpty loader (nulet_ eqName f)).1 in
+    Some (loader, modref hook.functions (mapInsert tyConName eqName (deref hook.functions)))
+
+  sem registerCustomEqFunction : Name -> Expr -> Loader -> Loader
+  sem registerCustomEqFunction tyConName f = | loader ->
+    (withHookState (_registerCustomEqFunction tyConName f) loader).0
+
   sem _eqFunctionsFor : [Type] -> Loader -> Hook -> Option (Loader, [Expr])
   sem _eqFunctionsFor tys loader =
   | _ -> None ()

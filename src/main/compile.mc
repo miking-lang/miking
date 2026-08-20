@@ -177,18 +177,24 @@ let compileViaLoader = lam options : Options. lam sourcePath.
           then eqString x.filename filename
           else true
         else true in
-      enableUtestGeneration keepUtestIf loader
+      let loader = enableUtestGeneration keepUtestIf loader in
+      registerCustomEqFunction (mapFindExn "Symbol" builtinTypeNames) (uconst_ (CEqsym ())) loader
     else addHook loader (StripUtestHook ()) in
   endPhaseStatsProg log
     (if options.runTests then "enable utests" else "disable utests")
     {decls = getDecls loader, expr = unit_};
 
-  let loader = if options.debugDprint
-    then enableDPrintViaPprint loader
-    else loader in
-  endPhaseStatsProg log
-    (if options.debugDprint then "enable dprint-via-pprint" else "disable dprint-via-pprint")
-    {decls = getDecls loader, expr = unit_};
+  let loader =
+    let loader = enableDPrintViaPprint loader in
+    match includeFileExn "." "stdlib::string.mc" loader with (stringEnv, loader) in
+    let symName = nameSym "s" in
+    let symPprint =
+      nulam_ symName (concat_ (str_ "sym (")
+        (concat_
+          (app_ (nvar_ (_getVarExn "int2string" stringEnv)) (app_ (uconst_ (CSym2hash ())) (nvar_ symName)))
+          (str_ ")"))) in
+    registerCustomPprintFunction (mapFindExn "Symbol" builtinTypeNames) symPprint loader in
+  endPhaseStatsProg log "enable dprint-via-pprint" {decls = getDecls loader, expr = unit_};
 
   -- TODO(vipa, 2026-08-14): Original parsing also can prune external utests and do something about mexprExtendedKeywords
   -- TODO(vipa, 2026-08-14): insertTunedOrDefaults?
