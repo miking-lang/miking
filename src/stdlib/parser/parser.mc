@@ -414,10 +414,14 @@ lang NegParser = AstParserBase + IntAst + FloatAst + IntPat
       parseErr (cur.info, "Expected an integer")
 end
 
-lang VarParser = AstParserBase + VarAst + NamedPat
+lang VarParser = AstParserBase + VarAst + VarTypeAst + NamedPat
   sem canStartAppArgExpr =
   | { token = LIdentTok { } } -> true
   | { token = HashStringTok { hash = "frozen" | "var" } } -> true
+
+  sem canStartAppArgType =
+  | { token = LIdentTok { } } -> true
+  | { token = HashStringTok { hash = "var" } } -> true
 
   sem parseExprROpen state =
   | { token = LIdentTok { val = val } | HashStringTok { hash = "var", val = val } } & cur ->
@@ -439,6 +443,15 @@ lang VarParser = AstParserBase + VarAst + NamedPat
     } in
     let state = breakableAddAtom (configExpr ()) (OpExprAtom expr) state in
     parseExprRClosed state (nextToken cur.stream)
+
+  sem parseTypeROpen state =
+  | { token = LIdentTok { val = val } | HashStringTok { hash = "var", val = val } } & cur ->
+    let typ = TyVar {
+      ident = nameNoSym val,
+      info = cur.info
+    } in
+    let state = breakableAddAtom (configType ()) (OpTypeAtom typ) state in
+    parseTypeRClosed state (nextToken cur.stream)
 
   sem parsePatROpen state =
   | { token = LIdentTok { val = "_" } } & cur ->
@@ -514,6 +527,81 @@ lang AppParser = AstParserBase + AppAst + AppTypeAst
     TyApp {
       lhs = lhs,
       rhs = rhs,
+      info = info
+    }
+end
+
+lang DataParser = AstParserBase + DataAst + ConTypeAst + AppTypeAst + DataPat
+  syn BrkOpExpr lstyle rstyle =
+  | OpExprConApp (Info, Name)
+
+  syn BrkOpType lstyle rstyle =
+  | OpTypeConApp (Info, Name)
+
+  syn BrkOpPat lstyle rstyle =
+  | OpPatConApp (Info, Name)
+
+  sem getInfoExpr =
+  | OpExprConApp (info, _) -> info
+
+  sem getInfoType =
+  | OpTypeConApp (info, _) -> info
+
+  sem getInfoPat =
+  | OpPatConApp (info, _) -> info
+
+  sem parseExprROpen state =
+  | { token = UIdentTok { val = val } | HashStringTok { hash = "con", val = val } } & tokident ->
+    let cur = nextToken tokident.stream in
+    let ident = nameNoSym val in
+    let state = breakableAddPrefix (configExpr ()) (OpExprConApp (tokident.info, ident)) state in
+    parseExprROpen state cur
+
+  sem parseTypeROpen state =
+  | { token = UIdentTok { val = val } | HashStringTok { hash = "con", val = val } } & tokident ->
+    let cur = nextToken tokident.stream in
+    let ident = nameNoSym val in
+    let state = breakableAddPrefix (configType ()) (OpTypeConApp (tokident.info, ident)) state in
+    parseTypeROpen state cur
+  
+  sem parsePatROpen state =
+  | { token = UIdentTok { val = val } | HashStringTok { hash = "con", val = val } } & tokident ->
+    let cur = nextToken tokident.stream in
+    let ident = nameNoSym val in
+    let state = breakableAddPrefix (configPat ()) (OpPatConApp (tokident.info, ident)) state in
+    parsePatROpen state cur
+
+  sem constructPrefixExpr =
+  | (OpExprConApp (info, ident), rhs) ->
+    let info = mergeInfo info (infoTm rhs) in
+    TmConApp {
+      ident = ident,
+      body = rhs,
+      ty = ityunknown_ info,
+      info = info
+    }
+
+  sem constructPrefixType =
+  | (OpTypeConApp (info, ident), rhs) ->
+    let lhs = TyCon {
+      ident = ident,
+      data = ityunknown_ info,
+      info = info
+    } in
+    let info = mergeInfo info (infoTy rhs) in
+    TyApp {
+      lhs = lhs,
+      rhs = rhs,
+      info = info
+    }
+
+  sem constructPrefixPat =
+  | (OpPatConApp (info, ident), rhs) ->
+    let info = mergeInfo info (infoPat rhs) in
+    PatCon {
+      ident = ident,
+      subpat = rhs,
+      ty = ityunknown_ info,
       info = info
     }
 end
@@ -1304,17 +1392,19 @@ lang NotParser = AstParserBase + NotPat
 end
 
 -- TODO: Better solution
-lang PrecedenceParser = AppParser + LamParser + LetDeclParser + AndParser + OrParser + NotParser
+lang PrecedenceParser = AppParser + DataParser + LamParser + LetDeclParser + AndParser + OrParser + NotParser
   sem groupingsAllowedExpr =
   | (OpExprApp _, OpExprApp _) -> GLeft ()
   | (OpExprDecl _, OpExprApp _) -> GRight ()
   | (OpExprLam _, OpExprApp _) -> GRight ()
+  | (OpExprConApp _, OpExprApp _) -> GLeft ()
 
   sem groupingsAllowedType =
   | (OpTypeApp _, OpTypeApp _)  -> GLeft ()
   | (OpTypeApp _, OpTypeArrow _) -> GLeft ()
   | (OpTypeArrow _, OpTypeApp _) -> GRight ()
   | (OpTypeArrow _, OpTypeArrow _) -> GLeft ()
+  | (OpTypeConApp _, OpTypeApp _) -> GLeft ()
 
   sem groupingsAllowedPat =
   | (OpPatAnd _, OpPatAnd _) -> GLeft ()
@@ -1365,6 +1455,7 @@ lang AstParser =
   + NegParser
   + VarParser
   + AppParser
+  + DataParser
   + ParenParser
   + UnitParser
   + TupleParser
@@ -1442,11 +1533,11 @@ let printAst = lam str.
   end
 in
 
-let str = "match 1 with 1 & 2 | 3 then 3 else 4" in
-printLn "\nBoot:";
-printAstBoot str;
-printLn "Native:";
-printAst str;
+-- let str = "let a: Option b c = Option 1 2 in a" in
+-- printLn "\nBoot:";
+-- printAstBoot str;
+-- printLn "Native:";
+-- printAst str;
 
 utest compare "0" with true in
 utest compare "1" with true in
@@ -1531,5 +1622,12 @@ utest compare "never" with true in
 utest compareWithoutInfo "recursive let a = lam b. 1 in c" with true in
 
 utest compareWithoutInfo "recursive let a = lam b. 1 let c = lam d. 2 in e" with true in
+
+utest compareWithoutInfo "Test ()" with true in
+utest compareWithoutInfo "Test (1, 2, 3)" with true in
+utest compareWithoutInfo "Test {}" with true in
+utest compareWithoutInfo "Test {a = 1, b = 2}" with true in
+
+utest compareWithoutInfo "let o: Option a b c = Option 1 2 3 in ()" with true in
 
 ()
