@@ -11,9 +11,12 @@ include "mexpr/ast-builder.mc"
 include "stringid.mc"
 include "seq.mc"
 include "mexpr/unify.mc"
+include "mexpr/symbolize.mc"
+include "mexpr/pprint.mc"
 include "basic-types.mc"
 include "error.mc"
 include "set.mc"
+include "type.mc"
 
 lang GenerateEq = Ast
   type GEqEnv =
@@ -133,7 +136,7 @@ lang GenerateEqCon = GenerateEq + ConTypeAst + Generalize + UnifyPure
           tm in
         (env, tm)
       else error "Unification should always be possible here" in
-    match mapFoldWithKey addMatch (env, never_) constructors with (env, matchChain) in
+    match mapFoldWithKey addMatch (env, app_ never_ (str_ (concat " in " (nameGetStr fname)))) constructors with (env, matchChain) in
     let matchChain = nulam_ lName (nulam_ rName matchChain) in
     let body = foldr (lam p. lam body. nulam_ p.f body) matchChain paramFNames in
     let tyAnnot = foldr
@@ -160,6 +163,17 @@ lang GenerateEqVar = GenerateEq + VarTypeAst
     match mapLookup x.ident env.varFunctions with Some fname
     then (env, nvar_ fname)
     else errorSingle [x.info] (join ["I don't know how to compare values of the polymorphic type ", nameGetStr x.ident])
+end
+
+lang GenerateEqMetaVarError = GenerateEq + MetaVarTypeAst + PrettyPrint
+  sem _getEqFunction env +=
+  | ty & TyMetaVar x ->
+    switch deref x.contents
+    case Link ty then
+      errorSingle [x.info] "unwrapType didn't unwrap"
+    case Unbound u then
+      errorSingle [x.info] (join ["Not enough information to generate equality function for ", type2str ty, " : ", kind2str u.kind])
+    end
 end
 
 lang MExprGenerateEq
