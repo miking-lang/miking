@@ -14,6 +14,7 @@ include "stringid.mc"
 include "basic-types.mc"
 include "seq.mc"
 include "mexpr/unify.mc"
+include "mexpr/symbolize.mc"
 include "set.mc"
 include "mexpr/type.mc"
 include "mexpr/info.mc"
@@ -163,8 +164,8 @@ lang GeneratePprintCon = GeneratePprint + ConTypeAst + Generalize + UnifyPure
           (cons_ (char_ '(') (snoc_ (concat_ (str_ (pprintConString (nameGetStr c))) (cons_ (char_ ' ') (app_ subf (nvar_ sub)))) (char_ ')')))
           tm in
         (env, tm)
-      else error "Unification should always be possible here" in
-    match mapFoldWithKey addMatch (env, str_ (join ["<missing case for ", nameGetStr x.ident, ">"])) constructors with (env, matchChain) in
+      else errorSingle [x.info] (join ["Unification should always be possible here (TyCon: ", nameGetStr x.ident, ", t: ", type2str t, ", fullType: ", type2str fullType, ")"]) in
+    match mapFoldWithKey addMatch (env, app_ never_ (str_ (concat " in " (nameGetStr fname)))) constructors with (env, matchChain) in
     let matchChain = nulam_ targetName matchChain in
     let body = foldr (lam p. lam body. nulam_ p.f body) matchChain paramFNames in
     let tyAnnot = foldr

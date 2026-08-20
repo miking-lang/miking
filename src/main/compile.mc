@@ -47,7 +47,7 @@ lang MCoreCompile =
   PprintTyAnnot + HtmlAnnotator +
   MExprToJson +
   ComposedMLangLoader + DPrintViaPprintLoader + StripUtestLoader + UtestLoader +
-  MExprGenerateEq + MExprDeadcodeElimination +
+  MExprGenerateEq + GenerateEqMetaVarError + MExprDeadcodeElimination +
 
   UnboundErrorAttr + DefinedAttr + WithoutInfoAttr
   sem mkInvariantAttrs : () -> [Attr Loc]
