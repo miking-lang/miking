@@ -589,6 +589,12 @@ lang AppParser = AstParserBase + AppAst + AppTypeAst
       rhs = rhs,
       info = info
     }
+
+  sem groupingsAllowedExpr =
+  | (OpExprApp _, OpExprApp _) -> GLeft ()
+
+  sem groupingsAllowedType =
+  | (OpTypeApp _, OpTypeApp _)  -> GLeft ()
 end
 
 lang DataParser = AstParserBase + DataAst + ConTypeAst + AppTypeAst + DataPat
@@ -1009,7 +1015,13 @@ lang StringParser = AstParserBase + SeqAst + CharAst + SeqTotPat + CharPat
     parsePatRClosed state (nextToken cur.stream)
 end
 
-lang SeqParser = AstParserBase + SeqAst + SeqTypeAst
+lang SeqParser = AstParserBase + SeqAst + SeqTypeAst + SeqTotPat + SeqEdgePat + NamedPat
+  syn BrkOpPat lstyle rstyle =
+  | OpPatSeqEdge Info
+
+  sem getInfoPat =
+  | OpPatSeqEdge info -> info
+
   sem canStartAppArgExpr =
   | { token = LBracketTok { } } -> true
 
@@ -1071,6 +1083,90 @@ lang SeqParser = AstParserBase + SeqAst + SeqTypeAst
         parseErr (cur.info, "Missing right bracket")
     )
 
+  sem parsePatROpen state =
+  | { token = LBracketTok { } } & toklb ->
+    recursive let parseItems = lam acc. lam cur.
+      result.bind (parsePat cur) (lam pat.
+        match pat with (pat, cur) in
+        let acc = snoc acc pat in
+        switch cur
+          case { token = RBracketTok { } } then
+            parseOk (cur, acc)
+          case { token = CommaTok { } } then
+            let cur = nextToken cur.stream in
+            parseItems acc cur
+          case _ then
+            parseErr (cur.info, "Unexpected token in sequence")
+        end
+      )
+    in
+
+    let cur = nextToken toklb.stream in
+    let res = switch cur
+      case { token = RBracketTok { } } then
+        parseOk (cur, [])
+      case _ then
+        parseItems [] cur
+    end in
+
+    result.bind res (lam res.
+      match res with (tokrb, pats) in
+      let info = mergeInfo toklb.info tokrb.info in
+      let pat = PatSeqTot {
+        pats = pats,
+        ty = ityunknown_ info,
+        info = info
+      } in
+      let state = breakableAddAtom (configPat ()) (OpPatAtom pat) state in
+      parsePatRClosed state (nextToken tokrb.stream)
+    )
+
+  sem parsePatRClosed state =
+  | { token = OperatorTok { val = "++" } } & tokpp ->
+    match breakableAddInfix (configPat ()) (OpPatSeqEdge tokpp.info) state with Some(state) then
+      let cur = nextToken tokpp.stream in
+      parsePatROpen state cur
+    else
+      parseErr (tokpp.info, "Breakable add infix error")
+
+  sem constructInfixPat =
+  | (OpPatSeqEdge info, lhs, rhs) ->
+    let info = mergeInfo (infoPat lhs) (infoPat rhs) in
+
+    switch (lhs, rhs)
+      -- [1,2,3] ++ rest
+      case (PatSeqTot lhs, PatNamed rhs) then
+        PatSeqEdge {
+          prefix = lhs.pats,
+          middle = rhs.ident,
+          postfix = [],
+          ty = ityunknown_ info,
+          info = info
+        }
+      -- rest ++ [7,8,9]
+      case (PatNamed lhs, PatSeqTot rhs) then
+        PatSeqEdge {
+          prefix = [],
+          middle = lhs.ident,
+          postfix = rhs.pats,
+          ty = ityunknown_ info,
+          info = info
+        }
+      -- ([1,2,3] ++ rest) ++ [7,8,9]
+      case (PatSeqEdge { postfix = [], prefix = prefix, middle = middle } & lhs, PatSeqTot rhs) then
+        PatSeqEdge {
+          prefix = prefix,
+          middle = middle,
+          postfix = rhs.pats,
+          ty = ityunknown_ info,
+          info = info
+        }
+      case _ then
+        never -- TODO: deal with error
+    end
+  
+  sem groupingsAllowedPat =
+  | (OpPatSeqEdge _, OpPatSeqEdge _) -> GLeft ()
 end
 
 lang BraceParser = AstParserBase
@@ -1469,6 +1565,9 @@ lang LamParser = AstParserBase + LamAst + FunTypeAst + LamKeyword
       to = to,
       info = info
     }
+
+  sem groupingsAllowedType =
+  | (OpTypeArrow _, OpTypeArrow _) -> GLeft ()
 end
 
 lang MatchParser = AstParserBase + MatchAst + NeverAst + MatchKeyword + WithKeyword + ThenKeyword + ElseKeyword + InKeyword
@@ -1577,6 +1676,9 @@ lang AndParser = AstParserBase + AndPat
       ty = ityunknown_ info,
       info = info
     }
+
+  sem groupingsAllowedPat =
+  | (OpPatAnd _, OpPatAnd _) -> GLeft ()
 end
 
 lang OrParser = AstParserBase + OrPat
@@ -1602,6 +1704,9 @@ lang OrParser = AstParserBase + OrPat
       ty = ityunknown_ info,
       info = info
     }
+
+  sem groupingsAllowedPat =
+  | (OpPatOr _, OpPatOr _) -> GLeft ()
 end
 
 lang NotParser = AstParserBase + NotPat
@@ -1624,33 +1729,30 @@ lang NotParser = AstParserBase + NotPat
       ty = ityunknown_ info,
       info = info
     }
+  
+  sem groupingsAllowedPat =
+  | (OpPatNot _, OpPatNot _) -> GLeft ()
 end
 
 -- TODO: Better solution
 lang PrecedenceParser = AppParser + DataParser + LamParser + LetDeclParser + AndParser + OrParser + NotParser
   sem groupingsAllowedExpr =
-  | (OpExprApp _, OpExprApp _) -> GLeft ()
   | (OpExprDecl _, OpExprApp _) -> GRight ()
   | (OpExprLam _, OpExprApp _) -> GRight ()
   | (OpExprConApp _, OpExprApp _) -> GLeft ()
 
   sem groupingsAllowedType =
-  | (OpTypeApp _, OpTypeApp _)  -> GLeft ()
   | (OpTypeApp _, OpTypeArrow _) -> GLeft ()
   | (OpTypeArrow _, OpTypeApp _) -> GRight ()
-  | (OpTypeArrow _, OpTypeArrow _) -> GLeft ()
   | (OpTypeConApp _, OpTypeApp _) -> GLeft ()
 
   sem groupingsAllowedPat =
-  | (OpPatAnd _, OpPatAnd _) -> GLeft ()
   | (OpPatAnd _, OpPatOr _) -> GLeft ()
   | (OpPatAnd _, OpPatNot _) -> GRight ()
   | (OpPatOr _, OpPatAnd _) -> GRight ()
-  | (OpPatOr _, OpPatOr _) -> GLeft ()
   | (OpPatOr _, OpPatNot _) -> GRight ()
   | (OpPatNot _, OpPatAnd _) -> GLeft ()
   | (OpPatNot _, OpPatOr _) -> GLeft ()
-  | (OpPatNot _, OpPatNot _) -> GLeft ()
 end
 
 lang UnexpectedTokenParser = AstParserBase
@@ -1769,7 +1871,7 @@ let printAst = lam str.
   end
 in
 
--- let str = "match a with {} in x" in
+-- let str = "match a with [1] ++ rest ++ [5] in x" in
 -- printLn "\nBoot:";
 -- printAstBoot str;
 -- printLn "Native:";
@@ -1880,5 +1982,14 @@ utest compareWithoutInfo "match (a, b) with (1, 2) in x" with true in
 utest compareWithoutInfo "match a with {} in x" with true in
 utest compareWithoutInfo "match a with { b = 1 } in x" with true in
 utest compareWithoutInfo "match a with { b = 1, cd = { c = 2, d = 3 } } in x" with true in
+
+utest compareWithoutInfo "match a with [] in x" with true in
+utest compareWithoutInfo "match a with [1] in x" with true in
+utest compareWithoutInfo "match a with [1, 2] in x" with true in
+utest compareWithoutInfo "match a with [1, [3, 4]] in x" with true in
+
+utest compareWithoutInfo "match a with [1] ++ rest in x" with true in
+utest compareWithoutInfo "match a with rest ++ [1] in x" with true in
+utest compareWithoutInfo "match a with [1] ++ rest ++ [1] in x" with true in
 
 ()
