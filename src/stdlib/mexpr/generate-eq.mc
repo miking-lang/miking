@@ -58,6 +58,13 @@ lang GenerateEqSeq = GenerateEq + SeqTypeAst
     (env, app_ (nvar_ env.eqSeq) elemF)
 end
 
+lang GenerateEqTensor = GenerateEq + TensorTypeAst + TensorOpAst
+  sem _getEqFunction env +=
+  | TyTensor x ->
+    match getEqFunction env x.ty with (env, elemF) in
+    (env, app_ (uconst_ (CTensorEq ())) elemF)
+end
+
 lang GenerateEqChar = GenerateEq + CharTypeAst + CmpCharAst
   sem _getEqFunction env +=
   | TyChar _ ->
@@ -182,6 +189,7 @@ lang MExprGenerateEq
   + GenerateEqInt
   + GenerateEqFloat
   + GenerateEqSeq
+  + GenerateEqTensor
   + GenerateEqChar
   + GenerateEqApp
   + GenerateEqCon
