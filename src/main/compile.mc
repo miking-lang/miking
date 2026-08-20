@@ -162,6 +162,7 @@ let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
 
 let compileViaLoader = lam options : Options. lam sourcePath.
   use MCoreCompile in
+  let sourcePath = stdlibMkExplicitPreferLocal sourcePath in
   let log = mkPhaseLogState options.debugDumpPhases options.debugPhases mkInvariantAttrs in
 
   let loader = mkLoader typcheckEnvDefault [] in
