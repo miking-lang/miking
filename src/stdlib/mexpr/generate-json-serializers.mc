@@ -18,6 +18,7 @@ include "map.mc"
 include "basic-types.mc"
 include "name.mc"
 include "mexpr/ast-builder.mc"
+include "mexpr/symbolize.mc"
 include "seq.mc"
 include "common.mc"
 include "option.mc"
@@ -458,13 +459,13 @@ lang JsonSerializationLoader = LoaderInterface + GenerateJsonSerializers
     match
       match pair.serializer with TmVar x then (loader, x.ident) else
       let serName = nameSym (concat "serialize" (nameGetStr tyConName)) in
-      let loader = _addDeclExn loader (nulet_ serName pair.serializer) in
+      let loader = (_addDeclExn _symEnvEmpty loader (nulet_ serName pair.serializer)).1 in
       (loader, serName)
     with (loader, serName) in
     match
       match pair.deserializer with TmVar x then (loader, x.ident) else
       let deserName = nameSym (concat "deserialize" (nameGetStr tyConName)) in
-      let loader = _addDeclExn loader (nulet_ deserName pair.deserializer) in
+      let loader = (_addDeclExn _symEnvEmpty loader (nulet_ deserName pair.deserializer)).1 in
       (loader, deserName)
     with (loader, deserName) in
     let named =
