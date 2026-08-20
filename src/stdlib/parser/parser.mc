@@ -1076,6 +1076,7 @@ end
 lang BraceParser = AstParserBase
   sem beginParseExprInBrace: all w. State BrkOpExpr ROpen -> NextTokenResult -> NextTokenResult -> ParseResult w (Expr, NextTokenResult)
   sem beginParseTypeInBrace: all w. State BrkOpType ROpen -> NextTokenResult -> NextTokenResult -> ParseResult w (Type, NextTokenResult)
+  sem beginParsePatInBrace:  all w. State BrkOpPat  ROpen -> NextTokenResult -> NextTokenResult -> ParseResult w (Pat,  NextTokenResult)
   
   sem canStartAppArgExpr =
   | { token = LBraceTok {} } -> true
@@ -1090,9 +1091,13 @@ lang BraceParser = AstParserBase
   sem parseTypeROpen state =
   | { token = LBraceTok {} } & open ->
     beginParseTypeInBrace state open (nextToken open.stream)
+
+  sem parsePatROpen state =
+  | { token = LBraceTok {} } & open ->
+    beginParsePatInBrace state open (nextToken open.stream)
 end
 
-lang RecordParser = BraceParser + RecordAst + RecordTypeAst + WithKeyword
+lang RecordParser = BraceParser + RecordAst + RecordTypeAst + RecordPat + WithKeyword
   sem beginParseExprInBrace state open =
   | { token = RBraceTok {} } & close ->
     -- this is a empty record
@@ -1250,6 +1255,56 @@ lang RecordParser = BraceParser + RecordAst + RecordTypeAst + WithKeyword
       } in
       let state = breakableAddAtom (configType ()) (OpTypeAtom typ) state in
       parseTypeRClosed state (nextToken close.stream)
+    )
+
+  sem beginParsePatInBrace state open =
+  | { token = RBraceTok {} } & close ->
+    -- this is a empty record
+    let info = mergeInfo open.info close.info in
+    let pat = PatRecord {
+      bindings = mapEmpty cmpSID,
+      ty = ityunknown_ info,
+      info = info
+    } in
+    let state = breakableAddAtom (configPat ()) (OpPatAtom pat) state in
+    parsePatRClosed state (nextToken close.stream)
+  
+  | cur ->
+    recursive let parseItems = lam acc. lam cur.
+      match cur with { token = LIdentTok { val = field } | HashStringTok { hash = "label", val = field } } & tokfield then
+        match nextToken tokfield.stream with { token = OperatorTok { val = "=" } } & tokeq then
+          let cur = nextToken tokeq.stream in
+          result.bind (parsePat cur) (lam pat.
+            match pat with (pat, cur) in
+            let acc = mapInsert (stringToSid field) pat acc in
+            switch cur
+              case { token = RBraceTok { } } then
+                parseOk (cur, acc)
+              case { token = CommaTok { } } then
+                let cur = nextToken cur.stream in
+                parseItems acc cur
+              case _ then
+                parseErr (cur.info, "Unexpected token in sequence")
+            end
+          )
+        else
+          parseErr (cur.info, "Missing pattern assignment")
+      else
+        parseErr (cur.info, "Unexpected token in record")
+    in
+    
+    let res = parseItems (mapEmpty cmpSID) cur in
+
+    result.bind res (lam res.
+      match res with (close, bindings) in
+      let info = mergeInfo open.info close.info in
+      let typ = PatRecord {
+        bindings = bindings,
+        ty = ityunknown_ info,
+        info = info
+      } in
+      let state = breakableAddAtom (configPat ()) (OpPatAtom typ) state in
+      parsePatRClosed state (nextToken close.stream)
     )
 end
 
@@ -1714,7 +1769,7 @@ let printAst = lam str.
   end
 in
 
--- let str = "match (a, b) with (1, 2) in c" in
+-- let str = "match a with {} in x" in
 -- printLn "\nBoot:";
 -- printAstBoot str;
 -- printLn "Native:";
@@ -1821,5 +1876,9 @@ utest compareWithoutInfo "match a with 1 then b else c" with true in
 utest compareWithoutInfo "match () with () in x" with true in
 utest compareWithoutInfo "match (a) with (1) in x" with true in
 utest compareWithoutInfo "match (a, b) with (1, 2) in x" with true in
+
+utest compareWithoutInfo "match a with {} in x" with true in
+utest compareWithoutInfo "match a with { b = 1 } in x" with true in
+utest compareWithoutInfo "match a with { b = 1, cd = { c = 2, d = 3 } } in x" with true in
 
 ()
