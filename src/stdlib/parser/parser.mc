@@ -669,8 +669,10 @@ end
 lang ParenParser = AstParserBase
   sem beginParseExprInParen: all w. State BrkOpExpr ROpen -> NextTokenResult -> NextTokenResult -> ParseResult w (Expr, NextTokenResult)
   sem beginParseTypeInParen: all w. State BrkOpType ROpen -> NextTokenResult -> NextTokenResult -> ParseResult w (Type, NextTokenResult)
+  sem beginParsePatInParen:  all w. State BrkOpPat  ROpen -> NextTokenResult -> NextTokenResult -> ParseResult w (Pat,  NextTokenResult)
   sem endParseExprInParen:   all w. State BrkOpExpr ROpen -> NextTokenResult -> Expr -> NextTokenResult -> ParseResult w (Expr, NextTokenResult)
   sem endParseTypeInParen:   all w. State BrkOpType ROpen -> NextTokenResult -> Type -> NextTokenResult -> ParseResult w (Type, NextTokenResult)
+  sem endParsePatInParen:    all w. State BrkOpPat  ROpen -> NextTokenResult -> Pat  -> NextTokenResult -> ParseResult w (Pat,  NextTokenResult)
 
   sem canStartAppArgExpr =
   | { token = LParenTok {} } -> true
@@ -708,6 +710,21 @@ lang ParenParser = AstParserBase
 
   | cur -> parseErr (cur.info, "Missing closing parenthesis")
 
+  sem beginParsePatInParen state open =
+  | cur ->
+    -- start of new pat in paren
+    result.bind (parsePat cur) (lam pat.
+      match pat with (pat, cur) in
+      endParsePatInParen state open pat cur
+    )
+
+  sem endParsePatInParen state open pat =
+  | { token = RParenTok {} } & close ->
+    let state = breakableAddAtom (configPat ()) (OpPatAtom pat) state in
+    parsePatRClosed state (nextToken close.stream)
+
+  | cur -> parseErr (cur.info, "Missing closing parenthesis")
+
   sem parseExprROpen state =
   | { token = LParenTok {} } & open ->
     beginParseExprInParen state open (nextToken open.stream)
@@ -716,9 +733,13 @@ lang ParenParser = AstParserBase
   | { token = LParenTok {} } & open ->
     beginParseTypeInParen state open (nextToken open.stream)
 
+  sem parsePatROpen state =
+  | { token = LParenTok {} } & open ->
+    beginParsePatInParen state open (nextToken open.stream)
+
 end
 
-lang UnitParser = ParenParser + RecordAst + RecordTypeAst
+lang UnitParser = ParenParser + RecordAst + RecordTypeAst + RecordPat
   sem beginParseExprInParen state open =
   | { token = RParenTok {} } & close ->
     -- this is a unit
@@ -741,9 +762,21 @@ lang UnitParser = ParenParser + RecordAst + RecordTypeAst
     } in
     let state = breakableAddAtom (configType ()) (OpTypeAtom typ) state in
     parseTypeRClosed state (nextToken close.stream)
+
+  sem beginParsePatInParen state open =
+  | { token = RParenTok {} } & close ->
+    -- this is a unit
+    let info = mergeInfo open.info close.info in
+    let pat = PatRecord {
+      bindings = mapEmpty cmpSID,
+      ty = ityunknown_ info,
+      info = info
+    } in
+    let state = breakableAddAtom (configPat ()) (OpPatAtom pat) state in
+    parsePatRClosed state (nextToken close.stream)
 end
 
-lang TupleParser = ParenParser + RecordAst + RecordTypeAst
+lang TupleParser = ParenParser + RecordAst + RecordTypeAst + RecordPat
   sem endParseExprInParen state open expr =
   | { token = CommaTok {} } & comma ->
     recursive let parseItems = lam acc. lam cur.
@@ -811,6 +844,41 @@ lang TupleParser = ParenParser + RecordAst + RecordTypeAst
       } in
       let state = breakableAddAtom (configType ()) (OpTypeAtom typ) state in
       parseTypeRClosed state (nextToken close.stream)
+    )
+
+  sem endParsePatInParen state open pat =
+  | { token = CommaTok {} } & comma ->
+    recursive let parseItems = lam acc. lam cur.
+      result.bind (parsePat cur) (lam pat.
+        match pat with (pat, cur) in
+        let acc = snoc acc pat in
+        switch cur
+          case { token = RParenTok { } } then
+            parseOk (cur, acc)
+          case { token = CommaTok { } } then
+            let cur = nextToken cur.stream in
+            parseItems acc cur
+          case _ then
+            parseErr (cur.info, "Unexpected token in tuple")
+        end
+      )
+    in
+
+    let cur = nextToken comma.stream in
+    let res = parseItems [pat] cur in
+
+    result.bind res (lam res.
+      match res with (close, pats) in
+      let info = mergeInfo open.info close.info in
+      let pat = PatRecord {
+        bindings = foldli (lam acc. lam i. lam pat.
+          mapInsert (stringToSid (int2string i)) pat acc
+        ) (mapEmpty cmpSID) pats,
+        ty = ityunknown_ info,
+        info = info
+      } in
+      let state = breakableAddAtom (configPat ()) (OpPatAtom pat) state in
+      parsePatRClosed state (nextToken close.stream)
     )
 
 end
@@ -1646,7 +1714,7 @@ let printAst = lam str.
   end
 in
 
--- let str = "match a with 1 then b else c" in
+-- let str = "match (a, b) with (1, 2) in c" in
 -- printLn "\nBoot:";
 -- printAstBoot str;
 -- printLn "Native:";
@@ -1749,5 +1817,9 @@ utest compareWithoutInfo "match a with 'a' in b" with true in
 utest compareWithoutInfo "match a with \"test\" in b" with true in
 
 utest compareWithoutInfo "match a with 1 then b else c" with true in
+
+utest compareWithoutInfo "match () with () in x" with true in
+utest compareWithoutInfo "match (a) with (1) in x" with true in
+utest compareWithoutInfo "match (a, b) with (1, 2) in x" with true in
 
 ()
