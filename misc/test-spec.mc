@@ -249,6 +249,12 @@ testMain substituters directories location (lam api.
     (eqString "src/test/mlang/include.mc")
     [(eval, fail), (compile, fail), (mlangCompile, fail)];
 
+  -- The mlang pipeline doesn't properly support specialize, thus this
+  -- test fails.
+  api.tests []
+    (eqString "src/test/examples/peval/pow.mc")
+    [(mlangCompile, fail)];
+
   -- === Microbenchmark ===
 
   let runBench = api.endStep

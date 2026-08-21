@@ -6,14 +6,14 @@ lang A
 end
 
 lang B = A
-  sem foo =
+  sem foo +=
   | Foo 2 -> 2
 end
 
 lang AB = A + B
   sem bar =
   | _ -> 2
-  sem foo =
+  sem foo +=
   | Foo _ -> 42
 end
 
@@ -29,7 +29,7 @@ lang CatchAll
 end
 
 lang Specific = CatchAll
-  sem foo =
+  sem foo +=
   | 3 -> 3
 end
 
