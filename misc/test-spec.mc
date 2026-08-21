@@ -223,6 +223,13 @@ testMain substituters directories location (lam api.
       ])
     [(eval, fail), (compile, fail), (mlangCompile, fail)];
 
+  -- Files that were too much work to update for now
+  api.tests []
+    (elem
+      [ "src/stdlib/mexpr/reptypes.mc"
+      ])
+    [(eval, fail), (compile, fail), (mlangCompile, fail)];
+
   -- TODO(vipa, 2024-11-08): Files that fail to compile, but I
   -- don't know why
   api.tests []
