@@ -255,6 +255,16 @@ testMain substituters directories location (lam api.
     (eqString "src/test/examples/peval/pow.mc")
     [(mlangCompile, fail)];
 
+  -- TODO(vipa, 2026-08-21): The mlang-pipeline currently has an issue
+  -- with excessive memory use, making these files too heavy to
+  -- compile.
+  api.tests []
+    (elem
+      [ "src/main/mi.mc"
+      , "src/main/tune.mc"
+      ])
+    [(mlangCompile, dont)];
+
   -- === Microbenchmark ===
 
   let runBench = api.endStep
