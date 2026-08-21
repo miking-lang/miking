@@ -3,6 +3,8 @@
 --
 -- Test integer primitives
 
+include "basic-types.mc"
+include "bool.mc"
 include "option.mc"
 include "string.mc"
 

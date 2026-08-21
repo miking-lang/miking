@@ -4,26 +4,26 @@ lang Pre
 end
 
 lang A = Pre
-  syn Expr =
+  syn Expr +=
   | TmA {}
 
-  sem f =
+  sem f +=
   | TmA _ -> 1
 end
 
 lang B = Pre
-  syn Expr =
+  syn Expr +=
   | TmB {}
 
-  sem f =
+  sem f +=
   | TmB _ -> 2
 end
 
 lang C = Pre
-  syn Expr =
+  syn Expr +=
   | TmC {}
 
-  sem f =
+  sem f +=
   | TmC _ -> 3
 end
 

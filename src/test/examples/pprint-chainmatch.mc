@@ -1,6 +1,7 @@
 include "common.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/pprint.mc"
+include "string.mc"
 
 mexpr
 
