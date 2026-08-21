@@ -1,5 +1,7 @@
 include "arg.mc"
+include "basic-types.mc"
 include "options-type.mc"
+include "set.mc"
 
 -- Options configuration
 let optionsConfig : ParseConfig Options = [

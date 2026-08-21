@@ -1,6 +1,12 @@
 include "arg.mc"
+include "basic-types.mc"
+include "bool.mc"
+include "char.mc"
 include "common.mc"
 include "options-type.mc"
+include "seq.mc"
+include "set.mc"
+include "string.mc"
 include "docgen/options/docgen-options.mc"
 include "tuning/tune-options.mc"
 

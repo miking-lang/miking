@@ -1,3 +1,4 @@
+include "basic-types.mc"
 include "docgen/options/docgen-options.mc"
 include "tuning/tune-options.mc"
 include "set.mc"

@@ -5,13 +5,19 @@
 -- needed for bootstrapping. It is used in place of mi in the first
 -- bootstrapping stage to speed up compile times.
 
+include "basic-types.mc"
+include "bool.mc"
 include "options.mc"
+include "options-type.mc"
 include "parse.mc"
+include "string.mc"
+include "sys.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/pprint.mc"
 include "mexpr/shallow-patterns.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-check.mc"
+include "ocaml/compile.mc"
 include "ocaml/mcore.mc"
 
 lang MCoreLiteCompile =
