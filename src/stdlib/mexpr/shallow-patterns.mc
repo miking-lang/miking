@@ -13,6 +13,8 @@ include "mexpr/info.mc"
 include "string.mc"
 include "char.mc"
 include "stringid.mc"
+include "mlang/lazy-ast.mc"
+include "lazy.mc"
 /-
 
 NOTE(vipa, 2022-05-20): This file decomposes nested patterns into a
@@ -126,6 +128,9 @@ lang ShallowBase = Ast + NamedPat + DeclAst + UnknownTypeAst
   type PatUpdate = [BranchInfo]
 
   type LowerEnv =
+    -- NOTE(vipa, 2026-08-25): The names here that may be inserted
+    -- during translation must be kept in sync with the `TmLazy` case
+    -- of `_lowerAll`, see the note of the same date there.
     { int2string : Option Name
     , escapeChar : Option Name
     , cons : Map Name (Set Name)
@@ -1070,7 +1075,7 @@ lang CollectBranches = MatchAst + VarAst + NamedPat + AndPat + OrPat + NotPat
   | _ -> None ()
 end
 
-lang LowerNestedPatterns = CollectBranches + ShallowBase + DedupBranchesAndInformativeNever + OpaqueAst + AppTypeUtils + LetDeclAst + DataDeclAst + ConTypeAst
+lang LowerNestedPatterns = CollectBranches + ShallowBase + DedupBranchesAndInformativeNever + OpaqueAst + AppTypeUtils + LetDeclAst + DataDeclAst + ConTypeAst + LazyAst
   sem lowerAll : Expr -> Expr
   sem lowerAll = | t ->
     _lowerAll
@@ -1079,6 +1084,17 @@ lang LowerNestedPatterns = CollectBranches + ShallowBase + DedupBranchesAndInfor
 
   sem _lowerAll : LowerEnv -> Expr -> Expr
   sem _lowerAll env =
+  | TmLazy t ->
+    -- NOTE(vipa, 2026-08-25): We may introduce references to
+    -- functions in the environment, and we don't know until we do the
+    -- translation, so we conservatively assume we _will_ introduce
+    -- them.
+    let extra = setOfSeq nameCmp (mapOption (lam x. x) [env.int2string, env.escapeChar]) in
+    TmLazy
+      { t with
+        thunk = lazyMap (_lowerAll env) t.thunk
+      , freeVars = setUnion t.freeVars extra
+      }
   | t & TmOpaque _ -> t
   | TmDecl (x & {decl = DeclLet d}) ->
     let inEnv =

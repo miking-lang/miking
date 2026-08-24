@@ -255,6 +255,9 @@ let compileViaLoader = lam options : Options. lam sourcePath.
   let ast = deadcodeElimination ast in
   endPhaseStatsExpr log "deadcodeElimination" ast;
 
+  let ast = forceLazyExpr ast in
+  endPhaseStatsExpr log "forceLazyExpr" ast;
+
   let res =
     if options.toJVM then compileMCoreToJVM ast else
     if options.toJavaScript then compileMCoreToJS

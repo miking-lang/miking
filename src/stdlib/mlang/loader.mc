@@ -17,6 +17,8 @@
 
 include "stdlib.mc"
 include "digraph.mc"
+include "mlang/lazy-ast.mc"
+include "mexpr/deadcode.mc"
 
 include "mexpr/boot-parser.mc"
 
@@ -48,6 +50,7 @@ include "lazy.mc"
 include "mexpr/pprint.mc"
 include "result.mc"
 include "mexpr/type.mc"
+include "common.mc"
 
 lang SymGetters = Sym
   -- Helpers for looking up names from known symbolization
@@ -261,7 +264,8 @@ lang LoaderImpl = LoaderInterface
     match foldl (lam loader. lam cb. _preBuildFullAst loader cb) loader x.hooks
       with loader & Loader x in
     let ast = foldr bind_ unit_ x.decls in
-    foldl (lam ast. lam cb. _postBuildFullAst loader ast cb) ast x.hooks
+    let ast = foldl (lam ast. lam cb. _postBuildFullAst loader ast cb) ast x.hooks in
+    ast
 
   sem _doHook : (Loader -> Decl -> Hook -> (Loader, Decl)) -> Loader -> Decl -> (Loader, Decl)
   sem _doHook f loader = | decl ->
@@ -335,12 +339,13 @@ lang BuiltinLoader = LoaderInterface
     (env, loader)
 end
 
-lang MLangLoader = LoaderImpl + BootParserMLang
+lang MLangLoader = LoaderImpl + BootParserMLang + LazyAst
   + Sym + TypeCheck
   + BuiltinLoader
   + Resymbolize
   + NormPat
   + KeywordMakerBase
+  + DeadcodeElimination
 
   syn FileType +=
   | FMCore {includeMExpr : Bool}
@@ -371,6 +376,12 @@ lang MLangLoader = LoaderImpl + BootParserMLang
     , posPat : Lazy NormPat
     , negPat : Lazy NormPat
     , orderCache : OrderCache -- order against all *earlier* branches
+    -- NOTE(vipa, 2026-08-25): We will construct a `TmLazy` wrapping
+    -- the body of each generated `sem`, and for that we need to
+    -- pre-compute some information for later use in deadcode
+    -- elimination
+    , freeVars : {semRefs : Set Name, otherVars : Set Name}
+    , sideEffect : Bool
     }
 
   sem addToDigraph : Info -> Set BranchId -> OrderCache -> Digraph BranchId () -> Digraph BranchId ()
@@ -435,6 +446,18 @@ lang MLangLoader = LoaderImpl + BootParserMLang
           else tm
         else smap_Expr_Expr work tm
       in work rawBody in
+    let freeVars =
+      let raw = collectVars (setEmpty nameCmp) rawBody in
+      let f = lam acc. lam n.
+        match mapLookup n currLocalToGlobal with Some glob
+        then {acc with semRefs = setInsert glob acc.semRefs}
+        else {acc with otherVars = setInsert n acc.otherVars} in
+      setFold f {semRefs = setEmpty nameCmp, otherVars = setEmpty nameCmp} raw in
+    -- TODO(vipa, 2026-08-25): I'm not fully convinced this is
+    -- correct, I suspect it might say `false` if we're referencing an
+    -- external thing that has a side-effect
+    let sideEffect =
+      tmHasSideEffect (mapEmpty nameCmp) false rawBody in
     { pat = pat
     , body = body
     , params = params
@@ -444,6 +467,8 @@ lang MLangLoader = LoaderImpl + BootParserMLang
       { id = id
       , cache = ref cache
       }
+    , freeVars = freeVars
+    , sideEffect = sideEffect
     }
 
   syn LangDefVar =
@@ -568,6 +593,7 @@ lang MLangLoader = LoaderImpl + BootParserMLang
       let branches = map (get global.branches) (digraphTopologicalOrder dig) in
       let scrutName = nameSym "scrut" in
       let paramNames = optionMapOr [] (lam x. create x.0 (lam. nameSym "sp")) global.preMatchArguments in
+      let redirectSemRef = lam n. (mapFindExn n langData.sems).local in
       let prepBody = lam.
         -- OPT(vipa, 2026-07-17): The body of this function could be
         -- delayed until later, as a "lazy" body, to minimize the
@@ -575,7 +601,7 @@ lang MLangLoader = LoaderImpl + BootParserMLang
         -- function will actually be used.
         let addBranch = lam branch. lam acc.
           match acc with (paramMap, tm) in
-          let branchBody = branch.body (lam n. (mapFindExn n langData.sems).local) in
+          let branchBody = branch.body redirectSemRef in
           let tm = withType (tyTm branchBody) (match_ (withType (tyPat branch.pat) (nvar_ scrutName))
             branch.pat
             branchBody
@@ -593,7 +619,23 @@ lang MLangLoader = LoaderImpl + BootParserMLang
         -- redirection has already happened via `branch.body` above.
         match foldr addBranch (mapEmpty nameCmp, default) branches with (paramMap, body) in
         resymbolizeExpr paramMap body in
-      let body = foldr nulam_ (prepBody ()) (snoc paramNames scrutName) in
+      let freeVars = foldl
+        (lam acc. lam branch.
+          { semRefs = setUnion acc.semRefs branch.freeVars.semRefs
+          , otherVars = setUnion acc.otherVars branch.freeVars.otherVars
+          })
+        {semRefs = setEmpty nameCmp, otherVars = setEmpty nameCmp}
+        branches in
+      let sideEffect = foldl (lam acc. lam branch. or acc branch.sideEffect) false branches in
+      let thunk = lazy prepBody in
+      let coreBody = TmLazy
+        { thunk = thunk
+        , freeVars = setUnion (setMap nameCmp redirectSemRef freeVars.semRefs) freeVars.otherVars
+        , sideEffect = sideEffect
+        , ty = tyunknown_
+        , info = local.info
+        } in
+      let body = foldr nulam_ coreBody (snoc paramNames scrutName) in
       let ty = (_withTCEnv
         (lam tcEnv. (tcEnv, mapLookupOrElse (lam. error "Compiler error: missing signature for base") base tcEnv.varEnv))
         loader).1 in
