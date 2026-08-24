@@ -835,7 +835,11 @@ lang TupleParser = ParenParser + RecordAst + RecordTypeAst + RecordPat
     in
 
     let cur = nextToken comma.stream in
-    let res = parseItems [expr] cur in
+    let res = match cur with { token = RParenTok {} } then
+      parseOk (cur, [expr])
+    else
+      parseItems [expr] cur
+    in
 
     result.bind res (lam res.
       match res with (close, exprs) in
@@ -870,7 +874,11 @@ lang TupleParser = ParenParser + RecordAst + RecordTypeAst + RecordPat
     in
 
     let cur = nextToken comma.stream in
-    let res = parseItems [typ] cur in
+    let res = match cur with { token = RParenTok {} } then
+      parseOk (cur, [typ])
+    else
+      parseItems [typ] cur
+    in
 
     result.bind res (lam res.
       match res with (close, typs) in
@@ -904,7 +912,11 @@ lang TupleParser = ParenParser + RecordAst + RecordTypeAst + RecordPat
     in
 
     let cur = nextToken comma.stream in
-    let res = parseItems [pat] cur in
+    let res = match cur with { token = RParenTok {} } then
+      parseOk (cur, [pat])
+    else
+      parseItems [pat] cur
+    in
 
     result.bind res (lam res.
       match res with (close, pats) in
@@ -1849,6 +1861,12 @@ lang TestParser =
   + MExprToJson
 end
 
+type TestResult
+con OkSame: () -> TestResult        -- Same result
+con OkSameExInfo: () -> TestResult  -- Same result excluding info field
+con OkFail: () -> TestResult        -- Both fails
+con Fail: () -> TestResult          -- Result is different
+
 mexpr
 
 use TestParser in
@@ -1865,20 +1883,19 @@ let jsonStr = lam expr. json2string (exprToJson expr) in
 let compare = lam str.
   let a = parse str in
   let b = parseBoot str in
-  match (result.toOption a, result.toOption b) with (Some a, Some b) then
-    eqString (jsonStr a) (jsonStr b) -- By comparing strings we also take info fieled into account.
-  else
-    false
-  in
-
-let compareWithoutInfo = lam str.
-  let a = parse str in
-  let b = parseBoot str in
-  match (result.toOption a, result.toOption b) with (Some a, Some b) then
-    eqExpr a b
-  else
-    false
-  in
+  switch (result.toOption a, result.toOption b)
+    case (Some a, Some b) then
+      match eqString (jsonStr a) (jsonStr b) with true then
+        OkSame ()
+      else match eqExpr a b with true then
+        OkSameExInfo ()
+      else
+        Fail ()
+    case (None (), None ()) then
+      OkFail ()
+    case _ then
+      Fail ()
+  end in
 
 let printAstBoot = lam str.
   switch result.consume (parseBoot str)
@@ -1904,125 +1921,154 @@ let printAst = lam str.
   end
 in
 
--- let str = "match a with [1] ++ rest ++ [5] in x" in
+-- let str = "(1,)" in
 -- printLn "\nBoot:";
 -- printAstBoot str;
 -- printLn "Native:";
 -- printAst str;
 
-utest compare "0" with true in
-utest compare "1" with true in
-utest compare "-1" with true in
+utest compare "0" with OkSame () in
+utest compare "1" with OkSame () in
+utest compare "-1" with OkSame () in
 
-utest compare "0.0" with true in
-utest compare "1.0" with true in
-utest compare "-1.0" with true in
+utest compare "0.0" with OkSame () in
+utest compare "1.0" with OkSame () in
+utest compare "-1.0" with OkSame () in
 
-utest compare "true" with true in
-utest compare "false" with true in
+utest compare "true" with OkSame () in
+utest compare "false" with OkSame () in
 
-utest compare "'a'" with true in
-utest compare "'😊'" with true in
+utest compare "'a'" with OkSame () in
+utest compare "'😊'" with OkSame () in
 
-utest compare "\"test\"" with true in
+utest compare "\"test\"" with OkSame () in
 
-utest compare "addi 1 2" with true in
-utest compare "addi 1 2 3" with true in
-utest compare "addi addi 1 2 3" with true in
-utest compare "addi (addi 1 2) 3" with true in
-utest compare "addi 1 (addi 2 3)" with true in
+utest compare "addi 1 2" with OkSame () in
+utest compare "addi 1 2 3" with OkSame () in
+utest compare "addi addi 1 2 3" with OkSame () in
+utest compare "addi (addi 1 2) 3" with OkSame () in
+utest compare "addi 1 (addi 2 3)" with OkSame () in
 
-utest compare "a" with true in
-utest compare "#frozen\"a\"" with true in
-utest compare "#var\"a\"" with true in
+utest compare "a" with OkSame () in
+utest compare "#frozen\"a\"" with OkSame () in
+utest compare "#var\"a\"" with OkSame () in
 
-utest compareWithoutInfo "()" with true in
-utest compareWithoutInfo "(())" with true in
-utest compareWithoutInfo "addi () ()" with true in
-utest compareWithoutInfo "(addi ()) ()" with true in
+utest compare "()" with OkSameExInfo () in
+utest compare "(())" with OkSameExInfo () in
+utest compare "addi () ()" with OkSameExInfo () in
+utest compare "(addi ()) ()" with OkSameExInfo () in
+utest compare "(" with OkFail () in
+utest compare ")" with OkFail () in
 
-utest compareWithoutInfo "let a = 1 in a" with true in
-utest compareWithoutInfo "let a = 1 in let b = 2 in addi a b" with true in
+utest compare "let a = 1 in a" with OkSameExInfo () in
+utest compare "let a = 1 in let b = 2 in addi a b" with OkSameExInfo () in
+utest compare "let a = 1" with OkFail () in
 
-utest compareWithoutInfo "let a: Int = 1 in a" with true in
-utest compareWithoutInfo "let a: Float = 1.0 in a" with true in
-utest compareWithoutInfo "let a: Bool = true in a" with true in
-utest compareWithoutInfo "let a: Char = 'a' in a" with true in
-utest compareWithoutInfo "let a: String = \"test\" in a" with true in
+utest compare "let a: Int = 1 in a" with OkSameExInfo () in
+utest compare "let a: Float = 1.0 in a" with OkSameExInfo () in
+utest compare "let a: Bool = true in a" with OkSameExInfo () in
+utest compare "let a: Char = 'a' in a" with OkSameExInfo () in
+utest compare "let a: String = \"test\" in a" with OkSameExInfo () in
 
-utest compareWithoutInfo "let a: Int Int = 1 1 in a" with true in
+utest compare "let a: Int Int = 1 1 in a" with OkSameExInfo () in
 
-utest compareWithoutInfo "let a: Int -> Int = addi 1 in a" with true in
-utest compareWithoutInfo "let a: Int Int -> Int = addi in a" with true in
+utest compare "let a: Int -> Int = addi 1 in a" with OkSameExInfo () in
+utest compare "let a: Int Int -> Int = addi in a" with OkSameExInfo () in
 
-utest compare "[]" with true in
-utest compare "[1]" with true in
-utest compare "[1, 2]" with true in
-utest compare "[1, [2, 3]]" with true in
-utest compare "[[1, 2], 3]" with true in
-utest compare "cons 0 [1, 2]" with true in
+utest compare "[]" with OkSame () in
+utest compare "[" with OkFail () in
+utest compare "]" with OkFail () in
+utest compare "[1]" with OkSame () in
+utest compare "[1,]" with OkFail () in
+utest compare "[,]" with OkFail () in
+utest compare "[,1]" with OkFail () in
+utest compare "[1, 2]" with OkSame () in
+utest compare "[1, [2, 3]]" with OkSame () in
+utest compare "[[1, 2], 3]" with OkSame () in
+utest compare "cons 0 [1, 2]" with OkSame () in
+utest compare "[1 2]" with OkSame () in
 
-utest compareWithoutInfo "let a: [Int] = () in a" with true in
-utest compareWithoutInfo "let a: [[Int]] = () in a" with true in
+utest compare "let a: [Int] = () in a" with OkSameExInfo () in
+utest compare "let a: [[Int]] = () in a" with OkSameExInfo () in
 
-utest compareWithoutInfo "lam. ()" with true in
-utest compareWithoutInfo "lam a. a" with true in
-utest compareWithoutInfo "lam a: Int. a" with true in
-utest compareWithoutInfo "lam. lam. ()" with true in
-utest compareWithoutInfo "lam a. lam b. addi a b" with true in
+utest compare "lam. ()" with OkSameExInfo () in
+utest compare "lam a. a" with OkSameExInfo () in
+utest compare "lam a: Int. a" with OkSameExInfo () in
+utest compare "lam. lam. ()" with OkSameExInfo () in
+utest compare "lam a. lam b. addi a b" with OkSameExInfo () in
 
-utest compare "(1, 2)" with true in
-utest compare "(1, (2, 3))" with true in
-utest compare "((1, 2), 3)" with true in
+utest compare "(1, 2)" with OkSame () in
+utest compare "(1, (2, 3))" with OkSame () in
+utest compare "((1, 2), 3)" with OkSame () in
+utest compare "(1,)" with OkSame () in
+utest compare "(1,2,)" with OkFail () in
+utest compare "(,)" with OkFail () in
+utest compare "(,1)" with OkFail () in
 
-utest compareWithoutInfo "let a: ((Int, Bool), String) = () in a" with true in
+utest compare "let a: ((Int, Bool), String) = () in a" with OkSameExInfo () in
 
-utest compare "{a = 1, b = 2}" with true in
-utest compare "{a = 1, bc = { b = 2, c = 3 } }" with true in
-utest compareWithoutInfo "{#label\"a\" = 1, b = 2}" with true in
+utest compare "{a = 1, b = 2}" with OkSame () in
+utest compare "{a = 1, bc = { b = 2, c = 3 } }" with OkSame () in
+utest compare "{#label\"a\" = 1, b = 2}" with OkSameExInfo () in
+utest compare "{" with OkFail () in
+utest compare "}" with OkFail () in
+utest compare "{a}" with OkFail () in
+utest compare "{a = }" with OkFail () in
+utest compare "{a = 1, }" with OkFail () in
 
-utest compareWithoutInfo "let a: { a: Int, b: Bool } = () in a" with true in
-utest compareWithoutInfo "let a: { a: Int, bc: { b: Bool, c: Char } } = () in a" with true in
+utest compare "let a: { a: Int, b: Bool } = () in a" with OkSameExInfo () in
+utest compare "let a: { a: Int, bc: { b: Bool, c: Char } } = () in a" with OkSameExInfo () in
 
-utest compareWithoutInfo "{negi 1 with b = 2}" with true in
-utest compareWithoutInfo "{negi 1 with b = 2, c = 3}" with true in
-utest compareWithoutInfo "{{negi 1 with b = 2} with c = 3}" with true in
+utest compare "{negi 1 with b = 2}" with OkSameExInfo () in
+utest compare "{negi 1 with b = 2, c = 3}" with OkSameExInfo () in
+utest compare "{{negi 1 with b = 2} with c = 3}" with OkSameExInfo () in
+utest compare "{negi 1 with }" with OkFail () in
 
-utest compare "never" with true in
+utest compare "never" with OkSame () in
 
-utest compareWithoutInfo "recursive let a = lam b. 1 in c" with true in
+utest compare "recursive let a = lam b. 1 in c" with OkSameExInfo () in
 
-utest compareWithoutInfo "recursive let a = lam b. 1 let c = lam d. 2 in e" with true in
+utest compare "recursive let a = lam b. 1 let c = lam d. 2 in e" with OkSameExInfo () in
 
-utest compareWithoutInfo "Test ()" with true in
-utest compareWithoutInfo "Test (1, 2, 3)" with true in
-utest compareWithoutInfo "Test {}" with true in
-utest compareWithoutInfo "Test {a = 1, b = 2}" with true in
+utest compare "Test ()" with OkSameExInfo () in
+utest compare "Test (1, 2, 3)" with OkSame () in
+utest compare "Test {}" with OkSame () in
+utest compare "Test {a = 1, b = 2}" with OkSame () in
 
-utest compareWithoutInfo "let o: Option a b c = Option 1 2 3 in ()" with true in
+utest compare "let o: Option a b c = Option 1 2 3 in ()" with OkSameExInfo () in
 
-utest compareWithoutInfo "match a with 1 in b" with true in
-utest compareWithoutInfo "match a with true in b" with true in
-utest compareWithoutInfo "match a with 'a' in b" with true in
-utest compareWithoutInfo "match a with \"test\" in b" with true in
+utest compare "match a with 1 in b" with OkSameExInfo () in
+utest compare "match a with true in b" with OkSameExInfo () in
+utest compare "match a with 'a' in b" with OkSameExInfo () in
+utest compare "match a with \"test\" in b" with OkSameExInfo () in
 
-utest compareWithoutInfo "match a with 1 then b else c" with true in
+utest compare "match a with 1 then b else c" with OkSameExInfo () in
 
-utest compareWithoutInfo "match () with () in x" with true in
-utest compareWithoutInfo "match (a) with (1) in x" with true in
-utest compareWithoutInfo "match (a, b) with (1, 2) in x" with true in
+utest compare "match a" with OkFail () in
+utest compare "match a with 1" with OkFail () in
+utest compare "match a with 1 then" with OkFail () in
+utest compare "match a with 1 then b else" with OkFail () in
 
-utest compareWithoutInfo "match a with {} in x" with true in
-utest compareWithoutInfo "match a with { b = 1 } in x" with true in
-utest compareWithoutInfo "match a with { b = 1, cd = { c = 2, d = 3 } } in x" with true in
+utest compare "match () with () in x" with OkSameExInfo () in
+utest compare "match (a) with (1) in x" with OkSameExInfo () in
+utest compare "match (a, b) with (1, 2) in x" with OkSameExInfo () in
 
-utest compareWithoutInfo "match a with [] in x" with true in
-utest compareWithoutInfo "match a with [1] in x" with true in
-utest compareWithoutInfo "match a with [1, 2] in x" with true in
-utest compareWithoutInfo "match a with [1, [3, 4]] in x" with true in
+utest compare "match a with {} in x" with OkSameExInfo () in
+utest compare "match a with { b = 1 } in x" with OkSameExInfo () in
+utest compare "match a with { b = 1, cd = { c = 2, d = 3 } } in x" with OkSameExInfo () in
 
-utest compareWithoutInfo "match a with [1] ++ rest in x" with true in
-utest compareWithoutInfo "match a with rest ++ [1] in x" with true in
-utest compareWithoutInfo "match a with [1] ++ rest ++ [1] in x" with true in
+utest compare "match a with [] in x" with OkSameExInfo () in
+utest compare "match a with [1] in x" with OkSameExInfo () in
+utest compare "match a with [1, 2] in x" with OkSameExInfo () in
+utest compare "match a with [1, [3, 4]] in x" with OkSameExInfo () in
+
+utest compare "match a with [1] ++ rest in x" with OkSameExInfo () in
+utest compare "match a with rest ++ [1] in x" with OkSameExInfo () in
+utest compare "match a with [1] ++ rest ++ [1] in x" with OkSameExInfo () in
+
+utest compare "match a with [1] ++ [1] in x" with OkFail () in
+utest compare "match a with rest ++ rest in x" with OkFail () in
+utest compare "match a with [1] ++ rest ++ [1] ++ rest in x" with OkFail () in
+utest compare "match a with rest ++ [1] ++ rest ++ [1] in x" with OkFail () in
 
 ()
