@@ -62,17 +62,17 @@ lang AstParserBase = Lexer + Ast + DeclAst
   sem canStartAppArgExpr: NextTokenResult -> Bool
   sem canStartAppArgType: NextTokenResult -> Bool
 
-  sem constructPrefixExpr: (BrkOpExpr LClosed ROpen, Expr) -> Expr
-  sem constructPrefixType: (BrkOpType LClosed ROpen, Type) -> Type
-  sem constructPrefixPat:  (BrkOpPat  LClosed ROpen, Pat)  -> Pat
+  sem constructPrefixExpr: all w. (BrkOpExpr LClosed ROpen, Expr) -> ParseResult w Expr
+  sem constructPrefixType: all w. (BrkOpType LClosed ROpen, Type) -> ParseResult w Type
+  sem constructPrefixPat:  all w. (BrkOpPat  LClosed ROpen, Pat)  -> ParseResult w Pat
 
-  sem constructInfixExpr: (BrkOpExpr LOpen ROpen, Expr, Expr) -> Expr
-  sem constructInfixType: (BrkOpType LOpen ROpen, Type, Type) -> Type
-  sem constructInfixPat:  (BrkOpPat  LOpen ROpen, Pat,  Pat)  -> Pat
+  sem constructInfixExpr: all w. (BrkOpExpr LOpen ROpen, Expr, Expr) -> ParseResult w Expr
+  sem constructInfixType: all w. (BrkOpType LOpen ROpen, Type, Type) -> ParseResult w Type
+  sem constructInfixPat:  all w. (BrkOpPat  LOpen ROpen, Pat,  Pat)  -> ParseResult w Pat
 
-  sem constructPostfixExpr: (BrkOpExpr LOpen RClosed, Expr) -> Expr
-  sem constructPostfixType: (BrkOpType LOpen RClosed, Type) -> Type
-  sem constructPostfixPat:  (BrkOpPat  LOpen RClosed, Pat)  -> Pat
+  sem constructPostfixExpr: all w. (BrkOpExpr LOpen RClosed, Expr) -> ParseResult w Expr
+  sem constructPostfixType: all w. (BrkOpType LOpen RClosed, Type) -> ParseResult w Type
+  sem constructPostfixPat:  all w. (BrkOpPat  LOpen RClosed, Pat)  -> ParseResult w Pat
 
   sem configExpr: () -> Config BrkOpExpr
   sem configType: () -> Config BrkOpType
@@ -137,13 +137,24 @@ lang AstParserBase = Lexer + Ast + DeclAst
       match errSpecs with [first] ++ _ then
         parseErrs (map breakableHighlightOne errSpecs)
       else
-        let expr = breakableConstructSimple {
-          constructAtom = lam op. match op with OpExprAtom expr in expr,
-          constructInfix = lam op. lam lhs. lam rhs. constructInfixExpr (op, lhs, rhs),
-          constructPrefix = lam op. lam rhs. constructPrefixExpr (op, rhs),
-          constructPostfix = lam op. lam lhs. constructPostfixExpr (op, lhs)
+        let exprRes = breakableConstructSimple {
+          constructAtom = lam op. match op with OpExprAtom expr in parseOk expr,
+          constructInfix = lam op. lam lhsRes. lam rhsRes.
+            result.bind lhsRes (lam lhs.
+              result.bind rhsRes (lam rhs.
+                constructInfixExpr (op, lhs, rhs)
+              )
+            ),
+          constructPrefix = lam op. lam rhsRes.
+            result.bind rhsRes (lam rhs.
+              constructPrefixExpr (op, rhs)
+            ),
+          constructPostfix = lam op. lam lhsRes.
+            result.bind lhsRes (lam lhs.
+              constructPostfixExpr (op, lhs)
+            )
         } sppf in
-        parseOk (expr, cur)
+        result.map (lam expr. (expr, cur)) exprRes
     else
       parseErr (cur.info, "Breakable parse error")
 
@@ -162,13 +173,24 @@ lang AstParserBase = Lexer + Ast + DeclAst
       match errSpecs with [first] ++ _ then
         parseErrs (map breakableHighlightOne errSpecs)
       else
-        let typ = breakableConstructSimple {
-          constructAtom = lam op. match op with OpTypeAtom typ in typ,
-          constructInfix = lam op. lam lhs. lam rhs. constructInfixType (op, lhs, rhs),
-          constructPrefix = lam op. lam rhs. constructPrefixType (op, rhs),
-          constructPostfix = lam op. lam lhs. constructPostfixType (op, lhs)
+        let typRes = breakableConstructSimple {
+          constructAtom = lam op. match op with OpTypeAtom typ in parseOk typ,
+          constructInfix = lam op. lam lhsRes. lam rhsRes.
+            result.bind lhsRes (lam lhs.
+              result.bind rhsRes (lam rhs.
+                constructInfixType (op, lhs, rhs)
+              )
+            ),
+          constructPrefix = lam op. lam rhsRes.
+            result.bind rhsRes (lam rhs.
+              constructPrefixType (op, rhs)
+            ),
+          constructPostfix = lam op. lam lhsRes.
+            result.bind lhsRes (lam lhs.
+              constructPostfixType (op, lhs)
+            )
         } sppf in
-        parseOk (typ, cur)
+        result.map (lam typ. (typ, cur)) typRes
     else
       parseErr (cur.info, "Breakable parse error")
 
@@ -187,13 +209,24 @@ lang AstParserBase = Lexer + Ast + DeclAst
       match errSpecs with [first] ++ _ then
         parseErrs (map breakableHighlightOne errSpecs)
       else
-        let pat = breakableConstructSimple {
-          constructAtom = lam op. match op with OpPatAtom pat in pat,
-          constructInfix = lam op. lam lhs. lam rhs. constructInfixPat (op, lhs, rhs),
-          constructPrefix = lam op. lam rhs. constructPrefixPat (op, rhs),
-          constructPostfix = lam op. lam lhs. constructPostfixPat (op, lhs)
+        let patRes = breakableConstructSimple {
+          constructAtom = lam op. match op with OpPatAtom pat in parseOk pat,
+          constructInfix = lam op. lam lhsRes. lam rhsRes.
+            result.bind lhsRes (lam lhs.
+              result.bind rhsRes (lam rhs.
+                constructInfixPat (op, lhs, rhs)
+              )
+            ),
+          constructPrefix = lam op. lam rhsRes.
+            result.bind rhsRes (lam rhs.
+              constructPrefixPat (op, rhs)
+            ),
+          constructPostfix = lam op. lam lhsRes.
+            result.bind lhsRes (lam lhs.
+              constructPostfixPat (op, lhs)
+            )
         } sppf in
-        parseOk (pat, cur)
+        result.map (lam pat. (pat, cur)) patRes
     else
       parseErr (cur.info, "Breakable parse error")
 
@@ -206,12 +239,12 @@ lang AstParserBase = Lexer + Ast + DeclAst
   sem constructPrefixExpr =
   | (OpExprDecl decl, inexpr) ->
     let info = infoDecl decl in
-    TmDecl {
+    parseOk (TmDecl {
       decl = decl,
       inexpr = inexpr,
       ty = ityunknown_ info,
       info = info
-    }
+    })
 
   sem configExpr =
   | _ ->
@@ -574,21 +607,21 @@ lang AppParser = AstParserBase + AppAst + AppTypeAst
   sem constructInfixExpr =
   | (OpExprApp info, lhs, rhs) ->
     let info = mergeInfo (infoTm lhs) (infoTm rhs) in
-    TmApp {
+    parseOk (TmApp {
       lhs = lhs,
       rhs = rhs,
       ty = ityunknown_ info,
       info = info
-    }
+    })
 
   sem constructInfixType =
   | (OpTypeApp info, lhs, rhs) ->
     let info = mergeInfo (infoTy lhs) (infoTy rhs) in
-    TyApp {
+    parseOk (TyApp {
       lhs = lhs,
       rhs = rhs,
       info = info
-    }
+    })
 
   sem groupingsAllowedExpr =
   | (OpExprApp _, OpExprApp _) -> GLeft ()
@@ -640,12 +673,12 @@ lang DataParser = AstParserBase + DataAst + ConTypeAst + AppTypeAst + DataPat
   sem constructPrefixExpr =
   | (OpExprConApp (info, ident), rhs) ->
     let info = mergeInfo info (infoTm rhs) in
-    TmConApp {
+    parseOk (TmConApp {
       ident = ident,
       body = rhs,
       ty = ityunknown_ info,
       info = info
-    }
+    })
 
   sem constructPrefixType =
   | (OpTypeConApp (info, ident), rhs) ->
@@ -655,21 +688,21 @@ lang DataParser = AstParserBase + DataAst + ConTypeAst + AppTypeAst + DataPat
       info = info
     } in
     let info = mergeInfo info (infoTy rhs) in
-    TyApp {
+    parseOk (TyApp {
       lhs = lhs,
       rhs = rhs,
       info = info
-    }
+    })
 
   sem constructPrefixPat =
   | (OpPatConApp (info, ident), rhs) ->
     let info = mergeInfo info (infoPat rhs) in
-    PatCon {
+    parseOk (PatCon {
       ident = ident,
       subpat = rhs,
       ty = ityunknown_ info,
       info = info
-    }
+    })
 end
 
 lang ParenParser = AstParserBase
@@ -1136,33 +1169,33 @@ lang SeqParser = AstParserBase + SeqAst + SeqTypeAst + SeqTotPat + SeqEdgePat + 
     switch (lhs, rhs)
       -- [1,2,3] ++ rest
       case (PatSeqTot lhs, PatNamed rhs) then
-        PatSeqEdge {
+        parseOk (PatSeqEdge {
           prefix = lhs.pats,
           middle = rhs.ident,
           postfix = [],
           ty = ityunknown_ info,
           info = info
-        }
+        })
       -- rest ++ [7,8,9]
       case (PatNamed lhs, PatSeqTot rhs) then
-        PatSeqEdge {
+        parseOk (PatSeqEdge {
           prefix = [],
           middle = lhs.ident,
           postfix = rhs.pats,
           ty = ityunknown_ info,
           info = info
-        }
+        })
       -- ([1,2,3] ++ rest) ++ [7,8,9]
       case (PatSeqEdge { postfix = [], prefix = prefix, middle = middle } & lhs, PatSeqTot rhs) then
-        PatSeqEdge {
+        parseOk (PatSeqEdge {
           prefix = prefix,
           middle = middle,
           postfix = rhs.pats,
           ty = ityunknown_ info,
           info = info
-        }
+        })
       case _ then
-        never -- TODO: deal with error
+        parseErr (info, "Sequence edge error")
     end
   
   sem groupingsAllowedPat =
@@ -1548,23 +1581,23 @@ lang LamParser = AstParserBase + LamAst + FunTypeAst + LamKeyword
   sem constructPrefixExpr =
   | (OpExprLam (beginInfo, ident, tyParam, tyAnnot), body) ->
     let info = mergeInfo beginInfo (infoTm body) in
-    TmLam {
+    parseOk (TmLam {
       ident = nameNoSym ident,
       tyAnnot = tyAnnot,
       tyParam = tyParam,
       body = body,
       ty = ityunknown_ info,
       info = info
-    }
+    })
 
   sem constructInfixType =
   | (OpTypeArrow info, from, to) ->
     let info = mergeInfo (infoTy from) (infoTy to) in
-    TyArrow {
+    parseOk (TyArrow {
       from = from,
       to = to,
       info = info
-    }
+    })
 
   sem groupingsAllowedType =
   | (OpTypeArrow _, OpTypeArrow _) -> GLeft ()
@@ -1619,7 +1652,7 @@ lang MatchParser = AstParserBase + MatchAst + NeverAst + MatchKeyword + WithKeyw
   
   sem constructPrefixExpr =
   | (OpExprMatchIn (info, target, pat), inexpr) ->
-    TmMatch {
+    parseOk (TmMatch {
       target = target,
       pat = pat,
       thn = inexpr,
@@ -1629,17 +1662,17 @@ lang MatchParser = AstParserBase + MatchAst + NeverAst + MatchKeyword + WithKeyw
       },
       ty = ityunknown_ info,
       info = info
-    }
+    })
 
   | (OpExprMatchElse (info, target, pat, thn), elsexpr) ->
-    TmMatch {
+    parseOk (TmMatch {
       target = target,
       pat = pat,
       thn = thn,
       els = elsexpr,
       ty = ityunknown_ info,
       info = info
-    }
+    })
 end
 
 lang NeverParser = AstParserBase + NeverAst + NeverKeyword
@@ -1670,12 +1703,12 @@ lang AndParser = AstParserBase + AndPat
   sem constructInfixPat =
   | (OpPatAnd info, lhs, rhs) ->
     let info = mergeInfo (infoPat lhs) (infoPat rhs) in
-    PatAnd {
+    parseOk (PatAnd {
       lpat = lhs,
       rpat = rhs,
       ty = ityunknown_ info,
       info = info
-    }
+    })
 
   sem groupingsAllowedPat =
   | (OpPatAnd _, OpPatAnd _) -> GLeft ()
@@ -1698,12 +1731,12 @@ lang OrParser = AstParserBase + OrPat
   sem constructInfixPat =
   | (OpPatOr info, lhs, rhs) ->
     let info = mergeInfo (infoPat lhs) (infoPat rhs) in
-    PatOr {
+    parseOk (PatOr {
       lpat = lhs,
       rpat = rhs,
       ty = ityunknown_ info,
       info = info
-    }
+    })
 
   sem groupingsAllowedPat =
   | (OpPatOr _, OpPatOr _) -> GLeft ()
@@ -1724,11 +1757,11 @@ lang NotParser = AstParserBase + NotPat
   sem constructPrefixPat =
   | (OpPatNot info, rhs) ->
     let info = mergeInfo info (infoPat rhs) in
-    PatNot {
+    parseOk (PatNot {
       subpat = rhs,
       ty = ityunknown_ info,
       info = info
-    }
+    })
   
   sem groupingsAllowedPat =
   | (OpPatNot _, OpPatNot _) -> GLeft ()
