@@ -336,6 +336,11 @@ lang TestSpec
 
   sem formatMake : Option (Set String) -> [Rule] -> String
   sem formatMake tags = | rules ->
+    let green = "\\033[0;32m" in
+    let red = "\\033[0;31m" in
+    let colorReset = "\\033[0m" in
+    let passMark = join [green, "✓", colorReset] in
+    let failMark = join [red, "✗", colorReset] in
     let prereq = match tags with Some tags
       then lam rule. if setMem rule.tag tags then cons ' ' (head rule.outputs) else ""
       else lam rule. cons ' ' (head rule.outputs) in
@@ -344,9 +349,11 @@ lang TestSpec
       , strJoin " " rule.inputs
       , if null rule.extraInputs then "" else
         concat " | " (strJoin " " rule.extraInputs)
-      , "\n\t@echo ", rule.dir, ": ", sysShellQuote rule.friendlyCommand
       , "\n\t@mkdir -p ", dirname (head rule.outputs)
-      , "\n\t@cd ", rule.dir, "; ", rule.command, "\n"
+      , "\n\t@cd ", rule.dir, "; if ", rule.command
+      , "; then echo ", sysShellQuote (join [rule.dir, ": ", passMark, " ", rule.friendlyCommand])
+      , "; else st=$$?; echo ", sysShellQuote (join [rule.dir, ": ", failMark, " ", rule.friendlyCommand])
+      , " >&2; exit $$st; fi\n"
       ] in
     join
       [ "ROOT := $(realpath .)\n"
@@ -591,7 +598,7 @@ lang TestSpec
 
   sem negateCommand : Rule -> Rule
   sem negateCommand = | cmd ->
-    { cmd with friendlyCommand = concat "FAIL " cmd.friendlyCommand
+    { cmd with friendlyCommand = concat "XFAIL " cmd.friendlyCommand
     , command = join ["! { ", cmd.command, "; }"]
     }
 
