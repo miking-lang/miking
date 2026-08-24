@@ -396,6 +396,16 @@ lang NeverKeyword = Lexer
   | "never" -> true
 end
 
+lang UtestKeyword = Lexer
+  sem identIsKeyword =
+  | "utest" -> true
+end
+
+lang UsingKeyword = Lexer
+  sem identIsKeyword =
+  | "using" -> true
+end
+
 lang IntParser = AstParserBase + IntAst + IntPat
   sem canStartAppArgExpr =
   | { token = IntTok { } } -> true
@@ -1779,6 +1789,63 @@ lang NotParser = AstParserBase + NotPat
   | (OpPatNot _, OpPatNot _) -> GLeft ()
 end
 
+lang UtestParser = AstParserBase + UtestDeclAst + UtestKeyword + WithKeyword + UsingKeyword + InKeyword
+  sem parseExprROpen state =
+  | { token = KeywordTok { val = "utest" } } & tokutest ->
+    result.bind (parseDecl tokutest) (lam decl.
+      match decl with (decl, cur) in
+
+      let state = breakableAddPrefix (configExpr ()) (OpExprDecl decl) state in
+
+      match cur with { token = KeywordTok { val = "in" } } & tokin then
+        let cur = nextToken tokin.stream in
+        parseExprROpen state cur
+      else
+        parseErr (cur.info, "Missing in expression")
+    )
+
+  sem parseDecl =
+  | { token = KeywordTok { val = "utest" } } & tokutest ->
+    let cur = nextToken tokutest.stream in
+    let test = parseExpr cur in
+    result.bind test (lam test.
+      match test with (test, cur) in
+      match cur with { token = KeywordTok { val = "with"} } & tokwith then
+        let cur = nextToken tokwith.stream in
+        let expected = parseExpr cur in
+        result.bind expected (lam expected.
+          match expected with (expected, cur) in
+          let info = mergeInfo tokutest.info (infoTm expected) in
+          
+          let tusing = match cur with { token = KeywordTok { val = "using" } } & tokusing then
+            let cur = nextToken tokusing.stream in
+            result.map (lam tusing.
+              match tusing with (tusing, cur) in
+              let info = mergeInfo info (infoTm tusing) in
+              (Some tusing, cur, info)
+            ) (parseExpr cur)
+          else
+            parseOk (None (), cur, info)
+          in
+
+          result.bind tusing (lam tusing.
+            match tusing with (tusing, cur, info) in
+
+            let decl = DeclUtest {
+              test = test,
+              expected = expected,
+              tusing = tusing,
+              tonfail = None (),
+              info = info
+            } in
+            parseOk (decl, cur)
+          )
+        )
+      else
+        parseErr (cur.info, "Expected with keyword")
+    )
+end
+
 -- TODO: Better solution
 lang PrecedenceParser = AppParser + DataParser + LamParser + LetDeclParser + AndParser + OrParser + NotParser
   sem groupingsAllowedExpr =
@@ -1850,6 +1917,7 @@ lang AstParser =
   + AndParser
   + OrParser
   + NotParser
+  + UtestParser
   + PrecedenceParser
   + UnexpectedTokenParser
 end
@@ -2070,5 +2138,14 @@ utest compare "match a with [1] ++ [1] in x" with OkFail () in
 utest compare "match a with rest ++ rest in x" with OkFail () in
 utest compare "match a with [1] ++ rest ++ [1] ++ rest in x" with OkFail () in
 utest compare "match a with rest ++ [1] ++ rest ++ [1] in x" with OkFail () in
+
+utest compare "utest a with 1 in x" with OkSameExInfo () in
+utest compare "utest a with 1" with OkFail () in
+utest compare "utest a with" with OkFail () in
+utest compare "utest a " with OkFail () in
+utest compare "utest" with OkFail () in
+utest compare "utest with" with OkFail () in
+utest compare "utest a with 1 using b in x" with OkSame () in
+utest compare "utest a with 1 using in x" with OkFail () in
 
 ()
