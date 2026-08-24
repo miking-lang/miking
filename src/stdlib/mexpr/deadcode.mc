@@ -5,6 +5,8 @@ include "mexpr/eq.mc"
 include "mexpr/pprint.mc"
 include "mexpr/side-effect.mc"
 include "mexpr/symbolize.mc"
+include "mlang/lazy-ast.mc"
+include "lazy.mc"
 include "name.mc"
 include "map.mc"
 include "set.mc"
@@ -177,7 +179,7 @@ lang MExprDeadcodeEliminationLetDecl = DeadcodeElimination + LetDeclAst
       None ()
 end
 
-lang MExprDeadcodeEliminationRecLetsDecl = DeadcodeElimination + RecLetsDeclAst
+lang MExprDeadcodeEliminationRecLetsDecl = DeadcodeElimination + RecLetsDeclAst + LazyAst
   sem collectLetsDecl : (NMap, Set Name) -> Decl -> (NMap, Set Name)
   sem collectLetsDecl acc +=
   | DeclRecLets t ->
@@ -241,12 +243,27 @@ lang MExprDeadcodeEliminationFunType = DeadcodeElimination + FunTypeAst
     addi 1 (lambdasInType t.to)
 end
 
+lang MExprDeadcodeEliminationLazy = DeadcodeElimination + LazyAst
+  sem tmHasSideEffect : NMap -> Bool -> Expr -> Bool
+  sem tmHasSideEffect nmap acc +=
+  | TmLazy t -> if acc then true else t.sideEffect
+
+  sem collectVars : Set Name -> Expr -> Set Name
+  sem collectVars free +=
+  | TmLazy t -> setUnion free t.freeVars
+
+  sem removeLets : NMap -> Expr -> Expr
+  sem removeLets nmap +=
+  | tm & TmLazy t -> tm
+end
+
 lang MExprDeadcodeElimination =
   MExprDeadcodeEliminationVar + MExprDeadcodeEliminationApp +
   MExprDeadcodeEliminationConst + MExprDeadcodeEliminationLam +
   MExprDeadcodeEliminationDecl + MExprDeadcodeEliminationLetDecl +
   MExprDeadcodeEliminationRecLetsDecl + MExprDeadcodeEliminationExtDecl +
-  MExprDeadcodeEliminationFunType + MExprDeadcodeEliminationOpaque
+  MExprDeadcodeEliminationFunType + MExprDeadcodeEliminationOpaque +
+  MExprDeadcodeEliminationLazy
 
   sem tmHasSideEffect : NMap -> Bool -> Expr -> Bool
   sem tmHasSideEffect nmap acc +=

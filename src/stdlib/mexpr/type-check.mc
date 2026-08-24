@@ -31,6 +31,8 @@ include "mexpr/symbolize.mc"
 include "mexpr/type.mc"
 include "mexpr/unify.mc"
 include "mexpr/repr-ast.mc"
+include "mlang/lazy-ast.mc"
+include "lazy.mc"
 include "name.mc"
 include "map.mc"
 include "set.mc"
@@ -726,7 +728,7 @@ lang SubstituteNewReprs = ReprTypeAst + RepTypesHelpers
   | ty -> smap_Type_Type (substituteNewReprs env) ty
 end
 
-lang RemoveMetaVar = MetaVarTypeAst + UnknownTypeAst + RecordTypeAst + RecordKindAst + OpaqueAst
+lang RemoveMetaVar = MetaVarTypeAst + UnknownTypeAst + RecordTypeAst + RecordKindAst + OpaqueAst + LazyAst
   sem removeMetaVarType =
   | TyMetaVar t ->
     switch deref t.contents
@@ -739,6 +741,8 @@ lang RemoveMetaVar = MetaVarTypeAst + UnknownTypeAst + RecordTypeAst + RecordKin
     smap_Type_Type removeMetaVarType ty
 
   sem removeMetaVarExpr =
+  | TmLazy t ->
+    TmLazy {t with thunk = lazyMap removeMetaVarExpr t.thunk, ty = removeMetaVarType t.ty}
   | TmOpaque x ->
     let body = removeMetaVarExpr x.body in
     let ty = removeMetaVarType x.ty in
