@@ -258,6 +258,15 @@ let compileViaLoader = lam options : Options. lam sourcePath.
   let ast = forceLazyExpr ast in
   endPhaseStatsExpr log "forceLazyExpr" ast;
 
+  -- NOTE(vipa, 2026-08-26): `TmOpaque` must be special-cased by every
+  -- pass that transforms the AST (see `OpaqueAst` in
+  -- `mexpr/ast.mc`), which not every pass reachable from here does
+  -- yet. Its body is already in a backend-compilable form, so we
+  -- strip the `TmOpaque` wrapper right before handing the AST to the
+  -- backend, once no more such passes remain.
+  let ast = removeOpaqueExpr ast in
+  endPhaseStatsExpr log "removeOpaqueExpr" ast;
+
   let res =
     if options.toJVM then compileMCoreToJVM ast else
     if options.toJavaScript then compileMCoreToJS
@@ -268,10 +277,6 @@ let compileViaLoader = lam options : Options. lam sourcePath.
       , tailCallOptimizations = not options.disableJsTCO
       } ast sourcePath
     else
-      -- let ast = typeAnnot ast in
-      -- endPhaseStatsExpr log "type-annot" ast;
-      -- -- If option --debug-type-annot, then pretty-print the AST
-      -- (if options.debugTypeAnnot then printLn (expr2str ast) else ());
       compileMCore ast
       { debugGenerate = lam ocamlProg. if options.debugGenerate then printLn ocamlProg else ()
       , exitBefore = lam. if options.exitBefore then exit 0 else ()

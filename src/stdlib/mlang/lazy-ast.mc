@@ -57,4 +57,12 @@ lang LazyAst = Ast + OpaqueAst
   | TmLazy t -> forceLazyExpr (lazyForce t.thunk)
   | tm & TmOpaque _ -> tm
   | t -> smap_Expr_Expr forceLazyExpr t
+
+  -- Count a `TmLazy` as a single node, without forcing (and thus
+  -- without instantiating) its thunk. This lets `countExprNodes`
+  -- (see `PhaseStats`) be used on ASTs that still contain unforced
+  -- `TmLazy` nodes, e.g. to measure AST size before dead code has
+  -- had a chance to prune never-forced branches.
+  sem countExprNodes count +=
+  | TmLazy _ -> addi count 1
 end
