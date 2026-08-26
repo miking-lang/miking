@@ -362,6 +362,16 @@ lang OpaqueAst = Ast
 
   sem mapPost_Expr_Expr f +=
   | tm & TmOpaque _ -> tm
+
+  -- Traverse an `Expr`, replacing any `TmOpaque` with its `body`. Its
+  -- body is meant to already be in a form the backend can compile
+  -- directly, so this is only safe to do right before handing the
+  -- AST off to the backend, once no more transformations that would
+  -- need to special-case `TmOpaque` remain.
+  sem removeOpaqueExpr : Expr -> Expr
+  sem removeOpaqueExpr =
+  | TmOpaque x -> removeOpaqueExpr x.body
+  | t -> smap_Expr_Expr removeOpaqueExpr t
 end
 
 -- TmVar --

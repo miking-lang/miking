@@ -48,8 +48,11 @@ include "seq.mc"
 include "error.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/type.mc"
+include "mlang/lazy-ast.mc"
+include "string.mc"
+include "set.mc"
 
-lang AttributeGrammar = Ast + DeclAst + PrettyPrint + MetaVarTypeAst
+lang AttributeGrammar = Ast + DeclAst + PrettyPrint + MetaVarTypeAst + LazyAst
   -- Each `Attr` is expected to contain exactly a `Thunk` of whatever
   -- the carried value is
   syn Attr loc =
@@ -241,7 +244,14 @@ lang AttributeGrammar = Ast + DeclAst + PrettyPrint + MetaVarTypeAst
     let acc = match tm with TmDecl x
       then f (getAttrDecl attr) acc x.decl
       else acc in
-    let acc = sfold_Expr_Expr (f (getAttrExpr attr)) acc tm in
+    -- NOTE: `TmLazy` (see `mlang/lazy-ast.mc`) has no usable
+    -- `smapAccumL_Expr_Expr`, by design: descending into it would
+    -- force (and thus materialize) its thunk. Treat it as having no
+    -- Expr children instead of crashing; `addHere` below still runs
+    -- against the `TmLazy` node itself, so attributes that only need
+    -- e.g. its `info` field are unaffected.
+    let acc = match tm with TmLazy _ then acc
+      else sfold_Expr_Expr (f (getAttrExpr attr)) acc tm in
     let acc = sfold_Expr_Type (f (getAttrType attr)) acc tm in
     let acc = sfold_Expr_Pat (f (getAttrPat attr)) acc tm in
     match acc with (st, gets) in
@@ -312,7 +322,10 @@ lang AttributeGrammar = Ast + DeclAst + PrettyPrint + MetaVarTypeAst
     let acc = match tm with TmDecl x
       then f (getAttrDecl attr) acc x.decl
       else acc in
-    let acc = sfold_Expr_Expr (f (getAttrExpr attr)) acc tm in
+    -- NOTE: see the matching comment in `simpleSynthesizedExpr` above
+    -- for why `TmLazy` is skipped here rather than folded over.
+    let acc = match tm with TmLazy _ then acc
+      else sfold_Expr_Expr (f (getAttrExpr attr)) acc tm in
     let acc = sfold_Expr_Type (f (getAttrType attr)) acc tm in
     let acc = sfold_Expr_Pat (f (getAttrPat attr)) acc tm in
     match acc with (st, writes) in
@@ -386,6 +399,19 @@ lang AttributeGrammar = Ast + DeclAst + PrettyPrint + MetaVarTypeAst
   sem getPatStringCode indent env += | PatWithEnv x -> (env, join ["<omitted pat, ", lazyForce x.label, ">"])
   sem pprintDeclCode indent env += | DeclWithEnv x -> (env, join ["<omitted decl, ", lazyForce x.label, ">"])
 
+  -- NOTE: `pprintCode` has no default case, and `TmLazy` (see
+  -- `mlang/lazy-ast.mc`) deliberately has no real one either, since
+  -- printing its expanded contents would require forcing (and thus
+  -- materializing) the thunk. This prints a placeholder from the
+  -- metadata already sitting on the node instead.
+  sem pprintCode indent env +=
+  | TmLazy t ->
+    (env, join
+      [ "<lazy: ", int2string (setSize t.freeVars), " free var(s)"
+      , (if t.sideEffect then ", side-effecting" else "")
+      , ">"
+      ])
+
   -- sem infoTm = | TmWithEnv _ -> NoInfo ()
   -- sem infoTy = | TyWithEnv _ -> NoInfo ()
   -- sem infoDecl = | DeclWithEnv _ -> NoInfo ()
@@ -425,6 +451,14 @@ lang AttributeGrammar = Ast + DeclAst + PrettyPrint + MetaVarTypeAst
       match tm with TmOpaque x then
         match prepareExpr toCall x.body with (toCall, body) in
         (toCall, TmOpaque {x with body = body})
+      -- NOTE: `TmLazy` (see `mlang/lazy-ast.mc`) must not be forced
+      -- here: leave it untouched and schedule no recursive call for
+      -- its thunk. `processAttrExpr` still runs against the raw
+      -- `TmLazy` node below, so per-node checks (e.g. its `info`
+      -- field) still apply; `simpleSynthesizedExpr` /
+      -- `simpleInheritedExpr` know to skip folding over its
+      -- (unreachable) children.
+      else match tm with TmLazy _ then (toCall, tm)
       else smapAccumL_Expr_Expr prepareExpr toCall tm
     with (toCall, tm) in
 

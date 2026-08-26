@@ -265,6 +265,16 @@ testMain substituters directories location (lam api.
       ])
     [(mlangCompile, dont)];
 
+  -- TODO(vipa, 2026-08-26): Examples that *should* fail to compile, but currently work in the new mlang-pipeline
+  api.tests []
+    (elem
+      [ "src/test/examples/external/ext-parse.mc"
+      , "src/test/examples/external/ext-not-fully-applied-parse-error.mc"
+      , "src/test/examples/external/ext-not-applied-parse-error.mc"
+      , "src/test/examples/external/multiple-ext-parse-error.mc"
+      ])
+    [(mlangCompile, succ)];
+
   -- === Microbenchmark ===
 
   let runBench = api.endStep

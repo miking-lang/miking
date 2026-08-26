@@ -3,6 +3,9 @@
 include "common.mc"
 include "json.mc"
 include "math.mc"
+include "seq.mc"
+include "string.mc"
+include "float.mc"
 
 let n_runs = 10
 

@@ -17,6 +17,7 @@ include "string.mc"
 include "stringid.mc"
 include "set.mc"
 include "mexpr/ast-builder.mc"
+include "mlang/lazy-ast.mc"
 
 lang AstToJson = Ast + DeclAst
   sem exprToJson : Expr -> JsonValue
@@ -173,6 +174,21 @@ lang OpaqueToJson = AstToJson + OpaqueAst
   | TmOpaque x -> JsonObject (mapFromSeq cmpString
     [ ("con", JsonString "TmOpaque")
     , ("body", exprToJson x.body)
+    , ("ty", typeToJson x.ty)
+    , ("info", infoToJson x.info)
+    ] )
+end
+
+-- NOTE: unlike `TmOpaque`, `TmLazy`'s (see `mlang/lazy-ast.mc`) body
+-- lives behind an unforced thunk; dumping it here would force (and
+-- thus materialize) it, so this reports the metadata already sitting
+-- on the node instead.
+lang LazyToJson = AstToJson + LazyAst
+  sem exprToJson +=
+  | TmLazy x -> JsonObject (mapFromSeq cmpString
+    [ ("con", JsonString "TmLazy")
+    , ("freeVars", JsonArray (map nameToJson (setToSeq x.freeVars)))
+    , ("sideEffect", JsonBool x.sideEffect)
     , ("ty", typeToJson x.ty)
     , ("info", infoToJson x.info)
     ] )
@@ -663,6 +679,7 @@ lang MExprToJson
   + ExtToJson
   + MetaVarToJson
   + OpaqueToJson
+  + LazyToJson
 end
 
 mexpr
