@@ -421,6 +421,11 @@ lang EndKeyword = Lexer
   | "end" -> true
 end
 
+lang TypeKeyword = Lexer
+  sem identIsKeyword =
+  | "type" -> true
+end
+
 lang IntParser = AstParserBase + IntAst + IntPat
   sem canStartAppArgExpr =
   | { token = IntTok { } } -> true
@@ -1564,6 +1569,66 @@ lang RecLetsDeclParser = AstParserBase + RecLetsDeclAst + RecursiveKeyword + Let
     )
 end
 
+lang TypeDeclParser = AstParserBase + TypeDeclAst + VariantTypeAst + TypeKeyword + InKeyword
+  sem parseExprROpen state =
+  | { token = KeywordTok { val = "type" } } & toktype ->
+    result.bind (parseDecl toktype) (lam decl.
+      match decl with (decl, cur) in
+
+      let state = breakableAddPrefix (configExpr ()) (OpExprDecl decl) state in
+
+      match cur with { token = KeywordTok { val = "in" } } & tokin then
+        let cur = nextToken tokin.stream in
+        parseExprROpen state cur
+      else
+        parseErr (cur.info, "Missing in expression")
+    )
+
+  sem parseDecl =
+  | { token = KeywordTok { val = "type" } } & toktype ->
+    
+    recursive let parseParams = lam acc. lam cur.
+      match cur with { token = LIdentTok { val = param } | HashStringTok { hash = "var", val = param } } & tokparam then
+        let cur = nextToken tokparam.stream in
+        let acc = snoc acc (nameNoSym param) in
+        parseParams acc cur
+      else
+        (acc, cur)
+    in
+
+    let cur = nextToken toktype.stream in
+
+    match cur with { token = UIdentTok { val = ident } | HashStringTok { hash = "con", val = ident } } & tokident then
+      let cur = nextToken tokident.stream in
+      let params = parseParams [] cur in
+      match params with (params, cur) in
+
+      let tyIdent = match cur with { token = OperatorTok { val = "=" } } & tokeq then
+        let cur = nextToken tokeq.stream in
+        parseType cur
+      else
+        let typ = TyVariant {
+          info = mergeInfo toktype.info tokident.info,
+          constrs = mapEmpty nameCmp
+        } in
+        parseOk (typ, cur)
+      in
+
+      result.bind tyIdent (lam tyIdent.
+        match tyIdent with (tyIdent, cur) in
+        let decl = DeclType {
+          ident = nameNoSym ident,
+          params = params,
+          tyIdent = tyIdent,
+          info = mergeInfo toktype.info (infoTy tyIdent)
+        } in
+        parseOk (decl, cur)
+      )
+    else
+      parseErr (cur.info, "Missing identifier")
+end
+
+
 lang LamParser = AstParserBase + LamAst + FunTypeAst + LamKeyword
   syn BrkOpExpr lstyle rstyle =
   | OpExprLam (Info, String, Type, Type)
@@ -2005,6 +2070,7 @@ lang AstParser =
   + RecordParser
   + LetDeclParser
   + RecLetsDeclParser
+  + TypeDeclParser
   + LamParser
   + MatchParser
   + SwitchParser
@@ -2084,7 +2150,7 @@ let printAst = lam str.
   end
 in
 
--- let str = "switch a case 1 then switch b case 2 then x end end" in
+-- let str = "type Test a b = Int Int in 1" in
 -- printLn "\nBoot:";
 -- printAstBoot str;
 -- printLn "Native:";
@@ -2255,5 +2321,14 @@ utest compare "switch a case end" with OkFail () in
 utest compare "switch a case 1 end" with OkFail () in
 utest compare "switch a case 1 then" with OkFail () in
 utest compare "switch a case 1 then end" with OkFail () in
+
+utest compare "type T in x" with OkSameExInfo () in
+utest compare "type T a in x" with OkSameExInfo () in
+utest compare "type T a b in x" with OkSameExInfo () in
+utest compare "type T = Int in x" with OkSameExInfo () in
+utest compare "type T = Int Int in x" with OkSameExInfo () in
+utest compare "type T a b = Int Int in x" with OkSameExInfo () in
+utest compare "type in x" with OkFail () in
+utest compare "type T = in x" with OkFail () in
 
 ()
