@@ -406,6 +406,21 @@ lang UsingKeyword = Lexer
   | "using" -> true
 end
 
+lang SwitchKeyword = Lexer
+  sem identIsKeyword =
+  | "switch" -> true
+end
+
+lang CaseKeyword = Lexer
+  sem identIsKeyword =
+  | "case" -> true
+end
+
+lang EndKeyword = Lexer
+  sem identIsKeyword =
+  | "end" -> true
+end
+
 lang IntParser = AstParserBase + IntAst + IntPat
   sem canStartAppArgExpr =
   | { token = IntTok { } } -> true
@@ -1697,6 +1712,85 @@ lang MatchParser = AstParserBase + MatchAst + NeverAst + MatchKeyword + WithKeyw
     })
 end
 
+lang SwitchParser = AstParserBase + MatchAst + LetDeclAst + VarAst + NeverAst + SwitchKeyword + CaseKeyword + EndKeyword
+  sem parseExprROpen state =
+  | { token = KeywordTok { val = "switch" } } & tokswitch ->
+
+    recursive let parseItems = lam cur.
+      switch cur
+        case { token = KeywordTok { val = "case" } } & tokcase then
+          let cur = nextToken tokcase.stream in
+          let pat = parsePat cur in
+          result.bind pat (lam pat.
+            match pat with (pat, cur) in
+            match cur with { token = KeywordTok { val = "then" } } & tokthen then
+              let cur = nextToken tokthen.stream in
+              let thn = parseExpr cur in
+              result.bind thn (lam thn.
+                match thn with (thn, cur) in
+                let els = parseItems cur in
+                result.bind els (lam els.
+                  match els with (els, tokend, cur) in
+                  let info = mergeInfo tokcase.info (infoTm thn) in
+                  let expr = TmMatch {
+                    target = TmVar {
+                      ident = nameNoSym "X",
+                      ty = ityunknown_ tokcase.info,
+                      info = tokcase.info,
+                      frozen = false
+                    },
+                    pat = pat,
+                    thn = thn,
+                    els = els,
+                    ty = ityunknown_ info,
+                    info = info
+                  } in
+                  parseOk (expr, tokend, cur)
+                )
+              )
+            else
+              parseErr (cur.info, "Expected then keyword")
+          )
+        case { token = KeywordTok { val = "end" } } & tokend then
+          let cur = nextToken tokend.stream in
+          let expr = TmNever {
+            ty = ityunknown_ tokend.info,
+            info = tokend.info
+          } in
+          parseOk (expr, tokend, cur)
+        case _ then
+          parseErr (cur.info, "Expected case or end keyword")
+      end
+    in
+
+    let cur = nextToken tokswitch.stream in
+    let body = parseExpr cur in
+    result.bind body (lam body.
+      match body with (body, cur) in
+
+      let inexpr = parseItems cur in
+      result.bind inexpr (lam inexpr.
+        match inexpr with (inexpr, tokend, cur) in
+        let info = mergeInfo tokswitch.info tokend.info in
+        let expr = TmDecl {
+          decl = DeclLet {
+            ident = nameNoSym "X",
+            tyAnnot = ityunknown_ info,
+            tyBody = ityunknown_ info,
+            body = body,
+            info = info
+          },
+          inexpr = inexpr,
+          ty = ityunknown_ info, 
+          info = info
+        } in
+
+        let state = breakableAddAtom (configExpr ()) (OpExprAtom expr) state in
+        parseExprRClosed state cur
+      )
+    )
+end
+
 lang NeverParser = AstParserBase + NeverAst + NeverKeyword
   sem parseExprROpen state =
   | { token = KeywordTok { val = "never" } } & cur ->
@@ -1913,6 +2007,7 @@ lang AstParser =
   + RecLetsDeclParser
   + LamParser
   + MatchParser
+  + SwitchParser
   + NeverParser
   + AndParser
   + OrParser
@@ -1989,7 +2084,7 @@ let printAst = lam str.
   end
 in
 
--- let str = "(1,)" in
+-- let str = "switch a case 1 then switch b case 2 then x end end" in
 -- printLn "\nBoot:";
 -- printAstBoot str;
 -- printLn "Native:";
@@ -2147,5 +2242,18 @@ utest compare "utest" with OkFail () in
 utest compare "utest with" with OkFail () in
 utest compare "utest a with 1 using b in x" with OkSame () in
 utest compare "utest a with 1 using in x" with OkFail () in
+
+utest compare "switch a end" with OkSame () in
+utest compare "switch a case 1 then b case 2 then c end" with OkSameExInfo () in
+utest compare "switch a case 1 then switch b case 2 then x end end" with OkSameExInfo () in
+utest compare "switch" with OkFail () in
+utest compare "switch a" with OkFail () in
+utest compare "switch end" with OkFail () in
+utest compare "switch a case" with OkFail () in
+utest compare "switch a case 1" with OkFail () in
+utest compare "switch a case end" with OkFail () in
+utest compare "switch a case 1 end" with OkFail () in
+utest compare "switch a case 1 then" with OkFail () in
+utest compare "switch a case 1 then end" with OkFail () in
 
 ()
