@@ -458,6 +458,8 @@ let rec print_const fmt = function
       fprintf fmt "deleteFile"
   | Ccommand ->
       fprintf fmt "command"
+  | Cexec _ ->
+      fprintf fmt "exec"
   | Cerror ->
       fprintf fmt "error"
   | Cexit ->

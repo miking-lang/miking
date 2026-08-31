@@ -1161,6 +1161,10 @@ let arity = function
       1
   | Ccommand ->
       1
+  | Cexec (Some _) ->
+      1
+  | Cexec None ->
+      2
   | Cerror ->
       1
   | Cexit ->
@@ -2166,6 +2170,18 @@ and delta (apply : info -> tm -> tm -> tm) fi c v =
   | Ccommand, TmSeq (_, lst) ->
       TmConst (fi, CInt (Intrinsics.MSys.command (tm_seq2int_seq fi lst)))
   | Ccommand, _ ->
+      fail_constapp fi
+  | Cexec None, TmSeq (fi, l) ->
+      TmConst (fi, Cexec (Some (tm_seq2int_seq fi l)))
+  | Cexec (Some program), TmSeq (fi, args) ->
+      let conv = function
+        | TmSeq (_, xs) ->
+            tm_seq2int_seq fi xs
+        | _ ->
+            fail_constapp fi
+      in
+      Intrinsics.MSys.exec program (Mseq.map conv args)
+  | Cexec _, _ ->
       fail_constapp fi
   | Cerror, TmSeq (fiseq, lst) ->
       tmseq2ustring fiseq lst |> Ustring.to_utf8 |> raise_error fi

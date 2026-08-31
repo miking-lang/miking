@@ -1,6 +1,16 @@
 include "mlang/ast.mc"
 include "mexpr/eq.mc"
 include "common.mc"
+include "mexpr/ast.mc"
+include "basic-types.mc"
+include "name.mc"
+include "mexpr/pprint.mc"
+include "mexpr/ast-builder.mc"
+include "mexpr/info.mc"
+include "seq.mc"
+include "option.mc"
+include "string.mc"
+include "set.mc"
 
 
 /-
@@ -225,18 +235,24 @@ lang CarriedTypeHelpers = CarriedTypeBase + SemDeclAst + PrettyPrint
           { ident = request.names.smapAccumL
           , tyAnnot = tyunknown_
           , tyBody = tyunknown_  -- TODO(vipa, 2023-03-09): Provide a proper type here
-          , args = Some [{ident = fName, tyAnnot = tyunknown_}, {ident = accName, tyAnnot = tyunknown_}]
-          , includes = [], declKind = BaseKind ()
-          , cases =
-            [ { pat = npcon_ constructor.name (npvar_ valName)
-              , thn = match_
-                (mkNew accName valName)
-                (ptuple_ [npvar_ accName, npvar_ valName])
-                (utuple_ [nvar_ accName, nconapp_ constructor.name (nvar_ valName)])
-                never_
-              }
-            ]
+          , impl = Some
+            { params =
+              [ {ident = fName, tyAnnot = tyunknown_, tyParam = tyunknown_, info = NoInfo ()}
+              , {ident = accName, tyAnnot = tyunknown_, tyParam = tyunknown_, info = NoInfo ()}
+              ]
+            , cases =
+              [ { pat = npcon_ constructor.name (npvar_ valName)
+                , body = match_
+                  (mkNew accName valName)
+                  (ptuple_ [npvar_ accName, npvar_ valName])
+                  (utuple_ [nvar_ accName, nconapp_ constructor.name (nvar_ valName)])
+                  never_
+                , info = NoInfo ()
+                }
+              ]
+            }
           , info = NoInfo ()  -- TODO(vipa, 2023-03-09): Info
+          , kind = SemSum {base = request.names.smapAccumL}
           } in
         Some decl
       else None ()
@@ -253,26 +269,32 @@ lang CarriedTypeHelpers = CarriedTypeBase + SemDeclAst + PrettyPrint
         { ident = request.names.get
         , tyAnnot = tyunknown_
         , tyBody = tyunknown_  -- TODO(vipa, 2023-03-09): provide a proper type here
-        , args = Some []
-        , includes = [], declKind = BaseKind ()
-        , cases =
-          [ { pat = npcon_ constructor.name (npvar_ targetName)
-            , thn = recordproj_ request.field (nvar_ targetName)
-            }
-          ]
+        , impl = Some
+          { params = []
+          , cases =
+            [ { pat = npcon_ constructor.name (npvar_ targetName)
+              , body = recordproj_ request.field (nvar_ targetName)
+              , info = NoInfo ()
+              }
+            ]
+          }
+        , kind = SemSum {base = request.names.get}
         , info = NoInfo () -- TODO(vipa, 2023-03-09): Info
         } in
       let setf = DeclSem
         { ident = request.names.set
         , tyAnnot = tyunknown_
         , tyBody = tyunknown_  -- TODO(vipa, 2023-03-09): provide a proper type here
-        , args = Some [{ident = valName, tyAnnot = tyunknown_}]
-        , includes = [], declKind = BaseKind ()
-        , cases =
-          [ { pat = npcon_ constructor.name (npvar_ targetName)
-            , thn = nconapp_ constructor.name (recordupdate_ (nvar_ targetName) request.field (nvar_ valName))
-            }
-          ]
+        , impl = Some
+          { params = [{ident = valName, tyAnnot = tyunknown_, tyParam = tyunknown_, info = NoInfo ()}]
+          , cases =
+            [ { pat = npcon_ constructor.name (npvar_ targetName)
+              , body = nconapp_ constructor.name (recordupdate_ (nvar_ targetName) request.field (nvar_ valName))
+              , info = NoInfo ()
+              }
+            ]
+          }
+        , kind = SemSum {base = request.names.get}
         , info = NoInfo () -- TODO(vipa, 2023-03-09): Info
         } in
       [getf, setf]
@@ -296,14 +318,16 @@ lang CarriedTypeHelpers = CarriedTypeBase + SemDeclAst + PrettyPrint
       { ident = request.names.smapAccumL
       , tyAnnot = ty
       , tyBody = ty
-      , includes = [], declKind = BaseKind ()
-      , args = Some
-        [ {ident = fName, tyAnnot = tyunknown_}
-        , {ident = accName, tyAnnot = tyunknown_}
-        ]
-      , cases =
-        [ {pat = npvar_ valName, thn = utuple_ [nvar_ accName, nvar_ valName]}
-        ]
+      , kind = SemBase ()
+      , impl = Some
+        { params =
+          [ {ident = fName, tyAnnot = tyunknown_, tyParam = tyunknown_, info = NoInfo ()}
+          , {ident = accName, tyAnnot = tyunknown_, tyParam = tyunknown_, info = NoInfo ()}
+          ]
+        , cases =
+          [ {pat = npvar_ valName, body = utuple_ [nvar_ accName, nvar_ valName], info = NoInfo ()}
+          ]
+        }
       , info = NoInfo ()
       } in
     let smap =
@@ -316,19 +340,20 @@ lang CarriedTypeHelpers = CarriedTypeBase + SemDeclAst + PrettyPrint
       { ident = request.names.smap
       , tyAnnot = ty
       , tyBody = ty
-      , includes = [], declKind = BaseKind ()
-      , args = Some
-        [ {ident = fName, tyAnnot = tyunknown_}
-        ]
-      , cases =
-        [ { pat = npvar_ valName
-          , thn = tupleproj_ 1
-            (smapAccumL_
-              (ulam_ "" (nulam_ valName (utuple_ [uunit_, appf1_ (nvar_ fName) (nvar_ valName)])))
-              uunit_
-              (nvar_ valName))
-          }
-        ]
+      , kind = SemBase ()
+      , impl = Some
+        { params = [{ident = fName, tyAnnot = tyunknown_, tyParam = tyunknown_, info = NoInfo ()}]
+        , cases =
+          [ { pat = npvar_ valName
+            , body = tupleproj_ 1
+              (smapAccumL_
+                (ulam_ "" (nulam_ valName (utuple_ [uunit_, appf1_ (nvar_ fName) (nvar_ valName)])))
+                uunit_
+                (nvar_ valName))
+            , info = NoInfo ()
+            }
+          ]
+        }
       , info = NoInfo ()
       } in
     let sfold =
@@ -342,20 +367,23 @@ lang CarriedTypeHelpers = CarriedTypeBase + SemDeclAst + PrettyPrint
       { ident = request.names.sfold
       , tyAnnot = ty
       , tyBody = ty
-      , includes = [], declKind = BaseKind ()
-      , args = Some
-        [ {ident = fName, tyAnnot = tyunknown_}
-        , {ident = accName, tyAnnot = tyunknown_}
-        ]
-      , cases =
-        [ { pat = npvar_ valName
-          , thn = tupleproj_ 0
-            (smapAccumL_
-              (nulam_ accName (nulam_ valName (utuple_ [appf2_ (nvar_ fName) (nvar_ accName) (nvar_ valName), nvar_ valName])))
-              (nvar_ accName)
-              (nvar_ valName))
-          }
-        ]
+      , impl = Some
+        { params =
+          [ {ident = fName, tyAnnot = tyunknown_, tyParam = tyunknown_, info = NoInfo ()}
+          , {ident = accName, tyAnnot = tyunknown_, tyParam = tyunknown_, info = NoInfo ()}
+          ]
+        , cases =
+          [ { pat = npvar_ valName
+            , body = tupleproj_ 0
+              (smapAccumL_
+                (nulam_ accName (nulam_ valName (utuple_ [appf2_ (nvar_ fName) (nvar_ accName) (nvar_ valName), nvar_ valName])))
+                (nvar_ accName)
+                (nvar_ valName))
+            , info = NoInfo ()
+            }
+          ]
+        }
+      , kind = SemBase ()
       , info = NoInfo ()
       } in
     [smapAccumL, smap, sfold]
@@ -377,10 +405,11 @@ let _mkFieldStubs
       { ident = request.names.get
       , tyAnnot = ty
       , tyBody = ty
-      , args = Some []
-      , args = Some []
-      , cases = []
-      , includes = [], declKind = BaseKind ()
+      , impl = Some
+        { params = []
+        , cases = []
+        }
+      , kind = SemBase ()
       , info = NoInfo ()
       } in
     let getf_ = appf1_ (nvar_ request.names.get) in
@@ -390,10 +419,11 @@ let _mkFieldStubs
       { ident = request.names.set
       , tyAnnot = ty
       , tyBody = ty
-      , args = Some [{ident = valName, tyAnnot = tyunknown_}]
-      , args = Some [{ident = valName, tyAnnot = tyunknown_}]
-      , cases = []
-      , includes = [], declKind = BaseKind ()
+      , impl = Some
+        { params = [{ident = valName, tyAnnot = tyunknown_, tyParam = tyunknown_, info = NoInfo ()}]
+        , cases = []
+        }
+      , kind = SemBase ()
       , info = NoInfo ()
       } in
     let setf_ = appf2_ (nvar_ request.names.set) in
@@ -407,19 +437,24 @@ let _mkFieldStubs
       in DeclSem
       { ident = request.names.mapAccum
       , tyAnnot = ty
-      , includes = [], declKind = BaseKind ()
       , tyBody = ty
-      , args = Some [{ident = fName, tyAnnot = tyunknown_}, {ident = accName, tyAnnot = tyunknown_}]
-      , args = Some [{ident = fName, tyAnnot = tyunknown_}, {ident = accName, tyAnnot = tyunknown_}]
-      , cases =
-        [ { pat = npvar_ targetName
-          , thn = match_
-            (appf2_ (nvar_ fName) (nvar_ accName) (getf_ (nvar_ targetName)))
-            (ptuple_ [npvar_ accName, npvar_ valName])
-            (utuple_ [nvar_ accName, setf_ (nvar_ valName) (nvar_ targetName)])
-            never_
-          }
-        ]
+      , impl = Some
+        { params =
+          [ {ident = fName, tyAnnot = tyunknown_, tyParam = tyunknown_, info = NoInfo ()}
+          , {ident = accName, tyAnnot = tyunknown_, tyParam = tyunknown_, info = NoInfo ()}
+          ]
+        , cases =
+          [ { pat = npvar_ targetName
+            , body = match_
+              (appf2_ (nvar_ fName) (nvar_ accName) (getf_ (nvar_ targetName)))
+              (ptuple_ [npvar_ accName, npvar_ valName])
+              (utuple_ [nvar_ accName, setf_ (nvar_ valName) (nvar_ targetName)])
+              never_
+            , info = NoInfo ()
+            }
+          ]
+        }
+      , kind = SemBase ()
       , info = NoInfo ()
       } in
     let mapf =
@@ -431,27 +466,29 @@ let _mkFieldStubs
       in DeclSem
       { ident = request.names.map
       , tyAnnot = ty
-      , includes = [], declKind = BaseKind ()
       , tyBody = ty
-      , args = Some [{ident = fName, tyAnnot = tyunknown_}]
-      , args = Some [{ident = fName, tyAnnot = tyunknown_}]
-      , cases =
-        [ { pat = npvar_ targetName
-          , thn = setf_ (appf1_ (nvar_ fName) (getf_ (nvar_ targetName))) (nvar_ targetName)
-          }
-        ]
+      , impl = Some
+        { params = [{ident = fName, tyAnnot = tyunknown_, tyParam = tyunknown_, info = NoInfo ()}]
+        , cases =
+          [ { pat = npvar_ targetName
+            , body = setf_ (appf1_ (nvar_ fName) (getf_ (nvar_ targetName))) (nvar_ targetName)
+            , info = NoInfo ()
+            }
+          ]
+        }
+      , kind = SemBase ()
       , info = NoInfo ()
       } in
     [getf, setf, mapAccumf, mapf]
 
 lang CarriedTarget = CarriedTypeBase + Eq + Ast
-  syn CarriedType =
+  syn CarriedType +=
   | TargetType {targetable : Bool, ty : Type}
 
-  sem carriedRepr =
+  sem carriedRepr +=
   | TargetType {ty = ty} -> ty
 
-  sem carriedSMapAccumL f targetTy =
+  sem carriedSMapAccumL f targetTy +=
   | TargetType {targetable = false} -> None ()
   | TargetType {targetable = true, ty = ty} ->
     if eqType ty targetTy
@@ -460,13 +497,13 @@ lang CarriedTarget = CarriedTypeBase + Eq + Ast
 end
 
 lang CarriedSeq = CarriedTypeBase
-  syn CarriedType =
+  syn CarriedType +=
   | SeqType CarriedType
 
-  sem carriedRepr =
+  sem carriedRepr +=
   | SeqType ty -> tyseq_ (carriedRepr ty)
 
-  sem carriedSMapAccumL f targetTy =
+  sem carriedSMapAccumL f targetTy +=
   | SeqType ty ->
     match carriedSMapAccumL f targetTy ty with Some mkNew then Some
       (lam accName. lam valName.
@@ -484,13 +521,13 @@ lang CarriedSeq = CarriedTypeBase
 end
 
 lang CarriedOption = CarriedTypeBase
-  syn CarriedType =
+  syn CarriedType +=
   | OptionType CarriedType
 
-  sem carriedRepr =
+  sem carriedRepr +=
   | OptionType ty -> tyapp_ (tycon_ "Option") (carriedRepr ty)
 
-  sem carriedSMapAccumL f targetTy =
+  sem carriedSMapAccumL f targetTy +=
   | OptionType ty ->
     match carriedSMapAccumL f targetTy ty with Some mkNew then Some
       (lam accName. lam valName.
@@ -508,16 +545,16 @@ lang CarriedOption = CarriedTypeBase
 end
 
 lang CarriedRecord = CarriedTypeBase
-  syn CarriedType =
+  syn CarriedType +=
   | RecordType [(String, CarriedType)]
 
-  sem carriedRepr =
+  sem carriedRepr +=
   | RecordType tys -> tyrecord_
     (map
       (lam x. (x.0, carriedRepr x.1))
       tys)
 
-  sem carriedSMapAccumL f targetTy =
+  sem carriedSMapAccumL f targetTy +=
   | RecordType fields ->
     let mappingFields = mapOption
       (lam x. optionMap (lam y. (x.0, y)) (carriedSMapAccumL f targetTy x.1))
@@ -596,12 +633,18 @@ lang CarriedTypeGenerate = CarriedTypeHelpers + LangDeclAst + TypeDeclAst + SynD
       (setEmpty nameCmp)
       input.constructors in
     let synTypes = setFold
-      (lam acc. lam synType. cons (DeclSyn {ident = synType, includes = [], declKind = BaseKind (), params = [], defs = [], info = NoInfo ()}) acc)
+      (lam acc. lam synType. cons (DeclSyn
+        { ident = synType
+        , params = []
+        , defs = []
+        , info = NoInfo ()
+        , kind = SynBase ()
+        }) acc)
       []
       synTypes in
     type DeclLangRec =
       { ident : Name
-      , includes : [Name]
+      , includes : [(Name, Info)]
       , decls : [Decl]
       , info : Info
       } in
@@ -625,15 +668,20 @@ lang CarriedTypeGenerate = CarriedTypeHelpers + LangDeclAst + TypeDeclAst + SynD
           (lam request. _mkAccess request constructor)
           input.fieldAccessors in
         { ident = constructor.fragment
-        , includes = [input.baseName]
-        , decls =
-          join
-            [ [ DeclType {ident = recordTyName, params = [], tyIdent = carriedRepr carried, info = NoInfo ()}
-              , DeclSyn {ident = synType, includes = [], declKind = BaseKind (), params = [], defs = [{ident = name, tyIdent = ntycon_ recordTyName, tyName = nameNoSym (concat (nameGetStr name) "Type")}], info = NoInfo ()}
-              ]
-            , sfunctions
-            , join accessors
+        , includes = [(input.baseName, NoInfo ())]
+        , decls = join
+          [ [ DeclType {ident = recordTyName, params = [], tyIdent = carriedRepr carried, info = NoInfo ()}
+            , DeclSyn
+              { ident = synType
+              , params = []
+              , defs = [{ident = name, tyIdent = ntycon_ recordTyName, info = NoInfo ()}]
+              , kind = SynSum {base = synType}
+              , info = NoInfo ()
+              }
             ]
+          , sfunctions
+          , join accessors
+          ]
         , info = NoInfo ()
         }
       else never in
@@ -643,7 +691,7 @@ lang CarriedTypeGenerate = CarriedTypeHelpers + LangDeclAst + TypeDeclAst + SynD
         snoc
           constructorLangs
           { ident = name
-          , includes = map (lam x. x.ident) constructorLangs
+          , includes = map (lam x. (x.ident, NoInfo ())) constructorLangs
           , decls = []
           , info = NoInfo ()
           }

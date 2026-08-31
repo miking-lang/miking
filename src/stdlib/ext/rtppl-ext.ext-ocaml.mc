@@ -1,5 +1,8 @@
 include "map.mc"
 include "ocaml/ast.mc"
+include "mexpr/ast-builder.mc"
+include "mexpr/ast.mc"
+include "string.mc"
 
 let tyts_ = tytuple_ [tyint_, tyunknown_]
 let impl = lam arg : {expr : String, ty : use Ast in Type }.

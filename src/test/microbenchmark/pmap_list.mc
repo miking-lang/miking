@@ -2,8 +2,9 @@
 include "benchmarkcommon.mc"
 include "string.mc"
 include "common.mc"
-include "map_n.ml"
+include "map_n.mc"
 include "multicore/pseq.mc"
+include "multicore/thread-pool.mc"
 
 mexpr
 

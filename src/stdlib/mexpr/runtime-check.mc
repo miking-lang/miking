@@ -12,6 +12,14 @@ include "mexpr/cmp.mc"
 include "mexpr/eq.mc"
 include "mexpr/const-arity.mc"
 include "mexpr/pprint.mc"
+include "name.mc"
+include "mexpr/ast.mc"
+include "set.mc"
+include "string.mc"
+include "map.mc"
+include "seq.mc"
+include "basic-types.mc"
+include "mexpr/info.mc"
 
 -- NOTE(larshum, 2021-11-29): The error messages and the error conditions are
 -- defined here so that they can be reused in the unit tests.

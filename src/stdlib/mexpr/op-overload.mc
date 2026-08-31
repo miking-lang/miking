@@ -7,20 +7,25 @@ include "mexpr/desugar.mc"
 include "mexpr/eq.mc"
 include "mexpr/pprint.mc"
 include "mexpr/type-check.mc"
+include "mexpr/info.mc"
+include "mexpr/ast-builder.mc"
+include "error.mc"
+include "seq.mc"
+include "mexpr/type.mc"
 
 lang OverloadedOpAst = Ast
   syn Op =
-  syn Expr =
+  syn Expr +=
   | TmOverloadedOp {info: Info, op: Op, ty: Type}
 
-  sem infoTm =
+  sem infoTm +=
   | TmOverloadedOp x -> x.info
-  sem withInfo info =
+  sem withInfo info +=
   | TmOverloadedOp x -> TmOverloadedOp {x with info = info}
 
-  sem tyTm =
+  sem tyTm +=
   | TmOverloadedOp x -> x.ty
-  sem withType ty =
+  sem withType ty +=
   | TmOverloadedOp x -> TmOverloadedOp {x with ty = ty}
 
   sem mkOp : Info -> Op -> Expr
@@ -38,7 +43,7 @@ lang OverloadedOpAst = Ast
 end
 
 lang OverloadedOpTypeCheck = TypeCheck + OverloadedOpAst
-  sem typeCheckExpr env =
+  sem typeCheckExpr env +=
   | TmOverloadedOp x ->
     let types = opMkTypes x.info env x.op in
     let ty = tyarrows_ (snoc types.params types.return) in
@@ -46,7 +51,7 @@ lang OverloadedOpTypeCheck = TypeCheck + OverloadedOpAst
 end
 
 lang OverloadedOpDesugar = Desugar + OverloadedOpAst + FunTypeAst
-  sem desugarExpr =
+  sem desugarExpr +=
   | TmOverloadedOp x ->
     match unwrapType x.ty with TyArrow t then
       recursive let flattenArrow = lam acc. lam t.
@@ -59,7 +64,7 @@ lang OverloadedOpDesugar = Desugar + OverloadedOpAst + FunTypeAst
 end
 
 lang OverloadedOpDesugarLoader = DesugarLoader + OverloadedOpAst + FunTypeAst
-  sem desugarExpr loader =
+  sem desugarExpr loader +=
   | TmOverloadedOp x ->
     match unwrapType x.ty with TyArrow t then
       recursive let flattenArrow = lam acc. lam t.
@@ -79,10 +84,10 @@ lang OverloadedOpPrettyPrint = OverloadedOpAst + PrettyPrint
   sem getOpStringCode: Int -> PprintEnv -> Op -> (PprintEnv, String)
   sem opIsAtomic: Op -> Bool
 
-  sem pprintCode indent env =
+  sem pprintCode indent env +=
   | TmOverloadedOp x -> getOpStringCode indent env x.op
 
-  sem isAtomic =
+  sem isAtomic +=
   | TmOverloadedOp x -> opIsAtomic x.op
 end
 
@@ -95,11 +100,11 @@ end
 lang _testOverloadedOp = OverloadedOpAst + OverloadedOpPrettyPrint + ArithIntAst
                        + ArithFloatAst + IntTypeAst + FloatTypeAst
                        + CmpIntTypeAst + CmpFloatTypeAst
-  syn Op =
+  syn Op +=
   | OAdd
   | ONeg
 
-  sem opMkTypes info env =
+  sem opMkTypes info env +=
   | OAdd _ ->
     let ty = newmonovar env.currentLvl info in
     {params = [ty, ty], return = ty}
@@ -107,18 +112,18 @@ lang _testOverloadedOp = OverloadedOpAst + OverloadedOpPrettyPrint + ArithIntAst
     let ty = newmonovar env.currentLvl info in
     {params = [ty], return = ty}
 
-  sem resolveOp info =
+  sem resolveOp info +=
   | x & {op = OAdd _, params = [TyInt _] ++ _}   -> mkConst info (CAddi ())
   | x & {op = OAdd _, params = [TyFloat _] ++ _} -> mkConst info (CAddf ())
 
   | x & {op = ONeg _, params = [TyInt _] ++ _}   -> mkConst info (CNegi ())
   | x & {op = ONeg _, params = [TyFloat _] ++ _} -> mkConst info (CNegf ())
 
-  sem getOpStringCode indent env =
+  sem getOpStringCode indent env +=
   | OAdd _ -> (env, "+")
   | ONeg _ -> (env, "-")
 
-  sem opIsAtomic =
+  sem opIsAtomic +=
   | (OAdd _) | (ONeg _) -> true
 end
 

@@ -8,6 +8,14 @@ include "mexpr/ast.mc"
 include "mexpr/eq.mc"
 include "mexpr/pprint.mc"
 include "mexpr/symbolize.mc"
+include "map.mc"
+include "name.mc"
+include "basic-types.mc"
+include "seq.mc"
+include "string.mc"
+include "option.mc"
+include "bool.mc"
+include "mexpr/ast-builder.mc"
 
 lang Resymbolize = Ast
   sem resymbolizeBindings : Expr -> Expr
@@ -16,12 +24,12 @@ lang Resymbolize = Ast
 
   sem resymbolizeExpr : Map Name Name -> Expr -> Expr
   sem resymbolizeDecl : Map Name Name -> Decl -> (Map Name Name, Decl)
-  sem resymbolizePat  : Map Name Name -> Pat -> (Map Name Name, Pat)
+  sem resymbolizePat  : Map Name Name -> Map Name Name -> Pat -> (Map Name Name, Pat)
   sem resymbolizeType : Map Name Name -> Type -> Type
 end
 
 lang ResymbolizeOpaque = Resymbolize + OpaqueAst
-  sem resymbolizeExpr nameMap =
+  sem resymbolizeExpr nameMap +=
   | TmOpaque x -> TmOpaque
     { x with body = resymbolizeExpr nameMap x.body
     , ty = resymbolizeType nameMap x.ty
@@ -30,7 +38,7 @@ end
 
 lang ResymbolizeVar = Resymbolize + VarAst
   sem resymbolizeExpr : Map Name Name -> Expr -> Expr
-  sem resymbolizeExpr nameMap =
+  sem resymbolizeExpr nameMap +=
   | TmVar t ->
     let newId =
       match mapLookup t.ident nameMap with Some newId then newId
@@ -41,7 +49,7 @@ end
 
 lang ResymbolizeLam = Resymbolize + LamAst
   sem resymbolizeExpr : Map Name Name -> Expr -> Expr
-  sem resymbolizeExpr nameMap =
+  sem resymbolizeExpr nameMap +=
   | TmLam t ->
     let newId = nameSetNewSym t.ident in
     let nameMap = mapInsert t.ident newId nameMap in
@@ -54,7 +62,7 @@ end
 
 lang ResymbolizeConApp = Resymbolize + DataAst
   sem resymbolizeExpr : Map Name Name -> Expr -> Expr
-  sem resymbolizeExpr nameMap =
+  sem resymbolizeExpr nameMap +=
   | TmConApp t ->
     let newId =
       match mapLookup t.ident nameMap with Some newId then newId
@@ -67,10 +75,11 @@ end
 
 lang ResymbolizeMatch = Resymbolize + MatchAst
   sem resymbolizeExpr : Map Name Name -> Expr -> Expr
-  sem resymbolizeExpr nameMap =
+  sem resymbolizeExpr nameMap +=
   | TmMatch t ->
     let target = resymbolizeExpr nameMap t.target in
-    match resymbolizePat nameMap t.pat with (thnNameMap, pat) in
+    match resymbolizePat nameMap (mapEmpty nameCmp) t.pat with (thnNameMap, pat) in
+    let thnNameMap = mapUnion nameMap thnNameMap in
     TmMatch {t with target = target, pat = pat,
                     thn = resymbolizeExpr thnNameMap t.thn,
                     els = resymbolizeExpr nameMap t.els,
@@ -79,7 +88,7 @@ end
 
 lang ResymbolizeDecl = Resymbolize + DeclAst
   sem resymbolizeExpr : Map Name Name -> Expr -> Expr
-  sem resymbolizeExpr nameMap =
+  sem resymbolizeExpr nameMap +=
   | TmDecl t ->
     match resymbolizeDecl nameMap t.decl with (nameMap, decl) in
     let inexpr = resymbolizeExpr nameMap t.inexpr in
@@ -88,7 +97,7 @@ end
 
 lang ResymbolizeLetDecl = Resymbolize + LetDeclAst
   sem resymbolizeDecl : Map Name Name -> Decl -> (Map Name Name, Decl)
-  sem resymbolizeDecl nameMap =
+  sem resymbolizeDecl nameMap +=
   | DeclLet t ->
     let body = resymbolizeExpr nameMap t.body in
     let newId = nameSetNewSym t.ident in
@@ -105,7 +114,7 @@ end
 
 lang ResymbolizeRecLetsDecl = Resymbolize + RecLetsDeclAst
   sem resymbolizeDecl : Map Name Name -> Decl -> (Map Name Name, Decl)
-  sem resymbolizeDecl nameMap =
+  sem resymbolizeDecl nameMap +=
   | DeclRecLets t ->
     let addNewIdBinding = lam nameMap. lam bind.
       let newId = nameSetNewSym bind.ident in
@@ -123,7 +132,7 @@ end
 
 lang ResymbolizeTypeDecl = Resymbolize + TypeDeclAst
   sem resymbolizeDecl : Map Name Name -> Decl -> (Map Name Name, Decl)
-  sem resymbolizeDecl nameMap =
+  sem resymbolizeDecl nameMap +=
   | DeclType t ->
     let newId = nameSetNewSym t.ident in
     let nameMap = mapInsert t.ident newId nameMap in
@@ -137,7 +146,7 @@ end
 
 lang ResymbolizeConDefDecl = Resymbolize + DataDeclAst
   sem resymbolizeDecl : Map Name Name -> Decl -> (Map Name Name, Decl)
-  sem resymbolizeDecl nameMap =
+  sem resymbolizeDecl nameMap +=
   | DeclConDef t ->
     let newId = nameSetNewSym t.ident in
     let nameMap = mapInsert t.ident newId nameMap in
@@ -145,33 +154,42 @@ lang ResymbolizeConDefDecl = Resymbolize + DataDeclAst
 end
 
 lang ResymbolizeNamedPat = Resymbolize + NamedPat
-  sem resymbolizePat : Map Name Name -> Pat -> (Map Name Name, Pat)
-  sem resymbolizePat nameMap =
+  sem resymbolizePat : Map Name Name -> Map Name Name -> Pat -> (Map Name Name, Pat)
+  sem resymbolizePat nameMap patNames +=
   | PatNamed (t & {ident = PName id}) ->
-    let newId = nameSetNewSym id in
-    (mapInsert id newId nameMap, PatNamed {t with ident = PName newId})
+    match mapLookup id patNames with Some id then
+      (patNames, PatNamed {t with ident = PName id})
+    else
+      let newId = nameSetNewSym id in
+      (mapInsert id newId patNames, PatNamed {t with ident = PName newId})
 end
 
 lang ResymbolizeSeqEdgePat = Resymbolize + SeqEdgePat
-  sem resymbolizePat : Map Name Name -> Pat -> (Map Name Name, Pat)
-  sem resymbolizePat nameMap =
+  sem resymbolizePat : Map Name Name -> Map Name Name -> Pat -> (Map Name Name, Pat)
+  sem resymbolizePat nameMap patNames +=
   | PatSeqEdge (t & {middle = PName id}) ->
-    let newId = nameSetNewSym id in
-    (mapInsert id newId nameMap, PatSeqEdge {t with middle = PName newId})
+    match
+      match mapLookup id patNames with Some id
+      then (patNames, id)
+      else let newId = nameSetNewSym id in (mapInsert id newId patNames, newId)
+    with (patNames, id) in
+    match mapAccumL (resymbolizePat nameMap) patNames t.prefix with (patNames, prefix) in
+    match mapAccumL (resymbolizePat nameMap) patNames t.postfix with (patNames, postfix) in
+    (patNames, PatSeqEdge {t with prefix = prefix, middle = PName id, postfix = postfix})
 end
 
 lang ResymbolizePatCon = Resymbolize + DataPat
-  sem resymbolizePat : Map Name Name -> Pat -> (Map Name Name, Pat)
-  sem resymbolizePat nameMap =
+  sem resymbolizePat : Map Name Name -> Map Name Name -> Pat -> (Map Name Name, Pat)
+  sem resymbolizePat nameMap patNames +=
   | PatCon t ->
-    match mapLookup t.ident nameMap with Some newId then
-      (nameMap, PatCon {t with ident = newId})
-    else (nameMap, PatCon t)
+    let id = mapLookupOr t.ident t.ident nameMap in
+    match resymbolizePat nameMap patNames t.subpat with (patNames, subpat) in
+    (patNames, PatCon {t with ident = id, subpat = subpat})
 end
 
 lang ResymbolizeConType = Resymbolize + ConTypeAst
   sem resymbolizeType : Map Name Name -> Type -> Type
-  sem resymbolizeType nameMap =
+  sem resymbolizeType nameMap +=
   | TyCon t ->
     match mapLookup t.ident nameMap with Some newId then
       TyCon {t with ident = newId}
@@ -180,7 +198,7 @@ end
 
 lang ResymbolizeVarType = Resymbolize + VarTypeAst
   sem resymbolizeType : Map Name Name -> Type -> Type
-  sem resymbolizeType nameMap =
+  sem resymbolizeType nameMap +=
   | TyVar t ->
     match mapLookup t.ident nameMap with Some newId then
       TyVar {t with ident = newId}
@@ -189,7 +207,7 @@ end
 
 lang ResymbolizeAllType = Resymbolize + AllTypeAst
   sem resymbolizeType : Map Name Name -> Type -> Type
-  sem resymbolizeType nameMap =
+  sem resymbolizeType nameMap +=
   | TyAll t ->
     let newId = nameSetNewSym t.ident in
     let nameMap = mapInsert t.ident newId nameMap in
@@ -212,7 +230,7 @@ lang MExprResymbolize =
   ResymbolizeConType + ResymbolizeVarType + ResymbolizeAllType
 
   sem resymbolizeExpr : Map Name Name -> Expr -> Expr
-  sem resymbolizeExpr nameMap =
+  sem resymbolizeExpr nameMap +=
   | t ->
     let t = smap_Expr_Expr (resymbolizeExpr nameMap) t in
     let t = smap_Expr_Type (resymbolizeType nameMap) t in
@@ -220,15 +238,15 @@ lang MExprResymbolize =
     withType (resymbolizeType nameMap (tyTm t)) t
 
   sem resymbolizeDecl : Map Name Name -> Decl -> (Map Name Name, Decl)
-  sem resymbolizeDecl nameMap =
+  sem resymbolizeDecl nameMap +=
   | d -> (nameMap, smap_Decl_Expr (resymbolizeExpr nameMap) d)
 
-  sem resymbolizePat : Map Name Name -> Pat -> (Map Name Name, Pat)
-  sem resymbolizePat nameMap =
-  | p -> smapAccumL_Pat_Pat resymbolizePat nameMap p
+  sem resymbolizePat : Map Name Name -> Map Name Name -> Pat -> (Map Name Name, Pat)
+  sem resymbolizePat nameMap patNames +=
+  | p -> smapAccumL_Pat_Pat (resymbolizePat nameMap) patNames p
 
   sem resymbolizeType : Map Name Name -> Type -> Type
-  sem resymbolizeType nameMap =
+  sem resymbolizeType nameMap +=
   | ty -> smap_Type_Type (resymbolizeType nameMap) ty
 end
 

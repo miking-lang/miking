@@ -42,8 +42,17 @@ include "mexpr/ast.mc"
 include "mexpr/pprint.mc"
 include "lazy.mc"
 include "thunk.mc"
+include "map.mc"
+include "basic-types.mc"
+include "seq.mc"
+include "error.mc"
+include "mexpr/ast-builder.mc"
+include "mexpr/type.mc"
+include "mlang/lazy-ast.mc"
+include "string.mc"
+include "set.mc"
 
-lang AttributeGrammar = Ast + DeclAst + PrettyPrint
+lang AttributeGrammar = Ast + DeclAst + PrettyPrint + MetaVarTypeAst + LazyAst
   -- Each `Attr` is expected to contain exactly a `Thunk` of whatever
   -- the carried value is
   syn Attr loc =
@@ -235,7 +244,14 @@ lang AttributeGrammar = Ast + DeclAst + PrettyPrint
     let acc = match tm with TmDecl x
       then f (getAttrDecl attr) acc x.decl
       else acc in
-    let acc = sfold_Expr_Expr (f (getAttrExpr attr)) acc tm in
+    -- NOTE: `TmLazy` (see `mlang/lazy-ast.mc`) has no usable
+    -- `smapAccumL_Expr_Expr`, by design: descending into it would
+    -- force (and thus materialize) its thunk. Treat it as having no
+    -- Expr children instead of crashing; `addHere` below still runs
+    -- against the `TmLazy` node itself, so attributes that only need
+    -- e.g. its `info` field are unaffected.
+    let acc = match tm with TmLazy _ then acc
+      else sfold_Expr_Expr (f (getAttrExpr attr)) acc tm in
     let acc = sfold_Expr_Type (f (getAttrType attr)) acc tm in
     let acc = sfold_Expr_Pat (f (getAttrPat attr)) acc tm in
     match acc with (st, gets) in
@@ -306,7 +322,10 @@ lang AttributeGrammar = Ast + DeclAst + PrettyPrint
     let acc = match tm with TmDecl x
       then f (getAttrDecl attr) acc x.decl
       else acc in
-    let acc = sfold_Expr_Expr (f (getAttrExpr attr)) acc tm in
+    -- NOTE: see the matching comment in `simpleSynthesizedExpr` above
+    -- for why `TmLazy` is skipped here rather than folded over.
+    let acc = match tm with TmLazy _ then acc
+      else sfold_Expr_Expr (f (getAttrExpr attr)) acc tm in
     let acc = sfold_Expr_Type (f (getAttrType attr)) acc tm in
     let acc = sfold_Expr_Pat (f (getAttrPat attr)) acc tm in
     match acc with (st, writes) in
@@ -370,15 +389,28 @@ lang AttributeGrammar = Ast + DeclAst + PrettyPrint
 
   -- === Internals ===
 
-  syn Expr = | TmWithEnv {env : Ref (InvEnv Loc), label : Lazy String}
-  syn Decl = | DeclWithEnv {env : Ref (InvEnv Loc), label : Lazy String}
-  syn Type = | TyWithEnv {env : Ref (InvEnv Loc), label : Lazy String}
-  syn Pat = | PatWithEnv {env : Ref (InvEnv Loc), label : Lazy String}
+  syn Expr += | TmWithEnv {env : Ref (InvEnv Loc), label : Lazy String}
+  syn Decl += | DeclWithEnv {env : Ref (InvEnv Loc), label : Lazy String}
+  syn Type += | TyWithEnv {env : Ref (InvEnv Loc), label : Lazy String}
+  syn Pat += | PatWithEnv {env : Ref (InvEnv Loc), label : Lazy String}
 
-  sem pprintCode indent env = | TmWithEnv x -> (env, join ["<omitted tm, ", lazyForce x.label, ">"])
-  sem getTypeStringCode indent env = | TyWithEnv x -> (env, join ["<omitted ty, ", lazyForce x.label, ">"])
-  sem getPatStringCode indent env = | PatWithEnv x -> (env, join ["<omitted pat, ", lazyForce x.label, ">"])
-  sem pprintDeclCode indent env = | DeclWithEnv x -> (env, join ["<omitted decl, ", lazyForce x.label, ">"])
+  sem pprintCode indent env += | TmWithEnv x -> (env, join ["<omitted tm, ", lazyForce x.label, ">"])
+  sem getTypeStringCode indent env += | TyWithEnv x -> (env, join ["<omitted ty, ", lazyForce x.label, ">"])
+  sem getPatStringCode indent env += | PatWithEnv x -> (env, join ["<omitted pat, ", lazyForce x.label, ">"])
+  sem pprintDeclCode indent env += | DeclWithEnv x -> (env, join ["<omitted decl, ", lazyForce x.label, ">"])
+
+  -- NOTE: `pprintCode` has no default case, and `TmLazy` (see
+  -- `mlang/lazy-ast.mc`) deliberately has no real one either, since
+  -- printing its expanded contents would require forcing (and thus
+  -- materializing) the thunk. This prints a placeholder from the
+  -- metadata already sitting on the node instead.
+  sem pprintCode indent env +=
+  | TmLazy t ->
+    (env, join
+      [ "<lazy: ", int2string (setSize t.freeVars), " free var(s)"
+      , (if t.sideEffect then ", side-effecting" else "")
+      , ">"
+      ])
 
   -- sem infoTm = | TmWithEnv _ -> NoInfo ()
   -- sem infoTy = | TyWithEnv _ -> NoInfo ()
@@ -419,6 +451,14 @@ lang AttributeGrammar = Ast + DeclAst + PrettyPrint
       match tm with TmOpaque x then
         match prepareExpr toCall x.body with (toCall, body) in
         (toCall, TmOpaque {x with body = body})
+      -- NOTE: `TmLazy` (see `mlang/lazy-ast.mc`) must not be forced
+      -- here: leave it untouched and schedule no recursive call for
+      -- its thunk. `processAttrExpr` still runs against the raw
+      -- `TmLazy` node below, so per-node checks (e.g. its `info`
+      -- field) still apply; `simpleSynthesizedExpr` /
+      -- `simpleInheritedExpr` know to skip folding over its
+      -- (unreachable) children.
+      else match tm with TmLazy _ then (toCall, tm)
       else smapAccumL_Expr_Expr prepareExpr toCall tm
     with (toCall, tm) in
 
@@ -492,7 +532,45 @@ lang AttributeGrammar = Ast + DeclAst + PrettyPrint
     for_ toCall (lam f. f ())
 
   sem processType : InvEnv Loc -> Type -> ()
-  sem processType env = | ty ->
+  sem processType env =
+  | TyMetaVar x ->
+    switch deref x.contents
+    case Link ty then processType env ty
+    case Unbound u then
+      -- NOTE(vipa, 2026-08-19): Disconnect the TyMetaVar from others,
+      -- which means that `smapAccumL_Type_Type` won't mutate what's
+      -- visible elsewhere.
+      let ty = TyMetaVar {x with contents = ref (Unbound u)} in
+      let loc = LocType ty in
+      -- NOTE(vipa, 2026-02-25): Prepare, insert environments in place
+      -- of expressions, prepare closures for the recursive calls
+      let toCall = [] in
+
+      let prepareType = lam toCall. lam x.
+        let localEnv = ref (mapEmpty subi) in
+        ( snoc toCall (lam. processType (deref localEnv) x)
+        , TyWithEnv {label = lazy (lam. type2str x), env = localEnv}
+        ) in
+      match smapAccumL_Type_Type prepareType toCall ty with (toCall, ty) in
+
+      -- NOTE(vipa, 2026-02-25): Do processing of attributes here
+      let st = {willWrite = []} in
+      let fsPerAttr = mapMap (lam attr. processAttrType env st loc (ty, attr)) env in
+
+      -- NOTE(vipa, 2026-02-25): Record connections between thunks and
+      -- their update functions
+      let f = lam pair.
+        match pair with (st, f) in
+        let f = lam.
+          for_ st.willWrite (lam ww. ww.blackhole ());
+          f () in
+        for_ st.willWrite (lam ww. ww.lazy f) in
+      mapMap f fsPerAttr;
+
+      -- NOTE(vipa, 2026-02-25): Do recursive calls
+      for_ toCall (lam f. f ())
+    end
+  | ty ->
     let loc = LocType ty in
     -- NOTE(vipa, 2026-02-25): Prepare, insert environments in place
     -- of expressions, prepare closures for the recursive calls
@@ -562,13 +640,13 @@ lang CountAttr = AttributeGrammar + MExprAst
     , pat : Int
     }
 
-  syn Attr loc =
+  syn Attr loc +=
   | CountAttr (Thunk (CountAttr loc))
 
-  sem newAttr label =
+  sem newAttr label +=
   | CountAttr _ -> CountAttr (mkThunk label)
 
-  sem attrKindToString =
+  sem attrKindToString +=
   | CountAttr _ -> "CountAttr"
 
   sem openCountAttr : all loc. Attr loc -> Thunk (CountAttr loc)
@@ -583,7 +661,7 @@ lang CountAttr = AttributeGrammar + MExprAst
     , pat = addi a.pat b.pat
     }
 
-  sem processAttrDecl env st loc =
+  sem processAttrDecl env st loc +=
   | pair & (_, CountAttr _) ->
     simpleSynthesizedDecl st
       pair
@@ -592,7 +670,7 @@ lang CountAttr = AttributeGrammar + MExprAst
       mergeCount
       (lam x. {x with decl = addi x.decl 1})
 
-  sem processAttrExpr env st loc =
+  sem processAttrExpr env st loc +=
   | pair & (_, CountAttr _) ->
     simpleSynthesizedExpr st
       pair
@@ -601,7 +679,7 @@ lang CountAttr = AttributeGrammar + MExprAst
       mergeCount
       (lam x. {x with tm = addi x.tm 1})
 
-  sem processAttrType env st loc =
+  sem processAttrType env st loc +=
   | pair & (_, CountAttr _) ->
     simpleSynthesizedType st
       pair
@@ -610,7 +688,7 @@ lang CountAttr = AttributeGrammar + MExprAst
       mergeCount
       (lam x. {x with ty = addi x.ty 1})
 
-  sem processAttrPat env st loc =
+  sem processAttrPat env st loc +=
   | pair & (_, CountAttr _) ->
     simpleSynthesizedPat st
       pair

@@ -6,6 +6,9 @@
 include "option.mc"
 include "char.mc"
 include "string.mc"
+include "seq.mc"
+include "basic-types.mc"
+include "bool.mc"
 
 type AssocMap k v = [(k, v)]
 type AssocTraits k = {eq : k -> k -> Bool}

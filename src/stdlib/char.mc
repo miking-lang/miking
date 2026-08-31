@@ -1,3 +1,5 @@
+include "basic-types.mc"
+include "bool.mc"
 include "seq.mc"
 
 

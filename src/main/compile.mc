@@ -1,36 +1,61 @@
 -- Miking is licensed under the MIT license.
 -- Copyright (C) David Broman. See file LICENSE.txt
 
+include "annotate.mc"
+include "bool.mc"
+include "common.mc"
 include "mi-lite.mc"
 include "options.mc"
 include "parse.mc"
 include "javascript/compile.mc"
 include "javascript/mcore.mc"
+include "javascript/util.mc"
+include "lazy.mc"
+include "mexpr/ast-builder.mc"
+include "mexpr/boot-parser.mc"
+include "mexpr/builtin.mc"
+include "mexpr/cmp.mc"
+include "mexpr/generate-eq.mc"
+include "mexpr/json-debug.mc"
+include "mexpr/keyword-maker.mc"
+include "mexpr/keywords.mc"
 include "mexpr/phase-stats.mc"
+include "mexpr/pprint.mc"
 include "mexpr/profiling.mc"
 include "mexpr/remove-ascription.mc"
 include "mexpr/runtime-check.mc"
 include "mexpr/shallow-patterns.mc"
+include "map.mc"
+include "name.mc"
+include "seq.mc"
+include "set.mc"
+include "stdlib.mc"
+include "string.mc"
 include "mexpr/symbolize.mc"
+include "mexpr/type.mc"
+include "mexpr/type-annot.mc"
 include "mexpr/type-check.mc"
 include "mexpr/utest-generate.mc"
 include "mexpr/constant-fold.mc"
+include "options-type.mc"
+include "mlang/loader.mc"
 include "ocaml/ast.mc"
 include "ocaml/external-includes.mc"
 include "ocaml/mcore.mc"
 include "ocaml/wrap-in-try-with.mc"
+include "thunk.mc"
 include "tuning/context-expansion.mc"
 include "tuning/tune-file.mc"
 include "jvm/compile.mc"
-include "mlang/main.mc"
 include "peval/compile.mc"
 include "mexpr/generate-pprint.mc"
+include "mexpr/generate-utest.mc"
+include "mexpr/deadcode.mc"
+include "mexpr/info.mc"
 
 include "mexpr/invariants/in-scope.mc"
 include "mexpr/invariants/definitions.mc"
 include "mexpr/invariants/info.mc"
-
-include "extrec/main.mc"
 
 lang MCoreCompile =
   BootParser +
@@ -47,6 +72,8 @@ lang MCoreCompile =
   OldDPrintViaPprint + MExprGeneratePprint + GeneratePprintMissingCase +
   PprintTyAnnot + HtmlAnnotator +
   MExprToJson +
+  ComposedMLangLoader + DPrintViaPprintLoader + StripUtestLoader + UtestLoader +
+  MExprGenerateEq + GenerateEqMetaVarError + MExprDeadcodeElimination +
 
   UnboundErrorAttr + DefinedAttr + WithoutInfoAttr
   sem mkInvariantAttrs : () -> [Attr Loc]
@@ -159,6 +186,106 @@ let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
     endPhaseStatsExpr log "backend" ast;
     res
 
+let compileViaLoader = lam options : Options. lam sourcePath.
+  use MCoreCompile in
+  let sourcePath = stdlibMkExplicitPreferLocal sourcePath in
+  let log = mkPhaseLogState options.debugDumpPhases options.debugPhases mkInvariantAttrs in
+
+  let loader = mkLoader typcheckEnvDefault [] in
+  endPhaseStatsProg log "mkLoader" {decls = getDecls loader, expr = unit_};
+
+  let loader =
+    if options.runTests then
+      let filename = stdlibResolveFileOr (lam x. error x) "." sourcePath in
+      let keepUtestIf = lam x.
+        if x.static
+        then match x.info with Info x
+          then eqString x.filename filename
+          else true
+        else true in
+      let loader = enableUtestGeneration keepUtestIf loader in
+      registerCustomEqFunction (mapFindExn "Symbol" builtinTypeNames) (uconst_ (CEqsym ())) loader
+    else addHook loader (StripUtestHook ()) in
+  endPhaseStatsProg log
+    (if options.runTests then "enable utests" else "disable utests")
+    {decls = getDecls loader, expr = unit_};
+
+  let loader =
+    let loader = enableDPrintViaPprint loader in
+    match includeFileExn "." "stdlib::string.mc" loader with (stringEnv, loader) in
+    let symName = nameSym "s" in
+    let symPprint =
+      nulam_ symName (concat_ (str_ "sym (")
+        (concat_
+          (app_ (nvar_ (_getVarExn "int2string" stringEnv)) (app_ (uconst_ (CSym2hash ())) (nvar_ symName)))
+          (str_ ")"))) in
+    registerCustomPprintFunction (mapFindExn "Symbol" builtinTypeNames) symPprint loader in
+  endPhaseStatsProg log "enable dprint-via-pprint" {decls = getDecls loader, expr = unit_};
+
+  -- TODO(vipa, 2026-08-14): Original parsing also can prune external utests and do something about mexprExtendedKeywords
+  -- TODO(vipa, 2026-08-14): insertTunedOrDefaults?
+  -- TODO(vipa, 2026-08-14): Print AST if options.debugParse?
+
+  -- TODO(vipa, 2026-08-14): if options.debugProfile, insert instrumentation for profiling
+
+  let loader = (includeFileTypeExn (FMCore {includeMExpr = true}) "." sourcePath loader).1 in
+  endPhaseStatsProg log "includeFileExn" {decls = getDecls loader, expr = unit_};
+
+  let ast = buildFullAst loader in
+  endPhaseStatsExpr log "buildFullAst" ast;
+
+  let ast = removeMetaVarExpr ast in
+  endPhaseStatsExpr log "removeMetaVarExpr" ast;
+
+  (if options.debugTypeCheck then
+    printLn (use TyAnnotFull in annotateMExpr ast);
+    endPhaseStatsExpr log "debug-type-check" ast
+   else ());
+
+  -- TODO(vipa, 2026-08-14): compileSpecialize
+  -- TODO(vipa, 2026-08-14): if options.runtimeChecks, injectRuntimeChecks
+  -- TODO(vipa, 2026-08-14): if options.enableConstantFold and not options.disableOptimizations, constantFold
+  -- TODO(vipa, 2026-08-14): if options.debugConstantFold, print ast
+
+  let ast = lowerAll ast in
+  endPhaseStatsExpr log "pattern-lowering" ast;
+  (if options.debugShallow then
+    printLn (expr2str ast) else ());
+
+  let ast = deadcodeElimination ast in
+  endPhaseStatsExpr log "deadcodeElimination" ast;
+
+  let ast = forceLazyExpr ast in
+  endPhaseStatsExpr log "forceLazyExpr" ast;
+
+  -- NOTE(vipa, 2026-08-26): `TmOpaque` must be special-cased by every
+  -- pass that transforms the AST (see `OpaqueAst` in
+  -- `mexpr/ast.mc`), which not every pass reachable from here does
+  -- yet. Its body is already in a backend-compilable form, so we
+  -- strip the `TmOpaque` wrapper right before handing the AST to the
+  -- backend, once no more such passes remain.
+  let ast = removeOpaqueExpr ast in
+  endPhaseStatsExpr log "removeOpaqueExpr" ast;
+
+  let res =
+    if options.toJVM then compileMCoreToJVM ast else
+    if options.toJavaScript then compileMCoreToJS
+      { compileJSOptionsEmpty with
+        targetPlatform = parseJSTarget options.jsTarget
+      , output = options.output
+      , generalOptimizations = not options.disableJsGeneralOptimizations
+      , tailCallOptimizations = not options.disableJsTCO
+      } ast sourcePath
+    else
+      compileMCore ast
+      { debugGenerate = lam ocamlProg. if options.debugGenerate then printLn ocamlProg else ()
+      , exitBefore = lam. if options.exitBefore then exit 0 else ()
+      , postprocessOcamlTops = lam tops. if options.runtimeChecks then wrapInTryWith tops else tops
+      , compileOcaml = ocamlCompile options sourcePath
+      } in
+  endPhaseStatsExpr log "backend" ast;
+  res
+
 -- Main function for compiling a program
 -- files: a list of files
 -- options: the options structure to the main program
@@ -168,12 +295,7 @@ let compile = lam files. lam options : Options. lam args.
 
   if options.mlangPipeline then
     printLn " * WARNING: You are using an experimental, unstable pipeline.";
-    use MLangPipeline in
-    iter (compileMLangToOcaml options compileWithUtests) files
-  else if options.experimentalRecords then
-    printLn " * WARNING: You are using an experimental, unstable pipeline.";
-    use BigPipeline in
-    iter (compileExtendedMLangToOcaml options compileWithUtests) files
+    iter (lam x. compileViaLoader options x; ()) files
   else
     let compileFile = lam file.
       let log = mkPhaseLogState options.debugDumpPhases options.debugPhases mkInvariantAttrs in

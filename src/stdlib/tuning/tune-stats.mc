@@ -9,9 +9,25 @@ include "string.mc"
 include "dependency-analysis.mc"
 include "search-space.mc"
 include "tune-options.mc"
+include "mexpr/pprint.mc"
+include "name.mc"
+include "map.mc"
+include "tuning/prefix-tree.mc"
+include "tuning/name-info.mc"
+include "set.mc"
+include "option.mc"
+include "graph.mc"
+include "basic-types.mc"
+include "seq.mc"
+include "tuning/graph-coloring.mc"
+include "tuning/nested.mc"
+include "mexpr/symbolize.mc"
+include "mexpr/boot-parser.mc"
+include "mexpr/keywords.mc"
+include "tuning/ast.mc"
 
 lang MeasPointCSV = CSV
-  syn CSVRow =
+  syn CSVRow +=
   | MeasPoint {id: Int,
                ident: String,
                context: [String],
@@ -19,11 +35,11 @@ lang MeasPointCSV = CSV
                searchSpace: Float,
                cc: Int}
 
-  sem csvHeader =
+  sem csvHeader +=
   | MeasPoint _ ->
     ["id-meas", "ident", "context", "deps", "searchSpace", "connectedComponent"]
 
-  sem csvRow2string =
+  sem csvRow2string +=
   | MeasPoint m ->
     [ int2string m.id
     , m.ident
@@ -35,7 +51,7 @@ lang MeasPointCSV = CSV
 end
 
 lang HoleCSV = CSV
-  syn CSVRow =
+  syn CSVRow +=
   | Hole {id: Int,
           ident: String,
           context: [String],
@@ -43,11 +59,11 @@ lang HoleCSV = CSV
           domainSize: Int,
           cc: Int}
 
-  sem csvHeader =
+  sem csvHeader +=
   | Hole _ ->
     ["id-hole", "ident", "context", "deps", "domainSize", "connectedComponent"]
 
-  sem csvRow2string =
+  sem csvRow2string +=
   | Hole h ->
     [ int2string h.id
     , h.ident
@@ -59,16 +75,16 @@ lang HoleCSV = CSV
 end
 
 lang ConnectedComponentCSV = CSV
-  syn CSVRow =
+  syn CSVRow +=
   | CC {id: Int,
         deps: [Int],
         size: Float}
 
-  sem csvHeader =
+  sem csvHeader +=
   | CC _ ->
     ["id-cc", "deps", "size"]
 
-  sem csvRow2string =
+  sem csvRow2string +=
   | CC c ->
     [ int2string c.id
     , strJoin "|" (map int2string c.deps)
@@ -77,14 +93,14 @@ lang ConnectedComponentCSV = CSV
 end
 
 lang SizeCSV = CSV
-  syn CSVRow =
+  syn CSVRow +=
   | Size {total: Float, reduced: Float}
 
-  sem csvHeader =
+  sem csvHeader +=
   | Size _ ->
     ["total", "reduced"]
 
-  sem csvRow2string =
+  sem csvRow2string +=
   | Size s ->
     [ float2string s.total
     , float2string s.reduced
@@ -92,14 +108,14 @@ lang SizeCSV = CSV
 end
 
 lang RunCSV = CSV
-  syn CSVRow =
+  syn CSVRow +=
   | Run {id: Int, nbrRuns: Int, time: Float}
 
-  sem csvHeader =
+  sem csvHeader +=
   | Run _ ->
     ["id-meas", "nbrRuns", "time"]
 
-  sem csvRow2string =
+  sem csvRow2string +=
   | Run r ->
     [ int2string r.id
     , int2string r.nbrRuns

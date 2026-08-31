@@ -5,6 +5,14 @@ include "../../global/objects.mc"
 include "../rendering-options.mc"
 include "./headers/search.mc"
 include "string.mc"
+include "docgen/global/format.mc"
+include "docgen/global/logger.mc"
+include "seq.mc"
+include "docgen/naming/name-context.mc"
+include "bool.mc"
+include "basic-types.mc"
+include "option.mc"
+include "docgen/global/util.mc"
 
 lang ObjectsRenderer = Objects + Formats
 

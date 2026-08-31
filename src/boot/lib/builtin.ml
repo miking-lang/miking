@@ -110,6 +110,7 @@ let builtin =
   ; ("fileExists", f CfileExists)
   ; ("deleteFile", f CdeleteFile)
   ; ("command", f Ccommand)
+  ; ("exec", f (Cexec None))
   ; ("error", f Cerror)
   ; ("exit", f Cexit)
   ; ("flushStdout", f CflushStdout)

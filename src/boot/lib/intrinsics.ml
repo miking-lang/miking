@@ -707,6 +707,12 @@ module MSys = struct
         a |> Ustring.from_utf8 |> Ustring.to_uchars |> Mseq.Helpers.of_array )
 
   let command s = Sys.command (s |> Mseq.Helpers.to_ustring |> Ustring.to_utf8)
+
+  let exec p args =
+    Unix.execvp (Mseq.Helpers.to_utf8 p)
+      ( Mseq.cons p args
+      |> Mseq.map Mseq.Helpers.to_utf8
+      |> Mseq.Helpers.to_array )
 end
 
 module Time = struct

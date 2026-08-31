@@ -1,4 +1,5 @@
 include "ext/mat-ext.mc"
+include "ext/arr-ext.mc"
 include "benchmarkcommon.mc"
 
 let n = 100

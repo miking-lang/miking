@@ -168,6 +168,7 @@ and const =
   | CfileExists
   | CdeleteFile
   | Ccommand
+  | Cexec of int Mseq.t option
   | Cerror
   | Cexit
   | CflushStdout
@@ -892,6 +893,7 @@ let const_has_side_effect = function
   | CfileExists
   | CdeleteFile
   | Ccommand
+  | Cexec _
   | Cerror
   | Cexit
   | CflushStdout

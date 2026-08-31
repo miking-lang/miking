@@ -9,6 +9,7 @@ include "./html-script.mc"
 include "./html-style.mc"
 include "string.mc"
 include "../../../global/util.mc"
+include "seq.mc"
 
 -- Build the HTML header + styles + opening body using a theme and a page title.
 let getHeader : String -> String -> String = lam title. lam srcPath.

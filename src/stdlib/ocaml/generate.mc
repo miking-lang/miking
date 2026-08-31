@@ -16,6 +16,18 @@ include "ocaml/intrinsics-ops.mc"
 include "ocaml/generate-env.mc"
 include "ocaml/external.mc"
 include "common.mc"
+include "map.mc"
+include "name.mc"
+include "seq.mc"
+include "string.mc"
+include "set.mc"
+include "basic-types.mc"
+include "ocaml/external-includes.mc"
+include "error.mc"
+include "bool.mc"
+include "option.mc"
+include "assoc-seq.mc"
+include "stringid.mc"
 
 let _omatch_ = lam target. lam arms.
   use OCamlAst in
@@ -341,7 +353,7 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst + OCamlTopGenerate
   -- NOTE(larshum, 2022-12-21): We define special-case treatment for patterns
   -- that can be compiled to more readable and/or more efficient OCaml code
   -- than in the default case.
-  sem generate (env : GenerateEnv) =
+  sem generate (env : GenerateEnv) +=
   | TmMatch ({pat = PatInt _, target = TmVar _} & t) ->
     match
       collectNestedMatches env
@@ -459,7 +471,7 @@ lang OCamlMatchGenerate = MExprAst + OCamlAst + OCamlTopGenerate
 end
 
 lang OCamlGenerate = MExprAst + OCamlAst + OCamlTopGenerate + OCamlMatchGenerate
-  sem generate (env : GenerateEnv) =
+  sem generate (env : GenerateEnv) +=
   | TmSeq {tms = tms} ->
     let toAsciiString = lam tms.
       let isAsciiChar = lam c.

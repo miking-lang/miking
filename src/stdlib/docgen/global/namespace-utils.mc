@@ -3,6 +3,9 @@
 -- util module if it grows or becomes more generally useful.
 
 include "./util.mc"
+include "string.mc"
+include "basic-types.mc"
+include "seq.mc"
 
 type Namespace = String
 

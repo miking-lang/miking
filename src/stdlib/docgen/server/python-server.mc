@@ -19,6 +19,9 @@ include "sys.mc"
 include "./server-options.mc"
 include "../global/util.mc"
 include "../global/ext-utils.mc"
+include "seq.mc"
+include "basic-types.mc"
+include "ext/file-ext.mc"
 
 let pythonScript = lam servesMd. join ["
 import os

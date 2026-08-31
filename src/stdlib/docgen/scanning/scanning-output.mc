@@ -1,5 +1,6 @@
 include "common.mc"
 include "string.mc"
+include "seq.mc"
 
 type FileToProcess = { path: String, outDir: String }
 

@@ -7,6 +7,8 @@ include "ast.mc"
 include "boot-parser.mc"
 include "map.mc"
 include "option.mc"
+include "name.mc"
+include "bool.mc"
 
 lang Index = Ast
 
@@ -73,45 +75,45 @@ end
 -----------
 
 lang VarIndex = Index + VarAst
-  sem indexAdd (acc: IndexAcc) =
+  sem indexAdd (acc: IndexAcc) +=
   | TmVar { ident = ident } -> addKey ident acc
 end
 
 lang LamIndex = Index + LamAst
-  sem indexAdd (acc: IndexAcc) =
+  sem indexAdd (acc: IndexAcc) +=
   | TmLam { ident = ident } -> addKey ident acc
 end
 
 lang LetIndex = Index + LetDeclAst
-  sem indexAdd (acc: IndexAcc) =
+  sem indexAdd (acc: IndexAcc) +=
   | TmDecl {decl = DeclLet { ident = ident }} -> addKey ident acc
 end
 
 lang RecLetsIndex = Index + RecLetsDeclAst
-  sem indexAdd (acc: IndexAcc) =
+  sem indexAdd (acc: IndexAcc) +=
   | TmDecl {decl = DeclRecLets { bindings = bindings }} ->
     foldl (lam acc: IndexAcc. lam b: DeclLetRecord. addKey b.ident acc)
       acc bindings
 end
 
 lang ExtIndex = Index + ExtDeclAst
-  sem indexAdd (acc: IndexAcc) =
+  sem indexAdd (acc: IndexAcc) +=
   | TmDecl {decl = DeclExt { ident = ident }} -> addKey ident acc
 end
 
 lang TypeIndex = Index + TypeDeclAst
-  sem indexAdd (acc: IndexAcc) =
+  sem indexAdd (acc: IndexAcc) +=
   | TmDecl {decl = DeclType { ident = ident }} -> addKey ident acc
 end
 
 lang DataIndex = Index + DataAst + DataDeclAst
-  sem indexAdd (acc: IndexAcc) =
+  sem indexAdd (acc: IndexAcc) +=
   | TmDecl {decl = DeclConDef { ident = ident }} -> addKey ident acc
   | TmConApp { ident = ident } -> addKey ident acc
 end
 
 lang MatchIndex = Index + MatchAst
-  sem indexAdd (acc: IndexAcc) =
+  sem indexAdd (acc: IndexAcc) +=
   | TmMatch { pat = pat } -> patIndexAdd acc pat
 
   sem patIndexAdd: IndexAcc -> Pat -> IndexAcc
@@ -124,12 +126,12 @@ end
 --------------
 
 lang NamedPatIndex = MatchIndex + NamedPat
-  sem patIndexAdd (acc: IndexAcc) =
+  sem patIndexAdd (acc: IndexAcc) +=
   | PatNamed { ident = PName name } -> addKey name acc
 end
 
 lang SeqEdgePatIndex = MatchIndex + SeqEdgePat
-  sem patIndexAdd (acc: IndexAcc) =
+  sem patIndexAdd (acc: IndexAcc) +=
   | PatSeqEdge { middle = PName name } & p ->
     sfold_Pat_Pat patIndexAdd (addKey name acc) p
 end

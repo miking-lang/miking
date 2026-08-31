@@ -1,5 +1,6 @@
 -- String format with MLang
 
+include "basic-types.mc"
 include "char.mc"
 include "seq.mc"
 include "string.mc"
@@ -13,13 +14,13 @@ lang Format
 end
 
 lang FormatInteger = Format
-  syn Fmt =
+  syn Fmt +=
   | FmtInt (Int)
 
-  sem toString =
+  sem toString +=
   | FmtInt n -> int2string n
 
-  sem toFormat (fmtstr : String) =
+  sem toFormat (fmtstr : String) +=
   | FmtInt n ->
     if eqString fmtstr "%d" then
       int2string n
@@ -28,13 +29,13 @@ lang FormatInteger = Format
 end
 
 lang FormatFloat = Format
-  syn Fmt =
+  syn Fmt +=
   | FmtFloat (Float)
 
-  sem toString =
+  sem toString +=
   | FmtFloat f -> float2string f
 
-  sem toFormat (fmtstr : String) =
+  sem toFormat (fmtstr : String) +=
   | FmtFloat f ->
     if eqString fmtstr "%f" then
       float2string f
@@ -43,13 +44,13 @@ lang FormatFloat = Format
 end
 
 lang FormatString = Format
-  syn Fmt =
+  syn Fmt +=
   | FmtStr (String)
 
-  sem toString =
+  sem toString +=
   | FmtStr s -> s
 
-  sem toFormat (fmtstr : String) =
+  sem toFormat (fmtstr : String) +=
   | FmtStr s ->
     if eqString fmtstr "%s" then
       s
@@ -62,13 +63,13 @@ lang FormatString = Format
 end
 
 lang FormatChar = Format
-  syn Fmt =
+  syn Fmt +=
   | FmtChar (Char)
 
-  sem toString =
+  sem toString +=
   | FmtChar c -> [c]
 
-  sem toFormat (fmtstr : String) =
+  sem toFormat (fmtstr : String) +=
   | FmtChar c ->
     if eqString fmtstr "%c" then
       [c]
@@ -77,13 +78,13 @@ lang FormatChar = Format
 end
 
 lang StrFormatBase = Format
-  syn Fmt =
+  syn Fmt +=
   -- Intentionally left blank
 
-  sem toString =
+  sem toString +=
   | _ -> error "StrFormatBase: toString: Unknown Fmt"
 
-  sem toFormat (fmtstr : String) =
+  sem toFormat (fmtstr : String) +=
   | _ -> error "StrFormatBase: toFormat: Unknown Fmt"
 
   sem strFormat (args : [Fmt]) =

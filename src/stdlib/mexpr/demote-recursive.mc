@@ -4,6 +4,10 @@ include "mexpr/free-vars.mc"
 include "mexpr/eq.mc"
 include "mexpr/symbolize.mc"
 include "digraph.mc"
+include "map.mc"
+include "seq.mc"
+include "name.mc"
+include "set.mc"
 
 -- Performs a "demotion" of all recursive bindings in the given expression.
 -- The result is that

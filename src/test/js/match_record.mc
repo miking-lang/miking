@@ -1,5 +1,6 @@
 include "string.mc"
 include "common.mc"
+include "seq.mc"
 
 mexpr
 	let a = 1 in

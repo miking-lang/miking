@@ -10,6 +10,11 @@ include "mexpr/mexpr.mc"
 include "peval/peval.mc"
 include "error.mc"
 include "list.mc"
+include "mexpr/parser.mc"
+include "mexpr/pprint.mc"
+include "mexpr/symbolize.mc"
+include "basic-types.mc"
+include "seq.mc"
 
 
 lang SpecializeAst =
@@ -17,44 +22,44 @@ lang SpecializeAst =
   + MExprEq + Eval + PrettyPrint + MExprTypeCheck + LamEval
 
 
-  syn Expr =
+  syn Expr +=
   | TmSpecialize {e: Expr, info: Info}
 
   -- States that the new terms are indeed mapping from keywords
-  sem isKeyword =
+  sem isKeyword +=
   | TmSpecialize _ -> true
 
   -- Defines the new mapping from keyword to new terms
-  sem matchKeywordString (info: Info) =
+  sem matchKeywordString (info: Info) +=
   | "specialize" -> Some (1, lam lst. TmSpecialize {e = get lst 0,
                                           info = info})
-  sem tyTm =
+  sem tyTm +=
   | TmSpecialize t -> tyTm t.e
 
-  sem infoTm =
+  sem infoTm +=
   | TmSpecialize t -> t.info
 
-  sem withType (ty : Type) =
+  sem withType (ty : Type) +=
   | TmSpecialize t -> TmSpecialize {t with e = withType ty t.e}
 
-  sem typeCheckExpr (env : TCEnv) =
+  sem typeCheckExpr (env : TCEnv) +=
   | TmSpecialize t ->
     let e = typeCheckExpr env t.e in
     TmSpecialize {t with e = e}
 
-  sem smapAccumL_Expr_Expr f acc =
+  sem smapAccumL_Expr_Expr f acc +=
   | TmSpecialize t ->
     match f acc t.e with (acc, e) in
     (acc, TmSpecialize {t with e = e})
 
   -- Equality of the new terms
-  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) =
+  sem eqExprH (env : EqEnv) (free : EqEnv) (lhs : Expr) +=
   | TmSpecialize r ->
     match lhs with TmSpecialize l then
       eqExprH env free l.e r.e
     else None ()
 
-  sem eval (ctx : EvalCtx) =
+  sem eval (ctx : EvalCtx) +=
   | TmSpecialize e ->
     switch eval ctx e.e
     case clos & TmClos _ then
@@ -65,10 +70,10 @@ lang SpecializeAst =
     case x then x
     end
 
-  sem isAtomic =
+  sem isAtomic +=
   | TmSpecialize _ -> false
 
-  sem pprintCode (indent : Int) (env : PprintEnv) =
+  sem pprintCode (indent : Int) (env : PprintEnv) +=
   | TmSpecialize t ->
     match printParen indent env t.e with (env, e) in
     (env, join ["specialize", pprintNewline indent , e])

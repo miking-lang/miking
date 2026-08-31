@@ -1,5 +1,11 @@
 include "../global/logger.mc"
 include "../global/namespace-utils.mc"
+include "hashmap.mc"
+include "seq.mc"
+include "char.mc"
+include "docgen/global/util.mc"
+include "basic-types.mc"
+include "option.mc"
 
 type NameMapEntry a = { entry: a, id: Int, namespace: String }
 type NameMapBucket a = HashMap String [NameMapEntry a]

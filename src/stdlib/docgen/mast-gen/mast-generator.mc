@@ -36,6 +36,14 @@ include "./mast.mc"
 include "../global/ext-utils.mc"
 include "../global/util.mc"
 include "../global/logger.mc"
+include "mexpr/symbolize.mc"
+include "docgen/parsing/token-readers.mc"
+include "map.mc"
+include "ocaml/external-includes.mc"
+include "seq.mc"
+include "docgen/parsing/pos.mc"
+include "basic-types.mc"
+include "string.mc"
 
 -- Builds the AST from a file using the Miking compiler parser.
 -- Generates a temporary file, processes includes, preserves utests/mexpr,

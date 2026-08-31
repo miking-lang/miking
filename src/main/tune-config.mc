@@ -1,6 +1,10 @@
+include "arg.mc"
+include "basic-types.mc"
 include "options-config.mc"
 include "options-type.mc"
 include "assoc.mc"
+include "seq.mc"
+include "string.mc"
 include "tuning/tune-options.mc"
 
 let tuneOptionsConfig : ParseConfig Options = concat optionsConfig [

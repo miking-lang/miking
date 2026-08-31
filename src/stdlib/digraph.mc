@@ -21,6 +21,10 @@ include "map.mc"
 include "math.mc"
 include "eqset.mc"
 include "set.mc"
+include "bool.mc"
+include "basic-types.mc"
+include "int.mc"
+include "string.mc"
 
 type DigraphEdge v l = (v, v, l)
 type Digraph v l = { adj : Map v [(v,l)],

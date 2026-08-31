@@ -28,6 +28,13 @@ include "mexpr/eval.mc"
 include "mexpr/symbolize.mc"
 
 include "sys.mc"
+include "map.mc"
+include "name.mc"
+include "mexpr/info.mc"
+include "seq.mc"
+include "string.mc"
+include "basic-types.mc"
+include "mexpr/ast-builder.mc"
 
 type ProfileEnv = Map Name (Int, Info)
 

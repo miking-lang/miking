@@ -39,6 +39,7 @@
 
 include "common.mc"
 include "lazy.mc"
+include "seq.mc"
 
 type ThunkContent a
 con TCUndefined : all a. () -> ThunkContent a

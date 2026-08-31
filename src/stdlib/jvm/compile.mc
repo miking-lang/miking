@@ -7,6 +7,9 @@ include "seq.mc"
 include "jvm/constants.mc"
 include "stdlib.mc"
 include "sys.mc"
+include "map.mc"
+include "name.mc"
+include "basic-types.mc"
 
 lang MExprJVMCompile = MExprAst + JVMAst
 

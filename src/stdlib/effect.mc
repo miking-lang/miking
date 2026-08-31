@@ -1,5 +1,6 @@
 include "option.mc"
 include "either.mc"
+include "basic-types.mc"
 
 /- This file implements an extensible effects library inspired by
    algebraic effects / free(er) monads.  To learn more, see e.g.,
@@ -102,10 +103,10 @@ end
 lang Reader = Effect
   syn Ctx =
 
-  syn Query =
+  syn Query +=
   | ReaderAskQ ()
 
-  syn Response =
+  syn Response +=
   | ReaderAskR Ctx
 
   sem ask : all a. (Ctx -> a) -> Eff a
@@ -135,10 +136,10 @@ end
 lang Writer = Effect
   syn Log =
 
-  syn Query =
+  syn Query +=
   | WriterTellQ Log
 
-  syn Response =
+  syn Response +=
   | WriterTellR ()
 
   sem tell : Log -> Eff ()
@@ -159,11 +160,11 @@ end
 lang State = Effect
   syn State =
 
-  syn Query =
+  syn Query +=
   | StateGetQ ()
   | StatePutQ (State -> State)
 
-  syn Response =
+  syn Response +=
   | StateGetR State
   | StatePutR ()
 
@@ -196,10 +197,10 @@ lang NonDet = Effect
   -- NOTE(aathn, 2024-02-07): If we had GADTs, we wouldn't need this
   -- NDItem type, we could simply have
   -- NDChooseQ : all a. [a] -> Query a.
-  syn Query =
+  syn Query +=
   | NDChooseQ [NDItem]
 
-  syn Response =
+  syn Response +=
   | NDChooseR NDItem
 
   sem choose : all a. [a] -> Eff a
@@ -230,10 +231,10 @@ end
 lang Failure = Effect
   syn Failure =
 
-  syn Query =
+  syn Query +=
   | FailQ Failure
 
-  syn Response =
+  syn Response +=
 
   sem fail : all a. Failure -> Eff a
   sem fail =
@@ -265,9 +266,9 @@ lang TestLang = Reader + NonDet
 end
 
 lang TestLangImpl = TestLang
-  syn Ctx = | ICtx Int
-  sem getInt = | ICtx i -> i
-  sem addInt j = | ICtx i -> ICtx (addi j i)
+  syn Ctx += | ICtx Int
+  sem getInt += | ICtx i -> i
+  sem addInt j += | ICtx i -> ICtx (addi j i)
 end
 
 mexpr

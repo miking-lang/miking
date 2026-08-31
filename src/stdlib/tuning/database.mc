@@ -5,6 +5,15 @@ include "instrumentation.mc"
 include "math.mc"
 
 include "mexpr/cmp.mc"
+include "mexpr/eq.mc"
+include "seq.mc"
+include "tuning/dependency-analysis.mc"
+include "basic-types.mc"
+include "map.mc"
+include "set.mc"
+include "graph.mc"
+include "float.mc"
+include "option.mc"
 
 lang Database = MExprEq + MExprCmp + Instrumentation
   syn Database =

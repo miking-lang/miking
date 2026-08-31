@@ -3,6 +3,7 @@
 --
 -- Test implementation of simple string operations
 
+include "bool.mc"
 include "char.mc"
 
 mexpr

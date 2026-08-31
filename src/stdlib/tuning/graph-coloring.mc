@@ -8,6 +8,18 @@ include "call-graph.mc"
 include "name-info.mc"
 
 include "mexpr/utils.mc"
+include "name.mc"
+include "map.mc"
+include "mexpr/ast.mc"
+include "basic-types.mc"
+include "common.mc"
+include "digraph.mc"
+include "seq.mc"
+include "option.mc"
+include "mexpr/info.mc"
+include "mexpr/ast-builder.mc"
+include "mexpr/eq.mc"
+include "set.mc"
 
 ------------------------------
 -- Call context environment --

@@ -5,6 +5,11 @@ include "./rendering-data.mc"
 include "./renderers/objects-renderer.mc"
 include "../global/objects.mc"
 include "../global/util.mc"
+include "docgen/rendering/rendering-options.mc"
+include "bool.mc"
+include "string.mc"
+include "hashmap.mc"
+include "basic-types.mc"
 
 -- During rendering, we generate one page and one documentation block per child.
 -- But what if two children have the same name and the same form?

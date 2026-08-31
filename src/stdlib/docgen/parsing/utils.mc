@@ -1,5 +1,14 @@
 include "mexpr/pprint.mc"
 include "./token-readers.mc"
+include "docgen/global/util.mc"
+include "seq.mc"
+include "basic-types.mc"
+include "bool.mc"
+include "docgen/global/logger.mc"
+include "string.mc"
+include "mexpr/ast.mc"
+include "mexpr/info.mc"
+include "./pos.mc"
 
 recursive let lex : use TokenReader in String -> Pos -> [(Token, Pos)] =
     lam s. lam pos.
@@ -63,7 +72,7 @@ recursive let gotoFirstWord : use TokenReader in String -> [Token] -> Pos -> Opt
     case { token = TokenEof {} } then None {}
     case { token = TokenWord { content = !("recursive" | "end") & content } } then
         (if (not (isValidBlockOpener content)) then
-            parsingWarn (join ["Wrong block opener detected: ", content, "."])            
+            parsingWarn (join ["Wrong block opener detected: ", content, "."])
         else ());
 
         Some { doc = reverse acc, pos = pos, rest = rest, isLang = eqString "lang" content }
@@ -127,7 +136,7 @@ end
 recursive let skipString: String -> String -> Option String =
     lam s. lam stream.
     use TokenReader in
-    
+
     match next stream pos0 with { token = token, stream = stream } in
     match token with TokenWord { content = content } then
         if eqString content s then Some stream
@@ -160,7 +169,7 @@ let extractName : String -> Option String =
     lam stream.
     use TokenReader in
     recursive let work =
-        lam stream. lam return.        
+        lam stream. lam return.
         match next stream pos0 with { stream = stream, token = token } in
         switch token
         case TokenEof {} then None {}
@@ -171,7 +180,7 @@ let extractName : String -> Option String =
         end
     in
     work stream false
-        
+
 recursive let correctSpanning : String -> Pos -> Pos -> Pos =
     lam s. lam p1. lam p2.
     use TokenReader in

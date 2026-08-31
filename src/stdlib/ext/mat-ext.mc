@@ -4,6 +4,8 @@
 
 -/
 
+include "basic-types.mc"
+include "bool.mc"
 include "either.mc"
 include "arr-ext.mc"
 include "cblas-ext.mc"

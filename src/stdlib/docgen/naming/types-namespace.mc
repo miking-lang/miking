@@ -1,6 +1,11 @@
 include "./generic-namespace-set.mc"
 include "../global/util.mc"
 include "../global/objects.mc"
+include "docgen/global/source-code.mc"
+include "basic-types.mc"
+include "docgen/global/logger.mc"
+include "seq.mc"
+include "string.mc"
 
 type TypeNamespace = use Objects in  {
     typeObj: Object,

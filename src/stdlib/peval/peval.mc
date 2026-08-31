@@ -9,6 +9,17 @@ include "mexpr/eval.mc"
 include "mexpr/pprint.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/side-effect.mc"
+include "name.mc"
+include "error.mc"
+include "seq.mc"
+include "mexpr/info.mc"
+include "basic-types.mc"
+include "lazy.mc"
+include "bool.mc"
+include "option.mc"
+include "int.mc"
+include "mexpr/const-arity.mc"
+include "mexpr/eq.mc"
 
 let astBuilder = lam info.
   use MExprAst in
@@ -122,14 +133,14 @@ lang PEvalApply = Ast + PEvalCtx
 end
 
 lang AppPEval = PEval + PEvalApply + AppAst
-  sem pevalBindThis =
+  sem pevalBindThis +=
   | TmApp _ -> true
 
   sem pevalApply : Info -> PEvalCtx -> (Expr -> Expr) -> (Expr, Expr) -> Expr
-  sem pevalApply info ctx k =
+  sem pevalApply info ctx k +=
   | (f, arg) -> k (app_ f arg)
 
-  sem pevalEval ctx k =
+  sem pevalEval ctx k +=
   | TmApp r ->
     pevalBind ctx
       (lam lhs.
@@ -140,38 +151,38 @@ lang AppPEval = PEval + PEvalApply + AppAst
 end
 
 lang VarPEval = PEval + VarAst + AppPEval
-  sem pevalBindThis =
+  sem pevalBindThis +=
   | TmVar _ -> false
 
-  sem pevalEval ctx k =
+  sem pevalEval ctx k +=
   | t & TmVar r ->
     match evalEnvLookup r.ident ctx.env with Some t then k t
     else k t
 
-  sem pevalReadbackH ctx =
+  sem pevalReadbackH ctx +=
   | t & TmVar r -> ({ ctx with freeVar = setInsert r.ident ctx.freeVar }, t)
 end
 
 lang ClosPAst = ClosAst
-  syn Expr =
+  syn Expr +=
   | TmClosP {
     cls : {ident : Name, body : Expr, env : Lazy EvalEnv, info : Info},
     ident : Option Name,
     isRecursive : Bool
   }
 
-  sem infoTm =
+  sem infoTm +=
   | TmClosP r -> r.cls.info
 
-  sem withInfo info =
+  sem withInfo info +=
   | TmClosP r -> TmClosP { r with cls = { r.cls with info = info } }
 end
 
 lang LamPEval = PEval + PEvalApply + VarAst + LamAst + ClosPAst + AppEval
-  sem pevalBindThis =
+  sem pevalBindThis +=
   | TmClosP _ -> false
 
-  sem pevalApply info ctx k =
+  sem pevalApply info ctx k +=
   | (TmClosP r, arg) ->
     if and (and (not ctx.recFlag) r.isRecursive) (optionIsSome r.ident) then
       let ident = optionGetOrElse (lam. error "impossible") r.ident in
@@ -180,7 +191,7 @@ lang LamPEval = PEval + PEvalApply + VarAst + LamAst + ClosPAst + AppEval
       let env = evalEnvInsert r.cls.ident arg (lazyForce r.cls.env) in
       pevalEval { ctx with env = env } k r.cls.body
 
-  sem pevalEval ctx k =
+  sem pevalEval ctx k +=
   | TmLam r ->
     let cls =
       { ident = r.ident, body = r.body, env = lazy (lam. ctx.env), info = r.info }
@@ -190,7 +201,7 @@ lang LamPEval = PEval + PEvalApply + VarAst + LamAst + ClosPAst + AppEval
     })
   | TmClosP r -> k (TmClosP r)
 
-  sem pevalReadbackH ctx =
+  sem pevalReadbackH ctx +=
   | TmClosP r ->
     let b = astBuilder r.cls.info in
     match r.ident with Some ident then
@@ -207,10 +218,10 @@ lang LamPEval = PEval + PEvalApply + VarAst + LamAst + ClosPAst + AppEval
 end
 
 lang LetPEval = PEval + ClosPAst + LetDeclAst
-  sem pevalBindThis =
+  sem pevalBindThis +=
   | TmDecl {decl = DeclLet _} -> true
 
-  sem pevalBindTop ctx k =
+  sem pevalBindTop ctx k +=
   | TmDecl (x & {decl = DeclLet r}) ->
     pevalBind ctx
       (lam body.
@@ -229,7 +240,7 @@ lang LetPEval = PEval + ClosPAst + LetDeclAst
               { ctx with env = evalEnvInsert r.ident body ctx.env } k x.inexpr)
       r.body
 
-  sem pevalEval ctx k =
+  sem pevalEval ctx k +=
   | TmDecl (x & {decl = DeclLet r}) ->
     pevalBind ctx
       (lam body.
@@ -240,7 +251,7 @@ lang LetPEval = PEval + ClosPAst + LetDeclAst
             { ctx with env = evalEnvInsert r.ident body ctx.env } k x.inexpr)
       r.body
 
-  sem pevalReadbackH ctx =
+  sem pevalReadbackH ctx +=
   | TmDecl (x & {decl = DeclLet r}) ->
     match pevalReadbackH ctx x.inexpr with (inexprCtx, inexpr) in
     match pevalReadbackH inexprCtx r.body with (ctx, body) in
@@ -254,10 +265,10 @@ lang LetPEval = PEval + ClosPAst + LetDeclAst
 end
 
 lang RecLetsPEval = PEval + RecLetsDeclAst + ClosPAst + LamAst
-  sem pevalBindThis =
+  sem pevalBindThis +=
   | TmDecl {decl = DeclRecLets _} -> true
 
-  sem pevalBindTop ctx k =
+  sem pevalBindTop ctx k +=
   | TmDecl (x & {decl = DeclRecLets r}) ->
     recursive let envPrime : Int -> () -> EvalEnv = lam n. lam.
       let wraplambda = lam bind.
@@ -296,12 +307,12 @@ lang RecLetsPEval = PEval + RecLetsDeclAst + ClosPAst + LamAst
       , inexpr = pevalBindTop { ctx with env = envPrime 0 () } k x.inexpr
       }
 
-  sem pevalEval ctx k =
+  sem pevalEval ctx k +=
   | TmDecl {decl = DeclRecLets _} ->
     error
       "Partial evaluation of non-top-level recursive let bindings is not safe"
 
-  sem pevalReadbackH ctx =
+  sem pevalReadbackH ctx +=
   | TmDecl (x & {decl = DeclRecLets r}) ->
     let fv = setOfSeq nameCmp (map (lam bind. bind.ident) r.bindings) in
     match pevalReadbackH ctx x.inexpr with (inexprCtx, inexpr) in
@@ -324,13 +335,13 @@ lang RecLetsPEval = PEval + RecLetsDeclAst + ClosPAst + LamAst
 end
 
 lang RecordPEval = PEval + RecordAst + VarAst
-  sem pevalBindThis =
+  sem pevalBindThis +=
   -- NOTE(oerikss, 2022-02-15): We do not have to check inside the record as the
   -- bindings vill always bind to values after the PEval transformation.
   | TmRecord _ -> false
   | TmRecordUpdate _ -> true
 
-  sem pevalEval ctx k =
+  sem pevalEval ctx k +=
   | TmRecord r ->
     mapMapK
       (lam t. lam k. pevalBind ctx k t)
@@ -355,25 +366,25 @@ lang RecordPEval = PEval + RecordAst + VarAst
 end
 
 lang TypePEval = PEval + TypeDeclAst
-  sem pevalBindThis =
+  sem pevalBindThis +=
   | TmDecl {decl = DeclType _} -> true
 
-  sem pevalBindTop ctx k =
+  sem pevalBindTop ctx k +=
   | TmDecl (x & {decl = DeclType _}) -> TmDecl {x with inexpr = pevalBindTop ctx k x.inexpr}
 
-  sem pevalEval ctx k =
+  sem pevalEval ctx k +=
   | TmDecl (x & {decl = DeclType _}) -> TmDecl {x with inexpr = pevalBind ctx k x.inexpr}
 end
 
 lang DataPEval = PEval + DataAst
-  sem pevalBindThis =
+  sem pevalBindThis +=
   | TmDecl {decl = DeclConDef _} -> true
   | TmConApp _ -> false
 
-  sem pevalBindTop ctx k =
+  sem pevalBindTop ctx k +=
   | TmDecl (x & {decl = DeclConDef _}) -> TmDecl {x with inexpr = pevalBindTop ctx k x.inexpr}
 
-  sem pevalEval ctx k =
+  sem pevalEval ctx k +=
   | TmDecl (x & {decl = DeclConDef _}) -> TmDecl {x with inexpr = pevalBind ctx k x.inexpr}
   | TmConApp t -> pevalBind ctx (lam body. k (TmConApp {t with body = body})) t.body
 end
@@ -381,10 +392,10 @@ end
 lang SeqPEval = PEval + SeqAst
   -- NOTE(oerikss, 2022-02-15): We do not have to check inside the sequences as the
   -- elements vill always be values in the PEval transformation.
-  sem pevalBindThis =
+  sem pevalBindThis +=
   | TmSeq _ -> false
 
-  sem pevalEval ctx k =
+  sem pevalEval ctx k +=
   | TmSeq r ->
     mapK
       (lam t. lam k. pevalBind ctx k t)
@@ -393,13 +404,13 @@ lang SeqPEval = PEval + SeqAst
 end
 
 lang ConstPEval = PEval + PEvalApply + ConstEvalNoDefault
-  sem pevalReadbackH ctx =
+  sem pevalReadbackH ctx +=
   | TmConstApp r ->
     match mapAccumL pevalReadbackH ctx r.args with (ctx, args) in
     let b = astBuilder r.info in
     (ctx, b.appSeq (b.uconst r.const) args)
 
-  sem pevalBindThis =
+  sem pevalBindThis +=
   | TmConst _ -> false
   | TmConstApp _ -> false
   -- NOTE(oerikss, 2022-02-15): We treat partially applied constants as
@@ -407,10 +418,10 @@ lang ConstPEval = PEval + PEvalApply + ConstEvalNoDefault
   -- avoid re-computations when we see that we cannot statically evaluate the
   -- constant.
 
-  sem pevalEval ctx k =
+  sem pevalEval ctx k +=
   | t & (TmConst _ | TmConstApp _) -> k t
 
-  sem delta info =
+  sem delta info +=
   | (const, args) ->
     if lti (length args) (constArity const) then
       -- Accumulate arguments if still not a complete application
@@ -420,7 +431,7 @@ lang ConstPEval = PEval + PEvalApply + ConstEvalNoDefault
       let b = astBuilder info in
       b.appSeq (b.uconst const) args
 
-  sem pevalApply info ctx k =
+  sem pevalApply info ctx k +=
   | (TmConst r, arg) -> k (delta info (r.val, [arg]))
   | (TmConstApp r, arg) -> k (delta info (r.const, snoc r.args arg))
 end
@@ -429,10 +440,10 @@ lang MatchPEval =
   PEval + MatchEval + RecordAst + ConstAst + DataAst + SeqAst + NeverAst +
   VarAst + NamedPat
 
-  sem pevalBindThis =
+  sem pevalBindThis +=
   | TmMatch _ -> true
 
-  sem pevalEval ctx k =
+  sem pevalEval ctx k +=
   | TmMatch r ->
     pevalBind ctx
       (lam target.
@@ -469,10 +480,10 @@ lang MatchPEval =
 end
 
 lang UtestPEval = PEval + UtestDeclAst
-  sem pevalBindThis =
+  sem pevalBindThis +=
   | TmDecl {decl = DeclUtest _} -> true
 
-  sem pevalEval ctx k =
+  sem pevalEval ctx k +=
   | TmDecl (x & {decl = DeclUtest t}) ->
     pevalBind ctx
       (lam test.
@@ -508,26 +519,26 @@ lang UtestPEval = PEval + UtestDeclAst
 end
 
 lang NeverPEval = PEval + PEvalApply + NeverAst
-  sem pevalBindThis =
+  sem pevalBindThis +=
   | TmNever _ -> false
 
-  sem pevalEval ctx k =
+  sem pevalEval ctx k +=
   | t & TmNever _ -> k t
 
-  sem pevalApply info ctx k =
+  sem pevalApply info ctx k +=
   | (t & TmNever _, _) -> k t
 end
 
 lang ExtPEval = PEval + ExtDeclAst
-  sem pevalBindThis =
+  sem pevalBindThis +=
   | TmDecl {decl = DeclExt _} -> true
 
-  sem pevalEval ctx k =
+  sem pevalEval ctx k +=
   | TmDecl (x & {decl = DeclExt _}) -> TmDecl {x with inexpr = pevalBind ctx k x.inexpr}
 end
 
 lang ArithIntPEval = ArithIntEval + VarAst
-  sem delta info =
+  sem delta info +=
   | (c & (CAddi _ | CMuli _), args & [!TmConst _, TmConst _]) ->
     -- NOTE(oerikss, 2022-02-15): We move constants to the lhs for associative
     -- operators to make later simplifications easier.
@@ -582,14 +593,14 @@ lang ArithIntPEval = ArithIntEval + VarAst
 end
 
 lang ArithFloatPEval = PEval + ArithFloatEval + VarAst
-  sem pevalReadbackH ctx =
+  sem pevalReadbackH ctx +=
   | t & TmConst (r & { val = CFloat v }) ->
     if ltf v.val 0. then
       let b = astBuilder r.info in
       (ctx, b.negf (b.float (negf v.val)))
     else (ctx, t)
 
-  sem delta info =
+  sem delta info +=
   | (c & (CAddf _ | CMulf _), args & [!TmConst _, TmConst _]) ->
     -- NOTE(oerikss, 2022-02-15): We move constants to the lhs for associative
     -- operators to make later simplifications easier.
@@ -639,7 +650,7 @@ lang CmpCharPEval = CmpCharEval + VarAst end
 lang IOPEval = IOAst + SeqAst + IOArity end
 
 lang SeqOpPEval = PEval + PEvalApply + SeqOpEvalFirstOrder + AppAst + ConstAst + VarAst
-  sem pevalBindThis =
+  sem pevalBindThis +=
   | TmApp {
     lhs = TmApp {
       lhs = TmConst { val = CGet _},
@@ -648,7 +659,7 @@ lang SeqOpPEval = PEval + PEvalApply + SeqOpEvalFirstOrder + AppAst + ConstAst +
     rhs = TmConst { val = CInt _} | TmVar _
   } -> false
 
-  sem pevalApply info ctx k =
+  sem pevalApply info ctx k +=
   | (TmConstApp {const = CMap _, args = [f]}, TmSeq s) ->
     let f = lam x. lam k.
       pevalApply info ctx (pevalBind ctx k) (f, x)

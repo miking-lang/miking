@@ -2,6 +2,8 @@
 
 include "math.mc"
 include "seq.mc"
+include "float.mc"
+include "ext/math-ext.mc"
 
 -- logSumExp function, using logSumExp-trick.
 let logSumExp: [Float] -> Float = lam vs.

@@ -6,6 +6,10 @@ include "json-debug.mc"
 include "invariants.mc"
 
 include "mlang/ast.mc"
+include "set.mc"
+include "seq.mc"
+include "string.mc"
+include "json.mc"
 
 lang PhaseStats = Ast + MLangTopLevel + AstToJson + MLangProgramToJson + Invariant
   type StatState =

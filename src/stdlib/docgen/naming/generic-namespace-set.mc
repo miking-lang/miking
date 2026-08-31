@@ -1,5 +1,9 @@
 include "../global/util.mc"
 include "../global/logger.mc"
+include "hashmap.mc"
+include "basic-types.mc"
+include "option.mc"
+include "seq.mc"
 
 type Id = Int
 

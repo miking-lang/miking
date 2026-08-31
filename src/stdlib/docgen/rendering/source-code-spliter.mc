@@ -1,5 +1,8 @@
 include "../parsing/token-readers.mc"
 include "./rendering-data.mc"
+include "docgen/global/source-code.mc"
+include "docgen/global/util.mc"
+include "string.mc"
 
 -- The result of a split operation.
 -- - `left`: Code before the split (e.g., `let x =`)

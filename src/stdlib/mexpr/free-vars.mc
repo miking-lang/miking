@@ -7,6 +7,8 @@ include "name.mc"
 include "mexpr/ast.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/boot-parser.mc"
+include "seq.mc"
+include "string.mc"
 
 lang FreeVars = Ast
   -- Returns the set of free variables for a given expression. Assumes
@@ -45,23 +47,23 @@ lang FreeNames = Ast
 end
 
 lang VarFreeVars = FreeVars + VarAst
-  sem freeVarsExpr acc =
+  sem freeVarsExpr acc +=
   | TmVar r -> setInsert r.ident acc
 end
 
 lang VarFreeNames = FreeNames + VarAst
-  sem freeNamesExpr free =
+  sem freeNamesExpr free +=
   | TmVar x -> setInsert x.ident free
 end
 
 lang LamFreeVars = FreeVars + LamAst
-  sem freeVarsExpr acc =
+  sem freeVarsExpr acc +=
   | TmLam r ->
     setRemove r.ident (freeVarsExpr acc r.body)
 end
 
 lang LamFreeNames = FreeNames + LamAst
-  sem freeNamesExpr free =
+  sem freeNamesExpr free +=
   | TmLam x ->
     let free = freeNamesExpr free x.body in
     let free = setRemove x.ident free in
@@ -70,13 +72,13 @@ lang LamFreeNames = FreeNames + LamAst
 end
 
 lang LetFreeVars = FreeVars + LetDeclAst
-  sem freeVarsExpr acc =
+  sem freeVarsExpr acc +=
   | TmDecl {decl = DeclLet r, inexpr = inexpr} ->
     setRemove r.ident (freeVarsExpr (freeVarsExpr acc r.body) inexpr)
 end
 
 lang LetFreeNames = FreeNames + LetDeclAst + AllTypeAst
-  sem freeNamesExpr free =
+  sem freeNamesExpr free +=
   | TmDecl {decl = DeclLet x, inexpr = inexpr} ->
     let free = freeNamesExpr free inexpr in
     let free = setRemove x.ident free in
@@ -90,7 +92,7 @@ lang LetFreeNames = FreeNames + LetDeclAst + AllTypeAst
 end
 
 lang RecLetsFreeVars = FreeVars + RecLetsDeclAst
-  sem freeVarsExpr acc =
+  sem freeVarsExpr acc +=
   | TmDecl {decl = DeclRecLets r, inexpr = inexpr} ->
     let acc = foldl (lam acc. lam b.
       freeVarsExpr acc b.body) (freeVarsExpr acc inexpr) r.bindings in
@@ -98,7 +100,7 @@ lang RecLetsFreeVars = FreeVars + RecLetsDeclAst
 end
 
 lang RecLetsFreeNames = FreeNames + RecLetsDeclAst + AllTypeAst
-  sem freeNamesExpr free =
+  sem freeNamesExpr free +=
   | TmDecl {decl = DeclRecLets x, inexpr = inexpr} ->
     let free = freeNamesExpr free inexpr in
     let f = lam free. lam binding.
@@ -113,7 +115,7 @@ lang RecLetsFreeNames = FreeNames + RecLetsDeclAst + AllTypeAst
 end
 
 lang TypeFreeNames = FreeNames + TypeDeclAst
-  sem freeNamesExpr free =
+  sem freeNamesExpr free +=
   | TmDecl {decl = DeclType x, inexpr = inexpr} ->
     let free = freeNamesExpr free inexpr in
     let free = freeNamesType free x.tyIdent in
@@ -123,7 +125,7 @@ lang TypeFreeNames = FreeNames + TypeDeclAst
 end
 
 lang DataFreeNames = FreeNames + DataAst + DataDeclAst
-  sem freeNamesExpr free =
+  sem freeNamesExpr free +=
   | TmDecl {decl = DeclConDef x, inexpr = inexpr} ->
     let free = freeNamesExpr free inexpr in
     let free = setRemove x.ident free in
@@ -136,7 +138,7 @@ lang DataFreeNames = FreeNames + DataAst + DataDeclAst
 end
 
 lang ExtFreeVars = FreeVars + ExtDeclAst
-  sem freeVarsExpr acc =
+  sem freeVarsExpr acc +=
   | TmDecl {decl = DeclExt x, inexpr = inexpr} ->
     let free = freeVarsExpr acc inexpr in
     let free = setRemove x.ident free in
@@ -144,7 +146,7 @@ lang ExtFreeVars = FreeVars + ExtDeclAst
 end
 
 lang ExtFreeNames = FreeNames + ExtDeclAst
-  sem freeNamesExpr free =
+  sem freeNamesExpr free +=
   | TmDecl {decl = DeclExt x, inexpr = inexpr} ->
     let free = freeNamesExpr free inexpr in
     let free = setRemove x.ident free in
@@ -153,7 +155,7 @@ lang ExtFreeNames = FreeNames + ExtDeclAst
 end
 
 lang MatchFreeVars = FreeVars + MatchAst + NamedPat + SeqEdgePat
-  sem freeVarsExpr acc =
+  sem freeVarsExpr acc +=
   | TmMatch r ->
     freeVarsExpr
       (freeVarsExpr
@@ -173,7 +175,7 @@ lang MatchFreeVars = FreeVars + MatchAst + NamedPat + SeqEdgePat
 end
 
 lang MatchFreeNames = FreeNames + MatchAst
-  sem freeNamesExpr free =
+  sem freeNamesExpr free +=
   | TmMatch x ->
     let free = freeNamesExpr free x.thn in
     -- NOTE(vipa, 2025-03-19): This will remove whatever the pattern
@@ -185,12 +187,12 @@ lang MatchFreeNames = FreeNames + MatchAst
 end
 
 lang NamedPatFreeNames = FreeNames + NamedPat
-  sem freeNamesPat free =
+  sem freeNamesPat free +=
   | PatNamed {ident = PName ident} -> setRemove ident free
 end
 
 lang SeqEdgePatFreeNames = FreeNames + SeqEdgePat
-  sem freeNamesPat free =
+  sem freeNamesPat free +=
   | PatSeqEdge (x & {middle = PName ident}) ->
     let free = setRemove ident free in
     let free = foldl freeNamesPat free x.prefix in
@@ -199,7 +201,7 @@ lang SeqEdgePatFreeNames = FreeNames + SeqEdgePat
 end
 
 lang DataPatFreeNames = FreeNames + DataPat
-  sem freeNamesPat free =
+  sem freeNamesPat free +=
   | PatCon x ->
     let free = freeNamesPat free x.subpat in
     let free = setInsert x.ident free in
@@ -209,19 +211,19 @@ end
 -- VariantTypeFreeNames?
 
 lang ConTypeFreeNames = FreeNames + ConTypeAst
-  sem freeNamesType free =
+  sem freeNamesType free +=
   | TyCon x -> setInsert x.ident free
 end
 
 -- TyData?
 
 lang VarTypeFreeNames = FreeNames + VarTypeAst
-  sem freeNamesType free =
+  sem freeNamesType free +=
   | TyVar x -> setInsert x.ident free
 end
 
 lang AllTypeFreeNames = FreeNames + AllTypeAst
-  sem freeNamesType free =
+  sem freeNamesType free +=
   | TyAll x ->
     let free = freeNamesType free x.ty in
     let free = setRemove x.ident free in

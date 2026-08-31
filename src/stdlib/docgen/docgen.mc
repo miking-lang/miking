@@ -16,6 +16,8 @@
 -- For more details about each option, see options/options.mc
 
 include "./execution-context.mc"
+include "docgen/options/docgen-options.mc"
+include "basic-types.mc"
 
 let docgen : DocGenOptions -> () = lam opt.
     match execContextNew opt with Some execCtx then
