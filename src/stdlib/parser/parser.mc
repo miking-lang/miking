@@ -1,13 +1,15 @@
 /-
 
-This will be a parser for MCore.
-It is work in progress.
+This is the new parser for MCore.
 
 The parser is designed to be as extensible as possible.
 It is built on top of the breakable library.
 
 The new parser is simply tested against the ocaml boot parser.
 The tests checks that the parsed AST is identical.
+
+`misc/parser-compare.mc` runs more sophisticated tests on full .mc files.
+`misc/test` runs parser-compare on most files in the project.
 
 -/
 
@@ -2837,7 +2839,7 @@ lang UnexpectedTokenParser = AstParserBase
     parseErr (cur.info, str)
 end
 
-lang AstParser =
+lang MExprParser =
     IntParser
   + FloatParser
   + BoolParser
@@ -2859,7 +2861,6 @@ lang AstParser =
   + TypeDeclParser
   + ConDeclParser
   + ExtDeclParser
-  + UseParser
   + LamParser
   + MatchParser
   + SwitchParser
@@ -2872,17 +2873,22 @@ lang AstParser =
   + UtestParser
   + AllParser
   + ProjParser
+  + PrecedenceParser
+  + UnexpectedTokenParser
+end
+
+lang MLangParser =
+    MExprParser
+  + UseParser
   + SynDeclParser
   + SemDeclParser
   + LangDeclParser
   + IncludeDeclParser
   + ProgramParser
-  + PrecedenceParser
-  + UnexpectedTokenParser
 end
 
 lang TestParser =
-    AstParser
+    MLangParser
   + MExprPrettyPrint
   + MLangPrettyPrint
   + MLangEq
