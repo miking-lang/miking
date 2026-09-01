@@ -186,6 +186,7 @@ lang TestSpec
     { inputs : [String]
     , extraInputs : [String]
     , outputs : [String]
+    , tag : String
     , command : String
     , friendlyCommand : String
     , dir : String
@@ -199,8 +200,8 @@ lang TestSpec
     { mkRule : String -> [FileDep] -> Bool -> InternalSpec -> (Rule, Option FileDep)
     }
 
-  sem computeRules : Bool -> String -> [String] -> ((() -> DepStatus) -> Bool) -> [ResolvedSubstituter] -> (Api -> ()) -> Focus -> [Rule]
-  sem computeRules debug root paths dependencyMode substituters declareTests = | focus ->
+  sem computeRules : Bool -> String -> [String] -> ((() -> DepStatus) -> Bool) -> [ResolvedSubstituter] -> (Api -> ()) -> Option (Set String) -> Focus -> [Rule]
+  sem computeRules debug root paths dependencyMode substituters declareTests tags = | focus ->
     let sources = switch focus
       case FocusFiles files then
         switch partition (lam path. and (any (lam top. strStartsWith top path) paths) (fileExists path)) files
@@ -219,13 +220,18 @@ lang TestSpec
       end in
 
     let usedTags : Ref (Set String) = ref (setEmpty cmpString) in
+    let tags : Option (Ref (Set String)) = optionMap ref tags in
     let steps : Ref [InternalSpec] = ref [] in
     let testFunctions : Ref [(String -> Bool, [(Step, Run)])] = ref [] in
 
     let mkStep = lam output. lam spec.
       (if setMem spec.tag (deref usedTags) then error (concat "Duplicate test tag: " spec.tag) else ());
       modref usedTags (setInsert spec.tag (deref usedTags));
-      let step = MidStep (length (deref steps)) in
+      let id = length (deref steps) in
+      let step = MidStep id in
+      (match tags with Some tags then
+        modref tags (setRemove spec.tag (deref tags))
+       else ());
       modref steps (snoc (deref steps)
         { uses = spec.uses
         , tag = spec.tag
@@ -246,6 +252,12 @@ lang TestSpec
     declareTests api;
     let steps = deref steps in
     let testFunctions = deref testFunctions in
+
+    (match tags with Some tags then
+      if setIsEmpty (deref tags)
+      then ()
+      else error (concat "Unknown tag(s): " (strJoin ", " (setToSeq (deref tags))))
+     else ());
 
     let processSource : String -> [Rule] = lam source.
       (if debug then
@@ -314,15 +326,19 @@ lang TestSpec
       ] in
     strJoin "\n" (map f rules)
 
-  sem formatTupFilter : [Rule] -> String
-  sem formatTupFilter = | rules ->
+  sem formatTupFilter : Option (Set String) -> [Rule] -> String
+  sem formatTupFilter tags = | rules ->
+    let rules = match tags with Some tags
+      then filter (lam rule. setMem rule.tag tags) rules
+      else rules in
     let f = lam rule. concat "build/" (head rule.outputs) in
     strJoin " " (map f rules)
 
-  sem formatMake : [Rule] -> String
-  sem formatMake = | rules ->
-    let prereq = lam rule.
-      cons ' ' (head rule.outputs) in
+  sem formatMake : Option (Set String) -> [Rule] -> String
+  sem formatMake tags = | rules ->
+    let prereq = match tags with Some tags
+      then lam rule. if setMem rule.tag tags then cons ' ' (head rule.outputs) else ""
+      else lam rule. cons ' ' (head rule.outputs) in
     let rule = lam rule. join
       [ head rule.outputs, " : "
       , strJoin " " rule.inputs
@@ -343,14 +359,14 @@ lang TestSpec
     , keepGoing : Bool
     }
 
-  sem runMake : RunFlags -> [Rule] -> Int
-  sem runMake flags = | rules ->
+  sem runMake : RunFlags -> Option (Set String) -> [Rule] -> Int
+  sem runMake flags tags = | rules ->
     let parallel = match flags.parallel with Some j
       then concat " -j" (int2string j)
       else "" in
     let keepGoing = if flags.keepGoing then " -k" else "" in
     sysWithTempFile (lam file.
-      writeFile file (formatMake rules);
+      writeFile file (formatMake tags rules);
       let localFile = if eqi 0 (command "test -f Makefile")
         then " -f Makefile"
         else "" in
@@ -462,10 +478,8 @@ lang TestSpec
 
     ()
 
-  sem runTup : Bool -> [String] -> RunFlags -> [Rule] -> Int
-  sem runTup force dirs flags =
-  | [] -> printLn "No tests specified, did not run tup."; 0
-  | rules ->
+  sem runTup : Bool -> [String] -> RunFlags -> Option (Set String) -> [Rule] -> Int
+  sem runTup force dirs flags tags = | rules ->
     ensureTupSetup force dirs;
     let parallel = match flags.parallel with Some n
       then concat " -j" (int2string n)
@@ -473,8 +487,11 @@ lang TestSpec
     let keepGoing = if flags.keepGoing
       then " -k"
       else "" in
-    sysWithTempFile (lam file.
-      writeFile file (formatTupFilter rules);
+    let targets = formatTupFilter tags rules in
+    if null targets
+    then printLn "No tests specified, did not run tup."; 0
+    else sysWithTempFile (lam file.
+      writeFile file targets;
       -- NOTE(vipa, 2026-05-06): Something about the way OCaml's
       -- Sys.command handles really, really long commands makes it
       -- break to run `tup` directly. Putting the arguments in a file
@@ -503,6 +520,11 @@ lang TestSpec
   sem runListTargets : [Rule] -> Int
   sem runListTargets = | rules ->
     for_ rules (lam r. printLn (concat "build/" (head r.outputs)));
+    0
+
+  sem runListTags : [Rule] -> Int
+  sem runListTags = | rules ->
+    for_ (setToSeq (setOfSeq cmpString (map (lam rule. rule.tag) rules))) (lam tag. printLn tag);
     0
 
   sem runWatch : [String] -> Option {src : String, exe : String} -> Int
@@ -641,6 +663,7 @@ lang TestSpec
         { inputs = mapOption (lam x. match x with GenFile x then Some x else None ()) uses
         , extraInputs = res.deps
         , outputs = optionMapOr [] (lam x. [x]) output
+        , tag = spec.tag
         , command = if and (not succ) spec.output
           then join ["{ ", res.actual, "; } || { touch ", conf.actual.o, "; false; } "]
           else res.actual
@@ -694,23 +717,35 @@ lang TestSpec
     let tupRules = optMap
       (lam dir.
         let focus = strTrim (sysRunCommand ["realpath", "--relative-to", dir, "."] "" ".").stdout in
-        let rules = computeRules false dir paths (lam. true) (map resolveTupRules substituters) declareTests (FocusDirectory focus) in
+        let rules = computeRules false dir paths (lam. true) (map resolveTupRules substituters) declareTests (None ()) (FocusDirectory focus) in
         match formatTupRules rules with str & !""
         then printLn str; exit 0
         else exit 0)
       tupRules in
 
-    let makeMode = lam flags. lam debug. lam dependencyMode. lam subs. lam focus.
-      runMake flags (computeRules debug "." paths dependencyMode (map resolveMake subs) declareTests focus) in
-    let tupMode = lam force. lam flags. lam debug. lam dependencyMode. lam subs. lam focus.
-      runTup force paths flags (computeRules debug "." paths dependencyMode (map resolveTupFilter subs) declareTests focus) in
-    let statsMode = lam flags. lam debug. lam dependencyMode. lam subs. lam focus.
+    let makeMode = lam flags. lam debug. lam dependencyMode. lam subs. lam tags. lam focus.
+      runMake flags tags (computeRules debug "." paths dependencyMode (map resolveMake subs) declareTests tags focus) in
+    let tupMode = lam force. lam flags. lam debug. lam dependencyMode. lam subs. lam tags. lam focus.
+      runTup force paths flags tags (computeRules debug "." paths dependencyMode (map resolveTupFilter subs) declareTests tags focus) in
+    let statsMode = lam flags. lam debug. lam dependencyMode. lam subs. lam tags. lam focus.
+      (if optionIsSome tags then
+        printErrorLn "Warning: --stats does not take --tag into account, enabled tests may be fewer than reported."
+       else ());
       runStats
-        (computeRules debug "." paths dependencyMode (map resolveTupFilter subs) declareTests focus)
-        (computeRules false "." paths (lam. true) (map resolveTupFilter subs) declareTests focus) in
-    let listTargetsMode = lam flags. lam debug. lam dependencyMode. lam subs. lam focus.
+        (computeRules debug "." paths dependencyMode (map resolveTupFilter subs) declareTests tags focus)
+        (computeRules false "." paths (lam. true) (map resolveTupFilter subs) declareTests (None ()) focus) in
+    let listTargetsMode = lam flags. lam debug. lam dependencyMode. lam subs. lam tags. lam focus.
+      (if optionIsSome tags then
+        printErrorLn "Warning: --targets does not take --tag into account, enabled tests may be fewer than reported."
+       else ());
       runListTargets
-        (computeRules debug "." paths dependencyMode (map resolveTupFilter subs) declareTests focus) in
+        (computeRules debug "." paths dependencyMode (map resolveTupFilter subs) declareTests tags focus) in
+    let listTagsMode = lam flags. lam debug. lam dependencyMode. lam subs. lam tags. lam focus.
+      (if optionIsSome tags then
+        printErrorLn "Warning: --tags does not take --tag into account, relevant tags may be fewer than reported."
+       else ());
+      runListTags
+        (computeRules debug "." paths dependencyMode (map resolveTupFilter subs) declareTests tags focus) in
     let checkDefaultMode = lam.
       if eqi 0 (command "test -e .tup")
       then tupMode false
@@ -739,6 +774,11 @@ lang TestSpec
     let listTargets = optNoArg
       { optNoArgDef listTargetsMode with long = "targets"
       , description = "Don't run tests, just print all primary targets that would be created."
+      , category = catMode
+      } in
+    let listTags = optNoArg
+      { optNoArgDef listTagsMode with long = "tags"
+      , description = "Don't run tests, just print all tags used for enabled tests."
       , category = catMode
       } in
 
@@ -785,6 +825,12 @@ lang TestSpec
         } in
       foldl1 optOr [noneF, smartF, mostF, allF, optPure smartDep] in
 
+    let tags = optOptional (optMap (setOfSeq cmpString) (optSome (optArg
+      { optArgDefString with long = "tag"
+      , arg = "<tag>"
+      , description = "Only run tests with the given tag (and their dependencies)."
+      }))) in
+
     let focusPaths = optPos
       { optPosDefString with arg = "<test-origin>"
       , description = "Run only tests from these files, if present, otherwise from all files."
@@ -811,20 +857,21 @@ lang TestSpec
         parallel keepGoing in
 
     let optParser = optOr tupRules
-      (optApply2 (optMap5
-        (lam mode. lam subs. lam debug. lam dependencyMode. lam flags. lam watch. lam focus.
+      (optApply3 (optMap5
+        (lam mode. lam subs. lam debug. lam dependencyMode. lam flags. lam watch. lam tags. lam focus.
           let mode = optionGetOrElse checkDefaultMode mode in
           checkAtRootAndUpToDate sourceLocation;
           ensureElideCat ();
           if watch
           then exit (runWatch paths sourceLocation)
-          else exit (mode flags debug dependencyMode subs focus))
-        (optOptional (optOr (optOr (optOr make tup) stats) listTargets))
+          else exit (mode flags debug dependencyMode subs tags focus))
+        (optOptional (optOr (optOr (optOr (optOr make tup) stats) listTargets) listTags))
         substituters
         debug
         dependencyMode
         runFlags)
         watch
+        tags
         focusPaths) in
 
     let helpText = strJoin "\n"
