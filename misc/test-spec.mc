@@ -149,15 +149,23 @@ testMain substituters directories location (lam api.
     (strEndsWith ".mc")
     [(eval, succ), (compile, succ), (run, succ), (mlangCompile, succ), (mlangRun, succ), (parserCompareRun, succ)];
 
-  -- Not real mcore syntax, or so large that the info-consistency check takes too long.
+  -- Skip some files for parser comparision
   api.tests []
-    (elem
-      [ "src/stdlib/python/python.mc"
-      , "src/test/py/python.mc"
-      , "src/stdlib/mexpr/nestable-records/merged.mc"
-      , "src/stdlib/mexpr/reptypes.mc"
-      , "src/stdlib/parser/selfhost-gen.mc"
-      ])
+    (or
+      (elem
+        [ "src/stdlib/python/python.mc"
+        , "src/test/py/python.mc"
+        , "src/stdlib/mexpr/nestable-records/merged.mc"
+        , "src/stdlib/mexpr/reptypes.mc"
+        , "src/stdlib/parser/selfhost-gen.mc"
+        , "src/test/microbenchmark/fold.mc"
+        , "src/test/microbenchmark/iter.mc"
+        , "src/test/microbenchmark/map_n.mc"
+        , "src/test/microbenchmark/rand_sample_n.mc"
+        , "src/test/microbenchmark/matrix_mul_carray_genarray.mc"
+        ])
+      (dirIs "src/test/meta")
+    )
     [(parserCompareRun, dont)];
 
   -- The compiler itself is tested through the bootstrap process, so

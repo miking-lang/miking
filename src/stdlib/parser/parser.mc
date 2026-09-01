@@ -35,6 +35,7 @@ include "stringid.mc"
 include "char.mc"
 include "option.mc"
 include "map.mc"
+include "set.mc"
 include "parser/breakable.mc"
 include "name.mc"
 include "result.mc"
@@ -756,7 +757,7 @@ lang AppParser = AstParserBase + AppAst + AppTypeAst
   | (OpTypeApp _, OpTypeApp _)  -> GLeft ()
 end
 
-lang DataParser = AstParserBase + DataAst + ConTypeAst + AppTypeAst + DataPat
+lang DataParser = AstParserBase + DataAst + ConTypeAst + AppTypeAst + DataPat + DataTypeAst + VarTypeAst
   syn BrkOpExpr lstyle rstyle +=
   | OpExprConApp (Info, Name)
 
@@ -784,14 +785,59 @@ lang DataParser = AstParserBase + DataAst + ConTypeAst + AppTypeAst + DataPat
   | { token = UIdentTok { val = val } | HashStringTok { hash = "con", val = val } } & tokident ->
     let cur = nextToken tokident.stream in
     let ident = nameNoSym val in
-    -- A constructor-type reference is a complete type atom on its own
-    -- (unlike TmConApp/PatCon, which always require an argument); any
-    -- following type arguments are picked up by the generic, left-
-    -- associative application handling in AppParser, exactly as for any
-    -- other atom (e.g. `Map SID Expr` = `(Map SID) Expr`).
-    let typ = TyCon { ident = ident, data = ityunknown_ tokident.info, info = tokident.info } in
-    let state = breakableAddAtom (configType ()) (OpTypeAtom typ) state in
-    parseTypeRClosed state cur
+    match cur with { token = LBraceTok {} } & tokopen then
+      let afterOpen = nextToken tokopen.stream in
+      if looksLikeConTypeRestriction afterOpen then
+        result.bind (parseConTypeRestrictionBody afterOpen) (lam res.
+          match res with (data, closeInfo, cur) in
+          let typ = TyCon { ident = ident, data = data, info = mergeInfo tokident.info closeInfo } in
+          let state = breakableAddAtom (configType ()) (OpTypeAtom typ) state in
+          parseTypeRClosed state cur
+        )
+      else
+        let typ = TyCon { ident = ident, data = ityunknown_ tokident.info, info = tokident.info } in
+        let state = breakableAddAtom (configType ()) (OpTypeAtom typ) state in
+        parseTypeRClosed state cur
+    else
+      let typ = TyCon { ident = ident, data = ityunknown_ tokident.info, info = tokident.info } in
+      let state = breakableAddAtom (configType ()) (OpTypeAtom typ) state in
+      parseTypeRClosed state cur
+
+  sem looksLikeConTypeRestriction: NextTokenResult -> Bool
+  sem looksLikeConTypeRestriction =
+  | { token = OperatorTok { val = "!" } } -> true
+  | { token = UIdentTok {} | LIdentTok {} } & tok -> 
+    match nextToken tok.stream with { token = OperatorTok { val = ":" } } then false else true
+  | _ -> false
+
+  sem parseConTypeRestrictionBody: all w. NextTokenResult -> ParseResult w (Type, Info, NextTokenResult)
+  sem parseConTypeRestrictionBody =
+  | { token = OperatorTok { val = "!" } } & toknot ->
+    match parseConNameList [] (nextToken toknot.stream) with (names, cur) in
+    finishConTypeRestriction
+      (TyData { info = NoInfo (), universe = mapEmpty nameCmp, positive = false, cons = setOfSeq nameCmp names })
+      cur
+  | { token = LIdentTok { val = val } } & tokvar ->
+    finishConTypeRestriction
+      (TyVar { info = NoInfo (), ident = nameNoSym val })
+      (nextToken tokvar.stream)
+  | cur ->
+    match parseConNameList [] cur with (names, cur) in
+    finishConTypeRestriction
+      (TyData { info = NoInfo (), universe = mapEmpty nameCmp, positive = true, cons = setOfSeq nameCmp names })
+      cur
+
+  sem finishConTypeRestriction: all w. Type -> NextTokenResult -> ParseResult w (Type, Info, NextTokenResult)
+  sem finishConTypeRestriction data =
+  | { token = RBraceTok {} } & tokclose ->
+    parseOk (data, tokclose.info, nextToken tokclose.stream)
+  | cur -> parseErr (cur.info, "Missing right brace in constructor type restriction")
+
+  sem parseConNameList: [Name] -> NextTokenResult -> ([Name], NextTokenResult)
+  sem parseConNameList acc =
+  | { token = UIdentTok { val = val } } & tok -> parseConNameList (snoc acc (nameNoSym val)) (nextToken tok.stream)
+  | { token = LIdentTok { val = val } } & tok -> parseConNameList (snoc acc (nameNoSym val)) (nextToken tok.stream)
+  | cur -> (acc, cur)
 
   sem parsePatROpen state +=
   | { token = UIdentTok { val = val } | HashStringTok { hash = "con", val = val } } & tokident ->
@@ -1163,7 +1209,7 @@ lang TensorParser = AstParserBase + TensorTypeAst
       parseErr (cur.info, "Missing left bracket")
 end
 
-lang StringParser = AstParserBase + SeqAst + CharAst + SeqTotPat + CharPat
+lang StringParser = AstParserBase + SeqAst + CharAst + SeqTotPat + CharPat + SeqTypeAst + CharTypeAst
   sem startsAtomExpr +=
   | { token = StringTok { } } -> true
 
@@ -1186,7 +1232,7 @@ lang StringParser = AstParserBase + SeqAst + CharAst + SeqTotPat + CharPat
 
   sem parseTypeROpen state +=
   | { token = UIdentTok { val = "String" } } & cur ->
-    let typ = itystr_ cur.info in
+    let typ = TySeq { ty = TyChar { info = NoInfo () }, info = cur.info } in
     let state = breakableAddAtom (configType ()) (OpTypeAtom typ) state in
     parseTypeRClosed state (nextToken cur.stream)
 
@@ -2446,21 +2492,104 @@ lang SemicolonParser = AstParserBase + LetDeclAst
   | (OpExprSemi _, OpExprSemi _) -> GRight ()
 end
 
-lang AllParser = AstParserBase + AllTypeAst + PolyKindAst + AllKeyword
+lang KindParser = AstParserBase + DataKindAst
+  sem parseKind +=
+  | { token = LBraceTok {} } & tokopen ->
+    parseKindBody (mapEmpty nameCmp) (nextToken tokopen.stream)
+
+  sem parseKindBody: all w. Map Name {lower : Set Name, upper : Option (Set Name)} -> NextTokenResult -> ParseResult w (Kind, NextTokenResult)
+  sem parseKindBody entries =
+  | { token = RBraceTok {} } & tokclose ->
+    parseOk (Data { types = entries }, nextToken tokclose.stream)
+  | cur ->
+    result.bind (parseKindEntry cur) (lam res.
+      match res with (name, entry, cur) in
+      let entries = mapInsert name entry entries in
+      match cur with { token = CommaTok {} } & tokcomma then
+        parseKindBody entries (nextToken tokcomma.stream)
+      else match cur with { token = RBraceTok {} } & tokclose then
+        parseOk (Data { types = entries }, nextToken tokclose.stream)
+      else
+        parseErr (cur.info, "Missing comma or right brace in kind")
+    )
+
+  sem parseKindEntry: all w. NextTokenResult -> ParseResult w (Name, {lower : Set Name, upper : Option (Set Name)}, NextTokenResult)
+  sem parseKindEntry =
+  | { token = UIdentTok { val = val } } & tokident ->
+    let name = nameNoSym val in
+    let cur = nextToken tokident.stream in
+    match cur with { token = LBracketTok {} } & tokopen then
+      let cur = nextToken tokopen.stream in
+      switch cur
+      case { token = OperatorTok { val = ">" } } & tokop then
+        match parseKindConList [] (nextToken tokop.stream) with (lower, cur) in
+        finishKindEntry name {lower = setOfSeq nameCmp lower, upper = None ()} cur
+      case { token = OperatorTok { val = "|" } } & tokop then
+        match parseKindConList [] (nextToken tokop.stream) with (lower, cur) in
+        finishKindEntry name {lower = setOfSeq nameCmp lower, upper = Some (setEmpty nameCmp)} cur
+      case { token = OperatorTok { val = "<" } } & tokop then
+        match parseKindConList [] (nextToken tokop.stream) with (upper, cur) in
+        switch cur
+        case { token = OperatorTok { val = "|" } } & tokbar then
+          match parseKindConList [] (nextToken tokbar.stream) with (lower, cur) in
+          finishKindEntry name {lower = setOfSeq nameCmp lower, upper = Some (setOfSeq nameCmp upper)} cur
+        case cur then
+          finishKindEntry name {lower = setEmpty nameCmp, upper = Some (setOfSeq nameCmp upper)} cur
+        end
+      case cur then
+        parseErr (cur.info, "Expected >, <, or | in kind entry")
+      end
+    else parseErr (cur.info, "Missing left bracket in kind entry")
+  | cur -> parseErr (cur.info, "Missing type identifier in kind entry")
+
+  sem finishKindEntry: all w. Name -> {lower : Set Name, upper : Option (Set Name)} -> NextTokenResult -> ParseResult w (Name, {lower : Set Name, upper : Option (Set Name)}, NextTokenResult)
+  sem finishKindEntry name entry =
+  | { token = RBracketTok {} } & tokclose -> parseOk (name, entry, nextToken tokclose.stream)
+  | cur -> parseErr (cur.info, "Missing right bracket in kind entry")
+
+  sem parseKindConList: [Name] -> NextTokenResult -> ([Name], NextTokenResult)
+  sem parseKindConList acc =
+  | { token = UIdentTok { val = val } } & tok -> parseKindConList (snoc acc (nameNoSym val)) (nextToken tok.stream)
+  | { token = LIdentTok { val = val } } & tok -> parseKindConList (snoc acc (nameNoSym val)) (nextToken tok.stream)
+  | cur -> (acc, cur)
+end
+
+lang AllParser = AstParserBase + AllTypeAst + PolyKindAst + AllKeyword + KindParser
   sem parseTypeROpen state +=
   | { token = KeywordTok { val = "all" } } & tokall ->
     let cur = nextToken tokall.stream in
 
     match cur with { token = LIdentTok { val = ident } | HashStringTok { hash = "var", val = ident } } & tokident then
       let cur = nextToken tokident.stream in
+      let ident = nameNoSym ident in
 
-      match cur with { token = OperatorTok { val = "." } } & tokdot then
+      match cur with { token = OperatorTok { val = "::" } } & tokdcolon then
+        let cur = nextToken tokdcolon.stream in
+        result.bind (parseKind cur) (lam res.
+          match res with (kind, cur) in
+          match cur with { token = OperatorTok { val = "." } } & tokdot then
+            let cur = nextToken tokdot.stream in
+            result.bind (parseType cur) (lam res.
+              match res with (ty, cur) in
+              let typ = TyAll {
+                info = mergeInfo tokall.info (infoTy ty),
+                ident = ident,
+                kind = kind,
+                ty = ty
+              } in
+              let state = breakableAddAtom (configType ()) (OpTypeAtom typ) state in
+              parseTypeRClosed state cur
+            )
+          else
+            parseErr (cur.info, "Missing period")
+        )
+      else match cur with { token = OperatorTok { val = "." } } & tokdot then
         let cur = nextToken tokdot.stream in
         result.bind (parseType cur) (lam res.
           match res with (ty, cur) in
           let typ = TyAll {
             info = mergeInfo tokall.info (infoTy ty),
-            ident = nameNoSym ident,
+            ident = ident,
             kind = Poly (),
             ty = ty
           } in
