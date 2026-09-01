@@ -17,7 +17,12 @@ include "mexpr/eq.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/json-debug.mc"
+include "mlang/ast.mc"
+include "mlang/eq.mc"
+include "mlang/boot-parser.mc"
+include "mlang/pprint.mc"
 include "json.mc"
+include "fileutils.mc"
 include "seq.mc"
 include "map.mc"
 include "parser/breakable.mc"
@@ -61,6 +66,22 @@ lang AstParserBase = Lexer + Ast + DeclAst
 
   sem canStartAppArgExpr: NextTokenResult -> Bool
   sem canStartAppArgType: NextTokenResult -> Bool
+
+  -- Matches a `=` or `+=` assignment operator, whether it is its own
+  -- token or the prefix of a merged operator token. Returns whether it
+  -- was `+=` and the token stream right after it.
+  sem matchAssignOp: NextTokenResult -> Option (Bool, NextTokenResult)
+  sem matchAssignOp =
+  | cur ->
+    match cur.token with OperatorTok { val = v } then
+      if eqString v "+=" then Some (true, nextToken cur.stream)
+      else if eqString v "=" then Some (false, nextToken cur.stream)
+      else if isPrefix eqChar "+=" v then
+        optionMap (lam c. (true, c)) (splitOperatorPrefix cur "+=")
+      else if isPrefix eqChar "=" v then
+        optionMap (lam c. (false, c)) (splitOperatorPrefix cur "=")
+      else None ()
+    else None ()
 
   sem constructPrefixExpr: all w. (BrkOpExpr LClosed ROpen, Expr) -> ParseResult w Expr
   sem constructPrefixType: all w. (BrkOpType LClosed ROpen, Type) -> ParseResult w Type
@@ -426,6 +447,69 @@ lang TypeKeyword = Lexer
   | "type" -> true
 end
 
+lang ConKeyword = Lexer
+  sem identIsKeyword =
+  | "con" -> true
+end
+
+lang ExternalKeyword = Lexer
+  sem identIsKeyword =
+  | "external" -> true
+end
+
+lang UseKeyword = Lexer
+  sem identIsKeyword =
+  | "use" -> true
+end
+
+lang AllKeyword = Lexer
+  sem identIsKeyword =
+  | "all" -> true
+end
+
+lang IfKeyword = Lexer
+  sem identIsKeyword =
+  | "if" -> true
+end
+
+lang LangKeyword = Lexer
+  sem identIsKeyword =
+  | "lang" -> true
+end
+
+lang SynKeyword = Lexer
+  sem identIsKeyword =
+  | "syn" -> true
+end
+
+lang SemKeyword = Lexer
+  sem identIsKeyword =
+  | "sem" -> true
+end
+
+lang IncludeKeyword = Lexer
+  sem identIsKeyword =
+  | "include" -> true
+end
+
+lang MexprKeyword = Lexer
+  sem identIsKeyword =
+  | "mexpr" -> true
+end
+
+-- `Unknown` is a reserved type keyword in boot (producing `TyUnknown`
+-- directly), not a generic constructor-type reference.
+lang UnknownTypeParser = AstParserBase + UnknownTypeAst
+  sem canStartAppArgType =
+  | { token = UIdentTok { val = "Unknown" } } -> true
+
+  sem parseTypeROpen state =
+  | { token = UIdentTok { val = "Unknown" } } & cur ->
+    let typ = ityunknown_ cur.info in
+    let state = breakableAddAtom (configType ()) (OpTypeAtom typ) state in
+    parseTypeRClosed state (nextToken cur.stream)
+end
+
 lang IntParser = AstParserBase + IntAst + IntPat
   sem canStartAppArgExpr =
   | { token = IntTok { } } -> true
@@ -664,17 +748,15 @@ lang DataParser = AstParserBase + DataAst + ConTypeAst + AppTypeAst + DataPat
   syn BrkOpExpr lstyle rstyle =
   | OpExprConApp (Info, Name)
 
-  syn BrkOpType lstyle rstyle =
-  | OpTypeConApp (Info, Name)
+  sem canStartAppArgType =
+  | { token = UIdentTok { } } -> true
+  | { token = HashStringTok { hash = "con" } } -> true
 
   syn BrkOpPat lstyle rstyle =
   | OpPatConApp (Info, Name)
 
   sem getInfoExpr =
   | OpExprConApp (info, _) -> info
-
-  sem getInfoType =
-  | OpTypeConApp (info, _) -> info
 
   sem getInfoPat =
   | OpPatConApp (info, _) -> info
@@ -690,9 +772,15 @@ lang DataParser = AstParserBase + DataAst + ConTypeAst + AppTypeAst + DataPat
   | { token = UIdentTok { val = val } | HashStringTok { hash = "con", val = val } } & tokident ->
     let cur = nextToken tokident.stream in
     let ident = nameNoSym val in
-    let state = breakableAddPrefix (configType ()) (OpTypeConApp (tokident.info, ident)) state in
-    parseTypeROpen state cur
-  
+    -- A constructor-type reference is a complete type atom on its own
+    -- (unlike TmConApp/PatCon, which always require an argument); any
+    -- following type arguments are picked up by the generic, left-
+    -- associative application handling in AppParser, exactly as for any
+    -- other atom (e.g. `Map SID Expr` = `(Map SID) Expr`).
+    let typ = TyCon { ident = ident, data = ityunknown_ tokident.info, info = tokident.info } in
+    let state = breakableAddAtom (configType ()) (OpTypeAtom typ) state in
+    parseTypeRClosed state cur
+
   sem parsePatROpen state =
   | { token = UIdentTok { val = val } | HashStringTok { hash = "con", val = val } } & tokident ->
     let cur = nextToken tokident.stream in
@@ -707,20 +795,6 @@ lang DataParser = AstParserBase + DataAst + ConTypeAst + AppTypeAst + DataPat
       ident = ident,
       body = rhs,
       ty = ityunknown_ info,
-      info = info
-    })
-
-  sem constructPrefixType =
-  | (OpTypeConApp (info, ident), rhs) ->
-    let lhs = TyCon {
-      ident = ident,
-      data = ityunknown_ info,
-      info = info
-    } in
-    let info = mergeInfo info (infoTy rhs) in
-    parseOk (TyApp {
-      lhs = lhs,
-      rhs = rhs,
       info = info
     })
 
@@ -1046,6 +1120,32 @@ lang CharParser = AstParserBase + CharAst + CharPat
     } in
     let state = breakableAddAtom (configPat ()) (OpPatAtom pat) state in
     parsePatRClosed state (nextToken cur.stream)
+end
+
+-- `Tensor[T]` is a dedicated, keyword-like type syntax (boot reserves
+-- `Tensor` and always requires the bracketed argument), distinct from a
+-- generic type application.
+lang TensorParser = AstParserBase + TensorTypeAst
+  sem canStartAppArgType =
+  | { token = UIdentTok { val = "Tensor" } } -> true
+
+  sem parseTypeROpen state =
+  | { token = UIdentTok { val = "Tensor" } } & toktensor ->
+    let cur = nextToken toktensor.stream in
+    match cur with { token = LBracketTok {} } & toklb then
+      let cur = nextToken toklb.stream in
+      result.bind (parseType cur) (lam res.
+        match res with (ty, cur) in
+        match cur with { token = RBracketTok {} } & tokrb then
+          let info = mergeInfo toktensor.info tokrb.info in
+          let typ = TyTensor { ty = ty, info = info } in
+          let state = breakableAddAtom (configType ()) (OpTypeAtom typ) state in
+          parseTypeRClosed state (nextToken tokrb.stream)
+        else
+          parseErr (cur.info, "Missing right bracket")
+      )
+    else
+      parseErr (cur.info, "Missing left bracket")
 end
 
 lang StringParser = AstParserBase + SeqAst + CharAst + SeqTotPat + CharPat
@@ -1535,7 +1635,7 @@ lang LetDeclParser = AstParserBase + LetDeclAst + LetKeyword + InKeyword
       parseErr (cur.info, "Missing identifier")
 end
 
-lang RecLetsDeclParser = AstParserBase + RecLetsDeclAst + RecursiveKeyword + LetKeyword + InKeyword
+lang RecLetsDeclParser = AstParserBase + RecLetsDeclAst + RecursiveKeyword + LetKeyword + InKeyword + EndKeyword
   sem parseExprROpen state =
   | { token = KeywordTok { val = "recursive" } } & rokrec ->
     recursive let parseItems = lam acc. lam cur.
@@ -1566,6 +1666,35 @@ lang RecLetsDeclParser = AstParserBase + RecLetsDeclAst + RecursiveKeyword + Let
       } in
       let state = breakableAddPrefix (configExpr ()) (OpExprDecl decl) state in
       parseExprROpen state (nextToken tokin.stream)
+    )
+
+  -- Top-level form: `recursive let ... let ... end` (terminated by `end`,
+  -- unlike the expression form above which is terminated by `in`).
+  sem parseDecl =
+  | { token = KeywordTok { val = "recursive" } } & rokrec ->
+    recursive let parseItems = lam acc. lam cur.
+      result.bind (parseDecl cur) (lam decl.
+        match decl with (DeclLet decl, cur) in
+        let acc = snoc acc decl in
+        switch cur
+          case { token = KeywordTok { val = "end" } } & tokend then
+            parseOk (tokend, nextToken tokend.stream, acc)
+          case { token = KeywordTok { val = "let" } } then
+            parseItems acc cur
+          case _ then
+            parseErr (cur.info, "Unexpected token in recursive declaration")
+        end
+      )
+    in
+
+    let cur = nextToken rokrec.stream in
+    result.bind (parseItems [] cur) (lam res.
+      match res with (tokend, cur, bindings) in
+      let decl = DeclRecLets {
+        bindings = bindings,
+        info = mergeInfo rokrec.info tokend.info
+      } in
+      parseOk (decl, cur)
     )
 end
 
@@ -1702,13 +1831,17 @@ lang LamParser = AstParserBase + LamAst + FunTypeAst + LamKeyword
     })
 
   sem groupingsAllowedType =
-  | (OpTypeArrow _, OpTypeArrow _) -> GLeft ()
+  | (OpTypeArrow _, OpTypeArrow _) -> GRight ()
 end
 
 lang MatchParser = AstParserBase + MatchAst + NeverAst + MatchKeyword + WithKeyword + ThenKeyword + ElseKeyword + InKeyword
   syn BrkOpExpr lstyle rstyle =
   | OpExprMatchIn (Info, Expr, Pat)
   | OpExprMatchElse (Info, Expr, Pat, Expr)
+
+  sem getInfoExpr =
+  | OpExprMatchIn (info, _, _) -> info
+  | OpExprMatchElse (info, _, _, _) -> info
 
   sem parseExprROpen state =
   | { token = KeywordTok { val = "match" } } & tokmatch ->
@@ -1892,7 +2025,7 @@ lang AndParser = AstParserBase + AndPat
     })
 
   sem groupingsAllowedPat =
-  | (OpPatAnd _, OpPatAnd _) -> GLeft ()
+  | (OpPatAnd _, OpPatAnd _) -> GRight ()
 end
 
 lang OrParser = AstParserBase + OrPat
@@ -1920,7 +2053,7 @@ lang OrParser = AstParserBase + OrPat
     })
 
   sem groupingsAllowedPat =
-  | (OpPatOr _, OpPatOr _) -> GLeft ()
+  | (OpPatOr _, OpPatOr _) -> GRight ()
 end
 
 lang NotParser = AstParserBase + NotPat
@@ -1948,7 +2081,7 @@ lang NotParser = AstParserBase + NotPat
   | (OpPatNot _, OpPatNot _) -> GLeft ()
 end
 
-lang UtestParser = AstParserBase + UtestDeclAst + UtestKeyword + WithKeyword + UsingKeyword + InKeyword
+lang UtestParser = AstParserBase + UtestDeclAst + UtestKeyword + WithKeyword + UsingKeyword + ElseKeyword + InKeyword
   sem parseExprROpen state =
   | { token = KeywordTok { val = "utest" } } & tokutest ->
     result.bind (parseDecl tokutest) (lam decl.
@@ -1975,7 +2108,7 @@ lang UtestParser = AstParserBase + UtestDeclAst + UtestKeyword + WithKeyword + U
         result.bind expected (lam expected.
           match expected with (expected, cur) in
           let info = mergeInfo tokutest.info (infoTm expected) in
-          
+
           let tusing = match cur with { token = KeywordTok { val = "using" } } & tokusing then
             let cur = nextToken tokusing.stream in
             result.map (lam tusing.
@@ -1990,14 +2123,29 @@ lang UtestParser = AstParserBase + UtestDeclAst + UtestKeyword + WithKeyword + U
           result.bind tusing (lam tusing.
             match tusing with (tusing, cur, info) in
 
-            let decl = DeclUtest {
-              test = test,
-              expected = expected,
-              tusing = tusing,
-              tonfail = None (),
-              info = info
-            } in
-            parseOk (decl, cur)
+            let tonfail = match cur with { token = KeywordTok { val = "else" } } & tokelse then
+              let cur = nextToken tokelse.stream in
+              result.map (lam tonfail.
+                match tonfail with (tonfail, cur) in
+                let info = mergeInfo info (infoTm tonfail) in
+                (Some tonfail, cur, info)
+              ) (parseExpr cur)
+            else
+              parseOk (None (), cur, info)
+            in
+
+            result.bind tonfail (lam tonfail.
+              match tonfail with (tonfail, cur, info) in
+
+              let decl = DeclUtest {
+                test = test,
+                expected = expected,
+                tusing = tusing,
+                tonfail = tonfail,
+                info = info
+              } in
+              parseOk (decl, cur)
+            )
           )
         )
       else
@@ -2005,17 +2153,626 @@ lang UtestParser = AstParserBase + UtestDeclAst + UtestKeyword + WithKeyword + U
     )
 end
 
+lang ConDeclParser = AstParserBase + DataDeclAst + ConKeyword + InKeyword
+  sem parseExprROpen state =
+  | { token = KeywordTok { val = "con" } } & tokcon ->
+    result.bind (parseDecl tokcon) (lam decl.
+      match decl with (decl, cur) in
+
+      let state = breakableAddPrefix (configExpr ()) (OpExprDecl decl) state in
+
+      match cur with { token = KeywordTok { val = "in" } } & tokin then
+        let cur = nextToken tokin.stream in
+        parseExprROpen state cur
+      else
+        parseErr (cur.info, "Missing in expression")
+    )
+
+  sem parseDecl =
+  | { token = KeywordTok { val = "con" } } & tokcon ->
+    let cur = nextToken tokcon.stream in
+
+    match cur with { token = UIdentTok { val = ident } | HashStringTok { hash = "con", val = ident } } & tokident then
+      let cur = nextToken tokident.stream in
+
+      let tyIdent = match cur with { token = OperatorTok { val = ":" } } & tokcol then
+        let cur = nextToken tokcol.stream in
+        parseType cur
+      else
+        parseOk (ityunknown_ (mergeInfo tokcon.info tokident.info), cur)
+      in
+
+      result.bind tyIdent (lam tyIdent.
+        match tyIdent with (tyIdent, cur) in
+        let decl = DeclConDef {
+          ident = nameNoSym ident,
+          tyIdent = tyIdent,
+          info = mergeInfo tokcon.info (infoTy tyIdent)
+        } in
+        parseOk (decl, cur)
+      )
+    else
+      parseErr (cur.info, "Missing identifier")
+end
+
+lang ExtDeclParser = AstParserBase + ExtDeclAst + ExternalKeyword + InKeyword
+  sem parseExprROpen state =
+  | { token = KeywordTok { val = "external" } } & tokext ->
+    result.bind (parseDecl tokext) (lam decl.
+      match decl with (decl, cur) in
+
+      let state = breakableAddPrefix (configExpr ()) (OpExprDecl decl) state in
+
+      match cur with { token = KeywordTok { val = "in" } } & tokin then
+        let cur = nextToken tokin.stream in
+        parseExprROpen state cur
+      else
+        parseErr (cur.info, "Missing in expression")
+    )
+
+  sem parseDecl =
+  | { token = KeywordTok { val = "external" } } & tokext ->
+    let cur = nextToken tokext.stream in
+
+    match cur with { token = LIdentTok { val = ident } | HashStringTok { hash = "var", val = ident } } & tokident then
+      let cur = nextToken tokident.stream in
+
+      let effectCur = match cur with { token = OperatorTok { val = "!" } } & tokbang then
+        (true, nextToken tokbang.stream)
+      else
+        (false, cur)
+      in
+      match effectCur with (effect, cur) in
+
+      match cur with { token = OperatorTok { val = ":" } } & tokcol then
+        let cur = nextToken tokcol.stream in
+        result.bind (parseType cur) (lam res.
+          match res with (ty, cur) in
+          let decl = DeclExt {
+            ident = nameNoSym ident,
+            tyIdent = ty,
+            effect = effect,
+            info = mergeInfo tokext.info (infoTy ty)
+          } in
+          parseOk (decl, cur)
+        )
+      else
+        parseErr (cur.info, "Missing colon")
+    else
+      parseErr (cur.info, "Missing identifier")
+end
+
+lang UseParser = AstParserBase + UseDeclAst + TyUseAst + UseKeyword + InKeyword
+  sem parseExprROpen state =
+  | { token = KeywordTok { val = "use" } } & tokuse ->
+    result.bind (parseDecl tokuse) (lam decl.
+      match decl with (decl, cur) in
+
+      let state = breakableAddPrefix (configExpr ()) (OpExprDecl decl) state in
+
+      match cur with { token = KeywordTok { val = "in" } } & tokin then
+        let cur = nextToken tokin.stream in
+        parseExprROpen state cur
+      else
+        parseErr (cur.info, "Missing in expression")
+    )
+
+  sem parseDecl =
+  | { token = KeywordTok { val = "use" } } & tokuse ->
+    let cur = nextToken tokuse.stream in
+
+    -- A `use`d language name is a generic identifier in boot's grammar
+    -- (either case), not specifically a constructor-style UIdent.
+    match cur with
+      { token = UIdentTok { val = ident } | LIdentTok { val = ident }
+              | HashStringTok { hash = "con" | "var", val = ident } } & tokident
+    then
+      let decl = DeclUse {
+        ident = nameNoSym ident,
+        info = mergeInfo tokuse.info tokident.info
+      } in
+      parseOk (decl, nextToken tokident.stream)
+    else
+      parseErr (cur.info, "Missing identifier")
+
+  sem parseTypeROpen state =
+  | { token = KeywordTok { val = "use" } } & tokuse ->
+    let cur = nextToken tokuse.stream in
+    match cur with
+      { token = UIdentTok { val = ident } | LIdentTok { val = ident }
+              | HashStringTok { hash = "con" | "var", val = ident } } & tokident
+    then
+      let cur = nextToken tokident.stream in
+      match cur with { token = KeywordTok { val = "in" } } & tokin then
+        let cur = nextToken tokin.stream in
+        result.bind (parseType cur) (lam res.
+          match res with (inty, cur) in
+          let typ = TyUse {
+            ident = nameNoSym ident,
+            info = mergeInfo tokuse.info (infoTy inty),
+            inty = inty
+          } in
+          let state = breakableAddAtom (configType ()) (OpTypeAtom typ) state in
+          parseTypeRClosed state cur
+        )
+      else
+        parseErr (cur.info, "Missing in")
+    else
+      parseErr (cur.info, "Missing identifier")
+end
+
+lang ProjParser = AstParserBase + MatchAst + NeverAst + RecordPat + NamedPat + VarAst
+  syn BrkOpExpr lstyle rstyle =
+  | OpExprProj (Info, String)
+
+  sem getInfoExpr =
+  | OpExprProj (info, _) -> info
+
+  sem parseExprRClosed state =
+  | { token = OperatorTok { val = "." } } & tokdot ->
+    let cur = nextToken tokdot.stream in
+    switch cur
+      case { token = IntTok { val = n } } & toklabel then
+        let op = OpExprProj (mergeInfo tokdot.info toklabel.info, int2string n) in
+        match breakableAddPostfix (configExpr ()) op state with Some state then
+          parseExprRClosed state (nextToken toklabel.stream)
+        else
+          parseErr (toklabel.info, "Breakable add postfix error")
+      case { token = LIdentTok { val = label } | HashStringTok { hash = "label", val = label } } & toklabel then
+        let op = OpExprProj (mergeInfo tokdot.info toklabel.info, label) in
+        match breakableAddPostfix (configExpr ()) op state with Some state then
+          parseExprRClosed state (nextToken toklabel.stream)
+        else
+          parseErr (toklabel.info, "Breakable add postfix error")
+      case _ then
+        parseErr (cur.info, "Expected a field label")
+    end
+
+  sem constructPostfixExpr =
+  | (OpExprProj (info, label), target) ->
+    let fullInfo = mergeInfo (infoTm target) info in
+    let tmpIdent = nameNoSym "t" in
+    parseOk (TmMatch {
+      target = target,
+      pat = PatRecord {
+        bindings = mapInsert (stringToSid label)
+          (PatNamed { ident = PName tmpIdent, ty = ityunknown_ fullInfo, info = fullInfo })
+          (mapEmpty cmpSID),
+        ty = ityunknown_ fullInfo,
+        info = fullInfo
+      },
+      thn = TmVar { ident = tmpIdent, ty = ityunknown_ fullInfo, info = fullInfo, frozen = false },
+      els = TmNever { ty = ityunknown_ fullInfo, info = fullInfo },
+      ty = ityunknown_ fullInfo,
+      info = fullInfo
+    })
+end
+
+lang IfParser = AstParserBase + MatchAst + BoolPat + IfKeyword + ThenKeyword + ElseKeyword
+  syn BrkOpExpr lstyle rstyle =
+  | OpExprIf (Info, Expr, Expr)
+
+  sem getInfoExpr =
+  | OpExprIf (info, _, _) -> info
+
+  sem parseExprROpen state =
+  | { token = KeywordTok { val = "if" } } & tokif ->
+    let cur = nextToken tokif.stream in
+    let cond = parseExpr cur in
+    result.bind cond (lam cond.
+      match cond with (cond, cur) in
+      match cur with { token = KeywordTok { val = "then" } } & tokthen then
+        let cur = nextToken tokthen.stream in
+        let thn = parseExpr cur in
+        result.bind thn (lam thn.
+          match thn with (thn, cur) in
+          match cur with { token = KeywordTok { val = "else" } } & tokelse then
+            let cur = nextToken tokelse.stream in
+            let info = mergeInfo tokif.info tokelse.info in
+            let state = breakableAddPrefix (configExpr ()) (OpExprIf (info, cond, thn)) state in
+            parseExprROpen state cur
+          else
+            parseErr (cur.info, "Expected else keyword")
+        )
+      else
+        parseErr (cur.info, "Expected then keyword")
+    )
+
+  sem constructPrefixExpr =
+  | (OpExprIf (info, cond, thn), els) ->
+    let info = mergeInfo info (infoTm els) in
+    parseOk (TmMatch {
+      target = cond,
+      pat = PatBool { val = true, ty = tybool_, info = info },
+      thn = thn,
+      els = els,
+      ty = ityunknown_ info,
+      info = info
+    })
+end
+
+lang SemicolonParser = AstParserBase + LetDeclAst
+  syn BrkOpExpr lstyle rstyle =
+  | OpExprSemi Info
+
+  sem getInfoExpr =
+  | OpExprSemi info -> info
+
+  sem parseExprRClosed state =
+  | { token = SemiTok {} } & toksemi ->
+    match breakableAddInfix (configExpr ()) (OpExprSemi toksemi.info) state with Some state then
+      parseExprROpen state (nextToken toksemi.stream)
+    else
+      parseErr (toksemi.info, "Breakable add infix error")
+
+  sem constructInfixExpr =
+  | (OpExprSemi info, lhs, rhs) ->
+    let info = mergeInfo (infoTm lhs) (infoTm rhs) in
+    parseOk (TmDecl {
+      decl = DeclLet {
+        ident = nameNoSym "",
+        tyAnnot = ityunknown_ info,
+        tyBody = ityunknown_ info,
+        body = lhs,
+        info = info
+      },
+      inexpr = rhs,
+      ty = ityunknown_ info,
+      info = info
+    })
+
+  sem groupingsAllowedExpr =
+  | (OpExprSemi _, OpExprSemi _) -> GRight ()
+end
+
+lang AllParser = AstParserBase + AllTypeAst + PolyKindAst + AllKeyword
+  sem parseTypeROpen state =
+  | { token = KeywordTok { val = "all" } } & tokall ->
+    let cur = nextToken tokall.stream in
+
+    match cur with { token = LIdentTok { val = ident } | HashStringTok { hash = "var", val = ident } } & tokident then
+      let cur = nextToken tokident.stream in
+
+      match cur with { token = OperatorTok { val = "." } } & tokdot then
+        let cur = nextToken tokdot.stream in
+        result.bind (parseType cur) (lam res.
+          match res with (ty, cur) in
+          let typ = TyAll {
+            info = mergeInfo tokall.info (infoTy ty),
+            ident = nameNoSym ident,
+            kind = Poly (),
+            ty = ty
+          } in
+          let state = breakableAddAtom (configType ()) (OpTypeAtom typ) state in
+          parseTypeRClosed state cur
+        )
+      else
+        parseErr (cur.info, "Missing period")
+    else
+      parseErr (cur.info, "Missing identifier")
+end
+
+lang SynDeclParser = AstParserBase + SynDeclAst + SynKeyword + RecordTypeAst
+  sem parseDecl =
+  | { token = KeywordTok { val = "syn" } } & toksyn ->
+    let cur = nextToken toksyn.stream in
+
+    match cur with { token = UIdentTok { val = ident } | HashStringTok { hash = "con", val = ident } } & tokident then
+      let cur = nextToken tokident.stream in
+
+      recursive let parseParams = lam acc. lam cur.
+        match cur with { token = LIdentTok { val = param } | HashStringTok { hash = "var", val = param } } & tokparam then
+          parseParams (snoc acc (nameNoSym param)) (nextToken tokparam.stream)
+        else
+          (acc, cur)
+      in
+      match parseParams [] cur with (params, cur) in
+
+      let opInfoFallback = cur.info in
+      match matchAssignOp cur with Some (isSum, cur) then
+        recursive let parseConstrs = lam acc. lam cur.
+          match cur with { token = OperatorTok { val = "|" } } & tokbar then
+            let cur = nextToken tokbar.stream in
+            match cur with { token = UIdentTok { val = conIdent } | HashStringTok { hash = "con", val = conIdent } } & tokcon then
+              let cur = nextToken tokcon.stream in
+              let tyRes =
+                if canStartAppArgType cur then parseType cur
+                else parseOk (TyRecord { fields = mapEmpty cmpSID, info = tokcon.info }, cur)
+              in
+              result.bind tyRes (lam res.
+                match res with (ty, cur) in
+                let constr = {ident = nameNoSym conIdent, tyIdent = ty, info = mergeInfo tokbar.info (infoTy ty)} in
+                parseConstrs (snoc acc constr) cur
+              )
+            else
+              parseErr (cur.info, "Missing constructor identifier")
+          else
+            parseOk (acc, cur)
+        in
+
+        result.bind (parseConstrs [] cur) (lam res.
+          match res with (constrs, cur) in
+          let kind = if isSum then SynSum { base = nameNoSym ident } else SynBase () in
+          let endInfo = match constrs with _ ++ [lastConstr] then lastConstr.info else opInfoFallback in
+          let decl = DeclSyn {
+            ident = nameNoSym ident,
+            params = params,
+            defs = constrs,
+            info = mergeInfo toksyn.info endInfo,
+            kind = kind
+          } in
+          parseOk (decl, cur)
+        )
+      else
+        parseErr (cur.info, "Expected = or +=")
+    else
+      parseErr (cur.info, "Missing identifier")
+end
+
+lang SemDeclParser = AstParserBase + SemDeclAst + SemKeyword
+  sem parseDecl =
+  | { token = KeywordTok { val = "sem" } } & toksem ->
+    let cur = nextToken toksem.stream in
+
+    match cur with { token = LIdentTok { val = ident } | HashStringTok { hash = "var", val = ident } } & tokident then
+      let cur = nextToken tokident.stream in
+
+      match cur with { token = OperatorTok { val = ":" } } & tokcol then
+        let cur = nextToken tokcol.stream in
+        result.bind (parseType cur) (lam res.
+          match res with (ty, cur) in
+          let decl = DeclSem {
+            ident = nameNoSym ident,
+            tyAnnot = ty,
+            tyBody = ityunknown_ (infoTy ty),
+            impl = None (),
+            info = mergeInfo toksem.info (infoTy ty),
+            kind = SemBase ()
+          } in
+          parseOk (decl, cur)
+        )
+      else
+        recursive let parseParams = lam acc. lam cur.
+          switch cur
+            case { token = LParenTok {} } & toklp then
+              let cur = nextToken toklp.stream in
+              match cur with { token = LIdentTok { val = pident } | HashStringTok { hash = "var", val = pident } } & tokpident then
+                let cur = nextToken tokpident.stream in
+                match cur with { token = OperatorTok { val = ":" } } & tokpcol then
+                  let cur = nextToken tokpcol.stream in
+                  result.bind (parseType cur) (lam res.
+                    match res with (ty, cur) in
+                    match cur with { token = RParenTok {} } & tokrp then
+                      let param =
+                        { ident = nameNoSym pident
+                        , tyAnnot = ty
+                        , tyParam = ityunknown_ (infoTy ty)
+                        , info = mergeInfo toklp.info tokrp.info
+                        } in
+                      parseParams (snoc acc param) (nextToken tokrp.stream)
+                    else
+                      parseErr (cur.info, "Missing closing parenthesis")
+                  )
+                else
+                  parseErr (cur.info, "Missing colon")
+              else
+                parseErr (cur.info, "Missing identifier")
+            case { token = LIdentTok { val = pident } | HashStringTok { hash = "var", val = pident } } & tokpident then
+              let info = tokpident.info in
+              let param = {ident = nameNoSym pident, tyAnnot = ityunknown_ info, tyParam = ityunknown_ info, info = info} in
+              parseParams (snoc acc param) (nextToken tokpident.stream)
+            case _ then
+              parseOk (acc, cur)
+          end
+        in
+
+        result.bind (parseParams [] cur) (lam res.
+          match res with (params, cur) in
+          let opInfoFallback = cur.info in
+          match matchAssignOp cur with Some (isSum, cur) then
+            recursive let parseCases = lam acc. lam cur.
+              match cur with { token = OperatorTok { val = "|" } } & tokbar then
+                let cur = nextToken tokbar.stream in
+                result.bind (parsePat cur) (lam pres.
+                  match pres with (pat, cur) in
+                  match cur with { token = OperatorTok { val = "->" } } & tokarrow then
+                    let cur = nextToken tokarrow.stream in
+                    result.bind (parseExpr cur) (lam eres.
+                      match eres with (body, cur) in
+                      let c = {pat = pat, body = body, info = mergeInfo tokbar.info (infoTm body)} in
+                      parseCases (snoc acc c) cur
+                    )
+                  else
+                    parseErr (cur.info, "Expected ->")
+                )
+              else
+                parseOk (acc, cur)
+            in
+
+            result.bind (parseCases [] cur) (lam res.
+              match res with (cases, cur) in
+              let kind = if isSum then SemSum { base = nameNoSym ident } else SemBase () in
+              let endInfo = match cases with _ ++ [lastCase] then lastCase.info else opInfoFallback in
+              let info = mergeInfo toksem.info endInfo in
+              let decl = DeclSem {
+                ident = nameNoSym ident,
+                tyAnnot = ityunknown_ info,
+                tyBody = ityunknown_ info,
+                impl = Some { params = params, cases = cases },
+                info = info,
+                kind = kind
+              } in
+              parseOk (decl, cur)
+            )
+          else
+            parseErr (cur.info, "Expected = or +=")
+        )
+    else
+      parseErr (cur.info, "Missing identifier")
+end
+
+lang LangDeclParser = AstParserBase + LangDeclAst + LangKeyword + EndKeyword + SynDeclParser + SemDeclParser + TypeDeclParser
+  sem parseDecl =
+  | { token = KeywordTok { val = "lang" } } & toklang ->
+    let cur = nextToken toklang.stream in
+
+    -- A `lang` name is a generic identifier in boot's grammar (either
+    -- case), not specifically a constructor-style UIdent.
+    match cur with
+      { token = UIdentTok { val = ident } | LIdentTok { val = ident }
+              | HashStringTok { hash = "con" | "var", val = ident } } & tokident
+    then
+      let cur = nextToken tokident.stream in
+
+      recursive let parseIncludes = lam acc. lam cur.
+        match cur with
+          { token = UIdentTok { val = incIdent } | LIdentTok { val = incIdent }
+                  | HashStringTok { hash = "con" | "var", val = incIdent } } & tokinc
+        then
+          let acc = snoc acc (nameNoSym incIdent, tokinc.info) in
+          let cur = nextToken tokinc.stream in
+          match cur with { token = OperatorTok { val = "+" } } & tokplus then
+            parseIncludes acc (nextToken tokplus.stream)
+          else
+            parseOk (acc, cur)
+        else
+          parseErr (cur.info, "Missing language identifier")
+      in
+
+      let includesRes = match cur with { token = OperatorTok { val = "=" } } & tokeq then
+        parseIncludes [] (nextToken tokeq.stream)
+      else
+        parseOk ([], cur)
+      in
+
+      result.bind includesRes (lam res.
+        match res with (includes, cur) in
+
+        recursive let parseBodyDecls = lam acc. lam cur.
+          match cur with { token = KeywordTok { val = "end" } } & tokend then
+            parseOk (acc, tokend, nextToken tokend.stream)
+          else
+            result.bind (parseDecl cur) (lam res.
+              match res with (decl, cur) in
+              parseBodyDecls (snoc acc decl) cur
+            )
+        in
+
+        result.bind (parseBodyDecls [] cur) (lam res.
+          match res with (decls, tokend, cur) in
+          let decl = DeclLang {
+            ident = nameNoSym ident,
+            includes = includes,
+            decls = decls,
+            info = mergeInfo toklang.info tokend.info
+          } in
+          parseOk (decl, cur)
+        )
+      )
+    else
+      parseErr (cur.info, "Missing identifier")
+end
+
+lang IncludeDeclParser = AstParserBase + IncludeDeclAst + IncludeKeyword
+  sem parseDecl =
+  | { token = KeywordTok { val = "include" } } & tokinc ->
+    let cur = nextToken tokinc.stream in
+    match cur with { token = StringTok { val = path } } & tokpath then
+      let decl = DeclInclude {
+        path = path,
+        info = mergeInfo tokinc.info tokpath.info
+      } in
+      parseOk (decl, nextToken tokpath.stream)
+    else
+      parseErr (cur.info, "Missing include path")
+end
+
+-- The entry point for parsing an entire mcore file: zero or more
+-- `include` statements, zero or more top-level declarations, and an
+-- optional `mexpr <expr>` section.
+lang ProgramParser = AstParserBase + MLangTopLevel + RecordAst + IncludeDeclParser + MexprKeyword
+  sem parseProgram: all w. NextTokenResult -> ParseResult w (MLangProgram, NextTokenResult)
+
+  sem parseProgram =
+  | cur ->
+    recursive let parseIncludes = lam acc. lam cur.
+      match cur with { token = KeywordTok { val = "include" } } then
+        result.bind (parseDecl cur) (lam res.
+          match res with (decl, cur) in
+          parseIncludes (snoc acc decl) cur
+        )
+      else
+        parseOk (acc, cur)
+    in
+
+    result.bind (parseIncludes [] cur) (lam res.
+      match res with (includes, cur) in
+
+      recursive let parseTops = lam acc. lam cur.
+        switch cur
+          case { token = KeywordTok { val = "let" | "type" | "recursive" | "con" | "external" | "utest" | "lang" } } then
+            result.bind (parseDecl cur) (lam res.
+              match res with (decl, cur) in
+              parseTops (snoc acc decl) cur
+            )
+          case _ then
+            parseOk (acc, cur)
+        end
+      in
+
+      result.bind (parseTops [] cur) (lam res.
+        match res with (tops, cur) in
+
+        let exprRes = match cur with { token = KeywordTok { val = "mexpr" } } & tokmexpr then
+          parseExpr (nextToken tokmexpr.stream)
+        else
+          parseOk (TmRecord { bindings = mapEmpty cmpSID, ty = ityunknown_ cur.info, info = cur.info }, cur)
+        in
+
+        result.bind exprRes (lam res.
+          match res with (expr, cur) in
+          match cur with { token = EOFTok {} } then
+            parseOk ({decls = concat includes tops, expr = expr}, cur)
+          else
+            parseErr (cur.info, "Unexpected token, expected end of file")
+        )
+      )
+    )
+end
+
 -- TODO: Better solution
-lang PrecedenceParser = AppParser + DataParser + LamParser + LetDeclParser + AndParser + OrParser + NotParser
+lang PrecedenceParser = AppParser + DataParser + LamParser + LetDeclParser + AndParser + OrParser + NotParser + IfParser + SemicolonParser + MatchParser + ProjParser + SeqParser
   sem groupingsAllowedExpr =
   | (OpExprDecl _, OpExprApp _) -> GRight ()
   | (OpExprLam _, OpExprApp _) -> GRight ()
   | (OpExprConApp _, OpExprApp _) -> GLeft ()
+  | (OpExprDecl _, OpExprSemi _) -> GRight ()
+  | (OpExprLam _, OpExprSemi _) -> GRight ()
+  | (OpExprIf _, OpExprSemi _) -> GRight ()
+  | (OpExprApp _, OpExprSemi _) -> GLeft ()
+  | (OpExprConApp _, OpExprSemi _) -> GLeft ()
+  | (OpExprSemi _, OpExprApp _) -> GRight ()
+  | (OpExprSemi _, OpExprConApp _) -> GRight ()
+  | (OpExprIf _, OpExprApp _) -> GRight ()
+  | (OpExprMatchIn _, OpExprApp _) -> GRight ()
+  | (OpExprMatchElse _, OpExprApp _) -> GRight ()
+  | (OpExprMatchIn _, OpExprSemi _) -> GRight ()
+  | (OpExprMatchElse _, OpExprSemi _) -> GRight ()
+  | (OpExprApp _, OpExprProj _) -> GRight ()
+  | (OpExprProj _, OpExprApp _) -> GLeft ()
+  | (OpExprLam _, OpExprProj _) -> GRight ()
+  | (OpExprDecl _, OpExprProj _) -> GRight ()
+  | (OpExprIf _, OpExprProj _) -> GRight ()
+  | (OpExprMatchIn _, OpExprProj _) -> GRight ()
+  | (OpExprMatchElse _, OpExprProj _) -> GRight ()
+  | (OpExprSemi _, OpExprProj _) -> GRight ()
+  | (OpExprProj _, OpExprSemi _) -> GLeft ()
+  | (OpExprConApp _, OpExprProj _) -> GRight ()
+  | (OpExprProj _, OpExprConApp _) -> GLeft ()
 
   sem groupingsAllowedType =
   | (OpTypeApp _, OpTypeArrow _) -> GLeft ()
   | (OpTypeArrow _, OpTypeApp _) -> GRight ()
-  | (OpTypeConApp _, OpTypeApp _) -> GLeft ()
 
   sem groupingsAllowedPat =
   | (OpPatAnd _, OpPatOr _) -> GLeft ()
@@ -2024,6 +2781,12 @@ lang PrecedenceParser = AppParser + DataParser + LamParser + LetDeclParser + And
   | (OpPatOr _, OpPatNot _) -> GRight ()
   | (OpPatNot _, OpPatAnd _) -> GLeft ()
   | (OpPatNot _, OpPatOr _) -> GLeft ()
+  | (OpPatSeqEdge _, OpPatOr _) -> GLeft ()
+  | (OpPatOr _, OpPatSeqEdge _) -> GRight ()
+  | (OpPatAnd _, OpPatSeqEdge _) -> GRight ()
+  | (OpPatSeqEdge _, OpPatAnd _) -> GLeft ()
+  | (OpPatConApp _, OpPatAnd _) -> GLeft ()
+  | (OpPatConApp _, OpPatOr _) -> GLeft ()
 end
 
 lang UnexpectedTokenParser = AstParserBase
@@ -2059,6 +2822,8 @@ lang AstParser =
   + BoolParser
   + CharParser
   + StringParser
+  + TensorParser
+  + UnknownTypeParser
   + SeqParser
   + NegParser
   + VarParser
@@ -2071,14 +2836,26 @@ lang AstParser =
   + LetDeclParser
   + RecLetsDeclParser
   + TypeDeclParser
+  + ConDeclParser
+  + ExtDeclParser
+  + UseParser
   + LamParser
   + MatchParser
   + SwitchParser
+  + IfParser
+  + SemicolonParser
   + NeverParser
   + AndParser
   + OrParser
   + NotParser
   + UtestParser
+  + AllParser
+  + ProjParser
+  + SynDeclParser
+  + SemDeclParser
+  + LangDeclParser
+  + IncludeDeclParser
+  + ProgramParser
   + PrecedenceParser
   + UnexpectedTokenParser
 end
@@ -2086,7 +2863,8 @@ end
 lang TestParser =
     AstParser
   + MExprPrettyPrint
-  + MExprEq
+  + MLangPrettyPrint
+  + MLangEq
   + MExprToJson
 end
 
@@ -2099,7 +2877,7 @@ con Fail: () -> TestResult          -- Result is different
 mexpr
 
 use TestParser in
-use BootParser in
+use BootParserMLang in
 
 let lex = lam str. nextToken {pos = initPos "internal", str = str} in
 let parse = lam str. result.map (lam a. a.0) (parseExpr (lex str)) in
@@ -2150,11 +2928,104 @@ let printAst = lam str.
   end
 in
 
--- let str = "type Test a b = Int Int in 1" in
--- printLn "\nBoot:";
--- printAstBoot str;
--- printLn "Native:";
--- printAst str;
+let parseProg = lam str. result.map (lam a. a.0) (parseProgram (lex str)) in
+let parseBootProg = lam str. parseMLangString str in
+
+
+let compareProg = lam str.
+  let a = parseProg str in
+  let b = parseBootProg str in
+  switch (result.toOption a, result.toOption b)
+    case (Some a, Some b) then
+      if eqProgram a b then OkSameExInfo () else Fail ()
+    case (None (), None ()) then
+      OkFail ()
+    case _ then
+      Fail ()
+  end in
+
+let printProgBoot = lam str.
+  switch result.consume (parseBootProg str)
+  case (w, Left e) then
+    printLn "Parse error:";
+    iter (lam e. match e with (info, msg) in printLn (infoErrorString info msg)) e
+  case (w, Right prog) then
+    printLn (mlang2str prog)
+  end
+in
+
+let printProg = lam str.
+  switch result.consume (parseProg str)
+  case (w, Left e) then
+    printLn "Parse error:";
+    iter (lam e. match e str with (info, msg) in printLn (infoErrorString info msg)) e
+  case (w, Right prog) then
+    printLn (mlang2str prog)
+  end
+in
+
+
+
+let smokeTestFile = lam path.
+  let str = readFile path in
+  let a = parseProg str in
+  let b = parseBootProg str in
+  switch (result.consume a, result.consume b)
+  case ((_, Right pa), (_, Right pb)) then
+    if eqProgram pa pb then
+      printLn (join [path, ": OK"])
+    else
+      let n = mini (length pa.decls) (length pb.decls) in
+      let firstDiffIdx = index (lam i. not (eqDecl (get pa.decls i) (get pb.decls i))) (range 0 n 1) in
+      (switch firstDiffIdx
+        case Some i then
+          printLn (join [path, ": AST MISMATCH at decl ", int2string i]);
+          printLn "Native:";
+          printLn (decl2str (get pa.decls i));
+          printLn "Boot:";
+          printLn (decl2str (get pb.decls i))
+        case None () then
+          if eqi (length pa.decls) (length pb.decls) then
+            printLn (join [path, ": AST MISMATCH in mexpr section"])
+          else
+            printLn (join [path, ": AST MISMATCH, decl count ", int2string (length pa.decls), " vs ", int2string (length pb.decls)])
+      end)
+  case ((_, Left es), (_, Right _)) then
+    printLn (join [path, ": NATIVE PARSE FAILS"]);
+    iter (lam e. match e str with (info, msg) in printLn (infoErrorString info msg)) es
+  case ((_, Right _), (_, Left es)) then
+    printLn (join [path, ": BOOT PARSE FAILS"]);
+    iter (lam e. match e with (info, msg) in printLn (infoErrorString info msg)) es
+  case ((_, Left _), (_, Left _)) then
+    printLn (join [path, ": both fail"])
+  end
+in
+
+iter smokeTestFile
+  [ "src/stdlib/bool.mc"
+  , "src/stdlib/option.mc"
+  , "src/stdlib/either.mc"
+  , "src/stdlib/seq.mc"
+  , "src/stdlib/map.mc"
+  , "src/stdlib/mexpr/ast.mc"
+  , "src/stdlib/stdlib.mc"
+  , "src/stdlib/mexpr/pprint.mc"
+  , "src/stdlib/parser/breakable.mc"
+  , "src/stdlib/peval/extract.mc"
+  , "src/stdlib/test-spec.mc"
+  , "src/stdlib/mexpr/index.mc"
+  , "src/stdlib/c/ast.mc"
+  , "src/stdlib/csv.mc"
+  , "src/stdlib/ext/local-search.mc"
+  , "src/stdlib/graph.mc"
+  , "src/stdlib/mexpr/constant-fold.mc"
+  , "src/stdlib/mexpr/cps.mc"
+  , "src/stdlib/mexpr/deadcode.mc"
+  , "src/stdlib/mexpr/keyword-maker.mc"
+  , "src/stdlib/mexpr/op-overload.mc"
+  , "src/stdlib/mlang/boot-parser.mc"
+  , "src/stdlib/optparse-applicative.mc"
+  ];
 
 utest compare "0" with OkSame () in
 utest compare "1" with OkSame () in
@@ -2199,10 +3070,22 @@ utest compare "let a: Bool = true in a" with OkSameExInfo () in
 utest compare "let a: Char = 'a' in a" with OkSameExInfo () in
 utest compare "let a: String = \"test\" in a" with OkSameExInfo () in
 
+utest compare "let a: Tensor[Int] = x in a" with OkSameExInfo () in
+utest compare "let a: Tensor [Int] = x in a" with OkSameExInfo () in
+utest compare "let a: Tensor[Tensor[Int]] = x in a" with OkSameExInfo () in
+
+utest compare "let a: Unknown = x in a" with OkSameExInfo () in
+utest compare "let a: Unknown -> Int = x in a" with OkSameExInfo () in
+
 utest compare "let a: Int Int = 1 1 in a" with OkSameExInfo () in
 
 utest compare "let a: Int -> Int = addi 1 in a" with OkSameExInfo () in
 utest compare "let a: Int Int -> Int = addi in a" with OkSameExInfo () in
+utest compare "let a: Int -> Int -> Int = f in a" with OkSameExInfo () in
+
+utest compare "let a: Foo = x in a" with OkSameExInfo () in
+utest compare "let a: Foo -> Int = x in a" with OkSameExInfo () in
+utest compare "let a: Map SID Expr = x in a" with OkSameExInfo () in
 
 utest compare "[]" with OkSame () in
 utest compare "[" with OkFail () in
@@ -2286,6 +3169,13 @@ utest compare "match a with {} in x" with OkSameExInfo () in
 utest compare "match a with { b = 1 } in x" with OkSameExInfo () in
 utest compare "match a with { b = 1, cd = { c = 2, d = 3 } } in x" with OkSameExInfo () in
 
+utest compare "x.0" with OkSameExInfo () in
+utest compare "x.field" with OkSameExInfo () in
+utest compare "(x.0).1" with OkSameExInfo () in
+utest compare "snoc acc.0 content" with OkSameExInfo () in
+utest compare "f (g a).0 b" with OkSameExInfo () in
+utest compare "lam x. x.0" with OkSameExInfo () in
+
 utest compare "match a with [] in x" with OkSameExInfo () in
 utest compare "match a with [1] in x" with OkSameExInfo () in
 utest compare "match a with [1, 2] in x" with OkSameExInfo () in
@@ -2300,6 +3190,11 @@ utest compare "match a with rest ++ rest in x" with OkFail () in
 utest compare "match a with [1] ++ rest ++ [1] ++ rest in x" with OkFail () in
 utest compare "match a with rest ++ [1] ++ rest ++ [1] in x" with OkFail () in
 
+utest compare "match a with 1 & 2 & 3 in b" with OkSameExInfo () in
+utest compare "match a with 1 | 2 | 3 in b" with OkSameExInfo () in
+utest compare "match a with \"/\" ++ _ | \"./\" ++ _ | \"../\" ++ _ in b" with OkSameExInfo () in
+utest compare "match a with c & ([1] ++ rest) in b" with OkSameExInfo () in
+
 utest compare "utest a with 1 in x" with OkSameExInfo () in
 utest compare "utest a with 1" with OkFail () in
 utest compare "utest a with" with OkFail () in
@@ -2308,6 +3203,8 @@ utest compare "utest" with OkFail () in
 utest compare "utest with" with OkFail () in
 utest compare "utest a with 1 using b in x" with OkSame () in
 utest compare "utest a with 1 using in x" with OkFail () in
+utest compare "utest a with 1 using eq else b in x" with OkSame () in
+utest compare "utest a with 1 else" with OkFail () in
 
 utest compare "switch a end" with OkSame () in
 utest compare "switch a case 1 then b case 2 then c end" with OkSameExInfo () in
@@ -2322,6 +3219,9 @@ utest compare "switch a case 1 end" with OkFail () in
 utest compare "switch a case 1 then" with OkFail () in
 utest compare "switch a case 1 then end" with OkFail () in
 
+utest compare "f (if true then 1 else 2) 3" with OkSame () in
+utest compare "(match a with 1 then b else c) d" with OkSameExInfo () in
+
 utest compare "type T in x" with OkSameExInfo () in
 utest compare "type T a in x" with OkSameExInfo () in
 utest compare "type T a b in x" with OkSameExInfo () in
@@ -2330,5 +3230,131 @@ utest compare "type T = Int Int in x" with OkSameExInfo () in
 utest compare "type T a b = Int Int in x" with OkSameExInfo () in
 utest compare "type in x" with OkFail () in
 utest compare "type T = in x" with OkFail () in
+
+utest compare "con Foo: Int in x" with OkSameExInfo () in
+utest compare "con Foo: Int -> Int in x" with OkSameExInfo () in
+utest compare "con Foo: Int in Foo 1" with OkSameExInfo () in
+utest compare "con Foo in x" with OkSameExInfo () in
+utest compare "con in x" with OkFail () in
+utest compare "con Foo: in x" with OkFail () in
+utest compare "con Foo: Int" with OkFail () in
+
+utest compare "external foo: Int in foo" with OkSameExInfo () in
+utest compare "external foo ! : Int in foo" with OkSameExInfo () in
+utest compare "external foo: Int -> Int in foo 1" with OkSameExInfo () in
+utest compare "external in x" with OkFail () in
+utest compare "external foo in x" with OkFail () in
+utest compare "external foo: in x" with OkFail () in
+utest compare "external foo: Int" with OkFail () in
+
+utest compare "use Foo in x" with OkSameExInfo () in
+utest compare "use foo in x" with OkSameExInfo () in
+utest compare "use in x" with OkFail () in
+utest compare "use Foo" with OkFail () in
+
+utest compare "if true then 1 else 2" with OkSame () in
+utest compare "if true then 1 else if false then 2 else 3" with OkSame () in
+utest compare "if true then addi 1 2 else 3" with OkSame () in
+utest compare "if" with OkFail () in
+utest compare "if true" with OkFail () in
+utest compare "if true then 1" with OkFail () in
+utest compare "if true then 1 else" with OkFail () in
+
+utest compare "1; 2" with OkSameExInfo () in
+utest compare "1; 2; 3" with OkSameExInfo () in
+utest compare "let a = 1 in a; 2" with OkSameExInfo () in
+
+utest compare "let a: all x. x -> x = lam y. y in a" with OkSameExInfo () in
+utest compare "let a: all x. Int = 1 in a" with OkSameExInfo () in
+utest compare "let a: all x. all y. x -> y -> x = lam a. lam b. a in a" with OkSameExInfo () in
+
+utest compare "f a; g b; c" with OkSameExInfo () in
+utest compare "(f a; g b); c" with OkSameExInfo () in
+utest compare "if true then 1 else a; 2" with OkSameExInfo () in
+utest compare "match a with 1 in b; 2" with OkSameExInfo () in
+
+
+
+utest compareProg "lang Foo\n  syn Expr =\n  | CInt Int\n  sem eval =\n  | CInt n -> n\nend\nmexpr\n1" with OkSameExInfo () in
+
+utest compareProg "lang Foo = Bar + Baz\nend\nmexpr\n1" with OkSameExInfo () in
+
+utest compareProg (strJoin "\n" [
+  "lang Bar",
+  "  syn Expr =",
+  "  | CInt Int",
+  "end",
+  "lang Baz",
+  "  syn Expr =",
+  "  | CBool Bool",
+  "end",
+  "lang Foo = Bar + Baz",
+  "  syn Expr +=",
+  "  | CUnit ()",
+  "  sem eval: Expr -> Int",
+  "end",
+  "mexpr",
+  "1"
+]) with OkSameExInfo () in
+
+utest compareProg (strJoin "\n" [
+  "lang Foo",
+  "  sem f (x: Int) (y: Int) =",
+  "  | 1 -> addi x y",
+  "  | n -> n",
+  "end",
+  "mexpr",
+  "1"
+]) with OkSameExInfo () in
+
+utest compareProg (strJoin "\n" [
+  "include \"foo.mc\"",
+  "include \"bar.mc\"",
+  "let x = 1",
+  "type T = Int",
+  "con C: Int",
+  "external ext: Int",
+  "recursive",
+  "  let f = lam x. x",
+  "  let g = lam x. x",
+  "end",
+  "utest 1 with 1",
+  "mexpr",
+  "x"
+]) with OkSameExInfo () in
+
+utest compareProg "mexpr\n1" with OkSameExInfo () in
+utest compareProg "1" with OkFail () in
+utest compareProg "let x = 1\nmexpr\nx" with OkSameExInfo () in
+utest compareProg "lang" with OkFail () in
+utest compareProg "lang Foo" with OkFail () in
+utest compareProg "lang Foo =\nend\nmexpr\n1" with OkFail () in
+utest compareProg "lang Foo\n  syn Expr\nend\nmexpr\n1" with OkFail () in
+
+utest compareProg "lang Foo\nend\nlet a: use Foo in Int = 1\nmexpr\na" with OkSameExInfo () in
+
+utest compareProg (strJoin "\n" [
+  "lang Foo",
+  "  sem f =| 1 -> 2",
+  "  sem g x =| 1 -> x",
+  "end",
+  "mexpr",
+  "1"
+]) with OkSameExInfo () in
+
+utest compareProg (strJoin "\n" [
+  "lang Bar",
+  "  syn X =",
+  "  | C1 Int",
+  "end",
+  "lang Foo = Bar",
+  "  syn X +=| C2 Int",
+  "end",
+  "mexpr",
+  "1"
+]) with OkSameExInfo () in
+
+utest compareProg "lang _foo\nend\nmexpr\n1" with OkSameExInfo () in
+utest compareProg "lang _foo\nend\nlang _bar = _foo\nend\nmexpr\n1" with OkSameExInfo () in
 
 ()
