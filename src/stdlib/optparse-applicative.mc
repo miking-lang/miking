@@ -722,14 +722,27 @@ recursive let _describeTree : all a. OptParser a -> DescTree
     end
 end
 
-let optParserHelpText : all a. String -> String -> OptParser a -> String
-  = lam appName. lam bigDescription. lam p.
-    let bigDescription = switch bigDescription
+type OptParserHelpConfig =
+  { appName : String
+  , description : String
+  , orderedCategories : [String]
+  }
+
+let optParserHelpDef : String -> OptParserHelpConfig = lam appName.
+  { appName = appName
+  , description = ""
+  , orderedCategories = []
+  }
+
+let optParserHelpText : all a. OptParserHelpConfig -> OptParser a -> String
+  = lam config. lam p.
+    let bigDescription = switch config.description
       case "" then ""
-      case _ ++ "\n\n" then bigDescription
-      case _ ++ "\n" then snoc bigDescription '\n'
-      case _ then concat bigDescription "\n\n"
+      case _ ++ "\n\n" then config.description
+      case _ ++ "\n" then snoc config.description '\n'
+      case _ then concat config.description "\n\n"
       end in
+
     let dt = _describeTree p in
 
     let options = _optDescGetDescs dt in
@@ -751,31 +764,36 @@ let optParserHelpText : all a. String -> String -> OptParser a -> String
     let options = foldl (lam m. lam o. mapInsertWith concat o.category [o] m) (mapEmpty cmpString) options in
     let otherOptions = mapLookup "" options in
     let options = mapRemove "" options in
-    let options = map (lam pair. join [pair.0, "\n", optsToStr pair.1]) (mapBindings options) in
-    let options = switch (options, otherOptions)
-      case ([], Some others) then [concat "Options:\n" (optsToStr others)]
-      case (opts, Some others) then snoc opts (concat "Other options:\n" (optsToStr others))
+    let popCategory = lam acc. lam cat.
+      match mapLookup cat acc with Some opt
+      then (mapRemove cat acc, (cat, opt))
+      else error (join ["Missing option category '", cat, "'"]) in
+    match mapAccumL popCategory options config.orderedCategories with (options, orderedCategories) in
+    let orderedCategories = concat orderedCategories (mapBindings options) in
+    let orderedCategories = switch (orderedCategories, otherOptions)
+      case ([], Some others) then [("Options:", others)]
+      case (opts, Some others) then snoc opts ("Other options:", others)
       case (opts, None _) then opts
       end in
-    let options = strJoin "\n\n" options in
+    let options = strJoin "\n\n" (map (lam x. join [x.0, "\n", optsToStr x.1]) orderedCategories) in
 
     let dt = _optDescTreeRemoveUnconditionalOptional dt in
     let dts = optionMapOr [] _optDescSplitOnce dt in
-    let shortUsage = strJoin "\n" (map (lam dt. join [appName, " ", _optDescTreeToString dt]) dts) in
+    let shortUsage = strJoin "\n" (map (lam dt. join ["  ", config.appName, " ", _optDescTreeToString dt]) dts) in
 
-    join [shortUsage, "\n\n", bigDescription, options]
+    join ["Usage:\n", shortUsage, "\n\n", bigDescription, options]
 
-let optParserWithHelp : all a. String -> String -> OptParser a -> OptParser (Either String a)
-  = lam appName. lam bigDescription. lam p.
+let optParserWithHelp : all a. OptParserHelpConfig -> OptParser a -> OptParser (Either String a)
+  = lam config. lam p.
     let help = optNoArg
-      { optNoArgDef (Left (optParserHelpText appName bigDescription p)) with short = "h"
+      { optNoArgDef (Left (optParserHelpText config p)) with short = "h"
       , long = "help"
       } in
     optOr (optMap (lam x. Right x) p) help
 
-let optParseWithHelp : all a. String -> String -> OptParser a -> [String] -> a
-  = lam appName. lam bigDescription. lam p. lam args.
-    let p = optParserWithHelp appName bigDescription p in
+let optParseWithHelp : all a. OptParserHelpConfig -> OptParser a -> [String] -> a
+  = lam config. lam p. lam args.
+    let p = optParserWithHelp config p in
     switch optParse p args
     case Left err then
       printLn err;
@@ -893,8 +911,9 @@ utest test ["--shared", "7", "--no", "--opt1"]
 with Left "Unexpected argument: '--opt1' is not valid after '--no'" in
 
 let helpText = strJoin "\n"
-  [ "test --shared INT [--opt1] [--extra] --thing FLOAT [--verbose]..."
-  , "test --shared INT (--yes | --no) --thing FLOAT [--verbose]..."
+  [ "Usage:"
+  , "  test --shared INT [--opt1] [--extra] --thing FLOAT [--verbose]..."
+  , "  test --shared INT (--yes | --no) --thing FLOAT [--verbose]..."
   , ""
   , "This thing can do stuff."
   , ""
@@ -908,11 +927,12 @@ let helpText = strJoin "\n"
   , "  FILENAME      file and stuff"
   , "  --verbose     verbosity or something"
   ] in
-utest optParserHelpText "test" "This thing can do stuff." parser with helpText using eqString else lam l. lam. l in
+utest optParserHelpText {optParserHelpDef "test" with description = "This thing can do stuff."} parser with helpText using eqString else lam l. lam. l in
 
 let helpText = strJoin "\n"
-  [ "test --shared INT [--opt1] [--extra] --thing FLOAT [--verbose]..."
-  , "test --shared INT (--yes | --no) --thing FLOAT [--verbose]..."
+  [ "Usage:"
+  , "  test --shared INT [--opt1] [--extra] --thing FLOAT [--verbose]..."
+  , "  test --shared INT (--yes | --no) --thing FLOAT [--verbose]..."
   , ""
   , "Options:"
   , "  --shared INT  shared is a thing"
@@ -924,11 +944,12 @@ let helpText = strJoin "\n"
   , "  FILENAME      file and stuff"
   , "  --verbose     verbosity or something"
   ] in
-utest optParserHelpText "test" "" parser with helpText using eqString else lam l. lam. l in
+utest optParserHelpText (optParserHelpDef "test") parser with helpText using eqString else lam l. lam. l in
 
 let helpText = strJoin "\n"
-  [ "test --shared INT [--opt1] [--extra] --thing FLOAT [--verbose]..."
-  , "test --shared INT (--yes | --no) --thing FLOAT [--verbose]..."
+  [ "Usage:"
+  , "  test --shared INT [--opt1] [--extra] --thing FLOAT [--verbose]..."
+  , "  test --shared INT (--yes | --no) --thing FLOAT [--verbose]..."
   , ""
   , "Stuff"
   , ""
@@ -945,6 +966,6 @@ let helpText = strJoin "\n"
   , "  FILENAME      file and stuff"
   , "  --verbose     verbosity or something"
   ] in
-utest optParserHelpText "test" "Stuff" (optMap2 (lam a. lam b. (a, b)) parser withCategory) with helpText using eqString else lam l. lam. l in
+utest optParserHelpText {optParserHelpDef "test" with description = "Stuff"} (optMap2 (lam a. lam b. (a, b)) parser withCategory) with helpText using eqString else lam l. lam. l in
 
 ()

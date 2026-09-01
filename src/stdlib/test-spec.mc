@@ -874,19 +874,22 @@ lang TestSpec
         tags
         focusPaths) in
 
-    let helpText = strJoin "\n"
-      [ "Generate a description of tests included in a test suite."
-      , ""
-      , "Expects to be run from the root of the repository, and will"
-      , "place all outputs under './build', in a structure mirroring"
-      , "the normal repository. For example, if a test originated at"
-      , "'src/test/foo.mc', then all testing results can be found at"
-      , "'build/src/test/foo.mc.*' (including stdout and stderr)."
-      , ""
-      , "There are two primary modes of operation:"
-      , "- make, which always runs all selected tests."
-      , "- tup, which tracks dependencies and only runs tests with"
-      , "  updates."
-      ] in
-    printLn (optParseWithHelp (head argv) "Generate a description of tests included in a test suite." optParser (tail argv))
+    let help =
+      { optParserHelpDef (head argv)
+        with description = strJoin "\n"
+        [ "Generate a description of tests included in a test suite."
+        , ""
+        , "Expects to be run from the root of the repository, and will"
+        , "place all outputs under './build', in a structure mirroring"
+        , "the normal repository. For example, if a test originated at"
+        , "'src/test/foo.mc', then all testing results can be found at"
+        , "'build/src/test/foo.mc.*' (including stdout and stderr)."
+        , ""
+        , "There are two primary modes of operation:"
+        , "- make, which always runs all selected tests."
+        , "- tup, which tracks dependencies and only runs tests with"
+        , "  updates."
+        ]
+      } in
+    printLn (optParseWithHelp help optParser (tail argv))
 end
