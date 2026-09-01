@@ -212,6 +212,7 @@ lang SysTypeAst = TyConst + SysAst
   | CError _ -> mktyall_ "a" (lam a. tyarrow_ tystr_ a)
   | CArgv _ -> tyseq_ tystr_
   | CCommand _ -> tyarrow_ tystr_ tyint_
+  | CExec _ -> mktyall_ "a" (lam a. tyarrows_ [tystr_, tyseq_ tystr_, a])
 end
 
 lang TimeTypeAst = TyConst + TimeAst

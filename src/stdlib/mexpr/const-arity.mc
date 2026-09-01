@@ -171,6 +171,7 @@ lang SysArity = ConstArity + SysAst
   | CError _ -> 1
   | CArgv _ -> 0
   | CCommand _ -> 1
+  | CExec _ -> 2
 end
 
 lang TimeArity = ConstArity + TimeAst

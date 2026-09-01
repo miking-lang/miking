@@ -88,6 +88,7 @@ let builtin = use MExprAst in
   , ("fileExists", CFileExists ())
   , ("deleteFile", CFileDelete ())
   , ("command", CCommand ())
+  , ("exec", CExec ())
   , ("error", CError ())
   , ("exit", CExit ())
   -- Constructor tags

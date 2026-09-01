@@ -1013,6 +1013,7 @@ lang SysAst = ConstAst
   | CError {}
   | CArgv {}
   | CCommand {}
+  | CExec {}
 end
 
 lang TimeAst = ConstAst

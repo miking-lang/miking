@@ -916,6 +916,7 @@ lang SysPrettyPrint = SysAst + ConstPrettyPrint
   | CError _ -> "error"
   | CArgv _ -> "argv"
   | CCommand _ -> "command"
+  | CExec _ -> "exec"
 end
 
 lang TimePrettyPrint = TimeAst + ConstPrettyPrint

@@ -424,6 +424,8 @@ module MSys : sig
   val argv : int Mseq.t Mseq.t
 
   val command : int Mseq.t -> int
+
+  val exec : int Mseq.t -> int Mseq.t Mseq.t -> 'a
 end
 
 module Time : sig

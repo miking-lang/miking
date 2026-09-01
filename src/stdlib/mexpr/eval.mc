@@ -689,6 +689,11 @@ lang SysEval = ConstDelta + SysAst + SeqAst + IntAst + CharAst + SysArity
       val = CInt {val = command (_evalSeqOfCharsToString info s.tms)},
       ty = tyunknown_, info = NoInfo ()
     }
+  | (CExec _, [TmSeq p, TmSeq args]) ->
+    let f = lam tm. match tm with TmSeq arg
+      then _evalSeqOfCharsToString info arg.tms
+      else errorSingle [info] "Expected sequence of characters" in
+    exec (_evalSeqOfCharsToString info p.tms) (map f args.tms)
 end
 
 lang TimeEval = ConstDelta + TimeAst + IntAst + TimeArity

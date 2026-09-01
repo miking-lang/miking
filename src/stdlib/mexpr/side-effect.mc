@@ -84,7 +84,7 @@ lang ConstSideEffect = ConstSideEffectBase + MExprAst
   | CPrint _ | CPrintError _ | CDPrint _ | CFlushStdout _ | CFlushStderr _
   | CReadLine _ | CReadBytesAsString _ -> true
   | CRandIntU _ | CRandSetSeed _ -> true
-  | CExit _ | CError _ | CArgv _ | CCommand _ -> true
+  | CExit _ | CError _ | CArgv _ | CCommand _ | CExec _ -> true
   | CWallTimeMs _ | CSleepMs _ -> true
   | CConstructorTag _ -> true
   | CRef _ | CModRef _ | CDeRef _ -> true

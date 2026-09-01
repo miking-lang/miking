@@ -265,6 +265,7 @@ lang OCamlPrettyPrint =
   | CError _ -> intrinsicOpSys "error"
   | CExit _ -> intrinsicOpSys "exit"
   | CCommand _ -> intrinsicOpSys "command"
+  | CExec _ -> intrinsicOpSys "exec"
   | CEqsym _ -> intrinsicOpSymb "eqsym"
   | CGensym _ -> intrinsicOpSymb "gensym"
   | CSym2hash _ -> intrinsicOpSymb "hash"
