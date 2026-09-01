@@ -8,6 +8,8 @@ include "mexpr/info.mc"
 include "grammar.mc"
 include "bool.mc"
 include "char.mc"
+include "basic-types.mc"
+include "option.mc"
 
 let tabSpace = 2
 

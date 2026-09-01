@@ -136,9 +136,29 @@ testMain substituters directories location (lam api.
     , cmd = "command %i"
     } in
 
+  -- Compares the new native parser (src/stdlib/parser/parser.mc)
+  -- against the boot parser: same AST (up to info fields), and every
+  -- info field is self-consistent 
+  let parserCompareRun = api.endStep
+    { uses = [origin]
+    , tag = "parser-compare-run"
+    , cmd = "$(ROOT)/misc/parser-compare %f"
+    } in
+
   api.tests []
     (strEndsWith ".mc")
-    [(eval, succ), (compile, succ), (run, succ), (mlangCompile, succ), (mlangRun, succ)];
+    [(eval, succ), (compile, succ), (run, succ), (mlangCompile, succ), (mlangRun, succ), (parserCompareRun, succ)];
+
+  -- Not real mcore syntax, or so large that the info-consistency check takes too long.
+  api.tests []
+    (elem
+      [ "src/stdlib/python/python.mc"
+      , "src/test/py/python.mc"
+      , "src/stdlib/mexpr/nestable-records/merged.mc"
+      , "src/stdlib/mexpr/reptypes.mc"
+      , "src/stdlib/parser/selfhost-gen.mc"
+      ])
+    [(parserCompareRun, dont)];
 
   -- The compiler itself is tested through the bootstrap process, so
   -- skip it here

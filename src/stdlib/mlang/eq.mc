@@ -4,6 +4,12 @@
 
 include "ast.mc"
 include "mexpr/eq.mc"
+include "name.mc"
+include "basic-types.mc"
+include "option.mc"
+include "string.mc"
+include "seq.mc"
+include "mexpr/info.mc"
 
 lang UseEq = Eq + UseDeclAst
   sem eqDeclH (env : EqEnv) (free : EqEnv) (lhs : Decl) +=
@@ -123,7 +129,7 @@ lang LangEq = Eq + LangDeclAst
     else None ()
 end
 
-lang MLangEq = MExprEq + UseEq + TyUseEq + IncludeEq + SynEq + SemEq + LangEq
+lang MLangEq = MExprEq + MLangTopLevel + UseEq + TyUseEq + IncludeEq + SynEq + SemEq + LangEq
   sem eqProgram : MLangProgram -> MLangProgram -> Bool
   sem eqProgram p1 =
   | p2 ->
