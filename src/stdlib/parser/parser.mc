@@ -64,8 +64,8 @@ lang AstParserBase = Lexer + Ast + DeclAst
   sem finalizeParseType: all w. State BrkOpType RClosed -> NextTokenResult -> ParseResult w (Type, NextTokenResult)
   sem finalizeParsePat:  all w. State BrkOpPat  RClosed -> NextTokenResult -> ParseResult w (Pat,  NextTokenResult)
 
-  sem canStartAppArgExpr: NextTokenResult -> Bool
-  sem canStartAppArgType: NextTokenResult -> Bool
+  sem startsAtomExpr: NextTokenResult -> Bool
+  sem startsAtomType: NextTokenResult -> Bool
 
   -- Matches a `=` or `+=` assignment operator, whether it is its own
   -- token or the prefix of a merged operator token. Returns whether it
@@ -251,10 +251,10 @@ lang AstParserBase = Lexer + Ast + DeclAst
     else
       parseErr (cur.info, "Breakable parse error")
 
-  sem canStartAppArgExpr =
+  sem startsAtomExpr =
   | _ -> false
 
-  sem canStartAppArgType =
+  sem startsAtomType =
   | _ -> false
 
   sem constructPrefixExpr =
@@ -500,7 +500,7 @@ end
 -- `Unknown` is a reserved type keyword in boot (producing `TyUnknown`
 -- directly), not a generic constructor-type reference.
 lang UnknownTypeParser = AstParserBase + UnknownTypeAst
-  sem canStartAppArgType =
+  sem startsAtomType =
   | { token = UIdentTok { val = "Unknown" } } -> true
 
   sem parseTypeROpen state =
@@ -511,10 +511,10 @@ lang UnknownTypeParser = AstParserBase + UnknownTypeAst
 end
 
 lang IntParser = AstParserBase + IntAst + IntPat
-  sem canStartAppArgExpr =
+  sem startsAtomExpr =
   | { token = IntTok { } } -> true
 
-  sem canStartAppArgType =
+  sem startsAtomType =
   | { token = UIdentTok { val = "Int" } } -> true
 
   sem parseExprROpen state =
@@ -545,10 +545,10 @@ lang IntParser = AstParserBase + IntAst + IntPat
 end
 
 lang FloatParser = AstParserBase + FloatAst
-  sem canStartAppArgExpr =
+  sem startsAtomExpr =
   | { token = FloatTok { } } -> true
 
-  sem canStartAppArgType =
+  sem startsAtomType =
   | { token = UIdentTok { val = "Float" } } -> true
 
   sem parseExprROpen state =
@@ -569,7 +569,7 @@ lang FloatParser = AstParserBase + FloatAst
 end
 
 lang NegParser = AstParserBase + IntAst + FloatAst + IntPat
-  sem canStartAppArgExpr =
+  sem startsAtomExpr =
   | { token = OperatorTok { val = "-" } } -> true
 
   sem parseExprROpen state =
@@ -617,11 +617,11 @@ lang NegParser = AstParserBase + IntAst + FloatAst + IntPat
 end
 
 lang VarParser = AstParserBase + VarAst + VarTypeAst + NamedPat
-  sem canStartAppArgExpr =
+  sem startsAtomExpr =
   | { token = LIdentTok { } } -> true
   | { token = HashStringTok { hash = "frozen" | "var" } } -> true
 
-  sem canStartAppArgType =
+  sem startsAtomType =
   | { token = LIdentTok { } } -> true
   | { token = HashStringTok { hash = "var" } } -> true
 
@@ -694,7 +694,7 @@ lang AppParser = AstParserBase + AppAst + AppTypeAst
   sem parseExprRClosed state =
   | cur ->
     -- check if the next token can be part of the current expression.
-    match canStartAppArgExpr cur with true then
+    match startsAtomExpr cur with true then
       match breakableAddInfix (configExpr ()) (OpExprApp cur.info) state with Some(state) then
         parseExprROpen state cur
       else
@@ -705,7 +705,7 @@ lang AppParser = AstParserBase + AppAst + AppTypeAst
   sem parseTypeRClosed state =
   | cur ->
     -- check if the next token can be part of the current type.
-    match canStartAppArgType cur with true then
+    match startsAtomType cur with true then
       match breakableAddInfix (configType ()) (OpTypeApp cur.info) state with Some(state) then
         parseTypeROpen state cur
       else
@@ -748,7 +748,7 @@ lang DataParser = AstParserBase + DataAst + ConTypeAst + AppTypeAst + DataPat
   syn BrkOpExpr lstyle rstyle =
   | OpExprConApp (Info, Name)
 
-  sem canStartAppArgType =
+  sem startsAtomType =
   | { token = UIdentTok { } } -> true
   | { token = HashStringTok { hash = "con" } } -> true
 
@@ -817,10 +817,10 @@ lang ParenParser = AstParserBase
   sem endParseTypeInParen:   all w. State BrkOpType ROpen -> NextTokenResult -> Type -> NextTokenResult -> ParseResult w (Type, NextTokenResult)
   sem endParsePatInParen:    all w. State BrkOpPat  ROpen -> NextTokenResult -> Pat  -> NextTokenResult -> ParseResult w (Pat,  NextTokenResult)
 
-  sem canStartAppArgExpr =
+  sem startsAtomExpr =
   | { token = LParenTok {} } -> true
 
-  sem canStartAppArgType =
+  sem startsAtomType =
   | { token = LParenTok {} } -> true
 
   sem beginParseExprInParen state open =
@@ -1039,10 +1039,10 @@ lang TupleParser = ParenParser + RecordAst + RecordTypeAst + RecordPat
 end
 
 lang BoolParser = AstParserBase + BoolAst + BoolPat + TrueKeyword + FalseKeyword
-  sem canStartAppArgExpr =
+  sem startsAtomExpr =
   | { token = KeywordTok { val = "true" | "false" } } -> true
 
-  sem canStartAppArgType =
+  sem startsAtomType =
   | { token = UIdentTok { val = "Bool" } } -> true
 
   sem parseExprROpen state =
@@ -1089,10 +1089,10 @@ lang BoolParser = AstParserBase + BoolAst + BoolPat + TrueKeyword + FalseKeyword
 end
 
 lang CharParser = AstParserBase + CharAst + CharPat
-  sem canStartAppArgExpr =
+  sem startsAtomExpr =
   | { token = CharTok { } } -> true
 
-  sem canStartAppArgType =
+  sem startsAtomType =
   | { token = UIdentTok { val = "Char" } } -> true
 
   sem parseExprROpen state =
@@ -1126,7 +1126,7 @@ end
 -- `Tensor` and always requires the bracketed argument), distinct from a
 -- generic type application.
 lang TensorParser = AstParserBase + TensorTypeAst
-  sem canStartAppArgType =
+  sem startsAtomType =
   | { token = UIdentTok { val = "Tensor" } } -> true
 
   sem parseTypeROpen state =
@@ -1149,10 +1149,10 @@ lang TensorParser = AstParserBase + TensorTypeAst
 end
 
 lang StringParser = AstParserBase + SeqAst + CharAst + SeqTotPat + CharPat
-  sem canStartAppArgExpr =
+  sem startsAtomExpr =
   | { token = StringTok { } } -> true
 
-  sem canStartAppArgType =
+  sem startsAtomType =
   | { token = UIdentTok { val = "String" } } -> true
 
   sem parseExprROpen state =
@@ -1197,10 +1197,10 @@ lang SeqParser = AstParserBase + SeqAst + SeqTypeAst + SeqTotPat + SeqEdgePat + 
   sem getInfoPat =
   | OpPatSeqEdge info -> info
 
-  sem canStartAppArgExpr =
+  sem startsAtomExpr =
   | { token = LBracketTok { } } -> true
 
-  sem canStartAppArgType =
+  sem startsAtomType =
   | { token = LBracketTok { } } -> true
 
   sem parseExprROpen state =
@@ -1349,10 +1349,10 @@ lang BraceParser = AstParserBase
   sem beginParseTypeInBrace: all w. State BrkOpType ROpen -> NextTokenResult -> NextTokenResult -> ParseResult w (Type, NextTokenResult)
   sem beginParsePatInBrace:  all w. State BrkOpPat  ROpen -> NextTokenResult -> NextTokenResult -> ParseResult w (Pat,  NextTokenResult)
   
-  sem canStartAppArgExpr =
+  sem startsAtomExpr =
   | { token = LBraceTok {} } -> true
 
-  sem canStartAppArgType =
+  sem startsAtomType =
   | { token = LBraceTok {} } -> true
 
   sem parseExprROpen state =
@@ -2476,7 +2476,7 @@ lang SynDeclParser = AstParserBase + SynDeclAst + SynKeyword + RecordTypeAst
             match cur with { token = UIdentTok { val = conIdent } | HashStringTok { hash = "con", val = conIdent } } & tokcon then
               let cur = nextToken tokcon.stream in
               let tyRes =
-                if canStartAppArgType cur then parseType cur
+                if startsAtomType cur then parseType cur
                 else parseOk (TyRecord { fields = mapEmpty cmpSID, info = tokcon.info }, cur)
               in
               result.bind tyRes (lam res.
@@ -2710,13 +2710,13 @@ lang ProgramParser = AstParserBase + MLangTopLevel + RecordAst + IncludeDeclPars
 
       recursive let parseTops = lam acc. lam cur.
         switch cur
-          case { token = KeywordTok { val = "let" | "type" | "recursive" | "con" | "external" | "utest" | "lang" } } then
+          case { token = KeywordTok { val = "mexpr" } } then parseOk (acc, cur)
+          case { token = EOFTok {} } then parseOk (acc, cur)
+          case _ then
             result.bind (parseDecl cur) (lam res.
               match res with (decl, cur) in
               parseTops (snoc acc decl) cur
             )
-          case _ then
-            parseOk (acc, cur)
         end
       in
 
