@@ -183,7 +183,8 @@ lang MExprEliminateDuplicateCode = MExprAst
   | PatCon t ->
     match lookupReplacement env replaced t.ident with (replaced, ident) in
     match eliminateDuplicateCodePat env replaced t.subpat with (replaced, subpat) in
-    (replaced, PatCon {t with ident = ident, subpat = subpat})
+    match eliminateDuplicateCodeType env replaced t.ty with (replaced, ty) in
+    (replaced, PatCon {t with ident = ident, subpat = subpat, ty = ty})
   | p ->
     match smapAccumL_Pat_Pat (eliminateDuplicateCodePat env) replaced p with (replaced, p) in
     match eliminateDuplicateCodeType env replaced (tyPat p) with (replaced, patTy) in
