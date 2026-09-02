@@ -756,45 +756,43 @@ lang MLangLoader = LoaderImpl + LazyAst
     (symEnv, loader)
 end
 
-lang BuiltinLoader = LoaderInterface
-  syn Hook +=
-  | BuiltinHook {env : SymEnv}
-
-  sem includeBuiltinEnv : Loader -> (SymEnv, Loader)
-  sem includeBuiltinEnv = | loader ->
-    match getHookOpt (lam x. match x with BuiltinHook x then Some x.env else None ()) loader
-    with Some env then (env, loader) else
-
-    let addBuiltin = lam loader. lam pair.
-      (_addDeclExn _symEnvEmpty loader (ulet_ pair.0 (uconst_ pair.1))).1 in
-    let f = lam loader.
-      let loader = foldl addBuiltin loader builtin in
-      ((), loader) in
-    match _captureEnv f loader with (_, env, loader) in
-    let env = symbolizeUpdateTyConEnv env (mapUnion env.currentEnv.tyConEnv builtinTypeNames) in
-    let loader = addHook loader (BuiltinHook {env = env}) in
-    (env, loader)
+lang ConstTransformerMLang = ConstTransformer + SemDeclAst
+  sem ctWorkerDecl env +=
+  | DeclSem x ->
+    let selfEnv = mapInsert (nameGetStr x.ident) (None ()) env in
+    let fimpl = lam impl.
+      let paramEnv =
+        foldl (lam e. lam p. mapInsert (nameGetStr p.ident) (None ()) e) selfEnv impl.params in
+      let fcase = lam c.
+        let caseEnv =
+          foldl (lam e. lam n. mapInsert n (None ()) e) paramEnv (ctGetPatVars [] c.pat) in
+        {c with body = ctWorker caseEnv c.body} in
+      {impl with cases = map fcase impl.cases} in
+    (selfEnv, DeclSem {x with impl = optionMap fimpl x.impl})
 end
 
-lang MCoreLoader = MLangLoader + BootParserMLang + BuiltinLoader
+lang MCoreFileParsing = BootParserMLang + ConstTransformerMLang
+  sem _parseMCoreFileRaw : [(String, Const)] -> String -> {decls : [Decl], expr : Expr}
+  sem _parseMCoreFileRaw consts = | path ->
+    switch result.consume (parseMLangFile path)
+    case (_, Right prog) then constTransformProgram consts prog
+    case (_, Left errs) then
+      errorMulti errs (join ["Parse error while parsing '", path, "'"])
+    end
+end
+
+lang MCoreLoader = MLangLoader + MCoreFileParsing
   syn FileType +=
   | FMCore {includeMExpr : Bool}
   sem _fileType += | _ ++ ".mc" -> FMCore {includeMExpr = false}
 
   sem _loadFile path += | (FMCore {includeMExpr = includeMExpr}, loader) ->
-    let prog = switch result.consume (parseMLangFile path)
-      case (_, Right prog) then prog
-      case (_, Left errs) then
-        errorMulti errs (join ["Parse error while parsing '", path, "'"])
-      end in
-
+    let prog = _parseMCoreFileRaw builtin path in
     let prog =
       { decls = map makeDeclKeywords prog.decls
       , expr = makeKeywords prog.expr
       } in
-
-    match includeBuiltinEnv loader with (env, loader) in
-    match foldl (lam acc. _addDeclExn acc.0 acc.1) (env, loader) prog.decls with (env, loader) in
+    match foldl (lam acc. _addDeclExn acc.0 acc.1) (symEnvDefault, loader) prog.decls with (env, loader) in
     if includeMExpr then
       -- NOTE(vipa, 2026-08-19): There are features that handle
       -- top-level definitions better than local ones, so we unwrap

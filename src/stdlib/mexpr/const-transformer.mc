@@ -7,6 +7,7 @@
 include "string.mc"
 include "name.mc"
 include "map.mc"
+include "seq.mc"
 include "ast-builder.mc"
 include "ast.mc"
 include "option.mc"
@@ -27,12 +28,22 @@ lang ConstTransformer = VarAst + LamAst + LetDeclAst + RecLetsDeclAst + MatchAst
 
   sem constTransform builtin =
   | t ->
-      let f = lam acc. lam v.
-        match v with (x, c) then mapInsert x (Some (uconst_ c)) acc else never in
-      let env = foldl f (mapEmpty cmpString) builtin in
+      let env = _ctBuiltinEnv builtin in
       let t2 = ctWorker env t in
       --dprint t2;
       t2
+
+  sem constTransformProgram : [(String, Const)] -> {decls : [Decl], expr : Expr} -> {decls : [Decl], expr : Expr}
+  sem constTransformProgram builtin = | prog ->
+    let env = _ctBuiltinEnv builtin in
+    match mapAccumL ctWorkerDecl env prog.decls with (env, decls) in
+    {decls = decls, expr = ctWorker env prog.expr}
+
+  sem _ctBuiltinEnv : [(String, Const)] -> Map String (Option Expr)
+  sem _ctBuiltinEnv = | builtin ->
+    let f = lam acc. lam v.
+      match v with (x, c) then mapInsert x (Some (uconst_ c)) acc else never in
+    foldl f (mapEmpty cmpString) builtin
 
   sem ctWorkerDecl (env: Map String (Option Expr)) =
   | DeclLet r ->
@@ -45,7 +56,9 @@ lang ConstTransformer = VarAst + LamAst + LetDeclAst + RecLetsDeclAst + MatchAst
     (env, DeclRecLets {r with bindings = bindings})
   | d & DeclExt r ->
     (mapInsert (nameGetStr r.ident) (None()) env, d)
-  | d -> (env, smap_Decl_Expr (ctWorker env) d)
+  | d ->
+    match smapAccumL_Decl_Decl ctWorkerDecl env d with (env, d) in
+    (env, smap_Decl_Expr (ctWorker env) d)
 
   sem ctWorker (env: Map String (Option Expr)) =
   | TmDecl x ->
