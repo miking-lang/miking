@@ -131,6 +131,8 @@ lang LoaderInterface
 
   -- Type-checking related functions
   sem _withTCEnv : all a. (TCEnv -> (TCEnv, a)) -> Loader -> (Loader, a)
+  sem _getTCEnv : Loader -> TCEnv
+  sem _getTCEnv = | loader -> (_withTCEnv (lam tcEnv. (tcEnv, tcEnv)) loader).1
 
   -- Run a function, capturing any added Decls in a separate
   -- environment, which is returned.
@@ -319,37 +321,14 @@ lang IncludeLoader = LoaderImpl + IncludeDeclAst
     (mergeSymEnv symEnv incEnv.env, loader)
 end
 
-lang BuiltinLoader = LoaderInterface
-  syn Hook +=
-  | BuiltinHook {env : SymEnv}
-
-  sem includeBuiltinEnv : Loader -> (SymEnv, Loader)
-  sem includeBuiltinEnv = | loader ->
-    match getHookOpt (lam x. match x with BuiltinHook x then Some x.env else None ()) loader
-    with Some env then (env, loader) else
-
-    let addBuiltin = lam loader. lam pair.
-      (_addDeclExn _symEnvEmpty loader (ulet_ pair.0 (uconst_ pair.1))).1 in
-    let f = lam loader.
-      let loader = foldl addBuiltin loader builtin in
-      ((), loader) in
-    match _captureEnv f loader with (_, env, loader) in
-    let env = symbolizeUpdateTyConEnv env (mapUnion env.currentEnv.tyConEnv builtinTypeNames) in
-    let loader = addHook loader (BuiltinHook {env = env}) in
-    (env, loader)
-end
-
-lang MLangLoader = LoaderImpl + BootParserMLang + LazyAst
+lang MLangLoader = LoaderImpl + LazyAst
   + Sym + TypeCheck
-  + BuiltinLoader
   + Resymbolize
   + NormPat
   + KeywordMakerBase
   + DeadcodeElimination
-
-  syn FileType +=
-  | FMCore {includeMExpr : Bool}
-  sem _fileType += | _ ++ ".mc" -> FMCore {includeMExpr = false}
+  + LangDeclAst
+  + SemDeclAst
 
   type BranchId = Int
 
@@ -775,6 +754,32 @@ lang MLangLoader = LoaderImpl + BootParserMLang + LazyAst
     let loader = _updateFileEnv updateSymEnv loader in
 
     (symEnv, loader)
+end
+
+lang BuiltinLoader = LoaderInterface
+  syn Hook +=
+  | BuiltinHook {env : SymEnv}
+
+  sem includeBuiltinEnv : Loader -> (SymEnv, Loader)
+  sem includeBuiltinEnv = | loader ->
+    match getHookOpt (lam x. match x with BuiltinHook x then Some x.env else None ()) loader
+    with Some env then (env, loader) else
+
+    let addBuiltin = lam loader. lam pair.
+      (_addDeclExn _symEnvEmpty loader (ulet_ pair.0 (uconst_ pair.1))).1 in
+    let f = lam loader.
+      let loader = foldl addBuiltin loader builtin in
+      ((), loader) in
+    match _captureEnv f loader with (_, env, loader) in
+    let env = symbolizeUpdateTyConEnv env (mapUnion env.currentEnv.tyConEnv builtinTypeNames) in
+    let loader = addHook loader (BuiltinHook {env = env}) in
+    (env, loader)
+end
+
+lang MCoreLoader = MLangLoader + BootParserMLang + BuiltinLoader
+  syn FileType +=
+  | FMCore {includeMExpr : Bool}
+  sem _fileType += | _ ++ ".mc" -> FMCore {includeMExpr = false}
 
   sem _loadFile path += | (FMCore {includeMExpr = includeMExpr}, loader) ->
     let prog = switch result.consume (parseMLangFile path)
@@ -1074,9 +1079,9 @@ lang TyUseSym = Sym + TyUseAst
         else error "Compiler error: missing langEnv"
 end
 
-lang ComposedMLangLoader
+lang ComposedMCoreLoader
   = MLangTypeAlias + MLangSyn + MLangSem + MExprResymbolize + MExprSym + DeclUseSym + TyUseSym
-  + MExprTypeCheck + MExprPatAnalysis + IncludeLoader + MCoreKeywordMaker
+  + MExprTypeCheck + MExprPatAnalysis + IncludeLoader + MCoreKeywordMaker + MCoreLoader
 end
 
 mexpr
@@ -1104,7 +1109,7 @@ mexpr
 -- let loader = (includeFileExn (sysGetCwd ()) "stdlib::seq.mc" loader).1 in
 -- utest boolDecls with getDecls loader using lam a. lam b. eqi 0 (seqCmp declCmp a b) in
 
-use ComposedMLangLoader in
+use ComposedMCoreLoader in
 
 (match argv with [_] then exit 0 else ());
 match argv with [_, input] ++ _ in

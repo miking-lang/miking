@@ -72,7 +72,7 @@ lang MCoreCompile =
   OldDPrintViaPprint + MExprGeneratePprint + GeneratePprintMissingCase +
   PprintTyAnnot + HtmlAnnotator +
   MExprToJson +
-  ComposedMLangLoader + DPrintViaPprintLoader + StripUtestLoader + UtestLoader +
+  ComposedMCoreLoader + DPrintViaPprintLoader + StripUtestLoader + UtestLoader +
   MExprGenerateEq + GenerateEqMetaVarError + MExprDeadcodeElimination +
 
   UnboundErrorAttr + DefinedAttr + WithoutInfoAttr
