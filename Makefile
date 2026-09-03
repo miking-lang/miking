@@ -116,12 +116,11 @@ uninstall-mi:
 misc/test: misc/test-spec.mc build/$(MI_NAME)
 	$(SET_STDLIB) $(SET_OCAMLPATH) build/$(MI_NAME) compile misc/test-spec.mc --output misc/test
 
-# Compares the new native parser (src/stdlib/parser/parser.mc) against the boot parser
-misc/parser-compare: misc/parser-compare.mc build/$(MI_NAME)
-	$(SET_STDLIB) $(SET_OCAMLPATH) build/$(MI_NAME) compile misc/parser-compare.mc --output misc/parser-compare
+misc/scripts/parser-compare: misc/scripts/parser-compare.mc src/stdlib/parser/parser.mc build/$(MI_NAME)
+	$(SET_STDLIB) $(SET_OCAMLPATH) build/$(MI_NAME) compile misc/scripts/parser-compare.mc --output misc/scripts/parser-compare
 
 .PHONY: test test-all test-quick
-test test-all test-quick: lint misc/test misc/parser-compare build/mi
+test test-all test-quick: lint misc/test build/mi
 test:
 	+ exec misc/test $(j_flag) --boot --smart-dep
 

@@ -4,6 +4,15 @@ mexpr
 
 use TestSpec in
 
+-- `misc/scripts/parser-compare` is a standalone tool
+let parserCompareSub =
+  ( 'p'
+  , { tup = {actual = "$(ROOT)/misc/scripts/parser-compare", deps = ["$(ROOT)/misc/scripts/<parser-compare>"]}
+    , make = {actual = "$(ROOT)/misc/scripts/parser-compare", deps = ["misc/scripts/parser-compare"]}
+    , friendly = "PARSER-COMPARE"
+    }
+  ) in
+
 let installed : Substituter =
   { flag = "installed"
   , description = "Run tests with a previously installed `mi` on `$PATH`."
@@ -14,6 +23,7 @@ let installed : Substituter =
         , friendly = "INSTALLED MI"
         }
       )
+    , parserCompareSub
     ]
   } in
 let cheated : Substituter =
@@ -32,6 +42,7 @@ let cheated : Substituter =
         , friendly = "CHEAT MI"
         }
       )
+    , parserCompareSub
     ]
   } in
 let bootstrapped : Substituter =
@@ -50,6 +61,7 @@ let bootstrapped : Substituter =
         , friendly = "BOOT MI"
         }
       )
+    , parserCompareSub
     ]
   } in
 
@@ -142,7 +154,7 @@ testMain substituters directories location (lam api.
   let parserCompareRun = api.endStep
     { uses = [origin]
     , tag = "parser-compare-run"
-    , cmd = "$(ROOT)/misc/parser-compare %f"
+    , cmd = "%p %f"
     } in
 
   api.tests []

@@ -1,0 +1,5 @@
+include_rules
+
+STDLIB := MCORE_LIBS=stdlib=$(ROOT)/src/stdlib
+
+: parser-compare.mc | $(ROOT)/src/<mi> |> ^ mi compile %f --output %o^ $(STDLIB) ./%1i compile %f --output %o |> parser-compare <parser-compare>
