@@ -233,7 +233,7 @@ lang AstParserBase = Lexer + Ast + DeclAst
         } sppf in
         result.map (lam expr. (expr, cur)) exprRes
     else
-      parseErr (cur.info, "Breakable parse error")
+      parseErr (cur.info, "Expected an expression")
 
   sem finalizeParseType state +=
   | cur ->
@@ -269,7 +269,7 @@ lang AstParserBase = Lexer + Ast + DeclAst
         } sppf in
         result.map (lam typ. (typ, cur)) typRes
     else
-      parseErr (cur.info, "Breakable parse error")
+      parseErr (cur.info, "Expected a type")
 
   sem finalizeParsePat state +=
   | cur ->
@@ -305,7 +305,7 @@ lang AstParserBase = Lexer + Ast + DeclAst
         } sppf in
         result.map (lam pat. (pat, cur)) patRes
     else
-      parseErr (cur.info, "Breakable parse error")
+      parseErr (cur.info, "Expected a pattern")
 
   sem startsAtomExpr +=
   | _ -> false
@@ -663,7 +663,7 @@ lang NegParser = AstParserBase + IntAst + FloatAst + IntPat
         let state = breakableAddAtom (configExpr ()) (OpExprAtom expr) state in
         parseExprRClosed state (nextToken cur.stream)
       case _ then
-        parseErr (cur.info, "Expected a number")
+        parseErr (cur.info, "Expected an integer or float literal after unary '-'")
     end
 
   sem parsePatROpen state +=
@@ -680,7 +680,7 @@ lang NegParser = AstParserBase + IntAst + FloatAst + IntPat
       let state = breakableAddAtom (configPat ()) (OpPatAtom pat) state in
       parsePatRClosed state (nextToken cur.stream)
     else
-      parseErr (cur.info, "Expected an integer")
+      parseErr (cur.info, "Expected an integer literal after unary '-' in a pattern")
 end
 
 lang VarParser = AstParserBase + VarAst + VarTypeAst + NamedPat
@@ -771,7 +771,7 @@ lang AppParser = AstParserBase + AppAst + AppTypeAst
       match breakableAddInfix (configExpr ()) (OpExprApp cur.info) state with Some(state) then
         parseExprROpen state cur
       else
-        parseErr (cur.info, "Breakable add infix error")
+        parseErr (cur.info, "Function application is not allowed here")
     else
       finalizeParseExpr state cur
 
@@ -782,7 +782,7 @@ lang AppParser = AstParserBase + AppAst + AppTypeAst
       match breakableAddInfix (configType ()) (OpTypeApp cur.info) state with Some(state) then
         parseTypeROpen state cur
       else
-        parseErr (cur.info, "Breakable add infix error")
+        parseErr (cur.info, "Type application is not allowed here")
     else
       finalizeParseType state cur
 
@@ -897,7 +897,7 @@ lang DataParser = AstParserBase + DataAst + ConTypeAst + AppTypeAst + DataPat + 
   sem finishConTypeRestriction data =
   | { token = RBraceTok {} } & tokclose ->
     parseOk (data, tokclose.info, nextToken tokclose.stream)
-  | cur -> parseErr (cur.info, "Missing right brace in constructor type restriction")
+  | cur -> parseErr (cur.info, "Expected '}' to close the constructor type restriction")
 
   sem parseConNameList: [Name] -> NextTokenResult -> ([Name], NextTokenResult)
   sem parseConNameList acc =
@@ -961,7 +961,7 @@ lang ParenParser = AstParserBase
     let state = breakableAddAtom (configExpr ()) (OpExprAtom expr) state in
     parseExprRClosed state (nextToken close.stream)
 
-  | cur -> parseErr (cur.info, "Missing closing parenthesis")
+  | cur -> parseErr (cur.info, "Expected ')' to close the parenthesized expression")
 
   sem beginParseTypeInParen state open +=
   | cur ->
@@ -977,7 +977,7 @@ lang ParenParser = AstParserBase
     let state = breakableAddAtom (configType ()) (OpTypeAtom typ) state in
     parseTypeRClosed state (nextToken close.stream)
 
-  | cur -> parseErr (cur.info, "Missing closing parenthesis")
+  | cur -> parseErr (cur.info, "Expected ')' to close the parenthesized type")
 
   sem beginParsePatInParen state open +=
   | cur ->
@@ -993,7 +993,7 @@ lang ParenParser = AstParserBase
     let state = breakableAddAtom (configPat ()) (OpPatAtom pat) state in
     parsePatRClosed state (nextToken close.stream)
 
-  | cur -> parseErr (cur.info, "Missing closing parenthesis")
+  | cur -> parseErr (cur.info, "Expected ')' to close the parenthesized pattern")
 
   sem parseExprROpen state +=
   | { token = LParenTok {} } & open ->
@@ -1060,7 +1060,7 @@ lang TupleParser = ParenParser + RecordAst + RecordTypeAst + RecordPat
             let cur = nextToken cur.stream in
             parseItems acc cur
           case _ then
-            parseErr (cur.info, "Unexpected token in tuple")
+            parseErr (cur.info, "Expected ',' or ')' in tuple expression")
         end
       )
     in
@@ -1099,7 +1099,7 @@ lang TupleParser = ParenParser + RecordAst + RecordTypeAst + RecordPat
             let cur = nextToken cur.stream in
             parseItems acc cur
           case _ then
-            parseErr (cur.info, "Unexpected token in tuple")
+            parseErr (cur.info, "Expected ',' or ')' in tuple type")
         end
       )
     in
@@ -1137,7 +1137,7 @@ lang TupleParser = ParenParser + RecordAst + RecordTypeAst + RecordPat
             let cur = nextToken cur.stream in
             parseItems acc cur
           case _ then
-            parseErr (cur.info, "Unexpected token in tuple")
+            parseErr (cur.info, "Expected ',' or ')' in tuple pattern")
         end
       )
     in
@@ -1269,10 +1269,10 @@ lang TensorParser = AstParserBase + TensorTypeAst
           let state = breakableAddAtom (configType ()) (OpTypeAtom typ) state in
           parseTypeRClosed state (nextToken tokrb.stream)
         else
-          parseErr (cur.info, "Missing right bracket")
+          parseErr (cur.info, "Expected ']' to close 'Tensor[...]'")
       )
     else
-      parseErr (cur.info, "Missing left bracket")
+      parseErr (cur.info, "Expected '[' after 'Tensor'")
 end
 
 lang StringParser = AstParserBase + SeqAst + CharAst + SeqTotPat + CharPat + SeqTypeAst + CharTypeAst
@@ -1346,7 +1346,7 @@ lang SeqParser = AstParserBase + SeqAst + SeqTypeAst + SeqTotPat + SeqEdgePat + 
             let cur = nextToken cur.stream in
             parseItems acc cur
           case _ then
-            parseErr (cur.info, "Unexpected token in sequence")
+            parseErr (cur.info, "Expected ',' or ']' in sequence expression")
         end
       )
     in
@@ -1385,7 +1385,7 @@ lang SeqParser = AstParserBase + SeqAst + SeqTypeAst + SeqTotPat + SeqEdgePat + 
         let state = breakableAddAtom (configType ()) (OpTypeAtom typ) state in
         parseTypeRClosed state (nextToken cur.stream)
       else
-        parseErr (cur.info, "Missing right bracket")
+        parseErr (cur.info, "Expected ']' to close the sequence type")
     )
 
   sem parsePatROpen state +=
@@ -1401,7 +1401,7 @@ lang SeqParser = AstParserBase + SeqAst + SeqTypeAst + SeqTotPat + SeqEdgePat + 
             let cur = nextToken cur.stream in
             parseItems acc cur
           case _ then
-            parseErr (cur.info, "Unexpected token in sequence")
+            parseErr (cur.info, "Expected ',' or ']' in sequence pattern")
         end
       )
     in
@@ -1432,7 +1432,7 @@ lang SeqParser = AstParserBase + SeqAst + SeqTypeAst + SeqTotPat + SeqEdgePat + 
       let cur = nextToken tokpp.stream in
       parsePatROpen state cur
     else
-      parseErr (tokpp.info, "Breakable add infix error")
+      parseErr (tokpp.info, "'++' is not allowed here")
 
   sem constructInfixPat +=
   | (OpPatSeqEdge info, lhs, rhs) ->
@@ -1467,7 +1467,7 @@ lang SeqParser = AstParserBase + SeqAst + SeqTypeAst + SeqTotPat + SeqEdgePat + 
           info = info
         })
       case _ then
-        parseErr (info, "Sequence edge error")
+        parseErr (info, "Expected a literal sequence on at least one side of '++'")
     end
   
   sem groupingsAllowedPat +=
@@ -1539,13 +1539,13 @@ lang RecordParser = BraceParser + RecordAst + RecordTypeAst + RecordPat + WithKe
                   let cur = nextToken cur.stream in
                   parseItems acc cur
                 case _ then
-                  parseErr (cur.info, "Unexpected token in sequence")
+                  parseErr (cur.info, "Expected ',' or '}' in record expression")
               end
             )
           else
-            parseErr (cur.info, "Missing assignment")
+            parseErr (cur.info, "Expected '=' after record field name")
         else
-          parseErr (cur.info, "Unexpected token in record")
+          parseErr (cur.info, "Expected a field name or '}' in record expression")
       in
 
       let res = parseItems (mapEmpty cmpSID) cur in
@@ -1583,13 +1583,13 @@ lang RecordParser = BraceParser + RecordAst + RecordTypeAst + RecordPat + WithKe
                       let cur = nextToken cur.stream in
                       parseItems acc cur
                     case _ then
-                      parseErr (cur.info, "Unexpected token in sequence")
+                      parseErr (cur.info, "Expected ',' or '}' in record update")
                   end
                 )
               else
-                parseErr (cur.info, "Missing assignment")
+                parseErr (cur.info, "Expected '=' after record update field name")
             else
-              parseErr (cur.info, "Unexpected token in record update")
+              parseErr (cur.info, "Expected a field name or '}' in record update")
           in
 
           let res = parseItems [] cur in
@@ -1612,7 +1612,7 @@ lang RecordParser = BraceParser + RecordAst + RecordTypeAst + RecordPat + WithKe
             parseExprRClosed state (nextToken close.stream)
           )
         else
-          parseErr (cur.info, "Unexpected token in record")
+          parseErr (cur.info, "Expected 'with' after the record expression to update")
       )
 
   sem beginParseTypeInBrace state open +=
@@ -1641,13 +1641,13 @@ lang RecordParser = BraceParser + RecordAst + RecordTypeAst + RecordPat + WithKe
                 let cur = nextToken cur.stream in
                 parseItems acc cur
               case _ then
-                parseErr (cur.info, "Unexpected token in sequence")
+                parseErr (cur.info, "Expected ',' or '}' in record type")
             end
           )
         else
-          parseErr (cur.info, "Missing type assignment")
+          parseErr (cur.info, "Expected ':' after record type field name")
       else
-        parseErr (cur.info, "Unexpected token in record")
+        parseErr (cur.info, "Expected a field name or '}' in record type")
     in
     
     let res = parseItems (mapEmpty cmpSID) cur in
@@ -1690,13 +1690,13 @@ lang RecordParser = BraceParser + RecordAst + RecordTypeAst + RecordPat + WithKe
                 let cur = nextToken cur.stream in
                 parseItems acc cur
               case _ then
-                parseErr (cur.info, "Unexpected token in sequence")
+                parseErr (cur.info, "Expected ',' or '}' in record pattern")
             end
           )
         else
-          parseErr (cur.info, "Missing pattern assignment")
+          parseErr (cur.info, "Expected '=' after record pattern field name")
       else
-        parseErr (cur.info, "Unexpected token in record")
+        parseErr (cur.info, "Expected a field name or '}' in record pattern")
     in
     
     let res = parseItems (mapEmpty cmpSID) cur in
@@ -1726,7 +1726,7 @@ lang LetDeclParser = AstParserBase + LetDeclAst + LetKeyword + InKeyword
         let cur = nextToken tokin.stream in
         parseExprROpen state cur
       else
-        parseErr (cur.info, "Missing in expression")
+        parseErr (cur.info, "Expected 'in' after the 'let' declaration")
     )
 
   sem parseDecl +=
@@ -1764,10 +1764,10 @@ lang LetDeclParser = AstParserBase + LetDeclAst + LetKeyword + InKeyword
             parseOk (decl, cur)
           )
         else
-          parseErr (cur.info, "Missing assignment")
+          parseErr (cur.info, "Expected '=' after the 'let' binding's identifier (and optional type annotation)")
       )
     else
-      parseErr (cur.info, "Missing identifier")
+      parseErr (cur.info, "Expected an identifier after 'let'")
 end
 
 lang RecLetsDeclParser = AstParserBase + RecLetsDeclAst + RecursiveKeyword + LetKeyword + InKeyword + EndKeyword
@@ -1784,7 +1784,7 @@ lang RecLetsDeclParser = AstParserBase + RecLetsDeclAst + RecursiveKeyword + Let
           case { token = KeywordTok { val = "let" } } then
             parseItems acc cur
           case _ then
-            parseErr (cur.info, "Unexpected token in recursive declaration")
+            parseErr (cur.info, "Expected 'let' or 'in' in a 'recursive let' chain")
         end
       )
     in
@@ -1817,7 +1817,7 @@ lang RecLetsDeclParser = AstParserBase + RecLetsDeclAst + RecursiveKeyword + Let
           case { token = KeywordTok { val = "let" } } then
             parseItems acc cur
           case _ then
-            parseErr (cur.info, "Unexpected token in recursive declaration")
+            parseErr (cur.info, "Expected 'let' or 'end' in a 'recursive let' chain")
         end
       )
     in
@@ -1845,7 +1845,7 @@ lang TypeDeclParser = AstParserBase + TypeDeclAst + VariantTypeAst + TypeKeyword
         let cur = nextToken tokin.stream in
         parseExprROpen state cur
       else
-        parseErr (cur.info, "Missing in expression")
+        parseErr (cur.info, "Expected 'in' after the 'type' declaration")
     )
 
   sem parseDecl +=
@@ -1889,7 +1889,7 @@ lang TypeDeclParser = AstParserBase + TypeDeclAst + VariantTypeAst + TypeKeyword
         parseOk (decl, cur)
       )
     else
-      parseErr (cur.info, "Missing identifier")
+      parseErr (cur.info, "Expected a type identifier after 'type'")
 end
 
 
@@ -1939,7 +1939,7 @@ lang LamParser = AstParserBase + LamAst + FunTypeAst + LamKeyword
         let cur = nextToken tokdot.stream in
         parseExprROpen state cur
       else
-        parseErr (cur.info, "Missing period")
+        parseErr (cur.info, "Expected '.' after the 'lam' parameter")
     )
 
   sem parseTypeRClosed state +=
@@ -1948,7 +1948,7 @@ lang LamParser = AstParserBase + LamAst + FunTypeAst + LamKeyword
       let cur = nextToken cur.stream in
       parseTypeROpen state cur
     else
-      parseErr (cur.info, "Breakable add infix error")
+      parseErr (cur.info, "'->' is not allowed here")
 
   sem constructPrefixExpr +=
   | (OpExprLam (beginInfo, ident, tyParam, tyAnnot), body) ->
@@ -2012,7 +2012,7 @@ lang MatchParser = AstParserBase + MatchAst + NeverAst + MatchKeyword + WithKeyw
                   let state = breakableAddPrefix (configExpr ()) (OpExprMatchElse (info, target, pat, thn)) state in
                   parseExprROpen state cur
                 else
-                  parseErr (cur.info, "Expected else keyword")
+                  parseErr (cur.info, "Expected 'else' after the 'match ... then' branch")
               )
 
             -- match .. with .. in ..
@@ -2023,11 +2023,11 @@ lang MatchParser = AstParserBase + MatchAst + NeverAst + MatchKeyword + WithKeyw
               parseExprROpen state cur
 
             case _ then
-              parseErr (cur.info, "Expected with or in keyword")
+              parseErr (cur.info, "Expected 'then' or 'in' after the 'match ... with <pattern>'")
           end
         )        
       else
-        parseErr (cur.info, "Expected with keyword")
+        parseErr (cur.info, "Expected 'with' after the 'match' target expression")
     )
   
   sem constructPrefixExpr +=
@@ -2093,7 +2093,7 @@ lang SwitchParser = AstParserBase + MatchAst + LetDeclAst + VarAst + NeverAst + 
                 )
               )
             else
-              parseErr (cur.info, "Expected then keyword")
+              parseErr (cur.info, "Expected 'then' after the 'case' pattern")
           )
         case { token = KeywordTok { val = "end" } } & tokend then
           let cur = nextToken tokend.stream in
@@ -2103,7 +2103,7 @@ lang SwitchParser = AstParserBase + MatchAst + LetDeclAst + VarAst + NeverAst + 
           } in
           parseOk (expr, tokend, cur)
         case _ then
-          parseErr (cur.info, "Expected case or end keyword")
+          parseErr (cur.info, "Expected 'case' or 'end' in a 'switch' expression")
       end
     in
 
@@ -2161,7 +2161,7 @@ lang AndParser = AstParserBase + AndPat
     match breakableAddInfix (configPat ()) (OpPatAnd tokop.info) state with Some(state) then
       parsePatROpen state (nextToken tokop.stream)
     else
-      parseErr (tokop.info, "Breakable add infix error")
+      parseErr (tokop.info, "'&' is not allowed here")
 
   sem constructInfixPat +=
   | (OpPatAnd info, lhs, rhs) ->
@@ -2192,7 +2192,7 @@ lang OrParser = AstParserBase + OrPat
     match breakableAddInfix (configPat ()) (OpPatOr tokop.info) state with Some(state) then
       parsePatROpen state (nextToken tokop.stream)
     else
-      parseErr (tokop.info, "Breakable add infix error")
+      parseErr (tokop.info, "'|' is not allowed here")
 
   sem constructInfixPat +=
   | (OpPatOr info, lhs, rhs) ->
@@ -2248,7 +2248,7 @@ lang UtestParser = AstParserBase + UtestDeclAst + UtestKeyword + WithKeyword + U
         let cur = nextToken tokin.stream in
         parseExprROpen state cur
       else
-        parseErr (cur.info, "Missing in expression")
+        parseErr (cur.info, "Expected 'in' after the 'utest' declaration")
     )
 
   sem parseDecl +=
@@ -2304,7 +2304,7 @@ lang UtestParser = AstParserBase + UtestDeclAst + UtestKeyword + WithKeyword + U
           )
         )
       else
-        parseErr (cur.info, "Expected with keyword")
+        parseErr (cur.info, "Expected 'with' after the 'utest' expression")
     )
 end
 
@@ -2320,7 +2320,7 @@ lang ConDeclParser = AstParserBase + DataDeclAst + ConKeyword + InKeyword
         let cur = nextToken tokin.stream in
         parseExprROpen state cur
       else
-        parseErr (cur.info, "Missing in expression")
+        parseErr (cur.info, "Expected 'in' after the 'con' declaration")
     )
 
   sem parseDecl +=
@@ -2347,7 +2347,7 @@ lang ConDeclParser = AstParserBase + DataDeclAst + ConKeyword + InKeyword
         parseOk (decl, cur)
       )
     else
-      parseErr (cur.info, "Missing identifier")
+      parseErr (cur.info, "Expected a constructor identifier after 'con'")
 end
 
 lang ExtDeclParser = AstParserBase + ExtDeclAst + ExternalKeyword + InKeyword
@@ -2362,7 +2362,7 @@ lang ExtDeclParser = AstParserBase + ExtDeclAst + ExternalKeyword + InKeyword
         let cur = nextToken tokin.stream in
         parseExprROpen state cur
       else
-        parseErr (cur.info, "Missing in expression")
+        parseErr (cur.info, "Expected 'in' after the 'external' declaration")
     )
 
   sem parseDecl +=
@@ -2392,9 +2392,9 @@ lang ExtDeclParser = AstParserBase + ExtDeclAst + ExternalKeyword + InKeyword
           parseOk (decl, cur)
         )
       else
-        parseErr (cur.info, "Missing colon")
+        parseErr (cur.info, "Expected ':' after the 'external' identifier (and optional '!')")
     else
-      parseErr (cur.info, "Missing identifier")
+      parseErr (cur.info, "Expected an identifier after 'external'")
 end
 
 lang UseParser = AstParserBase + UseDeclAst + TyUseAst + UseKeyword + InKeyword
@@ -2409,7 +2409,7 @@ lang UseParser = AstParserBase + UseDeclAst + TyUseAst + UseKeyword + InKeyword
         let cur = nextToken tokin.stream in
         parseExprROpen state cur
       else
-        parseErr (cur.info, "Missing in expression")
+        parseErr (cur.info, "Expected 'in' after the 'use' declaration")
     )
 
   sem parseDecl +=
@@ -2428,7 +2428,7 @@ lang UseParser = AstParserBase + UseDeclAst + TyUseAst + UseKeyword + InKeyword
       } in
       parseOk (decl, nextToken tokident.stream)
     else
-      parseErr (cur.info, "Missing identifier")
+      parseErr (cur.info, "Expected a language identifier after 'use'")
 
   sem parseTypeROpen state +=
   | { token = KeywordTok { val = "use" } } & tokuse ->
@@ -2451,9 +2451,9 @@ lang UseParser = AstParserBase + UseDeclAst + TyUseAst + UseKeyword + InKeyword
           parseTypeRClosed state cur
         )
       else
-        parseErr (cur.info, "Missing in")
+        parseErr (cur.info, "Expected 'in' after 'use <lang>' in a type")
     else
-      parseErr (cur.info, "Missing identifier")
+      parseErr (cur.info, "Expected a language identifier after 'use'")
 end
 
 lang ProjParser = AstParserBase + MatchAst + NeverAst + RecordPat + NamedPat + VarAst
@@ -2475,15 +2475,15 @@ lang ProjParser = AstParserBase + MatchAst + NeverAst + RecordPat + NamedPat + V
         match breakableAddPostfix (configExpr ()) op state with Some state then
           parseExprRClosed state (nextToken toklabel.stream)
         else
-          parseErr (toklabel.info, "Breakable add postfix error")
+          parseErr (toklabel.info, "'.' projection is not allowed here")
       case { token = LIdentTok { val = label } | HashStringTok { hash = "label", val = label } } & toklabel then
         let op = OpExprProj (mergeInfo tokdot.info toklabel.info, label) in
         match breakableAddPostfix (configExpr ()) op state with Some state then
           parseExprRClosed state (nextToken toklabel.stream)
         else
-          parseErr (toklabel.info, "Breakable add postfix error")
+          parseErr (toklabel.info, "'.' projection is not allowed here")
       case _ then
-        parseErr (cur.info, "Expected a field label")
+        parseErr (cur.info, "Expected a field label (an identifier or integer) after '.'")
     end
 
   sem constructPostfixExpr +=
@@ -2533,10 +2533,10 @@ lang IfParser = AstParserBase + MatchAst + BoolPat + IfKeyword + ThenKeyword + E
             let state = breakableAddPrefix (configExpr ()) (OpExprIf (info, cond, thn)) state in
             parseExprROpen state cur
           else
-            parseErr (cur.info, "Expected else keyword")
+            parseErr (cur.info, "Expected 'else' after the 'if ... then' branch")
         )
       else
-        parseErr (cur.info, "Expected then keyword")
+        parseErr (cur.info, "Expected 'then' after the 'if' condition")
     )
 
   sem constructPrefixExpr +=
@@ -2567,7 +2567,7 @@ lang SemicolonParser = AstParserBase + LetDeclAst
     match breakableAddInfix (configExpr ()) (OpExprSemi toksemi.info) state with Some state then
       parseExprROpen state (nextToken toksemi.stream)
     else
-      parseErr (toksemi.info, "Breakable add infix error")
+      parseErr (toksemi.info, "';' is not allowed here")
 
   sem constructInfixExpr +=
   | (OpExprSemi info, lhs, rhs) ->
@@ -2607,7 +2607,7 @@ lang KindParser = AstParserBase + DataKindAst
       else match cur with { token = RBraceTok {} } & tokclose then
         parseOk (Data { types = entries }, nextToken tokclose.stream)
       else
-        parseErr (cur.info, "Missing comma or right brace in kind")
+        parseErr (cur.info, "Expected ',' or '}' in kind")
     )
 
   sem parseKindEntry: all w. NextTokenResult -> ParseResult w (Name, {lower : Set Name, upper : Option (Set Name)}, NextTokenResult)
@@ -2634,15 +2634,15 @@ lang KindParser = AstParserBase + DataKindAst
           finishKindEntry name {lower = setEmpty nameCmp, upper = Some (setOfSeq nameCmp upper)} cur
         end
       case cur then
-        parseErr (cur.info, "Expected >, <, or | in kind entry")
+        parseErr (cur.info, "Expected '>', '<', or '|' after '[' in a kind entry")
       end
-    else parseErr (cur.info, "Missing left bracket in kind entry")
-  | cur -> parseErr (cur.info, "Missing type identifier in kind entry")
+    else parseErr (cur.info, "Expected '[' after the type name in a kind entry")
+  | cur -> parseErr (cur.info, "Expected a type identifier in a kind entry")
 
   sem finishKindEntry: all w. Name -> {lower : Set Name, upper : Option (Set Name)} -> NextTokenResult -> ParseResult w (Name, {lower : Set Name, upper : Option (Set Name)}, NextTokenResult)
   sem finishKindEntry name entry =
   | { token = RBracketTok {} } & tokclose -> parseOk (name, entry, nextToken tokclose.stream)
-  | cur -> parseErr (cur.info, "Missing right bracket in kind entry")
+  | cur -> parseErr (cur.info, "Expected ']' to close the kind entry")
 
   sem parseKindConList: [Name] -> NextTokenResult -> ([Name], NextTokenResult)
   sem parseKindConList acc =
@@ -2678,7 +2678,7 @@ lang AllParser = AstParserBase + AllTypeAst + PolyKindAst + AllKeyword + KindPar
               parseTypeRClosed state cur
             )
           else
-            parseErr (cur.info, "Missing period")
+            parseErr (cur.info, "Expected '.' after the kind constraint in 'all'")
         )
       else match cur with { token = OperatorTok { val = "." } } & tokdot then
         let cur = nextToken tokdot.stream in
@@ -2694,9 +2694,9 @@ lang AllParser = AstParserBase + AllTypeAst + PolyKindAst + AllKeyword + KindPar
           parseTypeRClosed state cur
         )
       else
-        parseErr (cur.info, "Missing period")
+        parseErr (cur.info, "Expected '.' after the type variable in 'all'")
     else
-      parseErr (cur.info, "Missing identifier")
+      parseErr (cur.info, "Expected a type variable identifier after 'all'")
 end
 
 lang SynDeclParser = AstParserBase + SynDeclAst + SynKeyword + RecordTypeAst
@@ -2734,7 +2734,7 @@ lang SynDeclParser = AstParserBase + SynDeclAst + SynKeyword + RecordTypeAst
                 parseConstrs (snoc acc constr) cur
               )
             else
-              parseErr (cur.info, "Missing constructor identifier")
+              parseErr (cur.info, "Expected a constructor identifier after '|' in a 'syn' declaration")
           else
             parseOk (acc, cur)
         in
@@ -2753,9 +2753,9 @@ lang SynDeclParser = AstParserBase + SynDeclAst + SynKeyword + RecordTypeAst
           parseOk (decl, cur)
         )
       else
-        parseErr (cur.info, "Expected = or +=")
+        parseErr (cur.info, "Expected '=' or '+=' after the 'syn' name and parameters")
     else
-      parseErr (cur.info, "Missing identifier")
+      parseErr (cur.info, "Expected a type identifier after 'syn'")
 end
 
 lang SemDeclParser = AstParserBase + SemDeclAst + SemKeyword
@@ -2800,12 +2800,12 @@ lang SemDeclParser = AstParserBase + SemDeclAst + SemKeyword
                         } in
                       parseParams (snoc acc param) (nextToken tokrp.stream)
                     else
-                      parseErr (cur.info, "Missing closing parenthesis")
+                      parseErr (cur.info, "Expected ')' to close the 'sem' parameter")
                   )
                 else
-                  parseErr (cur.info, "Missing colon")
+                  parseErr (cur.info, "Expected ':' after the 'sem' parameter name")
               else
-                parseErr (cur.info, "Missing identifier")
+                parseErr (cur.info, "Expected an identifier after '(' in a 'sem' parameter")
             case { token = LIdentTok { val = pident } | HashStringTok { hash = "var", val = pident } } & tokpident then
               let info = tokpident.info in
               let param = {ident = nameNoSym pident, tyAnnot = ityunknown_ info, tyParam = ityunknown_ info, info = info} in
@@ -2832,7 +2832,7 @@ lang SemDeclParser = AstParserBase + SemDeclAst + SemKeyword
                       parseCases (snoc acc c) cur
                     )
                   else
-                    parseErr (cur.info, "Expected ->")
+                    parseErr (cur.info, "Expected '->' after the 'sem' case pattern")
                 )
               else
                 parseOk (acc, cur)
@@ -2854,10 +2854,10 @@ lang SemDeclParser = AstParserBase + SemDeclAst + SemKeyword
               parseOk (decl, cur)
             )
           else
-            parseErr (cur.info, "Expected = or +=")
+            parseErr (cur.info, "Expected '=' or '+=' after the 'sem' name and parameters")
         )
     else
-      parseErr (cur.info, "Missing identifier")
+      parseErr (cur.info, "Expected an identifier after 'sem'")
 end
 
 lang LangDeclParser = AstParserBase + LangDeclAst + LangKeyword + EndKeyword + SynDeclParser + SemDeclParser + TypeDeclParser
@@ -2885,7 +2885,7 @@ lang LangDeclParser = AstParserBase + LangDeclAst + LangKeyword + EndKeyword + S
           else
             parseOk (acc, cur)
         else
-          parseErr (cur.info, "Missing language identifier")
+          parseErr (cur.info, "Expected an included language identifier after '+'")
       in
 
       let includesRes = match cur with { token = OperatorTok { val = "=" } } & tokeq then
@@ -2919,7 +2919,7 @@ lang LangDeclParser = AstParserBase + LangDeclAst + LangKeyword + EndKeyword + S
         )
       )
     else
-      parseErr (cur.info, "Missing identifier")
+      parseErr (cur.info, "Expected an identifier after 'lang'")
 end
 
 lang IncludeDeclParser = AstParserBase + IncludeDeclAst + IncludeKeyword
@@ -2933,7 +2933,7 @@ lang IncludeDeclParser = AstParserBase + IncludeDeclAst + IncludeKeyword
       } in
       parseOk (decl, nextToken tokpath.stream)
     else
-      parseErr (cur.info, "Missing include path")
+      parseErr (cur.info, "Expected a string literal path after 'include'")
 end
 
 -- The entry point for parsing an entire mcore file: zero or more
@@ -2983,7 +2983,7 @@ lang ProgramParser = AstParserBase + MLangTopLevel + RecordAst + IncludeDeclPars
           match cur with { token = EOFTok {} } then
             parseOk ({decls = concat includes tops, expr = expr}, cur)
           else
-            parseErr (cur.info, "Unexpected token, expected end of file")
+            parseErr (cur.info, "Expected end of file")
         )
       )
     )
@@ -2991,29 +2991,19 @@ end
 
 lang UnexpectedTokenParser = AstParserBase
   sem parseExprROpen state +=
-  | cur ->
-    let str = concat "Unexpexted token while parsing expr: " (tokToStr cur.token) in
-    parseErr (cur.info, str)
+  | cur -> parseErr (cur.info, "Expected the start of an expression")
 
   sem parseDecl +=
-  | cur ->
-    let str = concat "Unexpexted token while parsing decl: " (tokToStr cur.token) in
-    parseErr (cur.info, str)
+  | cur -> parseErr (cur.info, "Expected the start of a declaration")
 
   sem parseTypeROpen state +=
-  | cur ->
-    let str = concat "Unexpexted token while parsing type: " (tokToStr cur.token) in
-    parseErr (cur.info, str)
+  | cur -> parseErr (cur.info, "Expected the start of a type")
 
   sem parseKind +=
-  | cur ->
-    let str = concat "Unexpexted token while parsing kind: " (tokToStr cur.token) in
-    parseErr (cur.info, str)
+  | cur -> parseErr (cur.info, "Expected a kind constraint")
 
   sem parsePatROpen state +=
-  | cur ->
-    let str = concat "Unexpexted token while parsing pat: " (tokToStr cur.token) in
-    parseErr (cur.info, str)
+  | cur -> parseErr (cur.info, "Expected the start of a pattern")
 end
 
 lang MExprParser =
