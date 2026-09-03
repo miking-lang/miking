@@ -58,6 +58,21 @@ lang AstParserBase = Lexer + Ast + DeclAst
   syn BrkOpPat lstyle rstyle =
   | OpPatAtom Pat
 
+  syn BrkCatExpr =
+  | CatExprPostfix     ()
+  | CatExprApplication ()
+  | CatExprSequencing  ()
+  | CatExprBinder      ()
+
+  syn BrkCatType =
+  | CatTypeApplication ()
+  | CatTypeArrow       ()
+
+  syn BrkCatPat =
+  | CatPatApplication ()
+  | CatPatPrefix      ()
+  | CatPatLogic       ()
+
   sem parseExpr: all w. NextTokenResult -> ParseResult w (Expr, NextTokenResult)
   sem parseDecl: all w. NextTokenResult -> ParseResult w (Decl, NextTokenResult)
   sem parseType: all w. NextTokenResult -> ParseResult w (Type, NextTokenResult)
@@ -114,6 +129,51 @@ lang AstParserBase = Lexer + Ast + DeclAst
   sem groupingsAllowedExpr: GroupingsAllowedFunc BrkOpExpr
   sem groupingsAllowedType: GroupingsAllowedFunc BrkOpType
   sem groupingsAllowedPat:  GroupingsAllowedFunc BrkOpPat
+
+  sem opCatExpr: all lstyle. all rstyle. BrkOpExpr lstyle rstyle -> BrkCatExpr
+  sem opCatType: all lstyle. all rstyle. BrkOpType lstyle rstyle -> BrkCatType
+  sem opCatPat:  all lstyle. all rstyle. BrkOpPat  lstyle rstyle -> BrkCatPat
+
+  sem categoryGroupingExpr: (BrkCatExpr, BrkCatExpr) -> AllowedDirection
+  sem categoryGroupingType: (BrkCatType, BrkCatType) -> AllowedDirection
+  sem categoryGroupingPat:  (BrkCatPat,  BrkCatPat)  -> AllowedDirection
+
+  sem categoryGroupingExpr +=
+  | (CatExprPostfix _, _) -> GLeft ()
+  | (CatExprApplication _, CatExprPostfix _) -> GRight ()
+  | (CatExprApplication _, _) -> GLeft ()
+  | (CatExprSequencing _, CatExprPostfix _) -> GRight ()
+  | (CatExprSequencing _, CatExprApplication _) -> GRight ()
+  | (CatExprSequencing _, _) -> GLeft ()
+  | (CatExprBinder _, CatExprPostfix _) -> GRight ()
+  | (CatExprBinder _, CatExprApplication _) -> GRight ()
+  | (CatExprBinder _, CatExprSequencing _) -> GRight ()
+  | (CatExprBinder _, _) -> GLeft ()
+  | _ -> GEither ()
+
+  sem categoryGroupingType +=
+  | (CatTypeApplication _, _) -> GLeft ()
+  | (CatTypeArrow _, CatTypeApplication _) -> GRight ()
+  | (CatTypeArrow _, _) -> GLeft ()
+  | _ -> GEither ()
+
+  sem categoryGroupingPat +=
+  | (CatPatApplication _, _) -> GLeft ()
+  | (CatPatPrefix _, CatPatApplication _) -> GRight ()
+  | (CatPatPrefix _, _) -> GLeft ()
+  | (CatPatLogic _, CatPatApplication _) -> GRight ()
+  | (CatPatLogic _, CatPatPrefix _) -> GRight ()
+  | (CatPatLogic _, _) -> GLeft ()
+  | _ -> GEither ()
+
+  sem groupingsAllowedExpr +=
+  | (p, c) -> categoryGroupingExpr (opCatExpr p, opCatExpr c)
+
+  sem groupingsAllowedType +=
+  | (p, c) -> categoryGroupingType (opCatType p, opCatType c)
+
+  sem groupingsAllowedPat +=
+  | (p, c) -> categoryGroupingPat (opCatPat p, opCatPat c)
 
   sem terminalInfosExpr: all lstyle. all rstyle. BrkOpExpr lstyle rstyle -> [Info]
   sem terminalInfosType: all lstyle. all rstyle. BrkOpType lstyle rstyle -> [Info]
@@ -329,15 +389,6 @@ lang AstParserBase = Lexer + Ast + DeclAst
   sem parenAllowedPat +=
   | _ -> GEither ()
 
-  sem groupingsAllowedExpr +=
-  | _ -> GEither ()
-
-  sem groupingsAllowedType +=
-  | _ -> GEither ()
-
-  sem groupingsAllowedPat +=
-  | _ -> GEither ()
-
   sem terminalInfosExpr +=
   | op -> [getInfoExpr op]
 
@@ -346,6 +397,9 @@ lang AstParserBase = Lexer + Ast + DeclAst
 
   sem terminalInfosPat +=
   | op -> [getInfoPat op]
+
+  sem opCatExpr +=
+  | OpExprDecl _ -> CatExprBinder ()
 
   sem getInfoExpr +=
   | OpExprAtom expr -> infoTm expr
@@ -704,6 +758,12 @@ lang AppParser = AstParserBase + AppAst + AppTypeAst
   | OpTypeApp info ->
     info
 
+  sem opCatExpr +=
+  | OpExprApp _ -> CatExprApplication ()
+
+  sem opCatType +=
+  | OpTypeApp _ -> CatTypeApplication ()
+
   sem parseExprRClosed state +=
   | cur ->
     -- check if the next token can be part of the current expression.
@@ -773,6 +833,12 @@ lang DataParser = AstParserBase + DataAst + ConTypeAst + AppTypeAst + DataPat + 
 
   sem getInfoPat +=
   | OpPatConApp (info, _) -> info
+
+  sem opCatExpr +=
+  | OpExprConApp _ -> CatExprApplication ()
+
+  sem opCatPat +=
+  | OpPatConApp _ -> CatPatApplication ()
 
   sem parseExprROpen state +=
   | { token = UIdentTok { val = val } | HashStringTok { hash = "con", val = val } } & tokident ->
@@ -1257,6 +1323,9 @@ lang SeqParser = AstParserBase + SeqAst + SeqTypeAst + SeqTotPat + SeqEdgePat + 
 
   sem getInfoPat +=
   | OpPatSeqEdge info -> info
+
+  sem opCatPat +=
+  | OpPatSeqEdge _ -> CatPatApplication ()
 
   sem startsAtomExpr +=
   | { token = LBracketTok { } } -> true
@@ -1837,6 +1906,12 @@ lang LamParser = AstParserBase + LamAst + FunTypeAst + LamKeyword
   sem getInfoType +=
   | OpTypeArrow info -> info
 
+  sem opCatExpr +=
+  | OpExprLam _ -> CatExprBinder ()
+
+  sem opCatType +=
+  | OpTypeArrow _ -> CatTypeArrow ()
+
   sem parseExprROpen state +=
   | { token = KeywordTok { val = "lam" } } & toklam ->
     let cur = nextToken toklam.stream in
@@ -1908,6 +1983,10 @@ lang MatchParser = AstParserBase + MatchAst + NeverAst + MatchKeyword + WithKeyw
   sem getInfoExpr +=
   | OpExprMatchIn (info, _, _) -> info
   | OpExprMatchElse (info, _, _, _) -> info
+
+  sem opCatExpr +=
+  | OpExprMatchIn _ -> CatExprBinder ()
+  | OpExprMatchElse _ -> CatExprBinder ()
 
   sem parseExprROpen state +=
   | { token = KeywordTok { val = "match" } } & tokmatch ->
@@ -2074,6 +2153,9 @@ lang AndParser = AstParserBase + AndPat
   sem getInfoPat +=
   | OpPatAnd info -> info
 
+  sem opCatPat +=
+  | OpPatAnd _ -> CatPatLogic ()
+
   sem parsePatRClosed state +=
   | { token = OperatorTok { val = "&" } } & tokop ->
     match breakableAddInfix (configPat ()) (OpPatAnd tokop.info) state with Some(state) then
@@ -2102,6 +2184,9 @@ lang OrParser = AstParserBase + OrPat
   sem getInfoPat +=
   | OpPatOr info -> info
 
+  sem opCatPat +=
+  | OpPatOr _ -> CatPatLogic ()
+
   sem parsePatRClosed state +=
   | { token = OperatorTok { val = "|" } } & tokop ->
     match breakableAddInfix (configPat ()) (OpPatOr tokop.info) state with Some(state) then
@@ -2129,6 +2214,9 @@ lang NotParser = AstParserBase + NotPat
 
   sem getInfoPat +=
   | OpPatNot info -> info
+
+  sem opCatPat +=
+  | OpPatNot _ -> CatPatPrefix ()
 
   sem parsePatROpen state +=
   | { token = OperatorTok { val = "!" } } & tokop ->
@@ -2375,6 +2463,9 @@ lang ProjParser = AstParserBase + MatchAst + NeverAst + RecordPat + NamedPat + V
   sem getInfoExpr +=
   | OpExprProj (info, _) -> info
 
+  sem opCatExpr +=
+  | OpExprProj _ -> CatExprPostfix ()
+
   sem parseExprRClosed state +=
   | { token = OperatorTok { val = "." } } & tokdot ->
     let cur = nextToken tokdot.stream in
@@ -2422,6 +2513,9 @@ lang IfParser = AstParserBase + MatchAst + BoolPat + IfKeyword + ThenKeyword + E
   sem getInfoExpr +=
   | OpExprIf (info, _, _) -> info
 
+  sem opCatExpr +=
+  | OpExprIf _ -> CatExprBinder ()
+
   sem parseExprROpen state +=
   | { token = KeywordTok { val = "if" } } & tokif ->
     let cur = nextToken tokif.stream in
@@ -2464,6 +2558,9 @@ lang SemicolonParser = AstParserBase + LetDeclAst
 
   sem getInfoExpr +=
   | OpExprSemi info -> info
+
+  sem opCatExpr +=
+  | OpExprSemi _ -> CatExprSequencing ()
 
   sem parseExprRClosed state +=
   | { token = SemiTok {} } & toksemi ->
@@ -2892,55 +2989,6 @@ lang ProgramParser = AstParserBase + MLangTopLevel + RecordAst + IncludeDeclPars
     )
 end
 
--- TODO: Better solution
-lang PrecedenceParser = AppParser + DataParser + LamParser + LetDeclParser + AndParser + OrParser + NotParser + IfParser + SemicolonParser + MatchParser + ProjParser + SeqParser
-  sem groupingsAllowedExpr +=
-  | (OpExprDecl _, OpExprApp _) -> GRight ()
-  | (OpExprLam _, OpExprApp _) -> GRight ()
-  | (OpExprConApp _, OpExprApp _) -> GLeft ()
-  | (OpExprDecl _, OpExprSemi _) -> GRight ()
-  | (OpExprLam _, OpExprSemi _) -> GRight ()
-  | (OpExprIf _, OpExprSemi _) -> GRight ()
-  | (OpExprApp _, OpExprSemi _) -> GLeft ()
-  | (OpExprConApp _, OpExprSemi _) -> GLeft ()
-  | (OpExprSemi _, OpExprApp _) -> GRight ()
-  | (OpExprSemi _, OpExprConApp _) -> GRight ()
-  | (OpExprIf _, OpExprApp _) -> GRight ()
-  | (OpExprMatchIn _, OpExprApp _) -> GRight ()
-  | (OpExprMatchElse _, OpExprApp _) -> GRight ()
-  | (OpExprMatchIn _, OpExprSemi _) -> GRight ()
-  | (OpExprMatchElse _, OpExprSemi _) -> GRight ()
-  | (OpExprApp _, OpExprProj _) -> GRight ()
-  | (OpExprProj _, OpExprApp _) -> GLeft ()
-  | (OpExprLam _, OpExprProj _) -> GRight ()
-  | (OpExprDecl _, OpExprProj _) -> GRight ()
-  | (OpExprIf _, OpExprProj _) -> GRight ()
-  | (OpExprMatchIn _, OpExprProj _) -> GRight ()
-  | (OpExprMatchElse _, OpExprProj _) -> GRight ()
-  | (OpExprSemi _, OpExprProj _) -> GRight ()
-  | (OpExprProj _, OpExprSemi _) -> GLeft ()
-  | (OpExprConApp _, OpExprProj _) -> GRight ()
-  | (OpExprProj _, OpExprConApp _) -> GLeft ()
-
-  sem groupingsAllowedType +=
-  | (OpTypeApp _, OpTypeArrow _) -> GLeft ()
-  | (OpTypeArrow _, OpTypeApp _) -> GRight ()
-
-  sem groupingsAllowedPat +=
-  | (OpPatAnd _, OpPatOr _) -> GLeft ()
-  | (OpPatAnd _, OpPatNot _) -> GRight ()
-  | (OpPatOr _, OpPatAnd _) -> GRight ()
-  | (OpPatOr _, OpPatNot _) -> GRight ()
-  | (OpPatNot _, OpPatAnd _) -> GLeft ()
-  | (OpPatNot _, OpPatOr _) -> GLeft ()
-  | (OpPatSeqEdge _, OpPatOr _) -> GLeft ()
-  | (OpPatOr _, OpPatSeqEdge _) -> GRight ()
-  | (OpPatAnd _, OpPatSeqEdge _) -> GRight ()
-  | (OpPatSeqEdge _, OpPatAnd _) -> GLeft ()
-  | (OpPatConApp _, OpPatAnd _) -> GLeft ()
-  | (OpPatConApp _, OpPatOr _) -> GLeft ()
-end
-
 lang UnexpectedTokenParser = AstParserBase
   sem parseExprROpen state +=
   | cur ->
@@ -3002,8 +3050,12 @@ lang MExprParser =
   + UtestParser
   + AllParser
   + ProjParser
-  + PrecedenceParser
   + UnexpectedTokenParser
+  
+  -- Can we remove this?
+  sem groupingsAllowedPat +=
+  | (OpPatAnd _, OpPatOr _) -> GLeft ()
+  | (OpPatOr _, OpPatAnd _) -> GRight ()
 end
 
 lang MLangParser =
