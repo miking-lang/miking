@@ -40,18 +40,28 @@ lang UtestLoader = LoaderInterface + GenerateEqLoader + GeneratePprintLoader + S
     , exitOnFailure : Name
     , includeUtestIf : {static : Bool, info : Info} -> Bool
     }
+  | PostponeUtestHook
+    { postponed : Ref [Decl]
+    , includeUtestIf : {static : Bool, info : Info} -> Bool
+    }
 
   -- Enable code generation replacing `utest` with equivalent
   -- code. Will remove `StripUtestHook` if present.
   sem enableUtestGeneration : ({static : Bool, info : Info} -> Bool) -> Loader -> Loader
   sem enableUtestGeneration includeUtestIf = | loader ->
     if hasHook (lam x. match x with UtestHook _ then true else false) loader then loader else
+    let loader = remHook (lam x. match x with StripUtestHook _ then true else false) loader in
 
-    -- NOTE(vipa, 2025-01-27): We strip utests found in files before
-    -- we're ready. Notably, this means that we can never utest things
-    -- that eq-generation, pprint-generation, or the utest-runtime
-    -- depend on.
-    let loader = addHook loader (StripUtestHook ()) in
+    -- NOTE(vipa, 2026-09-04): We postpone the insertion of utests
+    -- found in files before we're ready. It is only trivially correct
+    -- to postpone such utests if they're found on the top-level, all
+    -- other occurrences may have references to local names. This
+    -- means we cannot compile non-top-level utests before we're
+    -- ready. Theoretically we could compile all such decls twice,
+    -- where the second occurrence has `utest`s, but that seems
+    -- overkill for now, we error instead.
+    let postponed = ref [] in
+    let loader = addHook loader (PostponeUtestHook {postponed = postponed, includeUtestIf = includeUtestIf}) in
     let loader = enableEqGeneration loader in
     let loader = enablePprintGeneration loader in
     match includeFileExn "." "stdlib::mexpr/utest-runtime.mc" loader with (utestEnv, loader) in
@@ -62,8 +72,9 @@ lang UtestLoader = LoaderInterface + GenerateEqLoader + GeneratePprintLoader + S
       , exitOnFailure = _getVarExn "utestExitOnFailure" utestEnv
       , includeUtestIf = includeUtestIf
       } in
-    let loader = remHook (lam x. match x with StripUtestHook _ then true else false) loader in
-    addHook loader (UtestHook hook)
+    let loader = remHook (lam x. match x with PostponeUtestHook _ then true else false) loader in
+    let loader = addHook loader (UtestHook hook) in
+    foldl _addSymbolizedDeclExn loader (deref postponed)
 
   sem _preBuildFullAst loader += | UtestHook hook ->
     let decl = DeclLet
@@ -77,12 +88,37 @@ lang UtestLoader = LoaderInterface + GenerateEqLoader + GeneratePprintLoader + S
     -- side-effects; we don't need to capture it in a SymEnv
     (_addDeclExn _symEnvEmpty loader decl).1
 
+  sem _postSymbolize loader decl += | PostponeUtestHook hook ->
+    match decl with DeclUtest d then
+      (if hook.includeUtestIf {static = true, info = d.info} then
+        modref hook.postponed (snoc (deref hook.postponed) decl)
+       else ());
+      let noop = DeclLet
+        { ident = nameSym ""
+        , tyAnnot = tyunknown_
+        , tyBody = tyunit_
+        , body = unit_
+        , info = d.info
+        } in
+      (loader, noop)
+    else smapAccumL_Decl_Expr (_postponeUtests hook true) loader decl
+
+  sem _postponeUtests hook static loader =
+  | tm & TmLam _ -> smapAccumL_Expr_Expr (_postponeUtests hook false) loader tm
+  | tm & TmOpaque _ -> (loader, tm)
+  | tm -> smapAccumL_Expr_Expr (_postponeUtests hook static) loader tm
+  | TmDecl (x & {decl = DeclUtest t}) ->
+    if hook.includeUtestIf {static = static, info = t.info} then
+      errorSingle [t.info] "This utest is in a dependency required for compiling utests, and it is not on the top-level of the program, meaning it will never run."
+    else
+      _postponeUtests hook static loader x.inexpr
+
   sem _postTypecheck loader decl += | UtestHook hook ->
     match decl with DeclUtest d then
       if hook.includeUtestIf {static = true, info = d.info} then
         match _replaceUtests hook true loader (bind_ decl unit_) with (loader, expr) in
         let decl = DeclLet
-          { ident = nameNoSym ""
+          { ident = nameSym ""
           , tyAnnot = tyunit_
           , tyBody = tyunit_
           , body = expr
@@ -91,7 +127,7 @@ lang UtestLoader = LoaderInterface + GenerateEqLoader + GeneratePprintLoader + S
         (loader, decl)
       else
         let noop = DeclLet
-          { ident = nameNoSym ""
+          { ident = nameSym ""
           , tyAnnot = tyunknown_
           , tyBody = tyunit_
           , body = unit_
