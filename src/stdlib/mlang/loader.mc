@@ -79,6 +79,19 @@ lang SymGetters = Sym
       [ "Compiler error: expected type \"", str, "\" to be defined in\n"
       , path
       ])
+  sem _getLangEnvExn : String -> {path : String, env : SymEnv} -> {path : String, env : SymEnv}
+  sem _getLangEnvExn str = | {path = path, env = env} ->
+    match mapLookup str env.namespaceEnv with Some n then
+      match mapLookup n env.langEnv with Some langEnv then
+        {path = join [path, " <lang ", str, ">"], env = {env with currentEnv = langEnv}}
+      else error (join
+        [ "Compiler error: expected language fragment \"", str, "\" to have a language environment in\n"
+        , path
+        ])
+    else error (join
+      [ "Compiler error: expected language fragment \"", str, "\" to be defined in\n"
+      , path
+      ])
 end
 
 lang MCoreKeywordMaker = KeywordMaker + KeywordMakerOpaque
