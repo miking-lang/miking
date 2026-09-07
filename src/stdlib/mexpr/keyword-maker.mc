@@ -42,20 +42,14 @@ lang KeywordMakerBase = VarAst + AppAst + ConTypeAst + AppTypeAst + DeclAst
              " arguments, but found ", int2string n2, "."])
 
   sem makeKeywords : Expr -> Expr
-  sem makeKeywords =
-  | expr ->
-    let expr = mapPre_Expr_Expr (lam expr.
-        smap_Expr_Type (makeTypeKeywords []) expr
-      ) expr in
-    let expr = makeExprKeywords [] expr in
-    expr
+  sem makeKeywords = | expr -> makeExprKeywords [] expr
 
   sem makeExprKeywords (args: [Expr]) =
   | TmApp r ->
      let rhs = makeExprKeywords [] r.rhs in
      let lhs = makeExprKeywords (cons rhs args) r.lhs in
      if isKeyword lhs then lhs
-     else TmApp {r with lhs = lhs, rhs = rhs}
+     else smap_Expr_Type (makeTypeKeywords []) (TmApp {r with lhs = lhs, rhs = rhs})
   | TmVar r ->
      let ident = nameGetStr r.ident in
      match matchKeywordString r.info ident with Some n then
@@ -63,14 +57,17 @@ lang KeywordMakerBase = VarAst + AppAst + ConTypeAst + AppTypeAst + DeclAst
          if eqi noArgs (length args) then f args
          else makeKeywordError r.info noArgs (length args) ident
        else never
-     else TmVar r
+     else smap_Expr_Type (makeTypeKeywords []) (TmVar r)
   | TmDecl x ->
-     TmDecl {x with decl = makeDeclKeywords x.decl, inexpr = makeExprKeywords [] x.inexpr}
-  | expr -> smap_Expr_Expr (makeExprKeywords []) expr
+     smap_Expr_Type (makeTypeKeywords [])
+       (TmDecl {x with decl = makeDeclKeywords x.decl, inexpr = makeExprKeywords [] x.inexpr})
+  | expr -> smap_Expr_Type (makeTypeKeywords []) (smap_Expr_Expr (makeExprKeywords []) expr)
 
   sem makeDeclKeywords : Decl -> Decl
   sem makeDeclKeywords =
-  | decl -> smap_Decl_Expr (makeExprKeywords []) decl
+  | decl ->
+    let decl = smap_Decl_Decl makeDeclKeywords decl in
+    smap_Decl_Type (makeTypeKeywords []) (smap_Decl_Expr (makeExprKeywords []) decl)
 
   sem makeTypeKeywords : [Type] -> Type -> Type
   sem makeTypeKeywords args =
@@ -103,7 +100,7 @@ lang KeywordMakerData = KeywordMakerBase + DataAst + DataDeclAst
          if eqi noArgs (length args) then f args
          else makeKeywordError r.info noArgs (length args) ident
        else never
-     else TmConApp {r with body = body}
+     else smap_Expr_Type (makeTypeKeywords []) (TmConApp {r with body = body})
 
   sem makeDeclKeywords +=
   | DeclConDef r ->
@@ -111,7 +108,7 @@ lang KeywordMakerData = KeywordMakerBase + DataAst + DataDeclAst
      match matchKeywordString r.info ident with Some _ then
        errorSingle [r.info] (join ["Keyword '", ident,
        "' cannot be used in a constructor definition."])
-     else DeclConDef r
+     else smap_Decl_Type (makeTypeKeywords []) (DeclConDef r)
 end
 
 lang KeywordMakerType = KeywordMakerBase + TypeDeclAst
@@ -121,7 +118,7 @@ lang KeywordMakerType = KeywordMakerBase + TypeDeclAst
      match matchTypeKeywordString r.info ident with Some _ then
        errorSingle [r.info] (join ["Type keyword '", ident,
        "' cannot be used in a type definition."])
-     else DeclType r
+     else smap_Decl_Type (makeTypeKeywords []) (DeclType r)
 end
 
 -- Includes a check that a keyword cannot be used as a binding variable in a lambda
@@ -131,7 +128,7 @@ lang KeywordMakerLam = KeywordMakerBase + LamAst
      let ident = nameGetStr r.ident in
      match matchKeywordString r.info ident with Some _ then
        errorSingle [r.info] (join ["Keyword '", ident, "' cannot be used in a lambda expressions."])
-     else TmLam {r with body = makeExprKeywords [] r.body}
+     else smap_Expr_Type (makeTypeKeywords []) (TmLam {r with body = makeExprKeywords [] r.body})
 end
 
 
@@ -142,7 +139,7 @@ lang KeywordMakerLet = KeywordMakerBase + LetDeclAst
      let ident = nameGetStr r.ident in
      match matchKeywordString r.info ident with Some _ then
        errorSingle [r.info] (join ["Keyword '", ident, "' cannot be used in a let expressions."])
-     else DeclLet {r with body = makeExprKeywords [] r.body}
+     else smap_Decl_Type (makeTypeKeywords []) (DeclLet {r with body = makeExprKeywords [] r.body})
 end
 
 
@@ -160,10 +157,11 @@ lang KeywordMakerMatch = KeywordMakerBase + MatchAst + NamedPat
 
   sem makeExprKeywords (args: [Expr]) +=
   | TmMatch r ->
-      TmMatch {{{{r with target = makeExprKeywords [] r.target}
-                    with pat = matchKeywordPat r.pat}
-                    with thn = makeExprKeywords [] r.thn}
-                    with els = makeExprKeywords [] r.els}
+      smap_Expr_Type (makeTypeKeywords [])
+        (TmMatch {{{{r with target = makeExprKeywords [] r.target}
+                      with pat = matchKeywordPat r.pat}
+                      with thn = makeExprKeywords [] r.thn}
+                      with els = makeExprKeywords [] r.els})
 end
 
 
