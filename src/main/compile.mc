@@ -39,6 +39,7 @@ include "mexpr/utest-generate.mc"
 include "mexpr/constant-fold.mc"
 include "options-type.mc"
 include "mlang/loader.mc"
+include "parser/loader.mc"
 include "ocaml/ast.mc"
 include "ocaml/external-includes.mc"
 include "ocaml/mcore.mc"
@@ -73,6 +74,7 @@ lang MCoreCompile =
   PprintTyAnnot + HtmlAnnotator +
   MExprToJson +
   ComposedMLangLoader + DPrintViaPprintLoader + StripUtestLoader + UtestLoader +
+  NativeParserLoader +
   MExprGenerateEq + GenerateEqMetaVarError + MExprDeadcodeElimination +
 
   UnboundErrorAttr + DefinedAttr + WithoutInfoAttr
@@ -192,6 +194,8 @@ let compileViaLoader = lam options : Options. lam sourcePath.
   let log = mkPhaseLogState options.debugDumpPhases options.debugPhases mkInvariantAttrs in
 
   let loader = mkLoader typcheckEnvDefault [] in
+  let loader =
+    if options.nativeParser then enableNativeParser loader else loader in
   endPhaseStatsProg log "mkLoader" {decls = getDecls loader, expr = unit_};
 
   let loader =
@@ -293,7 +297,9 @@ let compileViaLoader = lam options : Options. lam sourcePath.
 let compile = lam files. lam options : Options. lam args.
   use MCoreCompile in
 
-  if options.mlangPipeline then
+  -- The native parser is only available through the loader;
+  -- asking for it thus also selects that pipeline.
+  if or options.mlangPipeline options.nativeParser then
     printLn " * WARNING: You are using an experimental, unstable pipeline.";
     iter (lam x. compileViaLoader options x; ()) files
   else
