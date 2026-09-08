@@ -4,6 +4,7 @@
 --------------------------------------------------------------------------------
 
 include "common.mc"
+include "ext/math-ext.mc"
 
 --==============================================================================
 -- Mutable arrays with storage internal to MCore.
@@ -151,10 +152,6 @@ external extArrKindFloat64 : ExtArrKind Float
 -- Integer kind
 external extArrKindInt : ExtArrKind Int
 
--- The sum of the natural logarithms of the first `n` elements, from index 0.
-let extArrSumLogFloat64 : ExtArr Float -> Int -> Float
-  = lam a. lam n. externalExtArrSumLogFloat64 a n
-
 -- Creates an external array of size `n` with uninitialized values.
 let extArrMakeUninit : all a. ExtArrKind a -> Int -> ExtArr a
   = lam kind. lam n. externalExtArrMakeUninit kind n
@@ -217,6 +214,18 @@ let extArrOfSeq : all a. ExtArrKind a -> [a] -> ExtArr a
 -- Creates a sequence from an external array.
 let extArrToSeq : all a. ExtArr a -> [a]
   = lam a. create (externalExtArrLength a) (externalExtArrGet a)
+
+
+-- The sum of the natural logarithms of the first `n` elements, from index 0.
+let extArrSumLogFloat64 : ExtArr Float -> Int -> Float
+  = lam a. lam n. externalExtArrSumLogFloat64 a n
+
+utest extArrSumLogFloat64 (extArrOfSeq extArrKindFloat64 [1., 1., 1.]) 3 with 0.
+utest extArrSumLogFloat64 (extArrOfSeq extArrKindFloat64 [2., 3., 5.]) 3
+  with addf (addf (log 2.) (log 3.)) (log 5.)
+utest extArrSumLogFloat64 (extArrOfSeq extArrKindFloat64 [2., 3., 5.]) 0 with 0.
+utest extArrSumLogFloat64 (extArrOfSeq extArrKindFloat64 [2., 3., 5.]) 2
+  with addf (log 2.) (log 3.)
 
 utest extArrToSeq (extArrOfSeq extArrKindFloat64 [1., 2., 3.]) with [1., 2., 3.]
 utest extArrToSeq (extArrOfSeq extArrKindInt [1, 2, 3]) with [1, 2, 3]
