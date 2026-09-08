@@ -136,6 +136,7 @@ external externalExtArrSet ! : all a. ExtArr a -> Int -> a -> ()
 external externalExtArrCopy : all a. ExtArr a -> ExtArr a
 external externalExtArrFill : all a. ExtArr a -> a -> ()
 external externalExtArrOfArr : all a. ExtArrKind a -> Arr a -> ExtArr a
+external externalExtArrSumLogFloat64 : ExtArr Float -> Int -> Float
 
 --------------------------------------------------------------------------------
 -- ExtArr interface
@@ -149,6 +150,10 @@ external extArrKindFloat64 : ExtArrKind Float
 
 -- Integer kind
 external extArrKindInt : ExtArrKind Int
+
+-- The sum of the natural logarithms of the first `n` elements, from index 0.
+let extArrSumLogFloat64 : ExtArr Float -> Int -> Float
+  = lam a. lam n. externalExtArrSumLogFloat64 a n
 
 -- Creates an external array of size `n` with uninitialized values.
 let extArrMakeUninit : all a. ExtArrKind a -> Int -> ExtArr a

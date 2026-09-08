@@ -108,5 +108,11 @@ let arrExtMap =
         expr = "(fun kind a -> Bigarray.Array1.of_array kind Bigarray.c_layout a)",
         ty = (tyarrows_ [otyopaque_, otyopaque_, otyopaque_])
       }
+    ]),
+    ("externalExtArrSumLogFloat64", [
+      impl {
+        expr = "(fun (a : (float, Bigarray.float64_elt, Bigarray.c_layout) Bigarray.Array1.t) (n : int) -> let acc = ref 0.0 in for i = 0 to n - 1 do acc := !acc +. Float.log (Bigarray.Array1.unsafe_get a i) done; !acc)",
+        ty = tyarrows_ [otyopaque_, tyint_, tyfloat_]
+      }
     ])
   ]
