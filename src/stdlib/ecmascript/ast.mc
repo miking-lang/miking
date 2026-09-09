@@ -1,0 +1,185 @@
+-- The ECMAScript AST targeted by the `ecmascript` backend.
+--
+-- This AST separates *statements* from *expressions*.
+-- That separation is what lets a chain of MExpr `let ... in`
+-- bindings compile to a flat list of `const` statements instead of one nested
+-- IIFE per binding.
+
+include "name.mc"
+include "option.mc"
+include "seq.mc"
+
+lang ESAst
+
+  ---------------
+  -- OPERATORS --
+  ---------------
+
+  syn ESBinOp =
+  | ESOAdd    {} -- lhs + rhs
+  | ESOSub    {} -- lhs - rhs
+  | ESOMul    {} -- lhs * rhs
+  | ESODiv    {} -- lhs / rhs
+  | ESOMod    {} -- lhs % rhs
+  | ESOEq     {} -- lhs === rhs
+  | ESONeq    {} -- lhs !== rhs
+  | ESOLt     {} -- lhs < rhs
+  | ESOLe     {} -- lhs <= rhs
+  | ESOGt     {} -- lhs > rhs
+  | ESOGe     {} -- lhs >= rhs
+  | ESOAnd    {} -- lhs && rhs
+  | ESOOr     {} -- lhs || rhs
+  | ESOShl    {} -- lhs << rhs
+  | ESOShr    {} -- lhs >> rhs
+  | ESOUShr   {} -- lhs >>> rhs
+  | ESOBitAnd {} -- lhs & rhs
+  | ESOBitOr  {} -- lhs | rhs
+  | ESOBitXor {} -- lhs ^ rhs
+
+  syn ESUnOp =
+  | ESONeg    {} -- -arg
+  | ESONot    {} -- !arg
+  | ESOSpread {} -- ...arg
+  | ESOTypeof {} -- typeof arg
+
+  -----------------
+  -- EXPRESSIONS --
+  -----------------
+
+  syn ESExpr =
+  -- Literals and identifiers
+  | ESEVar        { id : Name }
+  | ESEInt        { value : Int }    -- distinct from ESEFloat so that integer
+  | ESEFloat      { value : Float }  -- literals print exactly, e.g. `1` not `1.`
+  | ESEBool       { value : Bool }
+  | ESEString     { value : String }
+  | ESEUndefined  {}
+  | ESENull       {}
+  -- Composite values
+  | ESEArray      { exprs : [ESExpr] }
+  | ESEObject     { fields : [(String, ESExpr)] }
+  -- Access
+  | ESEMember     { obj : ESExpr, prop : String }  -- obj.prop
+  | ESEIndex      { obj : ESExpr, index : ESExpr } -- obj[index], for keys that
+                                                   -- are not identifiers
+  -- Application
+  | ESECall       { callee : ESExpr, args : [ESExpr] }
+  | ESENew        { callee : ESExpr, args : [ESExpr] }
+  | ESEArrow      { params : [Name], body : ESFunBody }
+  -- Operators
+  | ESEBin        { op : ESBinOp, lhs : ESExpr, rhs : ESExpr }
+  | ESEUn         { op : ESUnOp, arg : ESExpr }
+  | ESECond       { cond : ESExpr, thn : ESExpr, els : ESExpr }
+  | ESEInstanceOf { lhs : ESExpr, rhs : ESExpr }
+
+  -- An arrow function either returns a single expression concisely
+  -- (`x => x + 1`) or runs a block (`x => { ... }`).
+  syn ESFunBody =
+  | ESFBExpr  { expr : ESExpr }
+  | ESFBBlock { stmts : [ESStmt] }
+
+  ----------------
+  -- STATEMENTS --
+  ----------------
+
+  syn ESStmt =
+  | ESSConst        { id : Name, init : ESExpr }
+  | ESSLet          { id : Name, init : Option ESExpr }
+  | ESSAssign       { target : ESExpr, value : ESExpr } -- used by TCO to rebind
+                                                        -- parameters in a loop
+  | ESSExpr         { expr : ESExpr }
+  | ESSReturn       { expr : Option ESExpr }
+  | ESSIf           { cond : ESExpr, thn : [ESStmt], els : [ESStmt] }
+  | ESSBlock        { stmts : [ESStmt] }
+  | ESSWhile        { cond : ESExpr, body : [ESStmt] }
+  | ESSFunDecl      { id : Name, params : [Name], body : [ESStmt] }
+  -- Constructor classes are always empty bodies; the shared behavior lives on
+  -- the hand-written `Con` base in the runtime module.
+  | ESSClass        { id : Name, extends : Option Name }
+  | ESSExportDefault { stmt : ESStmt }
+
+  -------------
+  -- MODULES --
+  -------------
+
+  syn ESImport =
+  | ESImportNamed   { names : [(String, Name)], from : String }
+  | ESImportDefault { name : Name, from : String }
+
+  syn ESProg =
+  | ESProg { imports : [ESImport], stmts : [ESStmt] }
+
+  ----------------------
+  -- TRAVERSAL (smap) --
+  ----------------------
+
+  -- Maps `f` over the immediate *expression* children of an expression.
+  --
+  -- NOTE: this does not descend through the statement boundary. An `ESEArrow`
+  -- with a block body holds statements, not expressions, so its body is left
+  -- untouched here; a caller that wants to rewrite expressions throughout a
+  -- tree must alternate this with `smapESStmtESExpr`.
+  sem smapESExprESExpr : (ESExpr -> ESExpr) -> ESExpr -> ESExpr
+  sem smapESExprESExpr f =
+  | ESEArray t -> ESEArray { t with exprs = map f t.exprs }
+  | ESEObject t ->
+    ESEObject { t with fields = map (lam p. (p.0, f p.1)) t.fields }
+  | ESEMember t -> ESEMember { t with obj = f t.obj }
+  | ESEIndex t -> ESEIndex { t with obj = f t.obj, index = f t.index }
+  | ESECall t -> ESECall { t with callee = f t.callee, args = map f t.args }
+  | ESENew t -> ESENew { t with callee = f t.callee, args = map f t.args }
+  | ESEArrow t ->
+    match t.body with ESFBExpr b
+    then ESEArrow { t with body = ESFBExpr { b with expr = f b.expr } }
+    else ESEArrow t
+  | ESEBin t -> ESEBin { t with lhs = f t.lhs, rhs = f t.rhs }
+  | ESEUn t -> ESEUn { t with arg = f t.arg }
+  | ESECond t -> ESECond { t with cond = f t.cond, thn = f t.thn, els = f t.els }
+  | ESEInstanceOf t -> ESEInstanceOf { t with lhs = f t.lhs, rhs = f t.rhs }
+  | e -> e
+
+  -- Maps `f` over the immediate expression children of a statement.
+  sem smapESStmtESExpr : (ESExpr -> ESExpr) -> ESStmt -> ESStmt
+  sem smapESStmtESExpr f =
+  | ESSConst t -> ESSConst { t with init = f t.init }
+  | ESSLet t -> ESSLet { t with init = optionMap f t.init }
+  | ESSAssign t -> ESSAssign { t with target = f t.target, value = f t.value }
+  | ESSExpr t -> ESSExpr { t with expr = f t.expr }
+  | ESSReturn t -> ESSReturn { t with expr = optionMap f t.expr }
+  | ESSIf t -> ESSIf { t with cond = f t.cond }
+  | ESSWhile t -> ESSWhile { t with cond = f t.cond }
+  | ESSExportDefault t -> ESSExportDefault { t with stmt = smapESStmtESExpr f t.stmt }
+  | s -> s
+
+  -- Maps `f` over the immediate *statement* children of a statement.
+  sem smapESStmtESStmt : (ESStmt -> ESStmt) -> ESStmt -> ESStmt
+  sem smapESStmtESStmt f =
+  | ESSIf t -> ESSIf { t with thn = map f t.thn, els = map f t.els }
+  | ESSBlock t -> ESSBlock { t with stmts = map f t.stmts }
+  | ESSWhile t -> ESSWhile { t with body = map f t.body }
+  | ESSFunDecl t -> ESSFunDecl { t with body = map f t.body }
+  | ESSExportDefault t -> ESSExportDefault { t with stmt = f t.stmt }
+  | s -> s
+
+end
+
+------------------------
+-- CONSTRUCTOR SHORTHANDS --
+------------------------
+
+-- The representation of MExpr's unit value `()`.
+--
+-- This is the *single* definition of unit in the backend. `undefined` is chosen
+-- so that unit-returning functions can simply fall off the end of their body
+-- rather than emitting `return null;` everywhere.
+let esUnit : use ESAst in ESExpr = use ESAst in ESEUndefined {}
+
+-- `a.b`, for chained member access such as `env.print`.
+let esMember : use ESAst in ESExpr -> String -> ESExpr =
+  use ESAst in lam obj. lam prop. ESEMember { obj = obj, prop = prop }
+
+let esCall : use ESAst in ESExpr -> [ESExpr] -> ESExpr =
+  use ESAst in lam callee. lam args. ESECall { callee = callee, args = args }
+
+let esBin : use ESAst in ESBinOp -> ESExpr -> ESExpr -> ESExpr =
+  use ESAst in lam op. lam lhs. lam rhs. ESEBin { op = op, lhs = lhs, rhs = rhs }

@@ -10,6 +10,7 @@ include "parse.mc"
 include "javascript/compile.mc"
 include "javascript/mcore.mc"
 include "javascript/util.mc"
+include "ecmascript/mcore.mc"
 include "lazy.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/boot-parser.mc"
@@ -167,6 +168,9 @@ let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
 
     let res =
       if options.toJVM then compileMCoreToJVM ast else
+      if options.toEcmascript then compileMCoreToES
+        { compileESOptionsEmpty with output = options.output } ast sourcePath
+      else
       if options.toJavaScript then compileMCoreToJS
         { compileJSOptionsEmpty with
           targetPlatform = parseJSTarget options.jsTarget
@@ -273,6 +277,9 @@ let compileViaLoader = lam options : Options. lam sourcePath.
 
   let res =
     if options.toJVM then compileMCoreToJVM ast else
+    if options.toEcmascript then compileMCoreToES
+      { compileESOptionsEmpty with output = options.output } ast sourcePath
+    else
     if options.toJavaScript then compileMCoreToJS
       { compileJSOptionsEmpty with
         targetPlatform = parseJSTarget options.jsTarget

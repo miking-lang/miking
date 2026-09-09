@@ -123,6 +123,10 @@ let optionsConfig : ParseConfig Options = [
     "Disable JavaScript tail-call optimizations",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with disableJsTCO = true}),
+  ([("--to-es", "", "")],
+    "Compile a file to an ECMAScript module",
+    lam p: ArgPart Options.
+      let o: Options = p.options in {o with toEcmascript = true}),
   ([("--output", " ", "<file>")],
     "Write output to <file> when compiling",
     lam p: ArgPart Options.

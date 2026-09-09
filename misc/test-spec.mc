@@ -13,6 +13,22 @@ let parserCompareSub =
     }
   ) in
 
+-- `misc/scripts/es-node-run.mjs` supplies a runtime environment to a module
+-- built by the `ecmascript` backend.
+let esNodeRunSub =
+  ( 'e'
+  , { tup =
+      { actual = "node $(ROOT)/misc/scripts/es-node-run.mjs"
+      , deps = ["$(ROOT)/misc/scripts/es-node-run.mjs"]
+      }
+    , make =
+      { actual = "node $(ROOT)/misc/scripts/es-node-run.mjs"
+      , deps = ["misc/scripts/es-node-run.mjs"]
+      }
+    , friendly = "ES-NODE-RUN"
+    }
+  ) in
+
 let installed : Substituter =
   { flag = "installed"
   , description = "Run tests with a previously installed `mi` on `$PATH`."
@@ -24,6 +40,7 @@ let installed : Substituter =
         }
       )
     , parserCompareSub
+    , esNodeRunSub
     ]
   } in
 let cheated : Substituter =
@@ -43,6 +60,7 @@ let cheated : Substituter =
         }
       )
     , parserCompareSub
+    , esNodeRunSub
     ]
   } in
 let bootstrapped : Substituter =
@@ -62,6 +80,7 @@ let bootstrapped : Substituter =
         }
       )
     , parserCompareSub
+    , esNodeRunSub
     ]
   } in
 
@@ -425,6 +444,30 @@ testMain substituters directories location (lam api.
   api.tests [node]
     (and (dirIs "src/test/js") (strEndsWith ".mc"))
     [(jsCompile, succ), (jsRun, succ), (jsDiff, succ)];
+
+  -- === ECMAScript ===
+
+  -- NOTE: the tag becomes the final extension of the output path, and Node
+  -- only treats a file as an ES module if it ends in `.mjs`.
+  let esCompile = api.midStep
+    { uses = [origin]
+    , tag = "mjs"
+    , cmd = "%m compile --to-es %i --output %o"
+    } in
+  let esRun = api.endStep
+    { uses = [esCompile]
+    , tag = "run-es"
+    , cmd = "%e %i"
+    } in
+  let esDiff = api.endStep
+    { uses = [run, esRun]
+    , tag = "diff-es"
+    , cmd = "diff %i"
+    } in
+
+  api.tests [node]
+    (and (dirIs "src/test/ecmascript") (strEndsWith ".mc"))
+    [(esCompile, succ), (esRun, succ), (esDiff, succ)];
 
   -- === Java ===
 
