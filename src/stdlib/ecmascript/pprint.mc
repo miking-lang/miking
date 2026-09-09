@@ -109,7 +109,7 @@ lang ESPrettyPrint = ESAst
   -- A negative literal behaves like a unary minus for parenthesization.
   | ESEInt t -> if lti t.value 0 then 14 else 18
   | ESEFloat t -> if ltf t.value 0.0 then 14 else 18
-  | ESEVar _ | ESEBool _ | ESEString _ | ESEUndefined _ | ESENull _
+  | ESEVar _ | ESEGlobal _ | ESEBool _ | ESEString _ | ESEUndefined _ | ESENull _
   | ESEArray _ | ESEObject _ -> 18
   | ESEMember _ | ESEIndex _ | ESECall _ | ESENew _ -> 17
   | ESEUn _ -> 14
@@ -134,6 +134,7 @@ lang ESPrettyPrint = ESAst
   sem printESExpr : ESNameEnv -> Int -> ESExpr -> (ESNameEnv, String)
   sem printESExpr env indent =
   | ESEVar t -> esNameGet env t.id
+  | ESEGlobal t -> (env, t.name)
   | ESEInt t -> (env, int2string t.value)
   | ESEFloat t -> (env, esFloatLit t.value)
   | ESEBool t -> (env, if t.value then "true" else "false")
@@ -242,6 +243,9 @@ lang ESPrettyPrint = ESAst
     let prec = match t.expr with ESEObject _ then 19 else 0 in
     match printESExprP env indent prec t.expr with (env, e) in
     (env, concat e ";")
+  | ESSThrow t ->
+    match printESExpr env indent t.expr with (env, s) in
+    (env, join ["throw ", s, ";"])
   | ESSReturn t ->
     match t.expr with Some e then
       match printESExpr env indent e with (env, s) in
@@ -376,6 +380,11 @@ utest pp (ESEUn { op = ESONot {}, arg = add va vb }) with "!(a + b)" in
 utest pps (ESSConst { id = a, init = ESEInt { value = 1 } }) with "const a = 1;" in
 utest pps (ESSLet { id = a, init = None () }) with "let a;" in
 utest pps (ESSReturn { expr = None () }) with "return;" in
+utest pps (ESSThrow { expr = ESENew
+  { callee = ESEGlobal { name = "Error" }, args = [ESEString { value = "x" }] } })
+with "throw new Error(\"x\");" in
+utest pp (ESECall { callee = esMember (ESEGlobal { name = "Math" }) "trunc", args = [va] })
+with "Math.trunc(a)" in
 utest pps (ESSExpr { expr = ESECall { callee = va, args = [] } }) with "a();" in
 utest pps (ESSClass { id = a, extends = Some b }) with "class a extends b {}" in
 utest pps (ESSClass { id = a, extends = None () }) with "class a {}" in

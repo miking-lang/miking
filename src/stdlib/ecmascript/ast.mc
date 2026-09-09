@@ -55,6 +55,10 @@ lang ESAst
   | ESEString     { value : String }
   | ESEUndefined  {}
   | ESENull       {}
+  -- An identifier emitted verbatim, bypassing the name allocator. Used for
+  -- host globals such as `Math` and `String`; those names are reserved in
+  -- `ident.mc` so that no MExpr binding can shadow them.
+  | ESEGlobal     { name : String }
   -- Composite values
   | ESEArray      { exprs : [ESExpr] }
   | ESEObject     { fields : [(String, ESExpr)] }
@@ -96,6 +100,7 @@ lang ESAst
   -- Constructor classes are always empty bodies; the shared behavior lives on
   -- the hand-written `Con` base in the runtime module.
   | ESSClass        { id : Name, extends : Option Name }
+  | ESSThrow        { expr : ESExpr }
   | ESSExportDefault { stmt : ESStmt }
 
   -------------
@@ -146,6 +151,7 @@ lang ESAst
   | ESSAssign t -> ESSAssign { t with target = f t.target, value = f t.value }
   | ESSExpr t -> ESSExpr { t with expr = f t.expr }
   | ESSReturn t -> ESSReturn { t with expr = optionMap f t.expr }
+  | ESSThrow t -> ESSThrow { t with expr = f t.expr }
   | ESSIf t -> ESSIf { t with cond = f t.cond }
   | ESSWhile t -> ESSWhile { t with cond = f t.cond }
   | ESSExportDefault t -> ESSExportDefault { t with stmt = smapESStmtESExpr f t.stmt }

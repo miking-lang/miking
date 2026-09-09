@@ -9,6 +9,7 @@ include "common.mc"
 include "ecmascript/compile.mc"
 include "ecmascript/ident.mc"
 include "ecmascript/pprint.mc"
+include "ecmascript/runtime.mc"
 include "option.mc"
 include "string.mc"
 
@@ -30,11 +31,17 @@ let esStripExtension : String -> String = lam filename.
   else filename
 
 -- Compiles an MExpr AST to ECMAScript source text.
+--
+-- The pure runtime intrinsics the program used are appended *after* `main`.
+-- That is safe because everything the compiler emits into the program body
+-- lives inside `main`, and a host does not call `main` until the whole module
+-- has evaluated -- by which point every definition below it is initialised.
 let esCompileToString : use Ast in Expr -> String =
   lam ast.
   use MCoreCompileES in
-  match printESProg esNameEnvEmpty (compileESProg ast) with (_, source) in
-  source
+  match compileESProg ast with (prog, usedRuntime) in
+  match printESProg esNameEnvEmpty prog with (_, source) in
+  concat source (esRuntimeEmit usedRuntime)
 
 -- Compiles an MExpr AST and writes the module, returning the path written.
 let compileMCoreToES : use Ast in CompileESOptions -> Expr -> String -> String =
@@ -52,7 +59,6 @@ mexpr
 utest esStripExtension "foo/bar.mc" with "foo/bar" in
 utest esStripExtension "foo/bar" with "foo/bar" in
 
--- The step 1 acceptance program:
 --   let a = 1 in let b = 2 in let c = addi a b in dprint c
 let a = nameSym "a" in
 let b = nameSym "b" in
@@ -102,6 +108,156 @@ utest esCompileToString ast4 with join
   , "  const x_1 = 2;\n"
   , "  env.dprint(x + x_1);\n"
   , "}\n" ] in
+
+-- A named function becomes an n-ary declaration, and a saturated call a plain
+-- n-ary call rather than `f(1)(2)`.
+let f = nameSym "f" in
+let x = nameSym "x" in
+let y = nameSym "y" in
+let astFn = bind_ (nulet_ f (nulam_ x (nulam_ y (addi_ (nvar_ x) (nvar_ y)))))
+                  (dprint_ (appf2_ (nvar_ f) (int_ 1) (int_ 2))) in
+utest esCompileToString astFn with join
+  [ "export default function main(env) {\n"
+  , "  function f(x, y) {\n"
+  , "    return x + y;\n"
+  , "  }\n"
+  , "  env.dprint(f(1, 2));\n"
+  , "}\n" ] in
+
+-- Applying it to too few arguments eta-expands, so the emitted n-ary function
+-- is never called with a missing parameter.
+let astPartial = bind_ (nulet_ f (nulam_ x (nulam_ y (addi_ (nvar_ x) (nvar_ y)))))
+                       (dprint_ (app_ (nvar_ f) (int_ 1))) in
+utest esCompileToString astPartial with join
+  [ "export default function main(env) {\n"
+  , "  function f(x, y) {\n"
+  , "    return x + y;\n"
+  , "  }\n"
+  , "  env.dprint(a => f(1, a));\n"
+  , "}\n" ] in
+
+-- An alias inherits the arity it points at, so calls through it stay n-ary.
+let g = nameSym "g" in
+let astRef = bindall_
+  [ nulet_ f (nulam_ x (nulam_ y (addi_ (nvar_ x) (nvar_ y))))
+  , nulet_ g (nvar_ f) ]
+  (dprint_ (appf2_ (nvar_ g) (int_ 1) (int_ 2))) in
+utest esCompileToString astRef with join
+  [ "export default function main(env) {\n"
+  , "  function f(x, y) {\n"
+  , "    return x + y;\n"
+  , "  }\n"
+  , "  const g = f;\n"
+  , "  env.dprint(g(1, 2));\n"
+  , "}\n" ] in
+
+-- An anonymous lambda stays curried, since nothing tracks its arity.
+let astAnon = dprint_ (app_ (nulam_ x (addi_ (nvar_ x) (int_ 1))) (int_ 2)) in
+utest esCompileToString astAnon with join
+  [ "export default function main(env) {\n"
+  , "  env.dprint((x => x + 1)(2));\n"
+  , "}\n" ] in
+
+-- A constant condition folds away entirely.
+let astIf = bind_ (nulet_ x (if_ true_ (int_ 1) (int_ 2))) (dprint_ (nvar_ x)) in
+utest esCompileToString astIf with join
+  [ "export default function main(env) {\n"
+  , "  const x = 1;\n"
+  , "  env.dprint(x);\n"
+  , "}\n" ] in
+
+-- When both arms only produce a value, statement position folds to a ternary
+-- rather than a four-line `if`.
+let a = nameSym "a" in
+let astTernary = bindall_
+  [ nulet_ a (int_ 5)
+  , nulet_ x (if_ (lti_ (nvar_ a) (int_ 10)) (int_ 1) (int_ 2)) ]
+  (dprint_ (nvar_ x)) in
+utest esCompileToString astTernary with join
+  [ "export default function main(env) {\n"
+  , "  const a = 5;\n"
+  , "  const x = a < 10 ? 1 : 2;\n"
+  , "  env.dprint(x);\n"
+  , "}\n" ] in
+
+-- When an arm needs statements of its own it stays an `if`, with the binding
+-- declared outside so it is still readable after the branch.
+let z = nameSym "z" in
+let astIfStmts = bindall_
+  [ nulet_ a (int_ 5)
+  , nulet_ x (if_ (lti_ (nvar_ a) (int_ 10))
+                  (bind_ (nulet_ z (int_ 1)) (addi_ (nvar_ z) (nvar_ z)))
+                  (int_ 2)) ]
+  (dprint_ (nvar_ x)) in
+utest esCompileToString astIfStmts with join
+  [ "export default function main(env) {\n"
+  , "  const a = 5;\n"
+  , "  let x;\n"
+  , "  if (a < 10) {\n"
+  , "    const z = 1;\n"
+  , "    x = z + z;\n"
+  , "  } else {\n"
+  , "    x = 2;\n"
+  , "  }\n"
+  , "  env.dprint(x);\n"
+  , "}\n" ] in
+
+-- In expression position with simple branches it is a ternary.
+let astCond = dprint_ (if_ (lti_ (int_ 1) (int_ 2)) (int_ 1) (int_ 2)) in
+utest esCompileToString astCond with join
+  [ "export default function main(env) {\n"
+  , "  env.dprint(1 < 2 ? 1 : 2);\n"
+  , "}\n" ] in
+
+-- An irrefutable pattern emits no branch at all, just the binding.
+let astBind = dprint_ (match_ (int_ 3) (npvar_ x) (nvar_ x) never_) in
+utest esCompileToString astBind with join
+  [ "export default function main(env) {\n"
+  , "  const x = 3;\n"
+  , "  env.dprint(x);\n"
+  , "}\n" ] in
+
+-- Integer division truncates towards zero, as OCaml does; `Math.floor` would
+-- disagree on every negative quotient.
+let astDiv = dprint_ (divi_ (negi_ (int_ 7)) (int_ 2)) in
+utest esCompileToString astDiv with join
+  [ "export default function main(env) {\n"
+  , "  env.dprint(Math.trunc(-7 / 2));\n"
+  , "}\n" ] in
+
+-- Floats share the `number` representation, so `int2float` is a no-op.
+let astFloat = dprint_ (addf_ (int2float_ (int_ 1)) (float_ 0.5)) in
+utest esCompileToString astFloat with join
+  [ "export default function main(env) {\n"
+  , "  env.dprint(1 + 0.5);\n"
+  , "}\n" ] in
+
+-- A Char is a one-character string.
+let astChar = dprint_ (eqc_ (char_ 'a') (int2char_ (int_ 98))) in
+utest esCompileToString astChar with join
+  [ "export default function main(env) {\n"
+  , "  env.dprint(\"a\" === String.fromCodePoint(98));\n"
+  , "}\n" ] in
+
+-- `floorfi` and `ceilfi` map straight onto the host, with no runtime helper.
+let astFloor = dprint_ (floorfi_ (float_ 1.5)) in
+let floored = esCompileToString astFloor in
+let contains = lam needle. lam s. gti (length (strSplit needle s)) 1 in
+utest contains "env.dprint(Math.floor(1.5));" floored with true in
+utest contains "MExpr runtime intrinsics" floored with false in
+
+-- A shift pulls its runtime definition in behind the program, along with the
+-- helper it depends on.
+let astShift = dprint_ (slli_ (int_ 2) (int_ 5)) in
+let shifted = esCompileToString astShift in
+utest contains "env.dprint($slli(2, 5));" shifted with true in
+utest contains "function $slli(a, b) {" shifted with true in
+utest contains "function $fromBig(x) {" shifted with true in
+-- ... and nothing else from the runtime.
+utest contains "function $roundfi" shifted with false in
+
+-- A program using no runtime intrinsic gets no runtime section.
+utest contains "MExpr runtime intrinsics" (esCompileToString astFn) with false in
 
 -- A user binding named `env` does not capture the runtime environment.
 let userEnv = nameSym "env" in

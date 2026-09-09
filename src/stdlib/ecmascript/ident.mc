@@ -34,7 +34,13 @@ let esReservedWords : [String] = [
   -- Restricted identifiers in strict mode
   "arguments", "eval",
   -- Not reserved, but unsafe to shadow in generated code
-  "globalThis", "Infinity", "NaN", "undefined"
+  "globalThis", "Infinity", "NaN", "undefined",
+  -- Host globals that generated code and the runtime refer to directly, via
+  -- `ESEGlobal`. Reserving them means no MExpr binding can shadow one -- which
+  -- matters most for `class Map extends ...` in step 3.
+  "Array", "BigInt", "Boolean", "Error", "JSON", "Map", "Math", "Number",
+  "Object", "Promise", "RangeError", "Set", "String", "Symbol", "TypeError",
+  "console", "process"
 ]
 
 type ESNameEnv = {
