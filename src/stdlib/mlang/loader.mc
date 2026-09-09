@@ -114,6 +114,7 @@ lang LoaderInterface
 
   sem mkLoader : TCEnv -> [Hook] -> Loader
   sem addHook : Loader -> Hook -> Loader
+  sem addLocalHook : Loader -> Hook -> Loader
   sem remHook : (Hook -> Bool) -> Loader -> Loader
   sem hasHook : (Hook -> Bool) -> Loader -> Bool
   sem getHookOpt : all a. (Hook -> Option a) -> Loader -> Option a
@@ -184,6 +185,9 @@ lang LoaderInterface
   sem _postTypecheck : Loader -> Decl -> Hook -> (Loader, Decl)
   sem _postTypecheck loader decl = | _ -> (loader, decl)
 
+  sem _postInclude : Loader -> {path : String, env : SymEnv} -> Hook -> (Loader, {path : String, env : SymEnv})
+  sem _postInclude loader env = | _ -> (loader, env)
+
   sem _preBuildFullAst : Loader -> Hook -> Loader
   sem _preBuildFullAst loader = | _ -> loader
 
@@ -205,6 +209,7 @@ lang LoaderImpl = LoaderInterface
     , tcEnv : TCEnv
     , hooks : [Hook]
     , includeStack : Map String Int
+    , currentFileHooks : [Hook]
     , currentFileEnv : SymEnv
     }
   syn Loader +=
@@ -217,18 +222,26 @@ lang LoaderImpl = LoaderInterface
     , hooks = hooks
     , includeStack = mapEmpty cmpString
     , currentFileEnv = _symEnvEmpty
+    , currentFileHooks = []
     }
   sem addHook loader += | hook ->
     match loader with Loader x in
     Loader {x with hooks = snoc x.hooks hook}
-  sem remHook check += | Loader x ->
-    Loader {x with hooks = filter (lam x. not (check x)) x.hooks}
+  sem addLocalHook loader += | hook ->
+    match loader with Loader x in
+    Loader {x with currentFileHooks = snoc x.currentFileHooks hook}
+  sem remHook check += | Loader x -> Loader
+    { x with hooks = filter (lam x. not (check x)) x.hooks
+    , currentFileHooks = filter (lam x. not (check x)) x.currentFileHooks
+    }
   sem hasHook check += | Loader x ->
-    optionIsSome (find check x.hooks)
+    if optionIsSome (find check x.hooks)
+    then true
+    else optionIsSome (find check x.currentFileHooks)
   sem getHookOpt check += | Loader x ->
-    findMap check x.hooks
+    optionOrElse (lam. findMap check x.hooks) (findMap check x.currentFileHooks)
   sem withHookState f += | loader & Loader x ->
-    match findMap (f loader) x.hooks with Some res
+    match optionOrElse (lam. findMap (f loader) x.hooks) (findMap (f loader) x.currentFileHooks) with Some res
     then res
     else error "Compiler error: missing hook in loader"
 
@@ -256,8 +269,10 @@ lang LoaderImpl = LoaderInterface
     else
 
     let prevStack = x.includeStack in
+    let prevHooks = x.currentFileHooks in
     let loader = Loader
       { x with includeStack = mapInsert resolved (mapSize x.includeStack) prevStack
+      , currentFileHooks = []
       } in
 
     match _captureEnv (lam loader. ((), _loadFile resolved (ftype, loader))) loader with (_, env, Loader y) in
@@ -265,6 +280,7 @@ lang LoaderImpl = LoaderInterface
     let env = {path = resolved, env = env} in
     let loader = Loader
       { y with includeStack = prevStack
+      , currentFileHooks = prevHooks
       , includedFiles = mapInsert resolved env y.includedFiles
       } in
 
@@ -282,10 +298,10 @@ lang LoaderImpl = LoaderInterface
     let ast = foldl (lam ast. lam cb. _postBuildFullAst loader ast cb) ast x.hooks in
     ast
 
-  sem _doHook : (Loader -> Decl -> Hook -> (Loader, Decl)) -> Loader -> Decl -> (Loader, Decl)
+  sem _doHook : all a. (Loader -> a -> Hook -> (Loader, a)) -> Loader -> a -> (Loader, a)
   sem _doHook f loader = | decl ->
-    match loader with Loader {hooks = hooks} in
-    foldl (lam acc. lam cb. f acc.0 acc.1 cb) (loader, decl) hooks
+    match loader with Loader {hooks = hooks, currentFileHooks = currentFileHooks} in
+    foldl (lam acc. lam cb. f acc.0 acc.1 cb) (loader, decl) (concat hooks currentFileHooks)
 
   sem _addDeclExn symEnv loader += | decl ->
     match _doHook _preSymbolize loader decl with (loader, decl) in
@@ -331,6 +347,7 @@ lang IncludeLoader = LoaderImpl + IncludeDeclAst
   | DeclInclude x ->
     match x.info with Info {filename = filename} in
     match includeFileExn (dirname filename) x.path loader with (incEnv, loader) in
+    match _doHook _postInclude loader incEnv with (loader, incEnv) in
     (mergeSymEnv symEnv incEnv.env, loader)
 end
 
@@ -769,42 +786,52 @@ lang MLangLoader = LoaderImpl + LazyAst
     (symEnv, loader)
 end
 
-lang ConstTransformerMLang = ConstTransformer + SemDeclAst
+lang ConstTransformerMLang = LoaderInterface + ConstTransformer + SemDeclAst
+  syn Hook +=
+  | ConstTransformerHook {consts : Ref (Map String Expr)}
+
+  sem _preSymbolize loader decl +=
+  | ConstTransformerHook x ->
+    match ctWorkerDecl (deref x.consts) decl with (consts, decl) in
+    modref x.consts consts;
+    (loader, decl)
+
+  sem _postInclude loader env +=
+  | ConstTransformerHook x ->
+    modref x.consts (mapDifference (deref x.consts) env.env.currentEnv.varEnv);
+    (loader, env)
+
   sem ctWorkerDecl env +=
   | DeclSem x ->
-    let selfEnv = mapInsert (nameGetStr x.ident) (None ()) env in
+    let selfEnv = mapRemove (nameGetStr x.ident) env in
     let fimpl = lam impl.
       let paramEnv =
-        foldl (lam e. lam p. mapInsert (nameGetStr p.ident) (None ()) e) selfEnv impl.params in
+        foldl (lam e. lam p. mapRemove (nameGetStr p.ident) e) selfEnv impl.params in
       let fcase = lam c.
         let caseEnv =
-          foldl (lam e. lam n. mapInsert n (None ()) e) paramEnv (ctGetPatVars [] c.pat) in
+          foldl (lam e. lam n. mapRemove n e) paramEnv (ctGetPatVars [] c.pat) in
         {c with body = ctWorker caseEnv c.body} in
       {impl with cases = map fcase impl.cases} in
     (selfEnv, DeclSem {x with impl = optionMap fimpl x.impl})
 end
 
-lang MCoreFileParsing = BootParserMLang + ConstTransformerMLang
-  sem _parseMCoreFileRaw : [(String, Const)] -> String -> {decls : [Decl], expr : Expr}
-  sem _parseMCoreFileRaw consts = | path ->
-    switch result.consume (parseMLangFile path)
-    case (_, Right prog) then constTransformProgram consts prog
-    case (_, Left errs) then
-      errorMulti errs (join ["Parse error while parsing '", path, "'"])
-    end
-end
-
-lang MCoreLoader = MLangLoader + MCoreFileParsing
+lang MCoreLoader = MLangLoader + ConstTransformerMLang + BootParserMLang
   syn FileType +=
   | FMCore {includeMExpr : Bool}
   sem _fileType += | _ ++ ".mc" -> FMCore {includeMExpr = false}
 
   sem _loadFile path += | (FMCore {includeMExpr = includeMExpr}, loader) ->
-    let prog = _parseMCoreFileRaw builtin path in
+    let prog =
+      switch result.consume (parseMLangFile path)
+      case (_, Right prog) then prog
+      case (_, Left errs) then
+        errorMulti errs (join ["Parse error while parsing '", path, "'"])
+      end in
     let prog =
       { decls = map makeDeclKeywords prog.decls
       , expr = makeKeywords prog.expr
       } in
+    let loader = addLocalHook loader (ConstTransformerHook {consts = ref (_ctBuiltinEnv builtin)}) in
     match foldl (lam acc. _addDeclExn acc.0 acc.1) (symEnvDefault, loader) prog.decls with (env, loader) in
     if includeMExpr then
       -- NOTE(vipa, 2026-08-19): There are features that handle
