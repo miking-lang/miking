@@ -69,6 +69,10 @@ lang ConstTransformer = VarAst + LamAst + LetDeclAst + RecLetsDeclAst + MatchAst
     let t = ctWorker (mapRemove (nameGetStr r.ident) env) r.body in
     TmLam {r with body = t}
   | TmVar r ->
+    -- NOTE(vipa, 2026-09-09): We're only interested in resolving
+    -- non-symbolized vars, those with symbols refer to known
+    -- definitions.
+    if nameHasSym r.ident then TmVar r else
     let ident = nameGetStr r.ident in
     _constWithInfos r.info (mapFindOrElse (lam. TmVar r) ident env)
   | TmMatch r ->
