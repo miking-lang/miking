@@ -24,7 +24,7 @@ let _constWithInfos: Info -> use Ast in Expr -> use Ast in Expr =
       TmConst {{t with info = i} with ty = TyUnknown {ty with info = i}}
     else tm
 
-lang ConstTransformer = VarAst + LamAst + LetDeclAst + RecLetsDeclAst + MatchAst + ExtDeclAst + NamedPat + ConstAst
+lang ConstTransformer = VarAst + LamAst + LetDeclAst + RecLetsDeclAst + MatchAst + ExtDeclAst + NamedPat + ConstAst + OpaqueAst
 
   sem constTransform builtin =
   | t ->
@@ -81,6 +81,7 @@ lang ConstTransformer = VarAst + LamAst + LetDeclAst + RecLetsDeclAst + MatchAst
     TmMatch {r with target = ctWorker env r.target
                   , thn = ctWorker env2 r.thn
                   , els = ctWorker env r.els}
+  | TmOpaque x -> TmOpaque {x with body = ctWorker env x.body}
   | t -> smap_Expr_Expr (ctWorker env) t
 
 
