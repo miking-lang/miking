@@ -40,11 +40,11 @@ include "parser/breakable.mc"
 include "name.mc"
 include "result.mc"
 
-type ParseResult w a = Result w (String -> (Info, String)) a
+type ParseRes w a = Result w (String -> (Info, String)) a
 
-let parseOk:  all w. all a. a              -> ParseResult w a = lam a. result.ok a
-let parseErr: all w. all a. (Info, String) -> ParseResult w a = lam e. result.err (lam src. e)
-let parseErrs: all w. all a. [String -> (Info, String)] -> ParseResult w a = lam errs.
+let parseOk:  all w. all a. a              -> ParseRes w a = lam a. result.ok a
+let parseErr: all w. all a. (Info, String) -> ParseRes w a = lam e. result.err (lam src. e)
+let parseErrs: all w. all a. [String -> (Info, String)] -> ParseRes w a = lam errs.
   foldl1 result.withAnnotations (map result.err errs)
 
 lang AstParserBase = Lexer + Ast + DeclAst
@@ -73,38 +73,38 @@ lang AstParserBase = Lexer + Ast + DeclAst
   | CatPatPrefix      ()
   | CatPatLogic       ()
 
-  sem parseExpr: all w. NextTokenResult -> ParseResult w (Expr, NextTokenResult)
-  sem parseDecl: all w. NextTokenResult -> ParseResult w (Decl, NextTokenResult)
-  sem parseType: all w. NextTokenResult -> ParseResult w (Type, NextTokenResult)
-  sem parseKind: all w. NextTokenResult -> ParseResult w (Kind, NextTokenResult)
-  sem parsePat:  all w. NextTokenResult -> ParseResult w (Pat,  NextTokenResult)
+  sem parseExpr: all w. NextTokenResult -> ParseRes w (Expr, NextTokenResult)
+  sem parseDecl: all w. NextTokenResult -> ParseRes w (Decl, NextTokenResult)
+  sem parseType: all w. NextTokenResult -> ParseRes w (Type, NextTokenResult)
+  sem parseKind: all w. NextTokenResult -> ParseRes w (Kind, NextTokenResult)
+  sem parsePat:  all w. NextTokenResult -> ParseRes w (Pat,  NextTokenResult)
 
-  sem parseExprRClosed:  all w. State BrkOpExpr RClosed -> NextTokenResult -> ParseResult w (Expr, NextTokenResult)
-  sem parseTypeRClosed:  all w. State BrkOpType RClosed -> NextTokenResult -> ParseResult w (Type, NextTokenResult)
-  sem parsePatRClosed:   all w. State BrkOpPat  RClosed -> NextTokenResult -> ParseResult w (Pat,  NextTokenResult)
+  sem parseExprRClosed:  all w. State BrkOpExpr RClosed -> NextTokenResult -> ParseRes w (Expr, NextTokenResult)
+  sem parseTypeRClosed:  all w. State BrkOpType RClosed -> NextTokenResult -> ParseRes w (Type, NextTokenResult)
+  sem parsePatRClosed:   all w. State BrkOpPat  RClosed -> NextTokenResult -> ParseRes w (Pat,  NextTokenResult)
 
-  sem parseExprROpen:    all w. State BrkOpExpr ROpen   -> NextTokenResult -> ParseResult w (Expr, NextTokenResult)
-  sem parseTypeROpen:    all w. State BrkOpType ROpen   -> NextTokenResult -> ParseResult w (Type, NextTokenResult)
-  sem parsePatROpen:     all w. State BrkOpPat  ROpen   -> NextTokenResult -> ParseResult w (Pat,  NextTokenResult)
+  sem parseExprROpen:    all w. State BrkOpExpr ROpen   -> NextTokenResult -> ParseRes w (Expr, NextTokenResult)
+  sem parseTypeROpen:    all w. State BrkOpType ROpen   -> NextTokenResult -> ParseRes w (Type, NextTokenResult)
+  sem parsePatROpen:     all w. State BrkOpPat  ROpen   -> NextTokenResult -> ParseRes w (Pat,  NextTokenResult)
 
-  sem finalizeParseExpr: all w. State BrkOpExpr RClosed -> NextTokenResult -> ParseResult w (Expr, NextTokenResult)
-  sem finalizeParseType: all w. State BrkOpType RClosed -> NextTokenResult -> ParseResult w (Type, NextTokenResult)
-  sem finalizeParsePat:  all w. State BrkOpPat  RClosed -> NextTokenResult -> ParseResult w (Pat,  NextTokenResult)
+  sem finalizeParseExpr: all w. State BrkOpExpr RClosed -> NextTokenResult -> ParseRes w (Expr, NextTokenResult)
+  sem finalizeParseType: all w. State BrkOpType RClosed -> NextTokenResult -> ParseRes w (Type, NextTokenResult)
+  sem finalizeParsePat:  all w. State BrkOpPat  RClosed -> NextTokenResult -> ParseRes w (Pat,  NextTokenResult)
 
   sem startsAtomExpr: NextTokenResult -> Bool
   sem startsAtomType: NextTokenResult -> Bool
 
-  sem constructPrefixExpr: all w. (BrkOpExpr LClosed ROpen, Expr) -> ParseResult w Expr
-  sem constructPrefixType: all w. (BrkOpType LClosed ROpen, Type) -> ParseResult w Type
-  sem constructPrefixPat:  all w. (BrkOpPat  LClosed ROpen, Pat)  -> ParseResult w Pat
+  sem constructPrefixExpr: all w. (BrkOpExpr LClosed ROpen, Expr) -> ParseRes w Expr
+  sem constructPrefixType: all w. (BrkOpType LClosed ROpen, Type) -> ParseRes w Type
+  sem constructPrefixPat:  all w. (BrkOpPat  LClosed ROpen, Pat)  -> ParseRes w Pat
 
-  sem constructInfixExpr: all w. (BrkOpExpr LOpen ROpen, Expr, Expr) -> ParseResult w Expr
-  sem constructInfixType: all w. (BrkOpType LOpen ROpen, Type, Type) -> ParseResult w Type
-  sem constructInfixPat:  all w. (BrkOpPat  LOpen ROpen, Pat,  Pat)  -> ParseResult w Pat
+  sem constructInfixExpr: all w. (BrkOpExpr LOpen ROpen, Expr, Expr) -> ParseRes w Expr
+  sem constructInfixType: all w. (BrkOpType LOpen ROpen, Type, Type) -> ParseRes w Type
+  sem constructInfixPat:  all w. (BrkOpPat  LOpen ROpen, Pat,  Pat)  -> ParseRes w Pat
 
-  sem constructPostfixExpr: all w. (BrkOpExpr LOpen RClosed, Expr) -> ParseResult w Expr
-  sem constructPostfixType: all w. (BrkOpType LOpen RClosed, Type) -> ParseResult w Type
-  sem constructPostfixPat:  all w. (BrkOpPat  LOpen RClosed, Pat)  -> ParseResult w Pat
+  sem constructPostfixExpr: all w. (BrkOpExpr LOpen RClosed, Expr) -> ParseRes w Expr
+  sem constructPostfixType: all w. (BrkOpType LOpen RClosed, Type) -> ParseRes w Type
+  sem constructPostfixPat:  all w. (BrkOpPat  LOpen RClosed, Pat)  -> ParseRes w Pat
 
   sem configExpr: () -> Config BrkOpExpr
   sem configType: () -> Config BrkOpType
@@ -876,7 +876,7 @@ lang DataParser = AstParserBase + DataAst + ConTypeAst + AppTypeAst + DataPat + 
     match nextToken tok.stream with { token = OperatorTok { val = ":" } } then false else true
   | _ -> false
 
-  sem parseConTypeRestrictionBody: all w. NextTokenResult -> ParseResult w (Type, Info, NextTokenResult)
+  sem parseConTypeRestrictionBody: all w. NextTokenResult -> ParseRes w (Type, Info, NextTokenResult)
   sem parseConTypeRestrictionBody =
   | { token = OperatorTok { val = "!" } } & toknot ->
     match parseConNameList [] (nextToken toknot.stream) with (names, cur) in
@@ -893,7 +893,7 @@ lang DataParser = AstParserBase + DataAst + ConTypeAst + AppTypeAst + DataPat + 
       (TyData { info = NoInfo (), universe = mapEmpty nameCmp, positive = true, cons = setOfSeq nameCmp names })
       cur
 
-  sem finishConTypeRestriction: all w. Type -> NextTokenResult -> ParseResult w (Type, Info, NextTokenResult)
+  sem finishConTypeRestriction: all w. Type -> NextTokenResult -> ParseRes w (Type, Info, NextTokenResult)
   sem finishConTypeRestriction data =
   | { token = RBraceTok {} } & tokclose ->
     parseOk (data, tokclose.info, nextToken tokclose.stream)
@@ -934,12 +934,12 @@ lang DataParser = AstParserBase + DataAst + ConTypeAst + AppTypeAst + DataPat + 
 end
 
 lang ParenParser = AstParserBase
-  sem beginParseExprInParen: all w. State BrkOpExpr ROpen -> NextTokenResult -> NextTokenResult -> ParseResult w (Expr, NextTokenResult)
-  sem beginParseTypeInParen: all w. State BrkOpType ROpen -> NextTokenResult -> NextTokenResult -> ParseResult w (Type, NextTokenResult)
-  sem beginParsePatInParen:  all w. State BrkOpPat  ROpen -> NextTokenResult -> NextTokenResult -> ParseResult w (Pat,  NextTokenResult)
-  sem endParseExprInParen:   all w. State BrkOpExpr ROpen -> NextTokenResult -> Expr -> NextTokenResult -> ParseResult w (Expr, NextTokenResult)
-  sem endParseTypeInParen:   all w. State BrkOpType ROpen -> NextTokenResult -> Type -> NextTokenResult -> ParseResult w (Type, NextTokenResult)
-  sem endParsePatInParen:    all w. State BrkOpPat  ROpen -> NextTokenResult -> Pat  -> NextTokenResult -> ParseResult w (Pat,  NextTokenResult)
+  sem beginParseExprInParen: all w. State BrkOpExpr ROpen -> NextTokenResult -> NextTokenResult -> ParseRes w (Expr, NextTokenResult)
+  sem beginParseTypeInParen: all w. State BrkOpType ROpen -> NextTokenResult -> NextTokenResult -> ParseRes w (Type, NextTokenResult)
+  sem beginParsePatInParen:  all w. State BrkOpPat  ROpen -> NextTokenResult -> NextTokenResult -> ParseRes w (Pat,  NextTokenResult)
+  sem endParseExprInParen:   all w. State BrkOpExpr ROpen -> NextTokenResult -> Expr -> NextTokenResult -> ParseRes w (Expr, NextTokenResult)
+  sem endParseTypeInParen:   all w. State BrkOpType ROpen -> NextTokenResult -> Type -> NextTokenResult -> ParseRes w (Type, NextTokenResult)
+  sem endParsePatInParen:    all w. State BrkOpPat  ROpen -> NextTokenResult -> Pat  -> NextTokenResult -> ParseRes w (Pat,  NextTokenResult)
 
   sem startsAtomExpr +=
   | { token = LParenTok {} } -> true
@@ -1475,9 +1475,9 @@ lang SeqParser = AstParserBase + SeqAst + SeqTypeAst + SeqTotPat + SeqEdgePat + 
 end
 
 lang BraceParser = AstParserBase
-  sem beginParseExprInBrace: all w. State BrkOpExpr ROpen -> NextTokenResult -> NextTokenResult -> ParseResult w (Expr, NextTokenResult)
-  sem beginParseTypeInBrace: all w. State BrkOpType ROpen -> NextTokenResult -> NextTokenResult -> ParseResult w (Type, NextTokenResult)
-  sem beginParsePatInBrace:  all w. State BrkOpPat  ROpen -> NextTokenResult -> NextTokenResult -> ParseResult w (Pat,  NextTokenResult)
+  sem beginParseExprInBrace: all w. State BrkOpExpr ROpen -> NextTokenResult -> NextTokenResult -> ParseRes w (Expr, NextTokenResult)
+  sem beginParseTypeInBrace: all w. State BrkOpType ROpen -> NextTokenResult -> NextTokenResult -> ParseRes w (Type, NextTokenResult)
+  sem beginParsePatInBrace:  all w. State BrkOpPat  ROpen -> NextTokenResult -> NextTokenResult -> ParseRes w (Pat,  NextTokenResult)
   
   sem startsAtomExpr +=
   | { token = LBraceTok {} } -> true
@@ -2594,7 +2594,7 @@ lang KindParser = AstParserBase + DataKindAst
   | { token = LBraceTok {} } & tokopen ->
     parseKindBody (mapEmpty nameCmp) (nextToken tokopen.stream)
 
-  sem parseKindBody: all w. Map Name {lower : Set Name, upper : Option (Set Name)} -> NextTokenResult -> ParseResult w (Kind, NextTokenResult)
+  sem parseKindBody: all w. Map Name {lower : Set Name, upper : Option (Set Name)} -> NextTokenResult -> ParseRes w (Kind, NextTokenResult)
   sem parseKindBody entries =
   | { token = RBraceTok {} } & tokclose ->
     parseOk (Data { types = entries }, nextToken tokclose.stream)
@@ -2610,7 +2610,7 @@ lang KindParser = AstParserBase + DataKindAst
         parseErr (cur.info, "Expected ',' or '}' in kind")
     )
 
-  sem parseKindEntry: all w. NextTokenResult -> ParseResult w (Name, {lower : Set Name, upper : Option (Set Name)}, NextTokenResult)
+  sem parseKindEntry: all w. NextTokenResult -> ParseRes w (Name, {lower : Set Name, upper : Option (Set Name)}, NextTokenResult)
   sem parseKindEntry =
   | { token = UIdentTok { val = val } } & tokident ->
     let name = nameNoSym val in
@@ -2639,7 +2639,7 @@ lang KindParser = AstParserBase + DataKindAst
     else parseErr (cur.info, "Expected '[' after the type name in a kind entry")
   | cur -> parseErr (cur.info, "Expected a type identifier in a kind entry")
 
-  sem finishKindEntry: all w. Name -> {lower : Set Name, upper : Option (Set Name)} -> NextTokenResult -> ParseResult w (Name, {lower : Set Name, upper : Option (Set Name)}, NextTokenResult)
+  sem finishKindEntry: all w. Name -> {lower : Set Name, upper : Option (Set Name)} -> NextTokenResult -> ParseRes w (Name, {lower : Set Name, upper : Option (Set Name)}, NextTokenResult)
   sem finishKindEntry name entry =
   | { token = RBracketTok {} } & tokclose -> parseOk (name, entry, nextToken tokclose.stream)
   | cur -> parseErr (cur.info, "Expected ']' to close the kind entry")
@@ -2940,7 +2940,7 @@ end
 -- `include` statements, zero or more top-level declarations, and an
 -- optional `mexpr <expr>` section.
 lang ProgramParser = AstParserBase + MLangTopLevel + RecordAst + IncludeDeclParser + MexprKeyword
-  sem parseProgram: all w. NextTokenResult -> ParseResult w (MLangProgram, NextTokenResult)
+  sem parseProgram: all w. NextTokenResult -> ParseRes w (MLangProgram, NextTokenResult)
 
   sem parseProgram =
   | cur ->
@@ -3066,13 +3066,13 @@ lang TestParser =
   + MExprToJson
 end
 
-type TestResult
-con OkSame: () -> TestResult        -- Same result
-con OkSameExInfo: () -> TestResult  -- Same result excluding info field
-con OkFail: () -> TestResult        -- Both fails
-con Fail: () -> TestResult          -- Result is different
-
 mexpr
+
+type TestResult in
+con OkSame: () -> TestResult in        -- Same result
+con OkSameExInfo: () -> TestResult in  -- Same result excluding info field
+con OkFail: () -> TestResult in        -- Both fails
+con Fail: () -> TestResult in          -- Result is different
 
 use TestParser in
 use BootParserMLang in
