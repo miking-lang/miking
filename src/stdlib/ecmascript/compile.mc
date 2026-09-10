@@ -885,6 +885,20 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint + MExprArity
         { callee = esMember (ESEVar { id = ctx.runtimeEnv }) "wallTimeMs"
         , args = [] })
     case CSleepMs _ then env "sleepMs"
+    case CReadBytesAsString _ then
+      Some (ctx, ESECall
+        { callee = ESEGlobal { name = "$readBytesResult" }
+        , args = [ESECall
+            { callee = esMember (ESEVar { id = ctx.runtimeEnv }) "readBytesAsString"
+            , args = args }] })
+    case CExec _ then
+      match args with [prog, xs] in
+      Some (ctx, ESECall
+        { callee = esMember (ESEVar { id = ctx.runtimeEnv }) "exec"
+        , args = [ ESECall { callee = ESEGlobal { name = "$jsStr" }, args = [prog] }
+                 , ESECall { callee = esMember xs "map"
+                           , args = [ESEGlobal { name = "$jsStr" }] } ] })
+    case CTypeOf _ then rt "$typeOf"
     case CRandIntU _ then env "randIntU"
     case CRandSetSeed _ then env "randSetSeed"
 
@@ -907,6 +921,32 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint + MExprArity
     case CTensorEq _ then rt "$tEq"
     case CTensorTransposeExn _ then rt "$tTranspose"
     case CTensorToString _ then rt "$tToString"
+
+    -- The boot parser is the one interface this backend deliberately does not
+    -- provide: a program compiled here uses the MCore parser instead, reached
+    -- with `--native-parser`. The loader prelude still *binds* every builtin,
+    -- so these must compile to something; a stub keeps the binding legal and
+    -- makes an actual call fail immediately, naming the intrinsic.
+    case CBootParserGetConst _
+       | CBootParserGetCopat _
+       | CBootParserGetDecl _
+       | CBootParserGetFloat _
+       | CBootParserGetId _
+       | CBootParserGetInfo _
+       | CBootParserGetInt _
+       | CBootParserGetListLength _
+       | CBootParserGetPat _
+       | CBootParserGetString _
+       | CBootParserGetTerm _
+       | CBootParserGetTop _
+       | CBootParserGetType _
+       | CBootParserParseMCoreFile _
+       | CBootParserParseMExprString _
+       | CBootParserParseMLangFile _
+       | CBootParserParseMLangString _ then
+      Some (ctx, ESECall
+        { callee = ESEGlobal { name = "$unsupported" }
+        , args = [ESEString { value = getConstStringCode 0 const }] })
 
     case _ then None ()
     end

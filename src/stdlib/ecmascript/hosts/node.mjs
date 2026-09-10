@@ -11,7 +11,7 @@
 
 import { inspect } from "node:util";
 import * as fs from "node:fs";
-import { execSync } from "node:child_process";
+import { execSync, spawnSync } from "node:child_process";
 
 export function nodeEnv() {
   return {
@@ -53,6 +53,45 @@ export function nodeEnv() {
         out.push(buf[0]);
       }
       return Buffer.from(out).toString("utf8");
+    },
+
+    // Reads exactly `n` bytes from stdin and returns the text together with
+    // the number of *bytes* consumed, which is not the number of characters.
+    //
+    // The reference implementation reads exactly `n` bytes or nothing at all:
+    // it uses OCaml's `really_input_string`, whose End_of_file case yields the
+    // empty string rather than a short read. A partial read therefore reports
+    // ("", 0) here too.
+    readBytesAsString: (n) => {
+      if (n < 0) {
+        throw new RangeError("readBytesAsString: argument must not be negative");
+      }
+      const buf = Buffer.alloc(n);
+      let got = 0;
+      while (got < n) {
+        let r = 0;
+        try {
+          r = fs.readSync(0, buf, got, n - got, null);
+        } catch (e) {
+          if (e.code === "EAGAIN") continue;
+          if (e.code === "EOF") break;
+          throw e;
+        }
+        if (r === 0) break;
+        got += r;
+      }
+      return got < n ? ["", 0] : [buf.toString("utf8"), got];
+    },
+
+    // MExpr's `exec` is `execvp`: it replaces the running process and never
+    // returns. Node cannot replace its own image, so the nearest faithful
+    // behaviour is to run the program to completion and exit with its status.
+    // A caller cannot tell the difference except by observing this process's
+    // pid.
+    exec: (program, args) => {
+      const r = spawnSync(program, args, { stdio: "inherit" });
+      if (r.error) throw r.error;
+      process.exit(r.status === null ? 1 : r.status);
     },
 
     readFile: (path) => fs.readFileSync(path, "utf8"),

@@ -452,7 +452,7 @@ testMain substituters directories location (lam api.
   let esCompile = api.midStep
     { uses = [origin]
     , tag = "mjs"
-    , cmd = "%m compile --test --disable-prune-utests --to-es %i --output %o"
+    , cmd = "%m compile --test --native-parser --to-es %i --output %o"
     } in
   let esRun = api.endStep
     { uses = [esCompile]
@@ -460,14 +460,20 @@ testMain substituters directories location (lam api.
     , cmd = "%e %i"
     } in
   let esDiff = api.endStep
-    { uses = [run, esRun]
+    { uses = [mlangRun, esRun]
     , tag = "diff-es"
     , cmd = "diff %i"
     } in
 
   api.tests [node]
-    (and (dirIs "src/test/ecmascript") (strEndsWith ".mc"))
+    (and (or (dirIs "src/test/ecmascript") (dirIs "src/stdlib"))
+         (strEndsWith ".mc"))
     [(esCompile, succ), (esRun, succ), (esDiff, succ)];
+
+  -- These declare externals, which the ecmascript backend does not implement.
+  api.tests []
+    (elem ["src/stdlib/math.mc", "src/stdlib/stats.mc"])
+    [(esCompile, dont), (esRun, dont), (esDiff, dont)];
 
   -- === Java ===
 

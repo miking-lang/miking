@@ -385,6 +385,45 @@ function $conTag(x) {
 }
 //!end
 
+// Adapts what a host returns from `readBytesAsString`; it does no reading
+// itself.
+//
+// A host hands back an ordinary JS pair of the text and the number of *bytes*
+// consumed, which is not the number of characters -- only the host knows the
+// encoding, so it reports both. This turns that into MExpr's representation: a
+// `[Char]` for the text, and a record with "0" and "1" for the tuple. Keeping
+// the conversion here is what lets a host stay in plain JavaScript.
+//!intrinsic $readBytesResult $S
+function $readBytesResult(pair) {
+  return { "0": $S(pair[0]), "1": pair[1] };
+}
+//!end
+
+// `debug_typeof` is a debugging aid with no implementation in boot, so there is
+// no reference behaviour to match. This reports the host's view.
+//!intrinsic $typeOf $S
+function $typeOf(x) {
+  if (Array.isArray(x)) return $S("Sequence");
+  if (x === null || x === undefined) return $S("Unit");
+  if (typeof x === "object") {
+    return $S(x.constructor === Object ? "Record" : x.constructor.name);
+  }
+  return $S(typeof x);
+}
+//!end
+
+// A constant this backend does not implement.
+//
+// The loader pipeline binds every builtin in its prelude whether a program uses
+// it or not, so refusing at compile time would make the whole pipeline
+// unusable. Compiling to a stub keeps that binding legal while making any
+// actual call fail immediately, naming the intrinsic.
+//!intrinsic $unsupported
+function $unsupported(name) {
+  throw new Error("ecmascript backend: '" + name + "' is not implemented");
+}
+//!end
+
 export {
   $fromBig, $slli, $srli, $srai, $roundfi,
   $S, $jsStr, $set, $create, $splitAt, $subsequence,
@@ -392,5 +431,5 @@ export {
   $gensym, $tIdx, $tSize, $tCreate, $tUninit, $tGet, $tSet,
   $tLinGet, $tLinSet, $tReshape, $tSlice, $tSub, $tCopy,
   $tIterSlice, $tEq, $tTranspose, $tToString,
-  $ref, $modref, $conTag,
+  $ref, $modref, $conTag, $readBytesResult, $typeOf, $unsupported,
 };
