@@ -36,8 +36,7 @@ let esReservedWords : [String] = [
   -- Not reserved, but unsafe to shadow in generated code
   "globalThis", "Infinity", "NaN", "undefined",
   -- Host globals that generated code and the runtime refer to directly, via
-  -- `ESEGlobal`. Reserving them means no MExpr binding can shadow one -- which
-  -- matters most for `class Map extends ...` in step 3.
+  -- `ESEGlobal`. Reserving them means no MExpr binding can shadow one.
   "Array", "BigInt", "Boolean", "Error", "JSON", "Map", "Math", "Number",
   "Object", "Promise", "RangeError", "Set", "String", "Symbol", "TypeError",
   "console", "process"
@@ -69,6 +68,15 @@ let esSanitize : String -> String = lam str.
   match str with [] then "_"
   else if isDigit (head str) then cons '_' str
   else str
+
+-- Is `str` usable as a bare property key, as in `{ foo: 1 }`? Reserved words
+-- are fine in that position, so only the character shape matters.
+let esIsIdentLike : String -> Bool = lam str.
+  match str with [first] ++ rest then
+    if or (isAlpha first) (or (eqc first '_') (eqc first '$')) then
+      forAll (lam c. or (isAlphanum c) (or (eqc c '_') (eqc c '$'))) rest
+    else false
+  else false
 
 -- Returns the identifier for `id`, allocating one on first use.
 --

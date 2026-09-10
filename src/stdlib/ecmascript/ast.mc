@@ -62,6 +62,8 @@ lang ESAst
   -- Composite values
   | ESEArray      { exprs : [ESExpr] }
   | ESEObject     { fields : [(String, ESExpr)] }
+  -- `{ ...base, k: v }` -- a record with some fields replaced.
+  | ESEObjectWith { base : ESExpr, fields : [(String, ESExpr)] }
   -- Access
   | ESEMember     { obj : ESExpr, prop : String }  -- obj.prop
   | ESEIndex      { obj : ESExpr, index : ESExpr } -- obj[index], for keys that
@@ -129,6 +131,9 @@ lang ESAst
   | ESEArray t -> ESEArray { t with exprs = map f t.exprs }
   | ESEObject t ->
     ESEObject { t with fields = map (lam p. (p.0, f p.1)) t.fields }
+  | ESEObjectWith t ->
+    ESEObjectWith { t with base = f t.base
+                  , fields = map (lam p. (p.0, f p.1)) t.fields }
   | ESEMember t -> ESEMember { t with obj = f t.obj }
   | ESEIndex t -> ESEIndex { t with obj = f t.obj, index = f t.index }
   | ESECall t -> ESECall { t with callee = f t.callee, args = map f t.args }

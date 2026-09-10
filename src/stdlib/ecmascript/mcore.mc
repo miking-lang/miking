@@ -6,6 +6,7 @@
 -- print, how to read a file, how to exit -- afresh on every execution.
 
 include "common.mc"
+include "ecmascript/cleanup.mc"
 include "ecmascript/compile.mc"
 include "ecmascript/ident.mc"
 include "ecmascript/pprint.mc"
@@ -13,7 +14,7 @@ include "ecmascript/runtime.mc"
 include "option.mc"
 include "string.mc"
 
-lang MCoreCompileES = MExprESCompile + ESPrettyPrint
+lang MCoreCompileES = MExprESCompile + ESPrettyPrint + ESCleanup
 end
 
 type CompileESOptions = {
@@ -40,7 +41,9 @@ let esCompileToString : use Ast in Expr -> String =
   lam ast.
   use MCoreCompileES in
   match compileESProg ast with (prog, usedRuntime) in
-  match printESProg esNameEnvEmpty prog with (_, source) in
+  -- Remove the scrutinee temporaries the pattern lowerer leaves behind, and
+  -- the bindings record projection produces. See cleanup.mc.
+  match printESProg esNameEnvEmpty (esCleanupProg prog) with (_, source) in
   concat source (esRuntimeEmit usedRuntime)
 
 -- Compiles an MExpr AST and writes the module, returning the path written.
@@ -136,7 +139,9 @@ utest esCompileToString astPartial with join
   , "  env.dprint(a => f(1, a));\n"
   , "}\n" ] in
 
--- An alias inherits the arity it points at, so calls through it stay n-ary.
+-- An alias inherits the arity it points at, so the call through it is n-ary
+-- rather than curried. The alias binding itself is then removed, since a
+-- second name for `f` says nothing `f` does not.
 let g = nameSym "g" in
 let astRef = bindall_
   [ nulet_ f (nulam_ x (nulam_ y (addi_ (nvar_ x) (nvar_ y))))
@@ -147,8 +152,7 @@ utest esCompileToString astRef with join
   , "  function f(x, y) {\n"
   , "    return x + y;\n"
   , "  }\n"
-  , "  const g = f;\n"
-  , "  env.dprint(g(1, 2));\n"
+  , "  env.dprint(f(1, 2));\n"
   , "}\n" ] in
 
 -- An anonymous lambda stays curried, since nothing tracks its arity.
@@ -258,6 +262,176 @@ utest contains "function $roundfi" shifted with false in
 
 -- A program using no runtime intrinsic gets no runtime section.
 utest contains "MExpr runtime intrinsics" (esCompileToString astFn) with false in
+
+-- ---------------------------------------------------------------------
+-- Records and tuples
+-- ---------------------------------------------------------------------
+
+-- A record is an object literal. Fields are sorted so output is stable, since
+-- `mapBindings` order follows interned SIDs and is otherwise arbitrary.
+let r = nameSym "r" in
+let astRec = bind_ (nulet_ r (urecord_ [("y", int_ 2), ("x", int_ 1)]))
+                   (dprint_ (nvar_ r)) in
+utest esCompileToString astRec with join
+  [ "export default function main(env) {\n"
+  , "  const r = { x: 1, y: 2 };\n"
+  , "  env.dprint(r);\n"
+  , "}\n" ] in
+
+-- A tuple is a record whose fields are named "0", "1", ... They sort
+-- numerically rather than lexicographically, so a 10-field tuple does not put
+-- field 10 before field 2.
+let astTup = bind_ (nulet_ r (utuple_ [int_ 10, int_ 20]))
+                   (dprint_ (nvar_ r)) in
+utest esCompileToString astTup with join
+  [ "export default function main(env) {\n"
+  , "  const r = { \"0\": 10, \"1\": 20 };\n"
+  , "  env.dprint(r);\n"
+  , "}\n" ] in
+
+-- Projection reads the field directly. Tuple fields cannot be written with a
+-- dot, so they are indexed.
+let astProj = bind_ (nulet_ r (urecord_ [("x", int_ 1), ("y", int_ 2)]))
+                    (dprint_ (recordproj_ "x" (nvar_ r))) in
+utest esCompileToString astProj with join
+  [ "export default function main(env) {\n"
+  , "  const r = { x: 1, y: 2 };\n"
+  , "  env.dprint(r.x);\n"
+  , "}\n" ] in
+
+let astTupProj = bind_ (nulet_ r (utuple_ [int_ 10, int_ 20]))
+                       (dprint_ (tupleproj_ 1 (nvar_ r))) in
+utest esCompileToString astTupProj with join
+  [ "export default function main(env) {\n"
+  , "  const r = { \"0\": 10, \"1\": 20 };\n"
+  , "  env.dprint(r[1]);\n"
+  , "}\n" ] in
+
+-- Record update spreads the original.
+let astUpd = bind_ (nulet_ r (urecord_ [("x", int_ 1), ("y", int_ 2)]))
+                   (dprint_ (recordupdate_ (nvar_ r) "x" (int_ 9))) in
+utest esCompileToString astUpd with join
+  [ "export default function main(env) {\n"
+  , "  const r = { x: 1, y: 2 };\n"
+  , "  env.dprint({ ...r, x: 9 });\n"
+  , "}\n" ] in
+
+-- A record pattern reads only the fields it names -- there is no binding for
+-- `y` here. The binding for `x` survives because it is used twice; used once
+-- it would be inlined to `r.x`, as the projection tests above show.
+let px = nameSym "px" in
+let astPat = bind_ (nulet_ r (urecord_ [("x", int_ 1), ("y", int_ 2)]))
+  (match_ (nvar_ r) (prec_ [("x", npvar_ px)])
+     (dprint_ (addi_ (nvar_ px) (nvar_ px))) never_) in
+utest esCompileToString astPat with join
+  [ "export default function main(env) {\n"
+  , "  const r = { x: 1, y: 2 };\n"
+  , "  const px = r.x;\n"
+  , "  env.dprint(px + px);\n"
+  , "}\n" ] in
+
+-- The empty record is unit, and the empty record pattern matches it.
+let u = nameSym "u" in
+let astUnit = bind_ (nulet_ u uunit_) (dprint_ (nvar_ u)) in
+utest esCompileToString astUnit with join
+  [ "export default function main(env) {\n"
+  , "  const u = undefined;\n"
+  , "  env.dprint(u);\n"
+  , "}\n" ] in
+
+-- ---------------------------------------------------------------------
+-- Cleanup passes
+-- ---------------------------------------------------------------------
+
+-- The pattern lowerer binds every match scrutinee to a `_target`. Those are
+-- compiler-introduced, pure and used once, so they are inlined away.
+let t = nameSym "_target" in
+let astTemp = bind_ (nulet_ t (lti_ (int_ 1) (int_ 2)))
+  (dprint_ (if_ (nvar_ t) (int_ 1) (int_ 0))) in
+utest esCompileToString astTemp with join
+  [ "export default function main(env) {\n"
+  , "  env.dprint(1 < 2 ? 1 : 0);\n"
+  , "}\n" ] in
+
+-- A name the programmer wrote is kept, even though inlining it would be
+-- shorter: generated code is read while debugging, and the name is worth more.
+let sum = nameSym "sum" in
+let astNamed = bind_ (nulet_ sum (addi_ (int_ 1) (int_ 2)))
+                     (dprint_ (nvar_ sum)) in
+utest esCompileToString astNamed with join
+  [ "export default function main(env) {\n"
+  , "  const sum = 1 + 2;\n"
+  , "  env.dprint(sum);\n"
+  , "}\n" ] in
+
+-- A temporary used twice stays, since inlining would duplicate the work.
+let t2 = nameSym "_t" in
+let astTwice = bind_ (nulet_ t2 (addi_ (int_ 1) (int_ 2)))
+                     (dprint_ (addi_ (nvar_ t2) (nvar_ t2))) in
+utest esCompileToString astTwice with join
+  [ "export default function main(env) {\n"
+  , "  const _t = 1 + 2;\n"
+  , "  env.dprint(_t + _t);\n"
+  , "}\n" ] in
+
+-- An impure temporary stays too: the call has to happen, and where it was.
+let t3 = nameSym "_t" in
+let astImpure = bind_ (nulet_ t3 (dprint_ (int_ 1)))
+                      (dprint_ (nvar_ t3)) in
+utest esCompileToString astImpure with join
+  [ "export default function main(env) {\n"
+  , "  const _t = env.dprint(1);\n"
+  , "  env.dprint(_t);\n"
+  , "}\n" ] in
+
+-- ---------------------------------------------------------------------
+-- Sequences and strings
+-- ---------------------------------------------------------------------
+
+-- A character sequence prints as a string literal, spread into an array at
+-- run time so that indexing stays O(1) and codepoint-correct.
+let sq = nameSym "s" in
+let astStr = bind_ (nulet_ sq (str_ "hi")) (print_ (nvar_ sq)) in
+let strOut = esCompileToString astStr in
+let contains = lam needle. lam s. gti (length (strSplit needle s)) 1 in
+utest contains "const s = $S(\"hi\");" strOut with true in
+-- The host takes a plain JS string and never sees the representation.
+utest contains "env.print($jsStr(s));" strOut with true in
+utest contains "function $S(s) {" strOut with true in
+utest contains "function $jsStr(s) {" strOut with true in
+
+-- A sequence of anything else is an array literal.
+let astArr = bind_ (nulet_ sq (seq_ [int_ 1, int_ 2])) (dprint_ (nvar_ sq)) in
+utest esCompileToString astArr with join
+  [ "export default function main(env) {\n"
+  , "  const s = [1, 2];\n"
+  , "  env.dprint(s);\n"
+  , "}\n" ] in
+
+-- The common sequence operations are plain JS, not runtime calls.
+let astOps = bind_ (nulet_ sq (seq_ [int_ 1, int_ 2]))
+  (dprint_ (addi_ (length_ (nvar_ sq)) (get_ (nvar_ sq) (int_ 0)))) in
+utest esCompileToString astOps with join
+  [ "export default function main(env) {\n"
+  , "  const s = [1, 2];\n"
+  , "  env.dprint(s.length + s[0]);\n"
+  , "}\n" ] in
+
+let astCons = dprint_ (cons_ (int_ 0) (seq_ [int_ 1])) in
+utest esCompileToString astCons with join
+  [ "export default function main(env) {\n"
+  , "  env.dprint([0, ...[1]]);\n"
+  , "}\n" ] in
+
+-- Every function value is a one-parameter arrow, so `map` hands its callback
+-- straight to the JS method rather than wrapping it.
+let astMap = dprint_ (map_ (nulam_ (nameSym "c") (int_ 1)) (seq_ [int_ 2])) in
+utest contains "[2].map(c => 1)" (esCompileToString astMap) with true in
+
+-- Only the operations needing a copy, a clamp or a pair go through the
+-- runtime.
+let astSub = dprint_ (subsequence_ (seq_ [int_ 1]) (int_ 0) (int_ 1)) in
+utest contains "$subsequence([1], 0, 1)" (esCompileToString astSub) with true in
 
 -- A user binding named `env` does not capture the runtime environment.
 let userEnv = nameSym "env" in

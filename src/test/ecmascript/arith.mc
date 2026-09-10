@@ -43,8 +43,7 @@ dprint (ceilfi (negf 1.5));
 -- NOTE: `ceilfi (negf 0.2)` and friends land on JS negative zero, which this
 -- backend accepts as an alternative encoding of the Int 0. `dprint` is the one
 -- thing that can see the difference, and its format is unspecified, so those
--- cases are deliberately not exercised here. Step 2c covers the case that does
--- matter, `float2string (int2float ...)`.
+-- cases are deliberately not exercised here.
 dprint (floorfi (int2float 3));
 dprint (if ltf 1.0 2.0 then 1 else 0);
 dprint (if geqf 2.0 2.0 then 1 else 0);

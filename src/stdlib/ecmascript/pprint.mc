@@ -15,15 +15,6 @@ include "string.mc"
 let esIndentIncr : Int = 2
 let esNl : Int -> String = lam indent. concat "\n" (make indent ' ')
 
--- Is `str` usable as a bare property key, as in `{ foo: 1 }`? Reserved words
--- are fine in that position, so only the character shape matters.
-let esIsIdentLike : String -> Bool = lam str.
-  match str with [first] ++ rest then
-    if or (isAlpha first) (or (eqc first '_') (eqc first '$')) then
-      forAll (lam c. or (isAlphanum c) (or (eqc c '_') (eqc c '$'))) rest
-    else false
-  else false
-
 let _esHexDigits : String = "0123456789abcdef"
 
 let esUnicodeEscape : Int -> String = lam code.
@@ -110,7 +101,7 @@ lang ESPrettyPrint = ESAst
   | ESEInt t -> if lti t.value 0 then 14 else 18
   | ESEFloat t -> if ltf t.value 0.0 then 14 else 18
   | ESEVar _ | ESEGlobal _ | ESEBool _ | ESEString _ | ESEUndefined _ | ESENull _
-  | ESEArray _ | ESEObject _ -> 18
+  | ESEArray _ | ESEObject _ | ESEObjectWith _ -> 18
   | ESEMember _ | ESEIndex _ | ESECall _ | ESENew _ -> 17
   | ESEUn _ -> 14
   | ESEBin t -> esBinOpPrec t.op
@@ -131,6 +122,19 @@ lang ESPrettyPrint = ESAst
       with (env, strs) in
     (env, strJoin ", " strs)
 
+  -- A key is written bare when it looks like an identifier; reserved words are
+  -- fine in property position, so only the character shape matters.
+  sem printESObjectFields
+    : ESNameEnv -> Int -> [(String, ESExpr)] -> (ESNameEnv, [String])
+  sem printESObjectFields env indent =
+  | fields ->
+    mapAccumL (lam env. lam f.
+        match printESExprP env indent 2 f.1 with (env, v) in
+        let k = if esIsIdentLike f.0 then f.0
+                else join ["\"", esEscapeString f.0, "\""] in
+        (env, join [k, ": ", v]))
+      env fields
+
   sem printESExpr : ESNameEnv -> Int -> ESExpr -> (ESNameEnv, String)
   sem printESExpr env indent =
   | ESEVar t -> esNameGet env t.id
@@ -147,15 +151,13 @@ lang ESPrettyPrint = ESAst
     match printESExprs env indent 2 t.exprs with (env, s) in
     (env, join ["[", s, "]"])
   | ESEObject t ->
-    match mapAccumL (lam env. lam f.
-        match printESExprP env indent 2 f.1 with (env, v) in
-        let k = if esIsIdentLike f.0 then f.0
-                else join ["\"", esEscapeString f.0, "\""] in
-        (env, join [k, ": ", v]))
-      env t.fields
-      with (env, fields) in
+    match printESObjectFields env indent t.fields with (env, fields) in
     if null fields then (env, "{}")
     else (env, join ["{ ", strJoin ", " fields, " }"])
+  | ESEObjectWith t ->
+    match printESExprP env indent 2 t.base with (env, base) in
+    match printESObjectFields env indent t.fields with (env, fields) in
+    (env, join ["{ ...", base, ", ", strJoin ", " fields, " }"])
   | ESEMember t ->
     match printESExprP env indent 17 t.obj with (env, o) in
     (env, join [o, ".", t.prop])
@@ -360,6 +362,11 @@ utest pp esUnit with "undefined" in
 -- Objects: bare keys where possible, quoted otherwise.
 utest pp (ESEObject { fields = [("x", va), ("0", vb)] }) with "{ x: a, \"0\": b }" in
 utest pp (ESEObject { fields = [] }) with "{}" in
+utest pp (ESEObjectWith { base = va, fields = [("x", vb)] })
+with "{ ...a, x: b }" in
+utest pp (ESEObjectWith { base = ESECond { cond = va, thn = vb, els = vc }
+                        , fields = [("x", vb)] })
+with "{ ...a ? b : c, x: b }" in
 
 -- Arrows: a single parameter drops its parentheses.
 utest pp (ESEArrow { params = [a], body = ESFBExpr { expr = add va (ESEInt { value = 1 }) } })

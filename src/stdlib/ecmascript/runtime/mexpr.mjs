@@ -68,4 +68,113 @@ function $roundfi(x) {
 }
 //!end
 
-export { $fromBig, $slli, $srli, $srai, $roundfi };
+// Builds an MExpr string from a JS string literal.
+//
+// MExpr's `[Char]` is an array of one-character strings, like any other
+// sequence, so that `length` and `get` stay O(1) and codepoint-correct.
+// Spreading a JS string iterates by codepoint, so "ab\u{1F600}cd" yields five
+// elements, matching Miking, where JS `.length` would report six.
+//!intrinsic $S
+function $S(s) {
+  return [...s];
+}
+//!end
+
+// The inverse of `$S`, used at the boundary with a host environment. Hosts
+// take and return ordinary JS strings and never see the internal
+// representation.
+//!intrinsic $jsStr
+function $jsStr(s) {
+  return s.join("");
+}
+//!end
+
+//!intrinsic $set
+function $set(s, i, v) {
+  const out = s.slice();
+  out[i] = v;
+  return out;
+}
+//!end
+
+//!intrinsic $create
+function $create(n, f) {
+  const out = new Array(n);
+  for (let i = 0; i < n; i++) out[i] = f(i);
+  return out;
+}
+//!end
+
+// Returns an MExpr pair, which is a record with fields "0" and "1".
+//!intrinsic $splitAt
+function $splitAt(s, i) {
+  return { "0": s.slice(0, i), "1": s.slice(i) };
+}
+//!end
+
+// Clamped, matching the reference backend for an over-long span. Note that a
+// start index past the end is not well defined there -- the OCaml backend
+// returns a sequence of negative length -- so this returns empty instead.
+//!intrinsic $subsequence
+function $subsequence(s, off, len) {
+  const start = Math.max(0, Math.min(off, s.length));
+  return s.slice(start, Math.min(start + Math.max(0, len), s.length));
+}
+//!end
+
+// OCaml's `string_of_float`: "%.12g", with a trailing "." added when the
+// result would otherwise look like an integer.
+//
+// JS `String()` disagrees in three ways -- it prints 1.0 as "1", switches to
+// exponential at different thresholds, and writes a one-digit exponent where C
+// writes two -- so the formatting is done here rather than borrowed.
+//!intrinsic $f2s
+function $f2s(x) {
+  if (Number.isNaN(x)) return "nan";
+  if (x === Infinity) return "inf";
+  if (x === -Infinity) return "-inf";
+  const P = 12;
+  let s;
+  if (x === 0) {
+    s = Object.is(x, -0) ? "-0" : "0";
+  } else {
+    const e = Number(x.toExponential(P - 1).split("e")[1]);
+    if (e < -4 || e >= P) {
+      let [m, ex] = x.toExponential(P - 1).split("e");
+      if (m.indexOf(".") >= 0) m = m.replace(/0+$/, "").replace(/\.$/, "");
+      let d = ex.slice(1);
+      if (d.length < 2) d = "0" + d;
+      s = m + "e" + ex[0] + d;
+    } else {
+      s = x.toFixed(Math.max(0, P - 1 - e));
+      if (s.indexOf(".") >= 0) s = s.replace(/0+$/, "").replace(/\.$/, "");
+    }
+  }
+  return /[.e]/.test(s) ? s : s + ".";
+}
+//!end
+
+//!intrinsic $float2string $f2s $S
+function $float2string(x) {
+  return $S($f2s(x));
+}
+//!end
+
+//!intrinsic $string2float $jsStr
+function $string2float(s) {
+  return parseFloat($jsStr(s));
+}
+//!end
+
+//!intrinsic $stringIsFloat $jsStr
+function $stringIsFloat(s) {
+  const t = $jsStr(s);
+  return t.length > 0 && !Number.isNaN(Number(t));
+}
+//!end
+
+export {
+  $fromBig, $slli, $srli, $srai, $roundfi,
+  $S, $jsStr, $set, $create, $splitAt, $subsequence,
+  $f2s, $float2string, $string2float, $stringIsFloat,
+};
