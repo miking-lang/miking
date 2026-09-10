@@ -1762,7 +1762,21 @@ utest eval (eqi_ (sym2hash_ s2) (sym2hash_ s1)) with false_ using eqExpr in
 utest eval (eqi_ (sym2hash_ s1) (sym2hash_ s2)) with false_ using eqExpr in
 
 -- Unit tests for file operations
-let f = str_ "test_file_ops" in
+--
+-- This makes sure we're not clobbering operations when this same file
+-- is run in parallel with itself (which happens a lot in the test
+-- suite).
+recursive let claimScratchDir = lam base. lam i.
+  if geqi i 10000 then
+    error "eval.mc: could not create a scratch directory for the file operation tests"
+  else
+    let dir = concat base (int2string i) in
+    if eqi 0 (command (join ["mkdir ", dir, " 2>/dev/null"]))
+    then dir
+    else claimScratchDir base (addi i 1)
+in
+let scratchDir = claimScratchDir "test_file_ops." 0 in
+let f = str_ (join [scratchDir, "/contents"]) in
 let d = str_ "$&!@" in
 utest eval (fileExists_ f) with false_ using eqExpr in
 utest eval (writeFile_ f d) with uunit_ using eqExpr in
@@ -1770,6 +1784,7 @@ utest eval (fileExists_ f) with true_ using eqExpr in
 utest eval (readFile_ f) with d using eqExpr in
 utest eval (deleteFile_ f) with uunit_ using eqExpr in
 utest eval (fileExists_ f) with false_ using eqExpr in
+let _scratchDirCleanup = command (join ["rmdir ", scratchDir, " 2>/dev/null"]) in
 
 -- Test error
 -- let _ = eval (error_ (str_ "test error message")) in

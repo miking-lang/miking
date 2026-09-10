@@ -8,6 +8,7 @@ include "mexpr/symbolize.mc"
 include "name.mc"
 include "mexpr/info.mc"
 include "basic-types.mc"
+include "error.mc"
 
 lang StripUtestLoader = LoaderInterface + UtestDeclAst + OpaqueAst
   syn Hook +=

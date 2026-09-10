@@ -21,6 +21,7 @@ include "mlang/lazy-ast.mc"
 include "mexpr/deadcode.mc"
 
 include "mexpr/boot-parser.mc"
+include "mexpr/const-transformer.mc"
 
 include "mexpr/json-debug.mc"
 include "mexpr/keyword-maker.mc"

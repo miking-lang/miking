@@ -162,6 +162,15 @@ testMain substituters directories location (lam api.
       ])
     [(eval, dont)];
 
+  -- TODO(vipa, 2026-09-10): This test writes to a fixed path, which is an
+  -- issue when we run many variants of it in parallel. There are a
+  -- few other similar cases, but I'm leaving this one for now because
+  -- the file being written is specified in the profiling library code
+  -- rather than in the test itself.
+  api.tests []
+    (eqString "src/stdlib/mexpr/profiling.mc")
+    [(eval, dont), (mlangRun, dont)];
+
   -- Files that are expected to compile, but then fail
   api.tests []
     (elem
