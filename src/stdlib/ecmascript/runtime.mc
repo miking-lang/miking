@@ -11,6 +11,9 @@
 -- uses -- appended after `main`, so the program reads first and the runtime
 -- stays out of the way.
 
+include "bool.mc"
+include "basic-types.mc"
+include "option.mc"
 include "ecmascript/ast.mc"
 include "map.mc"
 include "seq.mc"

@@ -5,6 +5,11 @@
 -- environment, so that a caller supplies the effectful operations -- how to
 -- print, how to read a file, how to exit -- afresh on every execution.
 
+include "mexpr/ast-builder.mc"
+include "name.mc"
+include "seq.mc"
+include "mexpr/ast.mc"
+include "basic-types.mc"
 include "common.mc"
 include "ecmascript/cleanup.mc"
 include "ecmascript/compile.mc"

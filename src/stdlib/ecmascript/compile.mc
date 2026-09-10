@@ -13,6 +13,10 @@
 --     expression position are hoisted into the enclosing statement list rather
 --     than wrapped in an immediately-invoked function.
 
+include "error.mc"
+include "string.mc"
+include "bool.mc"
+include "basic-types.mc"
 include "ecmascript/ast.mc"
 include "ecmascript/ident.mc"
 include "map.mc"

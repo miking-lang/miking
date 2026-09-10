@@ -4,6 +4,8 @@
 -- inserted defensively around every operand, so `a + b` prints as `a + b` and
 -- only genuinely ambiguous nesting such as `a - (b - c)` keeps its parentheses.
 
+include "basic-types.mc"
+include "bool.mc"
 include "char.mc"
 include "common.mc"
 include "ecmascript/ast.mc"

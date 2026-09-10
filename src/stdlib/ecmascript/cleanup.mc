@@ -54,6 +54,8 @@
 -- inlined back into the assignments and a later argument would see an
 -- already-updated parameter.
 
+include "bool.mc"
+include "basic-types.mc"
 include "ecmascript/ast.mc"
 include "name.mc"
 include "option.mc"

@@ -7,6 +7,8 @@
 -- this allocator hands out the plain `nameGetStr` wherever it can and only
 -- disambiguates when there is a genuine collision.
 
+include "basic-types.mc"
+include "bool.mc"
 include "char.mc"
 include "map.mc"
 include "name.mc"

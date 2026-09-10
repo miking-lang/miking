@@ -5,6 +5,7 @@
 -- bindings compile to a flat list of `const` statements instead of one nested
 -- IIFE per binding.
 
+include "basic-types.mc"
 include "name.mc"
 include "option.mc"
 include "seq.mc"
