@@ -88,7 +88,7 @@ let eqInfoStruct : Info -> Info -> Bool = lam a. lam b. eqi (infoCmp a b) 0 in
 -- each character of a string literal, or the `Char` in the `[Char]` that
 -- `String` desugars to) and so aren't independently reparseable.
 let checkNode : all a. String -> [String] -> String -> Info -> Info -> a
-              -> (NextTokenResult -> ParseResult () (a, NextTokenResult))
+              -> (NextTokenResult -> ParseRes () (a, NextTokenResult))
               -> (a -> a -> Bool) -> [String] =
   lam src. lam acc. lam kind. lam parentInfo. lam info. lam orig. lam parseFn. lam eqFn.
     match info with NoInfo _ then acc else
