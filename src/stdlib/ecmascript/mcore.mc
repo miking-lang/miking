@@ -433,6 +433,105 @@ utest contains "[2].map(c => 1)" (esCompileToString astMap) with true in
 let astSub = dprint_ (subsequence_ (seq_ [int_ 1]) (int_ 0) (int_ 1)) in
 utest contains "$subsequence([1], 0, 1)" (esCompileToString astSub) with true in
 
+-- ---------------------------------------------------------------------
+-- Constructors, recursion and tail calls
+-- ---------------------------------------------------------------------
+
+-- A datatype becomes a base class carrying the payload, and each constructor
+-- a one-line subclass. `extends` is what records, in the output, that these
+-- belong together: MExpr datatypes are open, so the constructors can be
+-- declared far from the type.
+let shape = nameSym "Shape" in
+let circle = nameSym "Circle" in
+let tyShape = ntycon_ shape in
+let astCon = bindall_
+  [ ntype_ shape [] (tyvariant_ [])
+  , ncondef_ circle (tyarrow_ tyfloat_ tyShape) ]
+  (dprint_ (nconapp_ circle (float_ 1.0))) in
+utest esCompileToString astCon with join
+  [ "export default function main(env) {\n"
+  , "  class Shape { constructor(v) { this.v = v; } }\n"
+  , "  class Circle extends Shape {}\n"
+  , "  env.dprint(new Circle(1.0));\n"
+  , "}\n" ] in
+
+-- A type alias is erased entirely.
+let al = nameSym "Alias" in
+let astAlias = bind_ (ntype_ al [] tyint_) (dprint_ (int_ 1)) in
+utest esCompileToString astAlias with join
+  [ "export default function main(env) {\n"
+  , "  env.dprint(1);\n"
+  , "}\n" ] in
+
+-- Matching a constructor is an `instanceof`, and the payload is the single
+-- field the base class holds.
+let sv = nameSym "s" in
+let pv = nameSym "r" in
+let astMatchCon = bindall_
+  [ ntype_ shape [] (tyvariant_ [])
+  , ncondef_ circle (tyarrow_ tyfloat_ tyShape)
+  , nulet_ sv (nconapp_ circle (float_ 1.0)) ]
+  (dprint_ (match_ (nvar_ sv) (npcon_ circle (npvar_ pv))
+              (mulf_ (nvar_ pv) (float_ 2.0)) (float_ 0.0))) in
+let conOut = esCompileToString astMatchCon in
+let contains = lam needle. lam s. gti (length (strSplit needle s)) 1 in
+-- The payload binding is used once, so it inlines and the branch folds back
+-- into a ternary. Used twice it would stay an `if`, since inlining would
+-- duplicate the field access.
+utest contains "s instanceof Circle ? s.v * 2.0 : 0.0" conOut with true in
+
+-- A self tail call becomes a jump to the top of the body rather than
+-- recursion, so the stack does not grow.
+let f = nameSym "loop" in
+let n = nameSym "n" in
+let astTail = bind_
+  (nreclets_ [(f, tyunknown_, nulam_ n
+     (if_ (lti_ (nvar_ n) (int_ 1)) (int_ 0)
+          (app_ (nvar_ f) (subi_ (nvar_ n) (int_ 1)))))])
+  (dprint_ (app_ (nvar_ f) (int_ 5))) in
+utest esCompileToString astTail with join
+  [ "export default function main(env) {\n"
+  , "  function loop(n) {\n"
+  , "    while (true) {\n"
+  , "      if (n < 1) {\n"
+  , "        return 0;\n"
+  , "      } else {\n"
+  , "        n = n - 1;\n"
+  , "        continue;\n"
+  , "      }\n"
+  , "    }\n"
+  , "  }\n"
+  , "  env.dprint(loop(5));\n"
+  , "}\n" ] in
+
+-- With more than one parameter the rebinding goes through temporaries, so a
+-- later argument cannot see an already-updated parameter. The cleanup pass
+-- must not inline these away.
+let g = nameSym "go" in
+let acc = nameSym "acc" in
+let astTail2 = bind_
+  (nreclets_ [(g, tyunknown_, nulam_ n (nulam_ acc
+     (if_ (lti_ (nvar_ n) (int_ 1)) (nvar_ acc)
+          (appf2_ (nvar_ g) (subi_ (nvar_ n) (int_ 1))
+                            (addi_ (nvar_ acc) (nvar_ n))))))])
+  (dprint_ (appf2_ (nvar_ g) (int_ 5) (int_ 0))) in
+let tail2 = esCompileToString astTail2 in
+utest contains "const _arg = n - 1;" tail2 with true in
+utest contains "const _arg_1 = acc + n;" tail2 with true in
+utest contains "n = _arg;" tail2 with true in
+utest contains "acc = _arg_1;" tail2 with true in
+
+-- Recursion that is not in tail position stays a call.
+let h = nameSym "count" in
+let astNonTail = bind_
+  (nreclets_ [(h, tyunknown_, nulam_ n
+     (if_ (lti_ (nvar_ n) (int_ 1)) (int_ 0)
+          (addi_ (int_ 1) (app_ (nvar_ h) (subi_ (nvar_ n) (int_ 1))))))])
+  (dprint_ (app_ (nvar_ h) (int_ 5))) in
+let nonTail = esCompileToString astNonTail in
+utest contains "return n < 1 ? 0 : 1 + count(n - 1);" nonTail with true in
+utest contains "while (true)" nonTail with false in
+
 -- A user binding named `env` does not capture the runtime environment.
 let userEnv = nameSym "env" in
 let ast5 = bind_ (nulet_ userEnv (int_ 1)) (dprint_ (nvar_ userEnv)) in

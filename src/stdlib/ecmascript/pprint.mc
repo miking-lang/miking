@@ -283,7 +283,11 @@ lang ESPrettyPrint = ESAst
     match t.extends with Some base then
       match esNameGet env base with (env, b) in
       (env, join ["class ", id, " extends ", b, " {}"])
-    else (env, join ["class ", id, " {}"])
+    else
+      -- A base class carries the single payload field every MExpr constructor
+      -- has; derived classes inherit it.
+      (env, join ["class ", id, " { constructor(v) { this.v = v; } }"])
+  | ESSContinue _ -> (env, "continue;")
   | ESSExportDefault t ->
     match printESStmt env indent t.stmt with (env, s) in
     (env, concat "export default " s)
@@ -394,7 +398,12 @@ utest pp (ESECall { callee = esMember (ESEGlobal { name = "Math" }) "trunc", arg
 with "Math.trunc(a)" in
 utest pps (ESSExpr { expr = ESECall { callee = va, args = [] } }) with "a();" in
 utest pps (ESSClass { id = a, extends = Some b }) with "class a extends b {}" in
-utest pps (ESSClass { id = a, extends = None () }) with "class a {}" in
+utest pps (ESSClass { id = a, extends = None () })
+with "class a { constructor(v) { this.v = v; } }" in
+utest pps (ESSContinue {}) with "continue;" in
+utest pps (ESSWhile { cond = ESEBool { value = true }
+                    , body = [ESSContinue {}] })
+with "while (true) {\n  continue;\n}" in
 
 utest pps (ESSIf { cond = va, thn = [ESSReturn { expr = Some vb }], els = [] })
 with "if (a) {\n  return b;\n}" in

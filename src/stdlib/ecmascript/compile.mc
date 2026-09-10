@@ -45,13 +45,24 @@ type ESCompileCtx = {
 
   -- Pure runtime intrinsics the program has used. Their definitions are
   -- appended to the bottom of the generated module.
-  runtime : Set String
+  runtime : Set String,
+
+  -- Types that were emitted as a base class, so a constructor knows whether
+  -- it has a base to extend or must carry the payload itself.
+  variants : Set Name,
+
+  -- The function currently being compiled and its parameters, when a
+  -- saturated self-call in tail position can become a loop rather than
+  -- recursion. Cleared inside nested functions.
+  selfCall : Option (Name, [Name])
 }
 
 let esCompileCtxEmpty : ESCompileCtx = {
   runtimeEnv = nameNoSym "env",
   arities = mapEmpty nameCmp,
-  runtime = setEmpty cmpString
+  runtime = setEmpty cmpString,
+  variants = setEmpty nameCmp,
+  selfCall = None ()
 }
 
 -- Flattens a curried application spine into its head and argument list.
@@ -145,6 +156,35 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint
 
   -- Reads one field. Tuple fields are named "0", "1", ... which cannot be
   -- written with a dot.
+  -- The type a constructor belongs to: strip the quantifiers, take the
+  -- arrow's codomain, and strip any type arguments to reach its name.
+  sem esConCodomain : Type -> Option Name
+  sem esConCodomain =
+  | TyAll t -> esConCodomain t.ty
+  | TyArrow t -> esTyConName t.to
+  | _ -> None ()
+
+  sem esTyConName : Type -> Option Name
+  sem esTyConName =
+  | TyCon t -> Some t.ident
+  | TyApp t -> esTyConName t.lhs
+  | TyAll t -> esTyConName t.ty
+  | _ -> None ()
+
+  -- Whether a `continue` was emitted for the function being compiled. Nested
+  -- functions run their own loops, so their bodies are not searched.
+  sem esHasContinue : [ESStmt] -> Bool
+  sem esHasContinue =
+  | stmts -> any esStmtHasContinue stmts
+
+  sem esStmtHasContinue : ESStmt -> Bool
+  sem esStmtHasContinue =
+  | ESSContinue _ -> true
+  | ESSIf t -> or (esHasContinue t.thn) (esHasContinue t.els)
+  | ESSBlock t -> esHasContinue t.stmts
+  | ESSExportDefault t -> esStmtHasContinue t.stmt
+  | _ -> false
+
   sem esVar : Name -> ESExpr
   sem esVar = | id -> ESEVar { id = id }
 
@@ -209,6 +249,45 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint
     match compileStmtsDecl ctx d with (ctx, bind) in
     match compileStmts ctx cont inexpr with (ctx, rest) in
     (ctx, concat bind rest)
+  | TmDecl { decl = DeclType d, inexpr = inexpr } ->
+    -- A datatype becomes a base class carrying the payload; a type alias is
+    -- erased entirely.
+    match d.tyIdent with TyVariant _ then
+      let ctx = { ctx with variants = setInsert d.ident ctx.variants } in
+      match compileStmts ctx cont inexpr with (ctx, rest) in
+      (ctx, cons (ESSClass { id = d.ident, extends = None () }) rest)
+    else compileStmts ctx cont inexpr
+  | TmDecl { decl = DeclConDef d, inexpr = inexpr } ->
+    -- Extending the type's class is what records, in the output, that these
+    -- constructors belong together -- MExpr datatypes are open, so they can be
+    -- declared far from the type. A constructor whose type has no emitted
+    -- base carries the payload itself.
+    let base = match esConCodomain d.tyIdent with Some ty then
+      (if setMem ty ctx.variants then Some ty else None ()) else None () in
+    match compileStmts ctx cont inexpr with (ctx, rest) in
+    (ctx, cons (ESSClass { id = d.ident, extends = base }) rest)
+  | TmDecl { decl = DeclRecLets d, inexpr = inexpr } ->
+    -- Every arity is recorded before any body is compiled, so calls within the
+    -- group are n-ary in both directions. JS hoists function declarations, so
+    -- mutual recursion needs no ordering care.
+    let ctx = foldl (lam ctx. lam b.
+        match b.body with TmLam _ then
+          match esCollectLams b.body with (params, _) in
+          { ctx with arities = mapInsert b.ident (length params) ctx.arities }
+        else ctx)
+      ctx d.bindings in
+    let step = lam acc. lam b.
+      match acc with (ctx, stmts) in
+      match b.body with TmLam _ then
+        match esCollectLams b.body with (params, body) in
+        match esCompileFun ctx b.ident params body with (ctx, decl) in
+        (ctx, snoc stmts decl)
+      else errorSingle [b.info]
+        "ecmascript: a recursive binding must be a function"
+    in
+    match foldl step (ctx, []) d.bindings with (ctx, decls) in
+    match compileStmts ctx cont inexpr with (ctx, rest) in
+    (ctx, concat decls rest)
   | TmDecl { decl = decl } & t ->
     errorSingle [infoTm t] (concat
       "ecmascript: unsupported declaration: " (esDeclName decl))
@@ -240,9 +319,44 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint
           [ESSIf { cond = test, thn = concat binds thn, els = els }]])
   | TmNever t ->
     (ctx, [esThrow t.info "ecmascript: reached a `never` expression"])
+  | TmApp _ & t ->
+    -- A saturated self-call in tail position: rebind the parameters and jump
+    -- back to the top rather than recursing.
+    match (cont, ctx.selfCall) with (ESCReturn _, Some (fname, params)) then
+      match esCollectApp t with (fn, args) in
+      match fn with TmVar v then
+        if and (nameEq v.ident fname) (eqi (length args) (length params)) then
+          esTailCall ctx params args
+        else esCompileToCont ctx cont t
+      else esCompileToCont ctx cont t
+    else esCompileToCont ctx cont t
+  | t -> esCompileToCont ctx cont t
+
+  sem esCompileToCont : ESCompileCtx -> ESCont -> Expr -> (ESCompileCtx, [ESStmt])
+  sem esCompileToCont ctx cont =
   | t ->
     match compileExpr ctx t with (ctx, stmts, expr) in
     (ctx, concat stmts (esDeliver cont expr))
+
+  -- Parameters are rebound simultaneously, so with more than one they go
+  -- through temporaries first: assigning in sequence would let a later
+  -- argument see an already-updated parameter.
+  sem esTailCall
+    : ESCompileCtx -> [Name] -> [Expr] -> (ESCompileCtx, [ESStmt])
+  sem esTailCall ctx params =
+  | args ->
+    match compileExprs ctx args with (ctx, stmts, xs) in
+    match params with [p] then
+      (ctx, join [stmts
+        , [ESSAssign { target = ESEVar { id = p }, value = head xs }]
+        , [ESSContinue {}]])
+    else
+      let temps = map (lam. nameSym "_arg") params in
+      let binds = zipWith (lam n. lam x. ESSConst { id = n, init = x }) temps xs in
+      let assigns = zipWith (lam p. lam n.
+          ESSAssign { target = ESEVar { id = p }, value = ESEVar { id = n } })
+        params temps in
+      (ctx, join [stmts, binds, assigns, [ESSContinue {}]])
 
   ----------------------
   -- EXPRESSION MODE --
@@ -335,6 +449,9 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint
     else
       match compileExprs ctx t.tms with (ctx, stmts, xs) in
       (ctx, stmts, ESEArray { exprs = xs })
+  | TmConApp t ->
+    match compileExpr ctx t.body with (ctx, stmts, body) in
+    (ctx, stmts, ESENew { callee = ESEVar { id = t.ident }, args = [body] })
   | TmRecord t ->
     -- The empty record is MExpr's unit value.
     if mapIsEmpty t.bindings then (ctx, [], esUnit)
@@ -353,6 +470,23 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint
     errorSingle [infoTm t] (concat
       "ecmascript: unsupported expression: " (esExprName t))
 
+  -- Compiles a named function. A saturated self-call in tail position becomes
+  -- a jump back to the top of the body, so self-recursion runs in constant
+  -- stack; if any such jump was emitted the body is wrapped in a loop.
+  sem esCompileFun
+    : ESCompileCtx -> Name -> [Name] -> Expr -> (ESCompileCtx, ESStmt)
+  sem esCompileFun ctx id params =
+  | body ->
+    let outer = ctx.selfCall in
+    let ctx = { ctx with selfCall = Some (id, params) } in
+    match compileStmts ctx (ESCReturn ()) body with (ctx, stmts) in
+    let ctx = { ctx with selfCall = outer } in
+    let stmts =
+      if esHasContinue stmts
+      then [ESSWhile { cond = ESEBool { value = true }, body = stmts }]
+      else stmts in
+    (ctx, ESSFunDecl { id = id, params = params, body = stmts })
+
   -- Compiles a single `DeclLet` to the statements that bind it.
   sem compileStmtsDecl : ESCompileCtx -> DeclLetRecord -> (ESCompileCtx, [ESStmt])
   sem compileStmtsDecl ctx =
@@ -367,10 +501,10 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint
       -- that saturated calls avoid currying. `DeclLet` is not recursive, so
       -- the arity is deliberately recorded only after compiling the body.
       match esCollectLams d.body with (params, body) in
-      match compileStmts ctx (ESCReturn ()) body with (ctx, bodyStmts) in
+      match esCompileFun ctx d.ident params body with (ctx, decl) in
       let ctx = { ctx with
         arities = mapInsert d.ident (length params) ctx.arities } in
-      (ctx, [ESSFunDecl { id = d.ident, params = params, body = bodyStmts }])
+      (ctx, [decl])
     else match d.body with TmVar v then
       -- An alias inherits the arity it points at, so calls through it stay
       -- n-ary instead of going through an eta-expanded curried wrapper.
@@ -450,6 +584,15 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint
         (ctx, concat pre p, esAnd test t, concat binds b)
       in
       foldl step (ctx, pre, esTrue (), []) fields
+  | PatCon t ->
+    -- Each constructor is its own class, so matching is an `instanceof`, and
+    -- the payload is the single field the base class holds. The target is read
+    -- twice, so a computed one is bound first.
+    match esPatTarget ctx target with (obj, pre) in
+    match esPatCompile ctx (esMember obj "v") t.subpat with (ctx, pre2, sub, binds) in
+    ( ctx, concat pre pre2
+    , esAnd (ESEInstanceOf { lhs = obj, rhs = ESEVar { id = t.ident } }) sub
+    , binds )
   | PatSeqTot t ->
     match esPatTarget ctx target with (obj, pre) in
     let n = length t.pats in

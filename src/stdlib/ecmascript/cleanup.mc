@@ -46,6 +46,13 @@
 -- expression means the same thing wherever it is evaluated. An occurrence
 -- inside a nested function or loop body disqualifies inlining even so: moving
 -- a computation there would change how many times it runs.
+--
+-- One exception breaks that reasoning: tail-call elimination *assigns* to
+-- function parameters. Reading such a parameter is no longer time-invariant,
+-- so an initialiser that mentions a reassigned name is never moved. Without
+-- that guard, the temporaries which make the rebinding simultaneous would be
+-- inlined back into the assignments and a later argument would see an
+-- already-updated parameter.
 
 include "ecmascript/ast.mc"
 include "name.mc"
@@ -134,7 +141,7 @@ lang ESCleanup = ESAst
   | ESSWhile t ->
     addi (esCountExpr id t.cond) (esSum (map (esCountStmt id) t.body))
   | ESSFunDecl t -> esSum (map (esCountStmt id) t.body)
-  | ESSClass _ -> 0
+  | ESSClass _ | ESSContinue _ -> 0
   | ESSExportDefault t -> esCountStmt id t.stmt
 
   -- Occurrences that sit inside a nested function or loop body, where the
@@ -166,7 +173,7 @@ lang ESCleanup = ESAst
   | ESSExpr t -> esCountDeferredExpr id t.expr
   | ESSReturn t -> optionMapOr 0 (esCountDeferredExpr id) t.expr
   | ESSThrow t -> esCountDeferredExpr id t.expr
-  | ESSClass _ -> 0
+  | ESSClass _ | ESSContinue _ -> 0
 
   -- Immediate expression children, for traversals that do not care about the
   -- shape of the node they are visiting.
@@ -289,6 +296,39 @@ lang ESCleanup = ESAst
   | ESEIndex _ & e -> esIsPath e
   | _ -> false
 
+  -- Names assigned to somewhere in these statements. Reading one of them is
+  -- position-dependent, so an expression that does is not safe to move.
+  sem esAssignedStmt : ESStmt -> [Name]
+  sem esAssignedStmt =
+  | ESSAssign { target = ESEVar t } -> [t.id]
+  | ESSIf t ->
+    concat (join (map esAssignedStmt t.thn)) (join (map esAssignedStmt t.els))
+  | ESSBlock t -> join (map esAssignedStmt t.stmts)
+  | ESSWhile t -> join (map esAssignedStmt t.body)
+  | ESSFunDecl t -> join (map esAssignedStmt t.body)
+  | ESSExportDefault t -> esAssignedStmt t.stmt
+  | _ -> []
+
+  -- `let x; if (c) { x = a; } else { x = b; }` is a ternary written long-hand.
+  --
+  -- The compiler cannot always spot this itself: a pattern that binds
+  -- something puts those bindings in the `then` arm, so the arms are not yet
+  -- single assignments when the branch is built. Once inlining has removed
+  -- the bindings they are, and this recovers the ternary. Dropping the untaken
+  -- arm is safe because a ternary never evaluates it.
+  sem esFoldBranch : [ESStmt] -> Option [ESStmt]
+  sem esFoldBranch =
+  | [ESSLet { id = id, init = None _ }, ESSIf t] ++ rest ->
+    match (t.thn, t.els) with ([ESSAssign a], [ESSAssign b]) then
+      match (a.target, b.target) with (ESEVar av, ESEVar bv) then
+        if and (nameEq av.id id) (nameEq bv.id id) then
+          Some (cons (ESSConst { id = id, init = ESECond
+                { cond = t.cond, thn = a.value, els = b.value } }) rest)
+        else None ()
+      else None ()
+    else None ()
+  | _ -> None ()
+
   sem esInline : [ESStmt] -> [ESStmt]
   sem esInline =
   | [] -> []
@@ -297,12 +337,25 @@ lang ESCleanup = ESAst
     else
       let uses = esSum (map (esCountStmt id) rest) in
       let deferred = esSum (map (esCountDeferredStmt id) rest) in
-      if eqi uses 0 then esInline rest
-      else if and (or (esIsTemporary id) (esIsTrivial e))
-                 (and (eqi uses 1) (eqi deferred 0)) then
+      -- A use in the condition of the very next `if` is evaluated before
+      -- anything in its arms, so assignments inside them cannot affect it.
+      -- Without this, every scrutinee temporary inside a tail-call loop would
+      -- survive, since the loop assigns to the parameters it reads.
+      let inNextCond =
+        match rest with [ESSIf t] ++ _ then eqi (esCountExpr id t.cond) 1
+        else false in
+      let movable = or inNextCond
+        (not (any (lam n. gti (esCountExpr n e) 0)
+                (join (map esAssignedStmt rest)))) in
+      if and (eqi uses 0) movable then esInline rest
+      else if and movable
+                 (and (or (esIsTemporary id) (esIsTrivial e))
+                      (and (eqi uses 1) (eqi deferred 0))) then
         esInline (map (esSubstStmt id e) rest)
       else cons s (esInline rest)
-  | [s] ++ rest -> cons s (esInline rest)
+  | [s] ++ rest ->
+    match esFoldBranch (cons s rest) with Some folded then esInline folded
+    else cons s (esInline rest)
 
   sem esCleanupProg : ESProg -> ESProg
   sem esCleanupProg =
@@ -429,6 +482,51 @@ utest esCleanupStmts
 with [ ESSReturn { expr = Some (ESEMember
        { obj = ESEMember { obj = ESEVar { id = outer }, prop = "inner" }
        , prop = "a" }) } ] in
+
+-- A `let` plus a two-armed assignment is a ternary written long-hand.
+let vx = nameSym "_v" in
+let cnd = nameSym "c" in
+utest esCleanupStmts
+  [ ESSLet { id = vx, init = None () }
+  , ESSIf { cond = ESEVar { id = cnd }
+          , thn = [ESSAssign { target = ESEVar { id = vx }, value = ESEInt { value = 1 } }]
+          , els = [ESSAssign { target = ESEVar { id = vx }, value = ESEInt { value = 0 } }] }
+  , ESSReturn { expr = Some (ESEVar { id = vx }) } ]
+with [ ESSReturn { expr = Some (ESECond { cond = ESEVar { id = cnd }
+       , thn = ESEInt { value = 1 }, els = ESEInt { value = 0 } }) } ] in
+
+-- A scrutinee used in the next `if` condition is inlined even when the arms
+-- assign to what it reads: the condition is evaluated first.
+let p = nameSym "_p" in
+let cnd2 = nameSym "_c" in
+utest esCleanupStmts
+  [ ESSConst { id = cnd2, init = ESEBin { op = ESOLt {}
+      , lhs = ESEVar { id = p }, rhs = ESEInt { value = 1 } } }
+  , ESSIf { cond = ESEVar { id = cnd2 }
+          , thn = [ESSReturn { expr = Some (ESEInt { value = 0 }) }]
+          , els = [ESSAssign { target = ESEVar { id = p }
+                             , value = ESEInt { value = 2 } }] } ]
+with [ ESSIf { cond = ESEBin { op = ESOLt {}
+             , lhs = ESEVar { id = p }, rhs = ESEInt { value = 1 } }
+             , thn = [ESSReturn { expr = Some (ESEInt { value = 0 }) }]
+             , els = [ESSAssign { target = ESEVar { id = p }
+                                , value = ESEInt { value = 2 } }] } ] in
+
+-- An initialiser reading a name that is assigned later is otherwise never
+-- moved. Tail call elimination relies on this: the temporaries exist precisely
+-- so that parameters are rebound simultaneously.
+let n = nameSym "_n" in
+let acc = nameSym "acc" in
+let t1 = nameSym "_arg" in
+utest esCleanupStmts
+  [ ESSConst { id = t1, init = ESEBin { op = ESOSub {}
+      , lhs = ESEVar { id = n }, rhs = ESEInt { value = 1 } } }
+  , ESSAssign { target = ESEVar { id = n }, value = ESEVar { id = t1 } }
+  , ESSContinue {} ]
+with [ ESSConst { id = t1, init = ESEBin { op = ESOSub {}
+       , lhs = ESEVar { id = n }, rhs = ESEInt { value = 1 } } }
+     , ESSAssign { target = ESEVar { id = n }, value = ESEVar { id = t1 } }
+     , ESSContinue {} ] in
 
 -- Chained: inlining one binding exposes the next.
 let c = nameSym "_c" in
