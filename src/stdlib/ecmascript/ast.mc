@@ -123,6 +123,27 @@ lang ESAst
   -- TRAVERSAL (smap) --
   ----------------------
 
+  -- Immediate expression children, for traversals that do not care about the
+  -- shape of the node they are visiting.
+  --
+  -- Note that an arrow reports no children: its body may hold statements, so
+  -- crossing that boundary is left to the caller.
+  sem esExprChildren : ESExpr -> [ESExpr]
+  sem esExprChildren =
+  | ESEVar _ | ESEGlobal _ | ESEInt _ | ESEFloat _ | ESEBool _ | ESEString _
+  | ESEUndefined _ | ESENull _ | ESEArrow _ -> []
+  | ESEArray t -> t.exprs
+  | ESEObject t -> map (lam f. f.1) t.fields
+  | ESEObjectWith t -> cons t.base (map (lam f. f.1) t.fields)
+  | ESEMember t -> [t.obj]
+  | ESEIndex t -> [t.obj, t.index]
+  | ESECall t -> cons t.callee t.args
+  | ESENew t -> cons t.callee t.args
+  | ESEBin t -> [t.lhs, t.rhs]
+  | ESEUn t -> [t.arg]
+  | ESECond t -> [t.cond, t.thn, t.els]
+  | ESEInstanceOf t -> [t.lhs, t.rhs]
+
   -- Maps `f` over the immediate *expression* children of an expression.
   --
   -- NOTE: this does not descend through the statement boundary. An `ESEArrow`

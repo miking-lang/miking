@@ -173,8 +173,224 @@ function $stringIsFloat(s) {
 }
 //!end
 
+// Symbols are plain integers from a counter. `eqsym` is then `===` and
+// `sym2hash` is the identity, which is all MExpr asks of them -- the type
+// system keeps them from being confused with ordinary integers.
+//!intrinsic $gensym
+let $symCounter = 0;
+function $gensym() {
+  $symCounter += 1;
+  return $symCounter;
+}
+//!end
+
+// Row-major linear index, matching boot's cartesian_to_linear_idx. A partial
+// index (fewer entries than the rank) addresses the start of a sub-block,
+// which is what slicing relies on.
+//!intrinsic $tIdx
+function $tIdx(shape, idx) {
+  let ofs = 0;
+  let mul = 1;
+  for (let k = shape.length - 1; k >= idx.length; k--) mul *= shape[k];
+  for (let k = idx.length - 1; k >= 0; k--) {
+    ofs += mul * idx[k];
+    mul *= shape[k];
+  }
+  return ofs;
+}
+//!end
+
+//!intrinsic $tSize
+function $tSize(shape) {
+  let n = 1;
+  for (let i = 0; i < shape.length; i++) n *= shape[i];
+  return n;
+}
+//!end
+
+// A dense tensor is one flat *mutable* `data` array plus a shape and an offset
+// into it. There are no strides, which is why slicing can be a view but
+// transposing cannot. A rank-0 tensor has size 1 and is how `ref.mc` gets
+// mutability.
+//!intrinsic $tCreate $tSize
+function $tCreate(shape, f) {
+  const size = $tSize(shape);
+  const rank = shape.length;
+  const data = new Array(size);
+  for (let i = 0; i < size; i++) {
+    const idx = new Array(rank);
+    let rem = i;
+    for (let d = rank - 1; d >= 0; d--) {
+      idx[d] = rem % shape[d];
+      rem = (rem - idx[d]) / shape[d];
+    }
+    data[i] = f(idx);
+  }
+  return { data: data, shape: shape, rank: rank, offset: 0, size: size };
+}
+//!end
+
+//!intrinsic $tUninit $tSize
+function $tUninit(shape) {
+  const size = $tSize(shape);
+  return { data: new Array(size).fill(0), shape: shape,
+           rank: shape.length, offset: 0, size: size };
+}
+//!end
+
+//!intrinsic $tGet $tIdx
+function $tGet(t, idx) {
+  return t.data[$tIdx(t.shape, idx) + t.offset];
+}
+//!end
+
+//!intrinsic $tSet $tIdx
+function $tSet(t, idx, v) {
+  t.data[$tIdx(t.shape, idx) + t.offset] = v;
+}
+//!end
+
+//!intrinsic $tLinGet
+function $tLinGet(t, i) {
+  return t.data[i + t.offset];
+}
+//!end
+
+//!intrinsic $tLinSet
+function $tLinSet(t, i, v) {
+  t.data[i + t.offset] = v;
+}
+//!end
+
+//!intrinsic $tReshape
+function $tReshape(t, shape) {
+  return { data: t.data, shape: shape, rank: shape.length,
+           offset: t.offset, size: t.size };
+}
+//!end
+
+// Shares `data` with its parent, so writing through a slice is visible from
+// the tensor it came from. Do not reach for `Array.slice` here: copying would
+// silently break that aliasing.
+//!intrinsic $tSlice $tIdx $tSize
+function $tSlice(t, slice) {
+  if (slice.length === 0) return t;
+  const offset = $tIdx(t.shape, slice) + t.offset;
+  const rank = t.rank - slice.length;
+  const shape = rank > 0 ? t.shape.slice(slice.length) : [];
+  return { data: t.data, shape: shape, rank: rank,
+           offset: offset, size: $tSize(shape) };
+}
+//!end
+
+// Narrows the first dimension, also sharing `data`.
+//!intrinsic $tSub $tIdx $tSize
+function $tSub(t, ofs, len) {
+  const offset = $tIdx(t.shape, [ofs]) + t.offset;
+  const shape = t.shape.slice();
+  shape[0] = len;
+  return { data: t.data, shape: shape, rank: t.rank,
+           offset: offset, size: $tSize(shape) };
+}
+//!end
+
+// The one operation that breaks the sharing.
+//!intrinsic $tCopy
+function $tCopy(t) {
+  return { data: t.data.slice(t.offset, t.offset + t.size), shape: t.shape,
+           rank: t.rank, offset: 0, size: t.size };
+}
+//!end
+
+//!intrinsic $tIterSlice $tSlice
+function $tIterSlice(f, t) {
+  if (t.rank === 0) { f(0)(t); return undefined; }
+  for (let i = 0; i < t.shape[0]; i++) f(i)($tSlice(t, [i]));
+  return undefined;
+}
+//!end
+
+//!intrinsic $tEq
+function $tEq(eq, t1, t2) {
+  if (t1.rank !== t2.rank) return false;
+  for (let i = 0; i < t1.rank; i++) if (t1.shape[i] !== t2.shape[i]) return false;
+  for (let i = 0; i < t1.size; i++) {
+    if (!eq(t1.data[i + t1.offset])(t2.data[i + t2.offset])) return false;
+  }
+  return true;
+}
+//!end
+
+// Without strides a transposed view is not representable, so this copies --
+// as the reference implementation does.
+//!intrinsic $tTranspose $tCreate $tGet
+function $tTranspose(t, d0, d1) {
+  const shape = t.shape.slice();
+  const tmp = shape[d0];
+  shape[d0] = shape[d1];
+  shape[d1] = tmp;
+  return $tCreate(shape, (idx) => {
+    const j = idx.slice();
+    const s = j[d0];
+    j[d0] = j[d1];
+    j[d1] = s;
+    return $tGet(t, j);
+  });
+}
+//!end
+
+//!intrinsic $tToString $jsStr $S $tGet $tSlice
+function $tToString(el, t) {
+  const recur = (indent, t) => {
+    if (t.rank === 0) return $jsStr(el($tGet(t, [])));
+    const n = t.shape[0];
+    const parts = [];
+    if (t.rank === 1) {
+      for (let i = 0; i < n; i++) parts.push(recur("", $tSlice(t, [i])));
+      return "[" + parts.join(", ") + "]";
+    }
+    const ni = indent + "\t";
+    for (let i = 0; i < n; i++) parts.push(recur(ni, $tSlice(t, [i])));
+    return "[\n" + ni + parts.join(",\n" + ni) + "\n" + indent + "]";
+  };
+  return $S(recur("", t));
+}
+//!end
+
+
+//!intrinsic $ref
+function $ref(x) { return { v: x }; }
+//!end
+
+//!intrinsic $modref
+function $modref(r, v) { r.v = v; }
+//!end
+
+// `constructorTag` needs a stable integer per constructor. Each constructor is
+// its own class, so the class object identifies it; ids are handed out on
+// first sight, as boot does with symbol hashes. Non-constructor values are 0,
+// matching the reference implementation.
+//!intrinsic $conTag
+const $tagMap = new Map();
+let $tagCounter = 0;
+function $conTag(x) {
+  if (x === null || typeof x !== "object") return 0;
+  let t = $tagMap.get(x.constructor);
+  if (t === undefined) {
+    $tagCounter += 1;
+    t = $tagCounter;
+    $tagMap.set(x.constructor, t);
+  }
+  return t;
+}
+//!end
+
 export {
   $fromBig, $slli, $srli, $srai, $roundfi,
   $S, $jsStr, $set, $create, $splitAt, $subsequence,
   $f2s, $float2string, $string2float, $stringIsFloat,
+  $gensym, $tIdx, $tSize, $tCreate, $tUninit, $tGet, $tSet,
+  $tLinGet, $tLinSet, $tReshape, $tSlice, $tSub, $tCopy,
+  $tIterSlice, $tEq, $tTranspose, $tToString,
+  $ref, $modref, $conTag,
 };

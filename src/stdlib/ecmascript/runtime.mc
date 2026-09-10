@@ -11,11 +11,52 @@
 -- uses -- appended after `main`, so the program reads first and the runtime
 -- stays out of the way.
 
+include "ecmascript/ast.mc"
 include "map.mc"
 include "seq.mc"
 include "set.mc"
 include "stdlib.mc"
 include "string.mc"
+
+lang ESRuntime = ESAst
+
+  -- The runtime helpers a program actually refers to.
+  -- Runtime helpers are the globals whose name begins
+  -- with `$`; host globals such as `Math` do not.
+  sem esRuntimeUsed : ESProg -> [String]
+  sem esRuntimeUsed =
+  | ESProg t ->
+    setToSeq (setOfSeq cmpString (join (map esGlobalsStmt t.stmts)))
+
+  sem esGlobalsExpr : ESExpr -> [String]
+  sem esGlobalsExpr =
+  | ESEGlobal t -> match t.name with "$" ++ _ then [t.name] else []
+  | ESEArrow t ->
+    switch t.body
+    case ESFBExpr b then esGlobalsExpr b.expr
+    case ESFBBlock b then join (map esGlobalsStmt b.stmts)
+    end
+  | e -> join (map esGlobalsExpr (esExprChildren e))
+
+  sem esGlobalsStmt : ESStmt -> [String]
+  sem esGlobalsStmt =
+  | ESSConst t -> esGlobalsExpr t.init
+  | ESSLet t -> optionMapOr [] esGlobalsExpr t.init
+  | ESSAssign t -> concat (esGlobalsExpr t.target) (esGlobalsExpr t.value)
+  | ESSExpr t -> esGlobalsExpr t.expr
+  | ESSReturn t -> optionMapOr [] esGlobalsExpr t.expr
+  | ESSThrow t -> esGlobalsExpr t.expr
+  | ESSIf t ->
+    join [ esGlobalsExpr t.cond
+         , join (map esGlobalsStmt t.thn), join (map esGlobalsStmt t.els) ]
+  | ESSBlock t -> join (map esGlobalsStmt t.stmts)
+  | ESSWhile t ->
+    concat (esGlobalsExpr t.cond) (join (map esGlobalsStmt t.body))
+  | ESSFunDecl t -> join (map esGlobalsStmt t.body)
+  | ESSExportDefault t -> esGlobalsStmt t.stmt
+  | ESSClass _ | ESSContinue _ -> []
+
+end
 
 let esRuntimeFile : String = concat stdlibLoc "/ecmascript/runtime/mexpr.mjs"
 
@@ -73,6 +114,8 @@ let esRuntimeEmit : [String] -> String = lam used.
 
 mexpr
 
+use ESRuntime in
+
 let sections = esRuntimeSections () in
 
 utest mapMem "$slli" sections with true in
@@ -87,6 +130,24 @@ utest mapMem "export" sections with false in
 -- Dependencies are recorded from the marker line.
 utest (mapFindExn "$slli" sections).deps with ["$fromBig"] in
 utest (mapFindExn "$roundfi" sections).deps with [] in
+
+let a = nameSym "a" in
+
+-- Reports exactly the runtime helpers the program refers to. Reading this off
+-- the finished program is what keeps a helper used only inside a binding that
+-- was later deleted from being emitted; `mcore.mc` tests that interaction.
+let prog = ESProg { imports = [], stmts =
+  [ ESSConst { id = a, init = ESECall
+      { callee = ESEGlobal { name = "$unused" }, args = [] } }
+  , ESSExpr { expr = ESECall
+      { callee = ESEGlobal { name = "$kept" }, args = [ESEInt { value = 1 }] } } ] } in
+utest esRuntimeUsed prog with ["$kept", "$unused"] in
+
+-- Host globals are not runtime helpers.
+utest esRuntimeUsed (ESProg { imports = [], stmts =
+  [ ESSExpr { expr = ESECall
+      { callee = esMember (ESEGlobal { name = "Math" }) "floor"
+      , args = [ESEInt { value = 1 }] } } ] }) with [] in
 
 -- Nothing requested means nothing emitted.
 utest esRuntimeEmit [] with "" in

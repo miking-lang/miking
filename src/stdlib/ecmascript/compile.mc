@@ -18,6 +18,7 @@ include "ecmascript/ident.mc"
 include "map.mc"
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
+include "mexpr/const-arity.mc"
 include "mexpr/info.mc"
 -- Only for `getConstStringCode`, which names constants in error messages.
 include "mexpr/pprint.mc"
@@ -43,10 +44,6 @@ type ESCompileCtx = {
   -- these becomes a direct n-ary call; see `esApplyKnown`.
   arities : Map Name Int,
 
-  -- Pure runtime intrinsics the program has used. Their definitions are
-  -- appended to the bottom of the generated module.
-  runtime : Set String,
-
   -- Types that were emitted as a base class, so a constructor knows whether
   -- it has a base to extend or must carry the payload itself.
   variants : Set Name,
@@ -60,7 +57,6 @@ type ESCompileCtx = {
 let esCompileCtxEmpty : ESCompileCtx = {
   runtimeEnv = nameNoSym "env",
   arities = mapEmpty nameCmp,
-  runtime = setEmpty cmpString,
   variants = setEmpty nameCmp,
   selfCall = None ()
 }
@@ -94,7 +90,7 @@ let esCmpFieldName : String -> String -> Int = lam a. lam b.
   then subi (string2int a) (string2int b)
   else cmpString a b
 
-lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint
+lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint + MExprArity
 
   -----------------
   -- SMALL UTILS --
@@ -196,16 +192,6 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint
   sem esArrow2 p q = | body ->
     ESEArrow { params = [p, q], body = ESFBExpr { expr = body } }
 
-  -- Calls an effect on the runtime environment with the sequence converted to
-  -- a JS string.
-  sem esEnvStr : ESCompileCtx -> String -> [ESExpr] -> (ESCompileCtx, ESExpr)
-  sem esEnvStr ctx field =
-  | args ->
-    ({ ctx with runtime = setInsert "$jsStr" ctx.runtime }
-    , ESECall { callee = esMember (ESEVar { id = ctx.runtimeEnv }) field
-              , args = [ESECall { callee = ESEGlobal { name = "$jsStr" }
-                                , args = args }] })
-
   sem esIsCharConst : Expr -> Bool
   sem esIsCharConst =
   | TmConst { val = CChar _ } -> true
@@ -244,53 +230,11 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint
 
   sem compileStmts : ESCompileCtx -> ESCont -> Expr -> (ESCompileCtx, [ESStmt])
   sem compileStmts ctx cont =
-  | TmDecl { decl = DeclLet d, inexpr = inexpr } ->
-    -- The whole point: a binding becomes a sibling statement, not a scope.
-    match compileStmtsDecl ctx d with (ctx, bind) in
-    match compileStmts ctx cont inexpr with (ctx, rest) in
-    (ctx, concat bind rest)
-  | TmDecl { decl = DeclType d, inexpr = inexpr } ->
-    -- A datatype becomes a base class carrying the payload; a type alias is
-    -- erased entirely.
-    match d.tyIdent with TyVariant _ then
-      let ctx = { ctx with variants = setInsert d.ident ctx.variants } in
-      match compileStmts ctx cont inexpr with (ctx, rest) in
-      (ctx, cons (ESSClass { id = d.ident, extends = None () }) rest)
-    else compileStmts ctx cont inexpr
-  | TmDecl { decl = DeclConDef d, inexpr = inexpr } ->
-    -- Extending the type's class is what records, in the output, that these
-    -- constructors belong together -- MExpr datatypes are open, so they can be
-    -- declared far from the type. A constructor whose type has no emitted
-    -- base carries the payload itself.
-    let base = match esConCodomain d.tyIdent with Some ty then
-      (if setMem ty ctx.variants then Some ty else None ()) else None () in
-    match compileStmts ctx cont inexpr with (ctx, rest) in
-    (ctx, cons (ESSClass { id = d.ident, extends = base }) rest)
-  | TmDecl { decl = DeclRecLets d, inexpr = inexpr } ->
-    -- Every arity is recorded before any body is compiled, so calls within the
-    -- group are n-ary in both directions. JS hoists function declarations, so
-    -- mutual recursion needs no ordering care.
-    let ctx = foldl (lam ctx. lam b.
-        match b.body with TmLam _ then
-          match esCollectLams b.body with (params, _) in
-          { ctx with arities = mapInsert b.ident (length params) ctx.arities }
-        else ctx)
-      ctx d.bindings in
-    let step = lam acc. lam b.
-      match acc with (ctx, stmts) in
-      match b.body with TmLam _ then
-        match esCollectLams b.body with (params, body) in
-        match esCompileFun ctx b.ident params body with (ctx, decl) in
-        (ctx, snoc stmts decl)
-      else errorSingle [b.info]
-        "ecmascript: a recursive binding must be a function"
-    in
-    match foldl step (ctx, []) d.bindings with (ctx, decls) in
-    match compileStmts ctx cont inexpr with (ctx, rest) in
+  | TmDecl t ->
+    -- The whole point: a declaration becomes a sibling statement, not a scope.
+    match esCompileDecl ctx t.decl with (ctx, decls) in
+    match compileStmts ctx cont t.inexpr with (ctx, rest) in
     (ctx, concat decls rest)
-  | TmDecl { decl = decl } & t ->
-    errorSingle [infoTm t] (concat
-      "ecmascript: unsupported declaration: " (esDeclName decl))
   | TmMatch t ->
     match compileExpr ctx t.target with (ctx, s0, target) in
     match esPatCompile ctx target t.pat with (ctx, pre, test, binds) in
@@ -375,32 +319,38 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint
     else (ctx, [], ESEVar { id = t.ident })
   | TmConst t & e ->
     match esConstLit t.val with Some lit then (ctx, [], lit)
-    else match esConstArity t.val with Some n then
-      let ps = create n (lam. nameSym "a") in
+    else
+      let ps = create (constArity t.val) (lam. nameSym "a") in
       match esConstApplyWith ctx (map (lam p. ESEVar { id = p }) ps) t.val
-        with (ctx, body) in
-      (ctx, [], esCurryArrows ps body)
-    else errorSingle [infoTm e] (concat
-      "ecmascript: unsupported constant: " (getConstStringCode 0 t.val))
+        with Some (ctx, body) then
+        (ctx, [], esCurryArrows ps body)
+      else errorSingle [infoTm e] (concat
+        "ecmascript: unsupported constant: " (getConstStringCode 0 t.val))
   | TmLam _ & t ->
     -- An anonymous lambda's arity is not tracked anywhere, so whoever receives
     -- it will apply one argument at a time: emit curried arrows.
+    --
+    -- Entering a new function also ends the enclosing function's tail
+    -- position. Without clearing it, a self-call inside this lambda would emit
+    -- a `continue` belonging to a loop it is not inside.
     match esCollectLams t with (params, body) in
+    let outer = ctx.selfCall in
+    let ctx = { ctx with selfCall = None () } in
     match compileStmts ctx (ESCReturn ()) body with (ctx, stmts) in
+    let ctx = { ctx with selfCall = outer } in
     -- A lone `return e;` reads better as a concise arrow body.
     let innerBody = match stmts with [ESSReturn { expr = Some e }]
       then ESFBExpr { expr = e } else ESFBBlock { stmts = stmts } in
     match splitAt params (subi (length params) 1) with (outer, [innermost]) in
     (ctx, [], esCurryArrows outer
       (ESEArrow { params = [innermost], body = innerBody }))
-  | TmDecl { decl = DeclLet _ } & t ->
-    -- Hoist the binding out in front of the expression that needs it. Sound
-    -- because a hoist never crosses a conditional: `TmMatch` in expression
-    -- position keeps each branch's statements inside its own arm, below.
-    match t with TmDecl { decl = DeclLet d, inexpr = inexpr } in
-    match compileStmtsDecl ctx d with (ctx, bind) in
-    match compileExpr ctx inexpr with (ctx, stmts, expr) in
-    (ctx, concat bind stmts, expr)
+  | TmDecl t ->
+    -- Hoist the declaration out in front of the expression that needs it.
+    -- Sound because a hoist never crosses a conditional: `TmMatch` in
+    -- expression position keeps each branch's statements inside its own arm.
+    match esCompileDecl ctx t.decl with (ctx, decls) in
+    match compileExpr ctx t.inexpr with (ctx, stmts, expr) in
+    (ctx, concat decls stmts, expr)
   | TmApp _ & t ->
     match esCollectApp t with (fn, args) in
     match fn with TmConst c then compileConstApp ctx (infoTm t) c.val args
@@ -443,7 +393,7 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint
     -- literal, which iterates by codepoint, so the result reads as text in the
     -- output while staying an ordinary array at runtime.
     if and (not (null t.tms)) (forAll esIsCharConst t.tms) then
-      ({ ctx with runtime = setInsert "$S" ctx.runtime }, []
+      (ctx, []
       , ESECall { callee = ESEGlobal { name = "$S" }
                 , args = [ESEString { value = map esCharConstVal t.tms }] })
     else
@@ -487,10 +437,50 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint
       else stmts in
     (ctx, ESSFunDecl { id = id, params = params, body = stmts })
 
-  -- Compiles a single `DeclLet` to the statements that bind it.
-  sem compileStmtsDecl : ESCompileCtx -> DeclLetRecord -> (ESCompileCtx, [ESStmt])
-  sem compileStmtsDecl ctx =
-  | d ->
+  -- Compiles one declaration to the statements that introduce it. Shared by
+  -- both compilation modes, so a declaration behaves the same whether it is
+  -- reached in statement or expression position.
+  sem esCompileDecl : ESCompileCtx -> Decl -> (ESCompileCtx, [ESStmt])
+  sem esCompileDecl ctx =
+  | DeclType d ->
+    -- A datatype becomes a base class carrying the payload; a type alias is
+    -- erased entirely.
+    match d.tyIdent with TyVariant _ then
+      ({ ctx with variants = setInsert d.ident ctx.variants }
+      , [ESSClass { id = d.ident, extends = None () }])
+    else (ctx, [])
+  | DeclConDef d ->
+    -- Extending the type's class is what records, in the output, that these
+    -- constructors belong together -- MExpr datatypes are open, so they can be
+    -- declared far from the type. A constructor whose type has no emitted base
+    -- carries the payload itself.
+    let base = match esConCodomain d.tyIdent with Some ty then
+      (if setMem ty ctx.variants then Some ty else None ()) else None () in
+    (ctx, [ESSClass { id = d.ident, extends = base }])
+  | DeclRecLets d ->
+    -- Every arity is recorded before any body is compiled, so calls within the
+    -- group are n-ary in both directions. JS hoists function declarations, so
+    -- mutual recursion needs no ordering care.
+    let ctx = foldl (lam ctx. lam b.
+        match b.body with TmLam _ then
+          match esCollectLams b.body with (params, _) in
+          { ctx with arities = mapInsert b.ident (length params) ctx.arities }
+        else ctx)
+      ctx d.bindings in
+    let step = lam acc. lam b.
+      match acc with (ctx, stmts) in
+      match b.body with TmLam _ then
+        match esCollectLams b.body with (params, body) in
+        match esCompileFun ctx b.ident params body with (ctx, decl) in
+        (ctx, snoc stmts decl)
+      else errorSingle [b.info]
+        "ecmascript: a recursive binding must be a function"
+    in
+    foldl step (ctx, []) d.bindings
+  | decl & !(DeclLet _) ->
+    errorSingle [infoDecl decl] (concat
+      "ecmascript: unsupported declaration: " (esDeclName decl))
+  | DeclLet d ->
     -- `a; b` desugars to `let #var"" = a in b`, whose binder has an empty name
     -- and is never referenced. Emit the effect as a bare statement instead of
     -- an unused `const`.
@@ -668,41 +658,43 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint
   | CChar t -> Some (ESEString { value = [t.val] })
   | _ -> None ()
 
-  -- How many arguments an operation consumes. `None` means unsupported.
-  sem esConstArity : Const -> Option Int
-  sem esConstArity =
-  | CAddi _ | CSubi _ | CMuli _ | CDivi _ | CModi _
-  | CEqi _ | CNeqi _ | CLti _ | CGti _ | CLeqi _ | CGeqi _
-  | CSlli _ | CSrli _ | CSrai _
-  | CAddf _ | CSubf _ | CMulf _ | CDivf _
-  | CEqf _ | CNeqf _ | CLtf _ | CGtf _ | CLeqf _ | CGeqf _
-  | CEqc _ -> Some 2
-  | CNegi _ | CNegf _ | CFloorfi _ | CCeilfi _ | CRoundfi _ | CInt2float _
-  | CChar2Int _ | CInt2Char _ | CDPrint _
-  | CLength _ | CHead _ | CTail _ | CNull _ | CReverse _
-  | CIsList _ | CIsRope _
-  | CPrint _ | CPrintError _ | CFlushStdout _
-  | CFloat2string _ | CString2float _ | CStringIsFloat _ -> Some 1
-  | CGet _ | CCons _ | CSnoc _ | CConcat _ | CSplitAt _
-  | CMap _ | CMapi _ | CIter _ | CIteri _
-  | CCreate _ | CCreateList _ | CCreateRope _ -> Some 2
-  | CSet _ | CFoldl _ | CFoldr _ | CSubsequence _ -> Some 3
-  | _ -> None ()
 
-  -- Builds the expression for an operation applied to exactly its arity.
-  sem esConstApplyWith : ESCompileCtx -> [ESExpr] -> Const -> (ESCompileCtx, ESExpr)
+  -- Builds the expression for an operation applied to exactly its arity, or
+  -- `None` if this backend does not implement it.
+  sem esConstApplyWith
+    : ESCompileCtx -> [ESExpr] -> Const -> Option (ESCompileCtx, ESExpr)
   sem esConstApplyWith ctx args =
   | const ->
     let bin = lam op.
-      match args with [a, b] in (ctx, ESEBin { op = op, lhs = a, rhs = b }) in
+      match args with [a, b] in Some (ctx, ESEBin { op = op, lhs = a, rhs = b }) in
     let un = lam op.
-      match args with [a] in (ctx, ESEUn { op = op, arg = a }) in
+      match args with [a] in Some (ctx, ESEUn { op = op, arg = a }) in
     let math = lam f.
       match args with [a] in
-      (ctx, ESECall { callee = esMember (ESEGlobal { name = "Math" }) f, args = [a] }) in
+      Some (ctx, ESECall
+        { callee = esMember (ESEGlobal { name = "Math" }) f, args = [a] }) in
+    -- Calls a runtime helper with the arguments as given.
     let rt = lam name.
-      ({ ctx with runtime = setInsert name ctx.runtime }
-      , ESECall { callee = ESEGlobal { name = name }, args = args }) in
+      Some (ctx
+           , ESECall { callee = ESEGlobal { name = name }, args = args }) in
+    -- Calls an effect on the runtime environment with the arguments as given.
+    let env = lam field.
+      Some (ctx, ESECall
+        { callee = esMember (ESEVar { id = ctx.runtimeEnv }) field
+        , args = args }) in
+    -- ... with every `[Char]` argument converted to a JS string first, so a
+    -- host never sees the internal representation.
+    let envStr = lam field.
+      Some (ctx
+      , ESECall
+             { callee = esMember (ESEVar { id = ctx.runtimeEnv }) field
+             , args = map (lam a. ESECall
+                 { callee = ESEGlobal { name = "$jsStr" }, args = [a] }) args }) in
+    -- ... and the result converted back.
+    let envStrOut = lam field.
+      match envStr field with Some (ctx, call) in
+      Some (ctx
+      , ESECall { callee = ESEGlobal { name = "$S" }, args = [call] }) in
     switch const
     -- Integer arithmetic. `divi` truncates towards zero, as OCaml does.
     case CAddi _ then bin (ESOAdd {})
@@ -710,7 +702,7 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint
     case CMuli _ then bin (ESOMul {})
     case CDivi _ then
       match args with [a, b] in
-      (ctx, ESECall { callee = esMember (ESEGlobal { name = "Math" }) "trunc"
+      Some (ctx, ESECall { callee = esMember (ESEGlobal { name = "Math" }) "trunc"
                     , args = [ESEBin { op = ESODiv {}, lhs = a, rhs = b }] })
     case CModi _ then bin (ESOMod {})
     case CNegi _ then un (ESONeg {})
@@ -736,7 +728,7 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint
     case CGtf _ then bin (ESOGt {})
     case CLeqf _ then bin (ESOLe {})
     case CGeqf _ then bin (ESOGe {})
-    case CInt2float _ then match args with [a] in (ctx, a)
+    case CInt2float _ then match args with [a] in Some (ctx, a)
     case CFloorfi _ then math "floor"
     case CCeilfi _ then math "ceil"
     -- `Math.round` rounds half towards +Infinity; OCaml rounds half away from
@@ -746,44 +738,44 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint
     case CEqc _ then bin (ESOEq {})
     case CChar2Int _ then
       match args with [a] in
-      (ctx, ESECall { callee = esMember a "codePointAt", args = [ESEInt { value = 0 }] })
+      Some (ctx, ESECall { callee = esMember a "codePointAt", args = [ESEInt { value = 0 }] })
     case CInt2Char _ then
       match args with [a] in
-      (ctx, ESECall
+      Some (ctx, ESECall
         { callee = esMember (ESEGlobal { name = "String" }) "fromCodePoint"
         , args = [a] })
     case CDPrint _ then
-      (ctx, ESECall
+      Some (ctx, ESECall
         { callee = esMember (ESEVar { id = ctx.runtimeEnv }) "dprint", args = args })
 
     -- Sequences are arrays, so most operations are plain JS idioms. Only the
     -- ones needing a copy, a clamp, or a pair go through the runtime.
-    case CLength _ then match args with [s] in (ctx, esMember s "length")
+    case CLength _ then match args with [s] in Some (ctx, esMember s "length")
     case CGet _ then
-      match args with [s, i] in (ctx, ESEIndex { obj = s, index = i })
+      match args with [s, i] in Some (ctx, ESEIndex { obj = s, index = i })
     case CHead _ then
       match args with [s] in
-      (ctx, ESEIndex { obj = s, index = ESEInt { value = 0 } })
+      Some (ctx, ESEIndex { obj = s, index = ESEInt { value = 0 } })
     case CTail _ then
       match args with [s] in
-      (ctx, ESECall { callee = esMember s "slice"
+      Some (ctx, ESECall { callee = esMember s "slice"
                     , args = [ESEInt { value = 1 }] })
     case CNull _ then
       match args with [s] in
-      (ctx, ESEBin { op = ESOEq {}, lhs = esMember s "length"
+      Some (ctx, ESEBin { op = ESOEq {}, lhs = esMember s "length"
                    , rhs = ESEInt { value = 0 } })
     case CConcat _ then
       match args with [a, b] in
-      (ctx, ESECall { callee = esMember a "concat", args = [b] })
+      Some (ctx, ESECall { callee = esMember a "concat", args = [b] })
     case CCons _ then
       match args with [v, s] in
-      (ctx, ESEArray { exprs = [v, ESEUn { op = ESOSpread {}, arg = s }] })
+      Some (ctx, ESEArray { exprs = [v, ESEUn { op = ESOSpread {}, arg = s }] })
     case CSnoc _ then
       match args with [s, v] in
-      (ctx, ESEArray { exprs = [ESEUn { op = ESOSpread {}, arg = s }, v] })
+      Some (ctx, ESEArray { exprs = [ESEUn { op = ESOSpread {}, arg = s }, v] })
     case CReverse _ then
       match args with [s] in
-      (ctx, ESECall
+      Some (ctx, ESECall
         { callee = esMember
             (ESEArray { exprs = [ESEUn { op = ESOSpread {}, arg = s }] }) "reverse"
         , args = [] })
@@ -794,42 +786,42 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint
     -- its arguments in the opposite order to `reduceRight`.
     case CMap _ then
       match args with [f, s] in
-      (ctx, ESECall { callee = esMember s "map", args = [f] })
+      Some (ctx, ESECall { callee = esMember s "map", args = [f] })
     case CMapi _ then
       match args with [f, s] in
       let x = nameSym "_x" in let i = nameSym "_i" in
-      (ctx, ESECall { callee = esMember s "map"
+      Some (ctx, ESECall { callee = esMember s "map"
         , args = [esArrow2 x i (ESECall
             { callee = ESECall { callee = f, args = [esVar i] }
             , args = [esVar x] })] })
     case CIter _ then
       match args with [f, s] in
-      (ctx, ESECall { callee = esMember s "forEach", args = [f] })
+      Some (ctx, ESECall { callee = esMember s "forEach", args = [f] })
     case CIteri _ then
       match args with [f, s] in
       let x = nameSym "_x" in let i = nameSym "_i" in
-      (ctx, ESECall { callee = esMember s "forEach"
+      Some (ctx, ESECall { callee = esMember s "forEach"
         , args = [esArrow2 x i (ESECall
             { callee = ESECall { callee = f, args = [esVar i] }
             , args = [esVar x] })] })
     case CFoldl _ then
       match args with [f, acc, s] in
       let a = nameSym "_a" in let x = nameSym "_x" in
-      (ctx, ESECall { callee = esMember s "reduce"
+      Some (ctx, ESECall { callee = esMember s "reduce"
         , args = [esArrow2 a x (ESECall
             { callee = ESECall { callee = f, args = [esVar a] }
             , args = [esVar x] }), acc] })
     case CFoldr _ then
       match args with [f, acc, s] in
       let a = nameSym "_a" in let x = nameSym "_x" in
-      (ctx, ESECall { callee = esMember s "reduceRight"
+      Some (ctx, ESECall { callee = esMember s "reduceRight"
         , args = [esArrow2 a x (ESECall
             { callee = ESECall { callee = f, args = [esVar x] }
             , args = [esVar a] }), acc] })
     -- This backend has a single sequence representation, so the two
     -- representation predicates answer uniformly.
-    case CIsList _ then (ctx, ESEBool { value = false })
-    case CIsRope _ then (ctx, ESEBool { value = true })
+    case CIsList _ then Some (ctx, ESEBool { value = false })
+    case CIsRope _ then Some (ctx, ESEBool { value = true })
     case CSet _ then rt "$set"
     case CSplitAt _ then rt "$splitAt"
     case CSubsequence _ then rt "$subsequence"
@@ -837,37 +829,111 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint
 
     -- Effects reach the host as ordinary JS strings, so it never has to know
     -- how `[Char]` is represented.
-    case CPrint _ then esEnvStr ctx "print" args
-    case CPrintError _ then esEnvStr ctx "printError" args
+    case CPrint _ then envStr "print"
+    case CPrintError _ then envStr "printError"
     case CFlushStdout _ then
-      (ctx, ESECall
+      Some (ctx, ESECall
         { callee = esMember (ESEVar { id = ctx.runtimeEnv }) "flushStdout"
         , args = [] })
     case CFloat2string _ then rt "$float2string"
     case CString2float _ then rt "$string2float"
     case CStringIsFloat _ then rt "$stringIsFloat"
-    case _ then error "esConstApplyWith: arity table and cases disagree"
+    -- Symbols are integers from a counter, so equality is `===` and the hash
+    -- is the identity.
+    case CGensym _ then
+      Some (ctx
+      , ESECall { callee = ESEGlobal { name = "$gensym" }, args = [] })
+    case CSym2hash _ then match args with [a] in Some (ctx, a)
+    case CEqsym _ then bin (ESOEq {})
+
+    -- References. The standard library builds these out of rank-0 tensors
+    -- instead, so these intrinsics are rarely reached.
+    case CRef _ then rt "$ref"
+    case CDeRef _ then match args with [r] in Some (ctx, esMember r "v")
+    case CModRef _ then rt "$modref"
+
+    case CConstructorTag _ then rt "$conTag"
+    case CUnsafeCoerce _ then match args with [a] in Some (ctx, a)
+
+    -- Effects reach the host as ordinary JS strings.
+    case CExit _ then env "exit"
+    case CError _ then envStr "error"
+    case CArgv _ then
+      Some (ctx
+      , ESECall
+             { callee = esMember (ESECall
+                 { callee = esMember (ESEVar { id = ctx.runtimeEnv }) "argv"
+                 , args = [] }) "map"
+             , args = [ESEGlobal { name = "$S" }] })
+    case CCommand _ then envStr "command"
+    case CFileRead _ then envStrOut "readFile"
+    case CFileWrite _ then envStr "writeFile"
+    case CFileExists _ then envStr "fileExists"
+    case CFileDelete _ then envStr "deleteFile"
+    case CFlushStderr _ then
+      Some (ctx, ESECall
+        { callee = esMember (ESEVar { id = ctx.runtimeEnv }) "flushStderr"
+        , args = [] })
+    case CReadLine _ then
+      Some (ctx
+      , ESECall { callee = ESEGlobal { name = "$S" }
+                     , args = [ESECall
+                         { callee = esMember (ESEVar { id = ctx.runtimeEnv }) "readLine"
+                         , args = [] }] })
+    case CWallTimeMs _ then
+      Some (ctx, ESECall
+        { callee = esMember (ESEVar { id = ctx.runtimeEnv }) "wallTimeMs"
+        , args = [] })
+    case CSleepMs _ then env "sleepMs"
+    case CRandIntU _ then env "randIntU"
+    case CRandSetSeed _ then env "randSetSeed"
+
+    -- Tensors. The two element-type families collapse into one dense
+    -- representation here.
+    case CTensorCreate _ | CTensorCreateInt _ | CTensorCreateFloat _ then
+      rt "$tCreate"
+    case CTensorCreateUninitInt _ | CTensorCreateUninitFloat _ then rt "$tUninit"
+    case CTensorGetExn _ then rt "$tGet"
+    case CTensorSetExn _ then rt "$tSet"
+    case CTensorLinearGetExn _ then rt "$tLinGet"
+    case CTensorLinearSetExn _ then rt "$tLinSet"
+    case CTensorRank _ then match args with [t] in Some (ctx, esMember t "rank")
+    case CTensorShape _ then match args with [t] in Some (ctx, esMember t "shape")
+    case CTensorReshapeExn _ then rt "$tReshape"
+    case CTensorSliceExn _ then rt "$tSlice"
+    case CTensorSubExn _ then rt "$tSub"
+    case CTensorCopy _ then rt "$tCopy"
+    case CTensorIterSlice _ then rt "$tIterSlice"
+    case CTensorEq _ then rt "$tEq"
+    case CTensorTransposeExn _ then rt "$tTranspose"
+    case CTensorToString _ then rt "$tToString"
+
+    case _ then None ()
     end
 
   sem compileConstApp
     : ESCompileCtx -> Info -> Const -> [Expr] -> (ESCompileCtx, [ESStmt], ESExpr)
   sem compileConstApp ctx info const =
   | args ->
-    match esConstArity const with Some arity then
-      match compileExprs ctx args with (ctx, stmts, xs) in
-      let n = length xs in
-      if lti n arity then
-        -- Partial application: eta-expand into a curried closure.
-        let extra = create (subi arity n) (lam. nameSym "a") in
-        match esConstApplyWith ctx
-          (concat xs (map (lam p. ESEVar { id = p }) extra)) const
-          with (ctx, body) in
+    let arity = constArity const in
+    match compileExprs ctx args with (ctx, stmts, xs) in
+    let n = length xs in
+    let unsupported = lam.
+      errorSingle [info] (concat
+        "ecmascript: unsupported constant: " (getConstStringCode 0 const)) in
+    if lti n arity then
+      -- Partial application: eta-expand into a curried closure.
+      let extra = create (subi arity n) (lam. nameSym "a") in
+      match esConstApplyWith ctx
+        (concat xs (map (lam p. ESEVar { id = p }) extra)) const
+        with Some (ctx, body) then
         (ctx, stmts, esCurryArrows extra body)
-      else
-        match esConstApplyWith ctx (subsequence xs 0 arity) const with (ctx, e) in
+      else unsupported ()
+    else
+      match esConstApplyWith ctx (subsequence xs 0 arity) const
+        with Some (ctx, e) then
         (ctx, stmts, esCurryApply e (subsequence xs arity (subi n arity)))
-    else errorSingle [info] (concat
-      "ecmascript: unsupported constant: " (getConstStringCode 0 const))
+      else unsupported ()
 
   -------------------------
   -- ERROR MESSAGE NAMES --
@@ -905,24 +971,22 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint
   -- PROGRAM --
   --------------
 
-  -- Wraps a compiled program in `export default function main(env) { ... }`,
-  -- and reports which runtime intrinsics it used.
+  -- Wraps a compiled program in `export default function main(env) { ... }`.
   --
   -- The top-level expression is discarded rather than returned: in practice it
   -- is the program's final effect and has unit type, and `env.print(x);` reads
   -- better than `return env.print(x);`.
-  sem compileESProg : Expr -> (ESProg, [String])
+  sem compileESProg : Expr -> ESProg
   sem compileESProg =
   | ast ->
     let runtimeEnv = nameSym "env" in
     let ctx = { esCompileCtxEmpty with runtimeEnv = runtimeEnv } in
-    match compileStmts ctx (ESCDiscard ()) ast with (ctx, stmts) in
-    ( ESProg
-      { imports = []
-      , stmts =
-        [ ESSExportDefault
-          { stmt = ESSFunDecl
-            { id = nameSym "main", params = [runtimeEnv], body = stmts } } ] }
-    , setToSeq ctx.runtime )
+    match compileStmts ctx (ESCDiscard ()) ast with (_, stmts) in
+    ESProg
+    { imports = []
+    , stmts =
+      [ ESSExportDefault
+        { stmt = ESSFunDecl
+          { id = nameSym "main", params = [runtimeEnv], body = stmts } } ] }
 
 end

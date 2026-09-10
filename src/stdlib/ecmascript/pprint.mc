@@ -122,6 +122,13 @@ lang ESPrettyPrint = ESAst
       with (env, strs) in
     (env, strJoin ", " strs)
 
+  -- Whether the expression's printed form opens with `{`, which is ambiguous
+  -- with a block in both concise arrow bodies and expression statements.
+  sem esStartsWithBrace : ESExpr -> Bool
+  sem esStartsWithBrace =
+  | ESEObject _ | ESEObjectWith _ -> true
+  | _ -> false
+
   -- A key is written bare when it looks like an identifier; reserved words are
   -- fine in property position, so only the character shape matters.
   sem printESObjectFields
@@ -177,8 +184,10 @@ lang ESPrettyPrint = ESAst
     match esNameGetMany env t.params with (env, params) in
     let ps = match params with [p] then p else join ["(", strJoin ", " params, ")"] in
     match t.body with ESFBExpr b then
-      -- A concise body starting with `{` would be parsed as a block.
-      let prec = match b.expr with ESEObject _ then 19 else 2 in
+      -- A concise body starting with `{` would be parsed as a block -- and
+      -- `x => { ...r, k: v }` then fails as a rest parameter rather than
+      -- quietly meaning something else.
+      let prec = if esStartsWithBrace b.expr then 19 else 2 in
       match printESExprP env indent prec b.expr with (env, body) in
       (env, join [ps, " => ", body])
     else match t.body with ESFBBlock b then
@@ -242,7 +251,7 @@ lang ESPrettyPrint = ESAst
     (env, join [target, " = ", v, ";"])
   | ESSExpr t ->
     -- A statement starting with `{` would be parsed as a block.
-    let prec = match t.expr with ESEObject _ then 19 else 0 in
+    let prec = if esStartsWithBrace t.expr then 19 else 0 in
     match printESExprP env indent prec t.expr with (env, e) in
     (env, concat e ";")
   | ESSThrow t ->
@@ -380,6 +389,12 @@ with "(a, b) => b" in
 -- A concise body that is an object literal needs parentheses.
 utest pp (ESEArrow { params = [], body = ESFBExpr { expr = ESEObject { fields = [("x", va)] } } })
 with "() => ({ x: a })" in
+-- A record update is equally ambiguous, and fails more confusingly: JS reads
+-- the `...` as a rest parameter rather than as a block.
+utest pp (ESEArrow { params = [a]
+                   , body = ESFBExpr { expr = ESEObjectWith
+                       { base = va, fields = [("x", vb)] } } })
+with "a => ({ ...a, x: b })" in
 
 -- Conditionals and instanceof.
 utest pp (ESECond { cond = va, thn = vb, els = vc }) with "a ? b : c" in

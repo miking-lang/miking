@@ -58,6 +58,8 @@ include "ecmascript/ast.mc"
 include "name.mc"
 include "option.mc"
 include "seq.mc"
+include "set.mc"
+include "string.mc"
 
 let esSum : [Int] -> Int = foldl addi 0
 
@@ -174,24 +176,6 @@ lang ESCleanup = ESAst
   | ESSReturn t -> optionMapOr 0 (esCountDeferredExpr id) t.expr
   | ESSThrow t -> esCountDeferredExpr id t.expr
   | ESSClass _ | ESSContinue _ -> 0
-
-  -- Immediate expression children, for traversals that do not care about the
-  -- shape of the node they are visiting.
-  sem esExprChildren : ESExpr -> [ESExpr]
-  sem esExprChildren =
-  | ESEVar _ | ESEGlobal _ | ESEInt _ | ESEFloat _ | ESEBool _ | ESEString _
-  | ESEUndefined _ | ESENull _ | ESEArrow _ -> []
-  | ESEArray t -> t.exprs
-  | ESEObject t -> map (lam f. f.1) t.fields
-  | ESEObjectWith t -> cons t.base (map (lam f. f.1) t.fields)
-  | ESEMember t -> [t.obj]
-  | ESEIndex t -> [t.obj, t.index]
-  | ESECall t -> cons t.callee t.args
-  | ESENew t -> cons t.callee t.args
-  | ESEBin t -> [t.lhs, t.rhs]
-  | ESEUn t -> [t.arg]
-  | ESECond t -> [t.cond, t.thn, t.els]
-  | ESEInstanceOf t -> [t.lhs, t.rhs]
 
   ------------------
   -- SUBSTITUTION --

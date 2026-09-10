@@ -14,7 +14,7 @@ include "ecmascript/runtime.mc"
 include "option.mc"
 include "string.mc"
 
-lang MCoreCompileES = MExprESCompile + ESPrettyPrint + ESCleanup
+lang MCoreCompileES = MExprESCompile + ESPrettyPrint + ESCleanup + ESRuntime
 end
 
 type CompileESOptions = {
@@ -40,11 +40,12 @@ let esStripExtension : String -> String = lam filename.
 let esCompileToString : use Ast in Expr -> String =
   lam ast.
   use MCoreCompileES in
-  match compileESProg ast with (prog, usedRuntime) in
   -- Remove the scrutinee temporaries the pattern lowerer leaves behind, and
-  -- the bindings record projection produces. See cleanup.mc.
-  match printESProg esNameEnvEmpty (esCleanupProg prog) with (_, source) in
-  concat source (esRuntimeEmit usedRuntime)
+  -- the bindings record projection produces, before deciding which runtime
+  -- helpers the program still refers to. See cleanup.mc.
+  let prog = esCleanupProg (compileESProg ast) in
+  match printESProg esNameEnvEmpty prog with (_, source) in
+  concat source (esRuntimeEmit (esRuntimeUsed prog))
 
 -- Compiles an MExpr AST and writes the module, returning the path written.
 let compileMCoreToES : use Ast in CompileESOptions -> Expr -> String -> String =
@@ -249,6 +250,17 @@ let floored = esCompileToString astFloor in
 let contains = lam needle. lam s. gti (length (strSplit needle s)) 1 in
 utest contains "env.dprint(Math.floor(1.5));" floored with true in
 utest contains "MExpr runtime intrinsics" floored with false in
+
+-- A helper used only inside a binding that the cleanup passes delete is not
+-- emitted. The used set is read off the finished program precisely so that
+-- compiling and then deleting cannot leave a definition behind.
+let unusedBind = nameSym "u" in
+let astDead = bind_ (nulet_ unusedBind (float2string_ (float_ 1.0)))
+                    (dprint_ (int_ 1)) in
+utest esCompileToString astDead with join
+  [ "export default function main(env) {\n"
+  , "  env.dprint(1);\n"
+  , "}\n" ] in
 
 -- A shift pulls its runtime definition in behind the program, along with the
 -- helper it depends on.

@@ -452,7 +452,7 @@ testMain substituters directories location (lam api.
   let esCompile = api.midStep
     { uses = [origin]
     , tag = "mjs"
-    , cmd = "%m compile --to-es %i --output %o"
+    , cmd = "%m compile --test --disable-prune-utests --to-es %i --output %o"
     } in
   let esRun = api.endStep
     { uses = [esCompile]
