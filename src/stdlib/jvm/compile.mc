@@ -206,29 +206,18 @@ let modifyMainClassForTest = lam prog.
     createProg p.package (snoc (subsequence p.classes 0 (subi (length p.classes) 1)) modifiedMainClass) p.interfaces
 
 
-let prepareForTests = lam path.
+let prepareForTests = lam.
     match sysCommandExists "java" with false then
         error "java needs to be installed\n"
-        ()
     else
-        (match sysFileExists path with true then
-            (sysDeleteDir path);
-            (sysRunCommand ["mkdir", path] "" ".");
-            (sysRunCommand ["mkdir", (concat path "jar/")] "" ".");
-            (sysRunCommand ["mkdir", (concat path "out/")] "" ".");
-            ()
-        else
-            (sysRunCommand ["mkdir", path] "" ".");
-            (sysRunCommand ["mkdir", (concat path "jar/")] "" ".");
-            (sysRunCommand ["mkdir", (concat path "out/")] "" ".");
-            ());
+        let path = concat (sysTempDirMakePrefix "miking-jvm-backend." ()) "/" in
+        (sysRunCommand ["mkdir", (concat path "jar/")] "" ".");
+        (sysRunCommand ["mkdir", (concat path "out/")] "" ".");
         (getJarFiles (concat path "jar/"));
         (compileJava (concat path "out/") (concat path "jar/"));
-        ()
+        path
 
-let jvmTmpPath = "/tmp/miking-jvm-backend/"
-
-let testJVM = lam ast.
+let testJVMIn = lam jvmTmpPath. lam ast.
     use MExprJVMCompile in
     let jvmProgram = compileJVMEnv ast in
     let testJVMProgram = modifyMainClassForTest jvmProgram in
@@ -244,7 +233,9 @@ let testJVM = lam ast.
 -- tests
 
 mexpr
-prepareForTests jvmTmpPath;
+
+let jvmTmpPath = prepareForTests () in
+let testJVM = testJVMIn jvmTmpPath in
 
 -- integer operations
 utest testJVM (addi_ (int_ 1) (int_ 1)) with "2" in

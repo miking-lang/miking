@@ -365,14 +365,9 @@ testMain substituters directories location (lam api.
   -- currently not using that path at all, but rather manual code in
   -- the corresponding compile.mc file. Presumably rectified in #710.
 
-  -- NOTE(vipa, 2024-11-14): The Java tests (specifically compile.mc)
-  -- work in a fixed temporary directory, i.e., it cannot be run in
-  -- parallel with itself, i.e., we skip interpretation, so it's just
-  -- one such test that runs. This is definitely something we want to
-  -- fix.
   api.tests [javac]
     (and (strStartsWith "src/stdlib/jvm/") (strEndsWith ".mc"))
-    [(eval, dont), (compile, succ), (run, succ), (mlangCompile, succ), (mlangRun, succ)];
+    [(eval, succ), (compile, succ), (run, succ), (mlangCompile, succ), (mlangRun, succ)];
 
   -- === Constructor types ===
 
