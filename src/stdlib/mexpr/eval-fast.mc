@@ -38,9 +38,52 @@ lang VarEvalF = EvalF + VarAst
     else error "Unsymbolized TmVarin mkEvalF!"
 end
 
-lang AppEvalF = EvalF + AppAst
+lang AppEvalF = EvalF + AppAst + ConstAst + UnknownTypeAst
+  -- The partially applied constant values and `mkDeltaF` live here rather than
+  -- in ConstEvalF so that the application case below can consult them while
+  -- compiling; ConstEvalF still supplies all the actual cases.
+  syn Val =
+  | VConst1 (Const, Val -> Val)
+  | VConst2 (Const, Val -> Val -> Val)
+  | VConst3 (Const, Val -> Val -> Val -> Val)
+
+  sem mkDeltaF : Const -> Val
+
   sem mkEvalF =
   | TmApp r ->
+    -- A constant applied to exactly as many arguments as it takes: resolve the
+    -- delta function once, while compiling, and emit a closure that calls it
+    -- directly.  The general path would instead build a VConst2/VConst1 chain
+    -- and take it apart again on every single evaluation.  The three shapes
+    -- are disjoint, since each looks through a different number of TmApp
+    -- layers before expecting a TmConst, and a constant used as a value still
+    -- falls through to `mkEvalFApp`.
+    match r with
+      {lhs = TmApp {lhs = TmApp {lhs = TmConst c, rhs = a}, rhs = b}, rhs = d}
+    then
+      match mkDeltaF c.val with VConst3 (_, f) then
+        let a = mkEvalF a in
+        let b = mkEvalF b in
+        let d = mkEvalF d in
+        lam env. f (a env) (b env) (d env)
+      else mkEvalFApp r
+    else match r with {lhs = TmApp {lhs = TmConst c, rhs = a}, rhs = b} then
+      match mkDeltaF c.val with VConst2 (_, f) then
+        let a = mkEvalF a in
+        let b = mkEvalF b in
+        lam env. f (a env) (b env)
+      else mkEvalFApp r
+    else match r with {lhs = TmConst c, rhs = a} then
+      match mkDeltaF c.val with VConst1 (_, f) then
+        let a = mkEvalF a in
+        lam env. f (a env)
+      else mkEvalFApp r
+    else mkEvalFApp r
+
+  sem mkEvalFApp : {lhs : Expr, rhs : Expr, ty : Type, info : Info}
+                -> EvalFEnv -> Val
+  sem mkEvalFApp =
+  | r ->
     let lhs = mkEvalF r.lhs in
     let rhs = mkEvalF r.rhs in
     lam env. applyF (lhs env, rhs env)
@@ -76,11 +119,6 @@ lang DeclEvalF = EvalF + DeclAst
 end
 
 lang ConstEvalF = AppEvalF + ConstAst + UnknownTypeAst
-  syn Val =
-  | VConst1 (Const, Val -> Val)
-  | VConst2 (Const, Val -> Val -> Val)
-  | VConst3 (Const, Val -> Val -> Val -> Val)
-
   sem readback =
   | VConst1 (c, _) | VConst2 (c, _) | VConst3 (c, _) -> Some(TmConst
     { val = c, ty = TyUnknown { info = NoInfo () }, info = NoInfo () })
@@ -93,7 +131,6 @@ lang ConstEvalF = AppEvalF + ConstAst + UnknownTypeAst
   | (VConst2 (c, f), val) -> VConst1 (c, f val)
   | (VConst3 (c, f), val) -> VConst2 (c, f val)
 
-  sem mkDeltaF : Const -> Val
   sem mkDeltaF =| _ -> error "Unsupported Const in mkDeltaF!"
 end
 
