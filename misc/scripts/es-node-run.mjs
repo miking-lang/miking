@@ -17,4 +17,5 @@ if (target === undefined) {
 }
 
 const { default: main } = await import(pathToFileURL(target).href);
-main(nodeEnv());
+// The program's arguments start at its own path, as they would for a binary.
+main(nodeEnv(process.argv.slice(2)));

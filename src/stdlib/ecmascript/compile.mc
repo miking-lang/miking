@@ -19,6 +19,7 @@ include "bool.mc"
 include "basic-types.mc"
 include "ecmascript/ast.mc"
 include "ecmascript/ident.mc"
+include "ecmascript/runtime.mc"
 include "map.mc"
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
@@ -52,17 +53,34 @@ type ESCompileCtx = {
   -- it has a base to extend or must carry the payload itself.
   variants : Set Name,
 
+  -- Types that have at least one constructor. A type without any is opaque to
+  -- the program: its values can only be passed around, never inspected.
+  constructed : Set Name,
+
   -- The function currently being compiled and its parameters, when a
   -- saturated self-call in tail position can become a loop rather than
   -- recursion. Cleared inside nested functions.
-  selfCall : Option (Name, [Name])
+  selfCall : Option (Name, [Name]),
+
+  -- The local holding the host's `env.externals`, bound once at the top of
+  -- `main` when the program declares any external; and whether it does.
+  externalsName : Name,
+  usesExternals : Bool,
+
+  -- Externals with a default implementation, as the names of their `$ext_`
+  -- sections in the runtime file.
+  externalDefaults : Set String
 }
 
 let esCompileCtxEmpty : ESCompileCtx = {
   runtimeEnv = nameNoSym "env",
   arities = mapEmpty nameCmp,
   variants = setEmpty nameCmp,
-  selfCall = None ()
+  constructed = setEmpty nameCmp,
+  selfCall = None (),
+  externalsName = nameNoSym "externals",
+  usesExternals = false,
+  externalDefaults = setEmpty cmpString
 }
 
 -- Flattens a curried application spine into its head and argument list.
@@ -195,6 +213,113 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint + MExprArity
   | ESSBlock t -> esHasContinue t.stmts
   | ESSExportDefault t -> esStmtHasContinue t.stmt
   | _ -> false
+
+  ---------------
+  -- EXTERNALS --
+  ---------------
+
+  -- Normalises a type for inspecting an external's signature: resolves
+  -- aliases and drops quantifiers.
+  sem esNormTy : Type -> Type
+  sem esNormTy =
+  | ty -> match unwrapType ty with TyAll t then esNormTy t.ty else unwrapType ty
+
+  -- Splits a function type into its parameter types and its result.
+  sem esArrowTypes : Type -> ([Type], Type)
+  sem esArrowTypes =
+  | ty ->
+    match esNormTy ty with TyArrow t then
+      match esArrowTypes t.to with (params, result) in
+      (cons (esNormTy t.from) params, result)
+    else ([], esNormTy ty)
+
+  -- The type constructor at the head of a type application, `Foo` for
+  -- `Foo a b`.
+  sem esTyHead : Type -> Type
+  sem esTyHead =
+  | ty -> match esNormTy ty with TyApp t then esTyHead t.lhs else esNormTy ty
+
+  sem esIsStringTy : Type -> Bool
+  sem esIsStringTy =
+  | ty ->
+    match esNormTy ty with TySeq t then
+      (match esNormTy t.ty with TyChar _ then true else false)
+    else false
+
+  sem esRecordFields : Map SID Type -> [(String, Type)]
+  sem esRecordFields =
+  | fields ->
+    sort (lam a. lam b. esCmpFieldName a.0 b.0)
+      (map (lam b. (sidToString b.0, b.1)) (mapBindings fields))
+
+  -- The element types of a tuple -- a record whose fields are exactly "0",
+  -- "1", ... -- or `None` for any other type.
+  sem esTupleTys : Type -> Option [Type]
+  sem esTupleTys =
+  | ty ->
+    match esNormTy ty with TyRecord t then
+      let fields = esRecordFields t.fields in
+      if null fields then None ()
+      else if eqSeq eqString (map (lam f. f.0) fields)
+                (map int2string (create (length fields) (lam i. i)))
+      then Some (map (lam f. f.1) fields)
+      else None ()
+    else None ()
+
+  -- Whether values of this type are represented differently in MExpr and in
+  -- the plain JavaScript a host works with.
+  sem esNeedsConv : Type -> Bool
+  sem esNeedsConv =
+  | ty ->
+    if esIsStringTy ty then true
+    else match esTupleTys ty with Some _ then true
+    else match esNormTy ty with TyRecord t then
+      any (lam f. esNeedsConv f.1) (esRecordFields t.fields)
+    else match esNormTy ty with TySeq t then esNeedsConv t.ty
+    else false
+
+  -- Converts an MExpr value into what a host expects. `e` may be read more
+  -- than once, so it should be a variable.
+  sem esToJs : Type -> ESExpr -> ESExpr
+  sem esToJs ty =
+  | e ->
+    if not (esNeedsConv ty) then e
+    else if esIsStringTy ty then
+      ESECall { callee = ESEGlobal { name = "$jsStr" }, args = [e] }
+    else match esTupleTys ty with Some tys then
+      ESEArray { exprs = zipWith (lam i. lam t. esToJs t (esField e (int2string i)))
+                           (create (length tys) (lam i. i)) tys }
+    else match esNormTy ty with TyRecord t then
+      ESEObject { fields = map (lam f. (f.0, esToJs f.1 (esField e f.0)))
+                             (esRecordFields t.fields) }
+    else match esNormTy ty with TySeq t then
+      let x = nameSym "x" in
+      ESECall { callee = esMember e "map"
+              , args = [ESEArrow { params = [x]
+                                 , body = ESFBExpr { expr = esToJs t.ty (ESEVar { id = x }) } }] }
+    else e
+
+  -- Converts what a host returns into MExpr's representation. As above, `e`
+  -- may be read more than once.
+  sem esFromJs : Type -> ESExpr -> ESExpr
+  sem esFromJs ty =
+  | e ->
+    if not (esNeedsConv ty) then e
+    else if esIsStringTy ty then
+      ESECall { callee = ESEGlobal { name = "$S" }, args = [e] }
+    else match esTupleTys ty with Some tys then
+      ESEObject { fields = zipWith (lam i. lam t.
+          (int2string i, esFromJs t (ESEIndex { obj = e, index = ESEInt { value = i } })))
+        (create (length tys) (lam i. i)) tys }
+    else match esNormTy ty with TyRecord t then
+      ESEObject { fields = map (lam f. (f.0, esFromJs f.1 (esField e f.0)))
+                             (esRecordFields t.fields) }
+    else match esNormTy ty with TySeq t then
+      let x = nameSym "x" in
+      ESECall { callee = esMember e "map"
+              , args = [ESEArrow { params = [x]
+                                 , body = ESFBExpr { expr = esFromJs t.ty (ESEVar { id = x }) } }] }
+    else e
 
   sem esVar : Name -> ESExpr
   sem esVar = | id -> ESEVar { id = id }
@@ -469,8 +594,11 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint + MExprArity
     -- constructors belong together -- MExpr datatypes are open, so they can be
     -- declared far from the type. A constructor whose type has no emitted base
     -- carries the payload itself.
-    let base = match esConCodomain d.tyIdent with Some ty then
+    let codomain = esConCodomain d.tyIdent in
+    let base = match codomain with Some ty then
       (if setMem ty ctx.variants then Some ty else None ()) else None () in
+    let ctx = match codomain with Some ty then
+      { ctx with constructed = setInsert ty ctx.constructed } else ctx in
     (ctx, [ESSClass { id = d.ident, extends = base }])
   | DeclRecLets d ->
     -- Every arity is recorded before any body is compiled, so calls within the
@@ -497,6 +625,71 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint + MExprArity
         , nameGetStr b.ident, " is bound to ", esExprName b.body ])
     in
     foldl step (ctx, []) d.bindings
+  | DeclExt d ->
+    -- An external resolves once, where it is declared: to the host's
+    -- implementation when `env.externals` supplies one, else to a default
+    -- from the runtime file, else to a stub that throws.
+    let name = nameGetStr d.ident in
+    match esArrowTypes d.tyIdent with (params, result) in
+    let arity = length params in
+    let key = concat "$ext_" name in
+    let fallback =
+      if setMem key ctx.externalDefaults then
+        ESECall { callee = ESEGlobal { name = key }
+                , args = [ESEVar { id = ctx.runtimeEnv }] }
+      else
+        (let stub = ESECall { callee = ESEGlobal { name = "$noExternal" }
+                            , args = [ESEString { value = name }] } in
+         -- A function fails only when called: dead-code elimination guarantees
+         -- an external is referenced, not that the reference ever runs. So
+         -- does a value of an opaque type, such as a channel: the program can
+         -- only pass it on to other externals. Any other arity-0 external is a
+         -- value the program could use directly, so it fails here instead of
+         -- producing a wrong result later.
+         let opaque =
+           match esTyHead result with TyCon t then
+             not (setMem t.ident ctx.constructed)
+           else false in
+         if and (eqi arity 0) (not opaque)
+         then ESECall { callee = stub, args = [] } else stub)
+    in
+    -- `??` rather than `||`: a host may legitimately supply 0 or false.
+    let resolved = ESEBin
+      { op = ESONullish {}
+      , lhs = esField (ESEVar { id = ctx.externalsName }) name
+      , rhs = fallback } in
+    let ctx = { ctx with usesExternals = true } in
+    let ctx =
+      if gti arity 0
+      then { ctx with arities = mapInsert d.ident arity ctx.arities }
+      else ctx in
+    if not (or (any esNeedsConv params) (esNeedsConv result)) then
+      (ctx, [ESSConst { id = d.ident, init = resolved }])
+    else
+      -- Hosts and defaults both work in plain JavaScript, so values crossing
+      -- the boundary are converted according to the declared type.
+      let impl = nameSym (concat "_" name) in
+      let implVar = ESEVar { id = impl } in
+      if eqi arity 0 then
+        (ctx, [ ESSConst { id = impl, init = resolved }
+              , ESSConst { id = d.ident, init = esFromJs result implVar } ])
+      else
+        let ps = map (lam. nameSym "x") params in
+        let call = ESECall
+          { callee = implVar
+          , args = zipWith (lam t. lam p. esToJs t (ESEVar { id = p })) params ps } in
+        let body =
+          if or (not (esNeedsConv result)) (esIsStringTy result)
+          then ESFBExpr { expr = esFromJs result call }
+          else
+            (let r = nameSym "_r" in
+             ESFBBlock { stmts =
+               [ ESSConst { id = r, init = call }
+               , ESSReturn { expr = Some (esFromJs result (ESEVar { id = r })) } ] })
+        in
+        (ctx, [ ESSConst { id = impl, init = resolved }
+              , ESSConst { id = d.ident
+                         , init = ESEArrow { params = ps, body = body } } ])
   | decl & !(DeclLet _) ->
     errorSingle [infoDecl decl] (concat
       "ecmascript: unsupported declaration: " (esDeclName decl))
@@ -1040,8 +1233,26 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint + MExprArity
   sem compileESProg =
   | ast ->
     let runtimeEnv = nameSym "env" in
-    let ctx = { esCompileCtxEmpty with runtimeEnv = runtimeEnv } in
-    match compileStmts ctx (ESCDiscard ()) ast with (_, stmts) in
+    let externalsName = nameSym "externals" in
+    -- The runtime file is the table of which externals have a default.
+    let defaults = setOfSeq cmpString
+      (filter (isPrefix eqc "$ext_") (mapKeys (esRuntimeSections ()))) in
+    let ctx = { esCompileCtxEmpty with runtimeEnv = runtimeEnv
+              , externalsName = externalsName
+              , externalDefaults = defaults } in
+    match compileStmts ctx (ESCDiscard ()) ast with (ctx, stmts) in
+    -- A host need not supply `externals` at all, so fall back to an empty
+    -- object; each external then looks itself up in this one binding.
+    let stmts =
+      if ctx.usesExternals then
+        cons (ESSConst
+          { id = externalsName
+          , init = ESEBin
+            { op = ESONullish {}
+            , lhs = esMember (ESEVar { id = runtimeEnv }) "externals"
+            , rhs = ESEObject { fields = [] } } })
+          stmts
+      else stmts in
     ESProg
     { imports = []
     , stmts =

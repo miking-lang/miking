@@ -470,11 +470,6 @@ testMain substituters directories location (lam api.
          (strEndsWith ".mc"))
     [(esCompile, succ), (esRun, succ), (esDiff, succ)];
 
-  -- These declare externals, which the ecmascript backend does not implement.
-  api.tests []
-    (elem ["src/stdlib/math.mc", "src/stdlib/stats.mc"])
-    [(esCompile, dont), (esRun, dont), (esDiff, dont)];
-
   -- === Java ===
 
   -- NOTE(vipa, 2024-11-07): The `--to-jvm` flag of `mi compile` just

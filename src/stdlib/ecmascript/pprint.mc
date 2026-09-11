@@ -71,6 +71,7 @@ lang ESPrettyPrint = ESAst
   | ESOOr _ -> "||"    | ESOShl _ -> "<<"    | ESOShr _ -> ">>"
   | ESOUShr _ -> ">>>" | ESOBitAnd _ -> "&"  | ESOBitOr _ -> "|"
   | ESOBitXor _ -> "^"
+  | ESONullish _ -> "??"
 
   -- Precedence levels follow the ECMA-262 expression grammar.
   sem esBinOpPrec : ESBinOp -> Int
@@ -85,6 +86,7 @@ lang ESPrettyPrint = ESAst
   | ESOBitOr _ -> 5
   | ESOAnd _ -> 4
   | ESOOr _ -> 3
+  | ESONullish _ -> 3
 
   sem printESUnOp : ESUnOp -> String
   sem printESUnOp =
@@ -200,7 +202,10 @@ lang ESPrettyPrint = ESAst
     let prec = esBinOpPrec t.op in
     -- All binary operators we emit are left-associative, so the right operand
     -- must bind one level tighter to survive without parentheses.
-    match printESExprP env indent prec t.lhs with (env, l) in
+    -- `??` may not be mixed with `||` or `&&` without parentheses, so its
+    -- left operand must bind one level tighter as well.
+    let lprec = match t.op with ESONullish _ then addi prec 1 else prec in
+    match printESExprP env indent lprec t.lhs with (env, l) in
     match printESExprP env indent (addi prec 1) t.rhs with (env, r) in
     (env, join [l, " ", printESBinOp t.op, " ", r])
   | ESEUn t ->
@@ -351,6 +356,11 @@ let mul = lam l. lam r. ESEBin { op = ESOMul {}, lhs = l, rhs = r } in
 
 -- Operands that already bind tightly enough are not parenthesized.
 utest pp (add va vb) with "a + b" in
+utest pp (ESEBin { op = ESONullish {}, lhs = va, rhs = vb }) with "a ?? b" in
+-- JS rejects `a || b ?? c`, so a mixed operand is parenthesised.
+utest pp (ESEBin { op = ESONullish {}
+                 , lhs = ESEBin { op = ESOOr {}, lhs = va, rhs = vb }, rhs = vc })
+with "(a || b) ?? c" in
 utest pp (sub (sub va vb) vc) with "a - b - c" in
 utest pp (mul (add va vb) vc) with "(a + b) * c" in
 -- ... but a right operand at the same level is, since `-` is left-associative.

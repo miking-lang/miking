@@ -36,6 +36,7 @@ lang ESAst
   | ESOBitAnd {} -- lhs & rhs
   | ESOBitOr  {} -- lhs | rhs
   | ESOBitXor {} -- lhs ^ rhs
+  | ESONullish {} -- lhs ?? rhs
 
   syn ESUnOp =
   | ESONeg    {} -- -arg

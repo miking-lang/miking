@@ -558,4 +558,66 @@ utest esCompileToString ast5 with join
   , "  env.dprint(env_1);\n"
   , "}\n" ] in
 
+-- An external resolves once: the host's implementation, else the runtime's
+-- default. Floats need no conversion, so the resolved value is bound as is.
+let sqrtN = nameSym "externalSqrt" in
+let astExt = bind_ (next_ sqrtN false (tyarrow_ tyfloat_ tyfloat_))
+  (dprint_ (app_ (nvar_ sqrtN) (float_ 16.0))) in
+let ext = esCompileToString astExt in
+utest contains "const externals = env.externals ?? {};" ext with true in
+utest contains
+  "const externalSqrt = externals.externalSqrt ?? $ext_externalSqrt(env);" ext
+with true in
+utest contains "function $ext_externalSqrt(env)" ext with true in
+
+-- Without a default the fallback throws when called, and strings cross the
+-- boundary as JavaScript strings.
+let fooN = nameSym "externalFoo" in
+let astExtStr = bind_ (next_ fooN true (tyarrow_ tystr_ tybool_))
+  (dprint_ (app_ (nvar_ fooN) (str_ "a"))) in
+let extStr = esCompileToString astExtStr in
+utest contains "$noExternal(\"externalFoo\")" extStr with true in
+utest contains "$jsStr(x)" extStr with true in
+utest contains "function $noExternal(name)" extStr with true in
+
+-- A missing arity-0 external is a value, so it fails where it is resolved.
+let barN = nameSym "externalBar" in
+let astExt0 = bind_ (next_ barN false tyint_) (dprint_ (nvar_ barN)) in
+utest contains "$noExternal(\"externalBar\")()" (esCompileToString astExt0)
+with true in
+
+-- A missing arity-0 external of an opaque type can only be passed on, so it
+-- stays lazy too: the placeholder is bound, not called.
+let chanT = nameSym "Chan" in
+let chanN = nameSym "externalChan" in
+let astExtOpaque = bind_ (next_ chanN true (ntycon_ chanT))
+  (dprint_ (nvar_ chanN)) in
+let extOpaque = esCompileToString astExtOpaque in
+utest contains "externals.externalChan ?? $noExternal(\"externalChan\");" extOpaque
+with true in
+
+-- A type with a constructor is not opaque, since the program can match on
+-- its values, so a missing one still fails where it is resolved.
+let boxT = nameSym "Box" in
+let boxC = nameSym "MkBox" in
+let boxN = nameSym "externalBox" in
+let astExtCon = bindall_
+  [ ncondef_ boxC (tyarrow_ tyint_ (ntycon_ boxT))
+  , next_ boxN true (ntycon_ boxT) ]
+  (dprint_ (nvar_ boxN)) in
+utest contains "$noExternal(\"externalBox\")()" (esCompileToString astExtCon)
+with true in
+
+-- Tuples come back from the host as arrays.
+let pairN = nameSym "externalPair" in
+let astExtTup = bind_
+  (next_ pairN true (tyarrow_ tyint_ (tytuple_ [tystr_, tybool_])))
+  (dprint_ (app_ (nvar_ pairN) (int_ 1))) in
+let extTup = esCompileToString astExtTup in
+utest contains "$S(_r[0])" extTup with true in
+utest contains "_r[1]" extTup with true in
+
+-- A program without externals does not bind them.
+utest contains "externals" (esCompileToString ast5) with false in
+
 ()

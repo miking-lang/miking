@@ -424,6 +424,117 @@ function $unsupported(name) {
 }
 //!end
 
+// An external with no default here, and none supplied by the host through
+// `env.externals`. Returns a placeholder that throws when *used* rather than
+// failing at once: dead-code elimination guarantees an external is referenced,
+// not that the reference ever runs. Calling the placeholder throws, and so
+// does reading any property of it, so a missing opaque value -- a channel,
+// say -- reports itself even when it reaches a host function that expects
+// the real thing. The compiler calls the result immediately for an arity-0
+// external of a transparent type, which the program could use directly.
+//!intrinsic $noExternal
+function $noExternal(name) {
+  const fail = () => {
+    throw new Error("no default implementation for external '" + name +
+                    "', and the environment does not provide one");
+  };
+  return new Proxy(fail, { get: fail });
+}
+//!end
+
+// Default implementations of externals, one per section, each taking the
+// runtime environment and returning the implementation. The compiler treats
+// this file as the table of which externals have a default: an external named
+// `x` has one exactly when a `$ext_x` section exists. Values crossing the
+// boundary are converted by the compiler, so these work in plain JavaScript.
+//!intrinsic $ext_externalExp
+function $ext_externalExp(env) { return Math.exp; }
+//!end
+
+//!intrinsic $ext_externalLog
+function $ext_externalLog(env) { return Math.log; }
+//!end
+
+//!intrinsic $ext_externalAtan
+function $ext_externalAtan(env) { return Math.atan; }
+//!end
+
+//!intrinsic $ext_externalSin
+function $ext_externalSin(env) { return Math.sin; }
+//!end
+
+//!intrinsic $ext_externalCos
+function $ext_externalCos(env) { return Math.cos; }
+//!end
+
+//!intrinsic $ext_externalAtan2
+function $ext_externalAtan2(env) { return Math.atan2; }
+//!end
+
+//!intrinsic $ext_externalPow
+function $ext_externalPow(env) { return Math.pow; }
+//!end
+
+//!intrinsic $ext_externalSqrt
+function $ext_externalSqrt(env) { return Math.sqrt; }
+//!end
+
+// The logarithm of the binomial coefficient n choose k, summed as logarithms
+// so it does not overflow for large arguments.
+//!intrinsic $ext_externalLogCombination
+function $ext_externalLogCombination(env) {
+  return (n, k) => {
+    if (k < 0 || k > n) return -Infinity;
+    const m = Math.min(k, n - k);
+    let s = 0;
+    for (let i = 1; i <= m; i++) s += Math.log(n - m + i) - Math.log(i);
+    return s;
+  };
+}
+//!end
+
+// File externals that map directly onto operations every host provides. The
+// channel operations do not have defaults: a host implements them.
+//!intrinsic $ext_externalFileExists
+function $ext_externalFileExists(env) { return (path) => env.fileExists(path); }
+//!end
+
+//!intrinsic $ext_externalDeleteFile
+function $ext_externalDeleteFile(env) { return (path) => { env.deleteFile(path); }; }
+//!end
+
+// Atomic references. JavaScript runs a program on one thread, so an atomic
+// reference is an ordinary box. Compare-and-set compares with `===`.
+//!intrinsic $ext_externalAtomicMake
+function $ext_externalAtomicMake(env) { return (v) => ({ v: v }); }
+//!end
+
+//!intrinsic $ext_externalAtomicGet
+function $ext_externalAtomicGet(env) { return (r) => r.v; }
+//!end
+
+//!intrinsic $ext_externalAtomicExchange
+function $ext_externalAtomicExchange(env) {
+  return (r, v) => { const old = r.v; r.v = v; return old; };
+}
+//!end
+
+//!intrinsic $ext_externalAtomicCAS
+function $ext_externalAtomicCAS(env) {
+  return (r, seen, v) => {
+    if (r.v !== seen) return false;
+    r.v = v;
+    return true;
+  };
+}
+//!end
+
+//!intrinsic $ext_externalAtomicFetchAndAdd
+function $ext_externalAtomicFetchAndAdd(env) {
+  return (r, n) => { const old = r.v; r.v = old + n; return old; };
+}
+//!end
+
 export {
   $fromBig, $slli, $srli, $srai, $roundfi,
   $S, $jsStr, $set, $create, $splitAt, $subsequence,
@@ -432,4 +543,21 @@ export {
   $tLinGet, $tLinSet, $tReshape, $tSlice, $tSub, $tCopy,
   $tIterSlice, $tEq, $tTranspose, $tToString,
   $ref, $modref, $conTag, $readBytesResult, $typeOf, $unsupported,
+  $noExternal,
+  $ext_externalExp,
+  $ext_externalLog,
+  $ext_externalAtan,
+  $ext_externalSin,
+  $ext_externalCos,
+  $ext_externalAtan2,
+  $ext_externalPow,
+  $ext_externalSqrt,
+  $ext_externalLogCombination,
+  $ext_externalFileExists,
+  $ext_externalDeleteFile,
+  $ext_externalAtomicMake,
+  $ext_externalAtomicGet,
+  $ext_externalAtomicExchange,
+  $ext_externalAtomicCAS,
+  $ext_externalAtomicFetchAndAdd,
 };

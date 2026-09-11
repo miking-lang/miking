@@ -13,8 +13,114 @@ import { inspect } from "node:util";
 import * as fs from "node:fs";
 import { execSync, spawnSync } from "node:child_process";
 
-export function nodeEnv() {
+// Externals this host implements.
+function makeExternals() {
+  const readChannel = (fd) => ({ fd, pending: Buffer.alloc(0), consumed: 0, eof: false });
+  const writeChannel = (fd, write) => ({ fd, write });
+  const stdin = readChannel(0);
+  const stdout = writeChannel(1, (s) => { process.stdout.write(s); });
+  const stderr = writeChannel(2, (s) => { process.stderr.write(s); });
+
+  // Tops up the read-ahead buffer; returns false at end of input.
+  const fill = (ch) => {
+    if (ch.eof) return false;
+    const buf = Buffer.alloc(65536);
+    let n = 0;
+    try {
+      n = fs.readSync(ch.fd, buf, 0, buf.length, null);
+    } catch (e) {
+      if (e.code === "EAGAIN") return true;
+      if (e.code !== "EOF") throw e;
+    }
+    if (n === 0) { ch.eof = true; return false; }
+    ch.pending = Buffer.concat([ch.pending, buf.subarray(0, n)]);
+    return true;
+  };
+  const take = (ch, n) => {
+    const out = ch.pending.subarray(0, n);
+    ch.pending = ch.pending.subarray(n);
+    ch.consumed += out.length;
+    return out;
+  };
+
   return {
+    externalFileSize: (path) => {
+      try { return fs.statSync(path).size; } catch { return 0; }
+    },
+
+    externalWriteOpen: (path) => {
+      try {
+        const fd = fs.openSync(path, "w");
+        return [writeChannel(fd, (s) => { fs.writeSync(fd, s); }), true];
+      } catch {
+        return [stdout, false];
+      }
+    },
+
+    externalWriteString: (ch, s) => { ch.write(s); },
+
+    // Writes go straight to the descriptor, so there is nothing to flush.
+    externalWriteFlush: (_ch) => {},
+
+    externalWriteClose: (ch) => { try { fs.closeSync(ch.fd); } catch {} },
+
+    externalReadOpen: (path) => {
+      try { return [readChannel(fs.openSync(path, "r")), true]; }
+      catch { return [stdin, false]; }
+    },
+
+    externalReadLine: (ch) => {
+      for (;;) {
+        const nl = ch.pending.indexOf(0x0a);
+        if (nl >= 0) return [take(ch, nl + 1).subarray(0, nl).toString("utf8"), false];
+        if (!fill(ch)) {
+          if (ch.pending.length === 0) return ["", true];
+          return [take(ch, ch.pending.length).toString("utf8"), false];
+        }
+      }
+    },
+
+    // Returns the bytes read, whether fewer than `n` arrived, and whether an
+    // error occurred. Unlike the reference, a short count here means end of
+    // input rather than possibly a short read.
+    externalReadBytes: (ch, n) => {
+      try {
+        while (ch.pending.length < n && fill(ch)) {}
+        const got = take(ch, Math.min(n, ch.pending.length));
+        return [Array.from(got), got.length < n, false];
+      } catch {
+        return [[], false, true];
+      }
+    },
+
+    // The reference reads the whole file from the current position, so it
+    // yields "" once anything has been read, or for standard input.
+    externalReadString: (ch) => {
+      if (ch.consumed > 0 || ch.fd === 0) return "";
+      try {
+        while (fill(ch)) {}
+        return take(ch, ch.pending.length).toString("utf8");
+      } catch {
+        return "";
+      }
+    },
+    
+    externalReadClose: (ch) => { try { fs.closeSync(ch.fd); } catch {} },
+
+    externalStdin: stdin,
+    externalStdout: stdout,
+    externalStderr: stderr,
+  };
+}
+
+// `argv` is what the program sees as its arguments, the first being its own
+// name. It defaults to node's arguments without the interpreter's path, which
+// is right when the host itself is the entry point; a runner script that sits
+// in between passes its own view.
+export function nodeEnv(argv = process.argv.slice(1)) {
+  return {
+    externals: makeExternals(),
+
     // Writes a string with no trailing newline
     print: (s) => {
       process.stdout.write(s);
@@ -42,7 +148,7 @@ export function nodeEnv() {
       throw new Error(msg);
     },
 
-    argv: () => process.argv.slice(1),
+    argv: () => argv,
 
     // Reads one line from stdin, without its terminator.
     readLine: () => {
