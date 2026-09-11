@@ -10,7 +10,6 @@ lang EvalF = Ast
   | VError (Info, String)
 
   sem readback : Val -> Option Expr
-  sem readback =| _ -> error "Unsupported Val in readback!"
 
   type EvalFEnv = List (Int, Val)
 
@@ -20,10 +19,8 @@ lang EvalF = Ast
   | Cons ((s2, val), env) -> if eqi s1 s2 then val else evalFEnvLookup s1 env
 
   sem mkEvalF : Expr -> EvalFEnv -> Val
-  sem mkEvalF =| _ -> error "Unsupported Expr in mkEvalF!"
 
   sem mkEvalDeclF : Decl -> EvalFEnv -> EvalFEnv
-  sem mkEvalDeclF =| _ -> error "Unsupported Decl in mkEvalDeclF!"
 end
 
 ---------------------
@@ -35,13 +32,10 @@ lang VarEvalF = EvalF + VarAst
   | TmVar r ->
     match nameGetSym r.ident with Some s1 then
       evalFEnvLookup (sym2hash s1)
-    else error "Unsymbolized TmVarin mkEvalF!"
+    else errorSingle [r.info] "Unsymbolized TmVarin mkEvalF!"
 end
 
 lang AppEvalF = EvalF + AppAst + ConstAst + UnknownTypeAst
-  -- The partially applied constant values and `mkDeltaF` live here rather than
-  -- in ConstEvalF so that the application case below can consult them while
-  -- compiling; ConstEvalF still supplies all the actual cases.
   syn Val =
   | VConst1 (Const, Val -> Val)
   | VConst2 (Const, Val -> Val -> Val)
@@ -104,7 +98,7 @@ lang LamEvalF = AppEvalF + LamAst
       let s = sym2hash s in
       let body = mkEvalF r.body in
       lam env. VCls (lam val. body (Cons ((s, val), env)))
-    else error "Unsymbolized TmLam in mkEvalF!"
+    else errorSingle [r.info] "Unsymbolized TmLam in mkEvalF!"
 
   sem applyF =
   | (VCls cls, val) -> cls val
@@ -130,8 +124,6 @@ lang ConstEvalF = AppEvalF + ConstAst + UnknownTypeAst
   | (VConst1 (_, f), val) -> f val
   | (VConst2 (c, f), val) -> VConst1 (c, f val)
   | (VConst3 (c, f), val) -> VConst2 (c, f val)
-
-  sem mkDeltaF =| _ -> error "Unsupported Const in mkDeltaF!"
 end
 
 lang MatchEvalF = EvalF + MatchAst
@@ -145,7 +137,6 @@ lang MatchEvalF = EvalF + MatchAst
       match tryMatch (target env) env with Some env then thn env else els env
 
   sem mkTryMatch : Pat -> Val -> EvalFEnv -> Option EvalFEnv
-  sem mkTryMatch =| _ -> error "Unsupported Pat in mkTryMatch!"
 end
 
 lang RecordEvalF = EvalF + RecordAst
@@ -196,7 +187,7 @@ lang LetEvalF = EvalF + LetDeclAst
       let s = sym2hash s in
       let body = mkEvalF r.body in
       lam env. Cons ((s, body env), env)
-    else error "Unsymbolized DeclLet in mkEvalDeclF!"
+    else errorSingle [r.info] "Unsymbolized DeclLet in mkEvalDeclF!"
 end
 
 lang RecLetsEval = EvalF + RecLetsDeclAst + LamEvalF
@@ -212,8 +203,8 @@ lang RecLetsEval = EvalF + RecLetsDeclAst + LamEvalF
               let s2 = sym2hash s2 in
               let body = mkEvalF r.body in
               (s1, lam env. lam val. body (Cons ((s2, val), env)))
-            else error "Unsymbolized DeclRecLets in mkEvalDeclF!"
-          else error "Right-hand side of recursive let must be a lambda")
+            else errorSingle [r.info] "Unsymbolized DeclRecLets in mkEvalDeclF!"
+          else errorSingle [infoTm b.body] "Right-hand side of recursive let must be a lambda")
         r.bindings in
     recursive let reclet = lam env.
       foldl
@@ -240,7 +231,7 @@ lang DataEvalF = EvalF + DataAst + DataDeclAst
     match nameGetSym r.ident with Some s then
       let s = sym2hash s in
       lam env. VConApp (s, body env)
-    else error "Unsymbolized TmConApp in mkEvalF!"
+    else errorSingle [r.info] "Unsymbolized TmConApp in mkEvalF!"
 
   sem mkEvalDeclF =
   | DeclConDef _ -> lam env. env
@@ -340,28 +331,6 @@ lang CharEvalF = ConstEvalF + CharAst + UnknownTypeAst
   sem mkDeltaF =
   | CChar r -> VChar r.val
 end
-
--- lang IOEvalF = ConstEvalF + IOAst + SeqAst + RecordAst + UnknownTypeAst
---   sem mkDeltaF =
---   | (CPrint _, [TmSeq s]) ->
---     let s = _evalSeqOfCharsToString info s.tms in
---     print s;
---     uunit_
---   | (CPrintError _, [TmSeq s]) ->
---     let s = _evalSeqOfCharsToString info s.tms in
---     printError s;
---     uunit_
---   | (CDPrint _, [_]) -> uunit_
---   | (CFlushStdout _, [_]) ->
---     flushStdout ();
---     uunit_
---   | (CFlushStderr _, [_]) ->
---     flushStderr ();
---     uunit_
---   | (CReadLine _, [_]) ->
---     let s = readLine () in
---     TmSeq {tms = map char_ s, ty = tyunknown_, info = NoInfo ()}
--- end
 
 lang CmpCharEvalF = ConstEvalF + CharEvalF + BoolEvalF + CmpCharAst
   sem mkDeltaF =
@@ -631,6 +600,19 @@ end
 ------------------
 -- COMPOSITIONS --
 ------------------
+
+-- Missing, relative to `MExprAst` in `ast.mc`:
+--
+-- * Terms: TmPlaceholder, TmOpaque.
+-- * Decls: DeclUtest, DeclExt.
+-- * Constants: SymbAst, CmpSymbAst, FloatStringConversionAst, FileOpAst,
+--   IOAst, RandomNumberGeneratorAst, TimeAst, ConTagAst, RefOpAst, TypeOpAst,
+--   TensorOpAst and BootParserAst.  SysAst is only partially covered: CExit
+--   has a delta function, CError, CArgv, CCommand and CExec do not.
+-- * Patterns: PatCon, PatAnd, PatOr and PatNot.  DataEvalF can thus build a
+--   constructor, but nothing can take one apart.
+--
+-- Types and kinds are not evaluated, so nothing is missing there.
 
 lang MExprEvalF =
   -- Terms and Decls
