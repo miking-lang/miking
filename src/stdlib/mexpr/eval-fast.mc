@@ -79,9 +79,10 @@ lang ConstEvalF = AppEvalF + ConstAst + UnknownTypeAst
   syn Val =
   | VConst1 (Const, Val -> Val)
   | VConst2 (Const, Val -> Val -> Val)
+  | VConst3 (Const, Val -> Val -> Val -> Val)
 
   sem readback =
-  | VConst1 (c, _) | VConst2 (c, _) -> Some(TmConst
+  | VConst1 (c, _) | VConst2 (c, _) | VConst3 (c, _) -> Some(TmConst
     { val = c, ty = TyUnknown { info = NoInfo () }, info = NoInfo () })
 
   sem mkEvalF =
@@ -90,6 +91,7 @@ lang ConstEvalF = AppEvalF + ConstAst + UnknownTypeAst
   sem applyF =
   | (VConst1 (_, f), val) -> f val
   | (VConst2 (c, f), val) -> VConst1 (c, f val)
+  | (VConst3 (c, f), val) -> VConst2 (c, f val)
 
   sem mkDeltaF : Const -> Val
   sem mkDeltaF =| _ -> error "Unsupported Const in mkDeltaF!"
@@ -324,6 +326,164 @@ end
 --     TmSeq {tms = map char_ s, ty = tyunknown_, info = NoInfo ()}
 -- end
 
+lang CmpCharEvalF = ConstEvalF + CharEvalF + BoolEvalF + CmpCharAst
+  sem mkDeltaF =
+  | c & CEqc _ -> VConst2
+    (c , lam x. lam y. match (x, y) with (VChar x, VChar y) in VBool (eqc x y))
+end
+
+lang IntCharConversionEvalF =
+  ConstEvalF + CharEvalF + IntEvalF + IntCharConversionAst
+
+  sem mkDeltaF =
+  | c & CInt2Char _ -> VConst1
+    (c , lam x. match x with VInt x in VChar (int2char x))
+  | c & CChar2Int _ -> VConst1
+    (c , lam x. match x with VChar x in VInt (char2int x))
+end
+
+lang FloatEvalF = ConstEvalF + FloatAst + UnknownTypeAst
+  syn Val =
+  | VFloat Float
+
+  sem readback =
+  | VFloat f -> Some ( TmConst
+    { val = CFloat { val = f }
+    , ty = TyUnknown { info = NoInfo () }
+    , info = NoInfo () } )
+
+  sem mkDeltaF =
+  | CFloat r -> VFloat r.val
+end
+
+lang ArithFloatEvalF = ConstEvalF + FloatEvalF + ArithFloatAst
+  sem mkDeltaF =
+  | c & CAddf _ -> VConst2
+    (c , lam x. lam y. match (x, y) with (VFloat x, VFloat y) in VFloat (addf x y))
+  | c & CSubf _ -> VConst2
+    (c , lam x. lam y. match (x, y) with (VFloat x, VFloat y) in VFloat (subf x y))
+  | c & CMulf _ -> VConst2
+    (c , lam x. lam y. match (x, y) with (VFloat x, VFloat y) in VFloat (mulf x y))
+  | c & CDivf _ -> VConst2
+    (c , lam x. lam y. match (x, y) with (VFloat x, VFloat y) in VFloat (divf x y))
+  | c & CNegf _ -> VConst1
+    (c , lam x. match x with VFloat x in VFloat (negf x))
+end
+
+lang CmpFloatEvalF = ConstEvalF + FloatEvalF + BoolEvalF + CmpFloatAst
+  sem mkDeltaF =
+  | c & CEqf _ -> VConst2
+    (c , lam x. lam y. match (x, y) with (VFloat x, VFloat y) in VBool (eqf x y))
+  | c & CNeqf _ -> VConst2
+    (c , lam x. lam y. match (x, y) with (VFloat x, VFloat y) in VBool (neqf x y))
+  | c & CLtf _ -> VConst2
+    (c , lam x. lam y. match (x, y) with (VFloat x, VFloat y) in VBool (ltf x y))
+  | c & CGtf _ -> VConst2
+    (c , lam x. lam y. match (x, y) with (VFloat x, VFloat y) in VBool (gtf x y))
+  | c & CLeqf _ -> VConst2
+    (c , lam x. lam y. match (x, y) with (VFloat x, VFloat y) in VBool (leqf x y))
+  | c & CGeqf _ -> VConst2
+    (c , lam x. lam y. match (x, y) with (VFloat x, VFloat y) in VBool (geqf x y))
+end
+
+lang FloatIntConversionEvalF =
+  ConstEvalF + FloatEvalF + IntEvalF + FloatIntConversionAst
+
+  sem mkDeltaF =
+  | c & CFloorfi _ -> VConst1
+    (c , lam x. match x with VFloat x in VInt (floorfi x))
+  | c & CCeilfi _ -> VConst1
+    (c , lam x. match x with VFloat x in VInt (ceilfi x))
+  | c & CRoundfi _ -> VConst1
+    (c , lam x. match x with VFloat x in VInt (roundfi x))
+  | c & CInt2float _ -> VConst1
+    (c , lam x. match x with VInt x in VFloat (int2float x))
+end
+
+----------------------------
+-- SEQUENCE OPERATIONS --
+----------------------------
+
+lang SeqOpEvalF =
+  ConstEvalF + SeqEvalF + IntEvalF + BoolEvalF + RecordEvalF + SeqOpAst
+
+  sem mkDeltaF =
+  -- First order
+  | c & CHead _ -> VConst1
+    (c , lam s. match s with VSeq s in head s)
+  | c & CTail _ -> VConst1
+    (c , lam s. match s with VSeq s in VSeq (tail s))
+  | c & CNull _ -> VConst1
+    (c , lam s. match s with VSeq s in VBool (null s))
+  | c & CLength _ -> VConst1
+    (c , lam s. match s with VSeq s in VInt (length s))
+  | c & CReverse _ -> VConst1
+    (c , lam s. match s with VSeq s in VSeq (reverse s))
+  | c & CIsList _ -> VConst1
+    (c , lam s. match s with VSeq s in VBool (isList s))
+  | c & CIsRope _ -> VConst1
+    (c , lam s. match s with VSeq s in VBool (isRope s))
+  | c & CGet _ -> VConst2
+    (c , lam s. lam i. match (s, i) with (VSeq s, VInt i) in get s i)
+  | c & CCons _ -> VConst2
+    (c , lam v. lam s. match s with VSeq s in VSeq (cons v s))
+  | c & CSnoc _ -> VConst2
+    (c , lam s. lam v. match s with VSeq s in VSeq (snoc s v))
+  | c & CConcat _ -> VConst2
+    (c , lam s1. lam s2.
+      match (s1, s2) with (VSeq s1, VSeq s2) in VSeq (concat s1 s2))
+  | c & CSplitAt _ -> VConst2
+    (c , lam s. lam i.
+      match (s, i) with (VSeq s, VInt i) in
+      match splitAt s i with (l, r) in
+      VRecord
+        (mapFromSeq cmpSID
+          [(stringToSid "0", VSeq l), (stringToSid "1", VSeq r)]))
+  | c & CSet _ -> VConst3
+    (c , lam s. lam i. lam v.
+      match (s, i) with (VSeq s, VInt i) in VSeq (set s i v))
+  | c & CSubsequence _ -> VConst3
+    (c , lam s. lam o. lam n.
+      match (s, o, n) with (VSeq s, VInt o, VInt n) in
+      VSeq (subsequence s o n))
+
+  -- Higher order
+  | c & CMap _ -> VConst2
+    (c , lam f. lam s.
+      match s with VSeq s in VSeq (map (lam x. applyF (f, x)) s))
+  | c & CMapi _ -> VConst2
+    (c , lam f. lam s.
+      match s with VSeq s in
+      VSeq (mapi (lam i. lam x. applyF (applyF (f, VInt i), x)) s))
+  | c & CIter _ -> VConst2
+    (c , lam f. lam s.
+      match s with VSeq s in
+      iter (lam x. applyF (f, x); ()) s;
+      VRecord (mapEmpty cmpSID))
+  | c & CIteri _ -> VConst2
+    (c , lam f. lam s.
+      match s with VSeq s in
+      iteri (lam i. lam x. applyF (applyF (f, VInt i), x); ()) s;
+      VRecord (mapEmpty cmpSID))
+  | c & CCreate _ -> VConst2
+    (c , lam n. lam f.
+      match n with VInt n in VSeq (create n (lam i. applyF (f, VInt i))))
+  | c & CCreateList _ -> VConst2
+    (c , lam n. lam f.
+      match n with VInt n in VSeq (createList n (lam i. applyF (f, VInt i))))
+  | c & CCreateRope _ -> VConst2
+    (c , lam n. lam f.
+      match n with VInt n in VSeq (createRope n (lam i. applyF (f, VInt i))))
+  | c & CFoldl _ -> VConst3
+    (c , lam f. lam acc. lam s.
+      match s with VSeq s in
+      foldl (lam acc. lam x. applyF (applyF (f, acc), x)) acc s)
+  | c & CFoldr _ -> VConst3
+    (c , lam f. lam acc. lam s.
+      match s with VSeq s in
+      foldr (lam x. lam acc. applyF (applyF (f, x), acc)) acc s)
+end
+
 lang SysEvalF = ConstEvalF + IntEvalF + SysAst
   sem mkDeltaF =
   | c & CExit _ -> VConst1 (c, lam x. match x with VInt x in exit x)
@@ -367,6 +527,70 @@ lang RecordPatEval = MatchEvalF + RecordEvalF + RecordAst + RecordPat
       else None ()
 end
 
+lang SeqTotPatEvalF = MatchEvalF + SeqEvalF + SeqTotPat
+  sem mkTryMatch =
+  | PatSeqTot r ->
+    let pats = map mkTryMatch r.pats in
+    let n = length pats in
+    lam val. lam env.
+      match val with VSeq vals then
+        if eqi (length vals) n then
+          optionFoldlM
+            (lam env. lam pv. match pv with (pat, v) in pat v env)
+            env
+            (zipWith (lam pat. lam v. (pat, v)) pats vals)
+        else None ()
+      else None ()
+end
+
+lang SeqEdgePatEvalF = MatchEvalF + SeqEvalF + SeqEdgePat
+  sem mkTryMatch =
+  | PatSeqEdge r ->
+    let pats = map mkTryMatch (concat r.prefix r.postfix) in
+    let npre = length r.prefix in
+    let npost = length r.postfix in
+    let nfix = addi npre npost in
+    -- The middle binds the remaining subsequence, or is dropped for `_`.
+    let middle =
+      match r.middle with PName name then
+        match nameGetSym name with Some s then
+          let s = sym2hash s in
+          lam vals. lam env. Some (Cons ((s, VSeq vals), env))
+        else error "Unsymbolized PatSeqEdge in mkTryMatch!"
+      else lam. lam env. Some env
+    in
+    lam val. lam env.
+      match val with VSeq vals then
+        if geqi (length vals) nfix then
+          match splitAt vals npre with (pre, rest) in
+          match splitAt rest (subi (length rest) npost) with (mid, post) in
+          match
+            optionFoldlM
+              (lam env. lam pv. match pv with (pat, v) in pat v env)
+              env
+              (zipWith (lam pat. lam v. (pat, v)) pats (concat pre post))
+          with Some env then middle mid env
+          else None ()
+        else None ()
+      else None ()
+end
+
+lang IntPatEvalF = MatchEvalF + IntEvalF + IntPat
+  sem mkTryMatch =
+  | PatInt r -> lam val. lam env.
+    match val with VInt i then
+      if eqi i r.val then Some env else None ()
+    else None ()
+end
+
+lang CharPatEvalF = MatchEvalF + CharEvalF + CharPat
+  sem mkTryMatch =
+  | PatChar r -> lam val. lam env.
+    match val with VChar c then
+      if eqc c r.val then Some env else None ()
+    else None ()
+end
+
 ------------------
 -- COMPOSITIONS --
 ------------------
@@ -381,10 +605,13 @@ lang MExprEvalF =
 
   -- Constants
   UnsafeCoerceEvalF + IntEvalF + ArithIntEvalF + ShiftIntEvalF +  BoolEvalF +
-  CmpIntEvalF + CharEvalF + SysEvalF +
+  CmpIntEvalF + CharEvalF + CmpCharEvalF + IntCharConversionEvalF +
+  FloatEvalF + ArithFloatEvalF + CmpFloatEvalF +
+  FloatIntConversionEvalF + SeqOpEvalF + SysEvalF +
 
   -- Patterns
-  NamedPatEvalF + BoolPatEval + RecordPatEval
+  NamedPatEvalF + BoolPatEval + RecordPatEval + SeqTotPatEvalF +
+  SeqEdgePatEvalF + IntPatEvalF + CharPatEvalF
 end
 
 lang TestLang = MExprEvalF + MExprEq + MExprPrettyPrint end
