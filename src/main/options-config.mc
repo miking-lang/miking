@@ -124,7 +124,7 @@ let optionsConfig : ParseConfig Options = [
     lam p: ArgPart Options.
       let o: Options = p.options in {o with disableJsTCO = true}),
   ([("--to-es", "", "")],
-    "Compile a file to an ECMAScript module",
+    "Compile a file to an ECMAScript module. Implies --native-parser, and thus --mlang-pipeline. Note that this is an unstable, experimental feature!",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with toEcmascript = true}),
   ([("--output", " ", "<file>")],

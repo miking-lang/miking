@@ -75,6 +75,17 @@ recursive let esCollectApp : use Ast in Expr -> (Expr, [Expr]) =
   else (e, [])
 end
 
+-- Strips leading declarations from an expression, returning them and whatever
+-- they wrap.
+recursive let esStripDecls : use Ast in Expr -> ([Decl], Expr) =
+  use MExprAst in
+  lam e.
+  match e with TmDecl t then
+    match esStripDecls t.inexpr with (decls, body) in
+    (cons t.decl decls, body)
+  else ([], e)
+end
+
 -- Flattens a chain of single-parameter lambdas into a parameter list and body.
 recursive let esCollectLams : use Ast in Expr -> ([Name], Expr) =
   use MExprAst in
@@ -466,19 +477,24 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint + MExprArity
     -- group are n-ary in both directions. JS hoists function declarations, so
     -- mutual recursion needs no ordering care.
     let ctx = foldl (lam ctx. lam b.
-        match b.body with TmLam _ then
-          match esCollectLams b.body with (params, _) in
+        match esStripDecls b.body with (_, TmLam _ & fn) then
+          match esCollectLams fn with (params, _) in
           { ctx with arities = mapInsert b.ident (length params) ctx.arities }
         else ctx)
       ctx d.bindings in
     let step = lam acc. lam b.
       match acc with (ctx, stmts) in
-      match b.body with TmLam _ then
-        match esCollectLams b.body with (params, body) in
+      match esStripDecls b.body with (wrapping, TmLam _ & fn) then
+        -- Declarations wrapping the function are emitted before it. Function
+        -- declarations hoist in JS, so this stays correct even if one of them
+        -- refers back into the group.
+        match mapAccumL esCompileDecl ctx wrapping with (ctx, wrapStmts) in
+        match esCollectLams fn with (params, body) in
         match esCompileFun ctx b.ident params body with (ctx, decl) in
-        (ctx, snoc stmts decl)
-      else errorSingle [b.info]
-        "ecmascript: a recursive binding must be a function"
+        (ctx, join [stmts, join wrapStmts, [decl]])
+      else errorSingle [b.info] (join
+        [ "ecmascript: a recursive binding must be a function, but "
+        , nameGetStr b.ident, " is bound to ", esExprName b.body ])
     in
     foldl step (ctx, []) d.bindings
   | decl & !(DeclLet _) ->
