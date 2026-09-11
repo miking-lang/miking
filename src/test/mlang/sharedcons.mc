@@ -5,7 +5,7 @@ lang ExprDef
 end
 
 lang A = ExprDef
-    syn Expr =
+    syn Expr +=
     | TmFoo ()
 end
 
@@ -18,7 +18,7 @@ let isA = use A in lam x. match x with TmFoo () then true else false
 let isB = use B in lam x. match x with TmFoo () then true else false
 
 lang C = ExprDef
-    syn Expr =
+    syn Expr +=
     | TmBar ()
 end
 

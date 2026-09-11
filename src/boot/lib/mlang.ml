@@ -783,16 +783,7 @@ let add_decl_to_lang (lang_fi : info) (lang_name : ustring) (data : lang_data)
         ( "Product extension is not supported by this version of "
         ^ "Miking. You can use the experimental--mlang-pipeline"
         ^ "flag to enable this feature." )
-  | Data (fi, name, param_count, constructors, kind) ->
-      ( match kind with
-      | Base ->
-          ()
-      | SumExt ->
-          raise_error fi
-            ( "Explicit Sum extension through '+=' is not "
-            ^ "supported in this version. You can use"
-            ^ "either use '=' or use the experimental "
-            ^ "flag --mlang-pipeline to enable this " ^ "feature" ) ) ;
+  | Data (fi, name, param_count, constructors, _) ->
       let syn =
         match Record.find_opt name data.types with
         | Some (Right syn) ->
@@ -831,16 +822,7 @@ let add_decl_to_lang (lang_fi : info) (lang_name : ustring) (data : lang_data)
         {syn with cons= List.fold_left add_con syn.cons constructors}
       in
       {data with types= Record.add name (Either.Right syn) data.types}
-  | Inter (fi, name, ty, params, cases, kind) ->
-      ( match kind with
-      | Base ->
-          ()
-      | SumExt ->
-          raise_error fi
-            ( "Explicit sum extension through '+=' is not "
-            ^ "supported in this version. You can use"
-            ^ "either use '=' or use the experimental "
-            ^ "flag --mlang-pipeline to enable this " ^ "feature" ) ) ;
+  | Inter (fi, name, ty, params, cases, _) ->
       let sem =
         match Record.find_opt name data.values with
         | Some sem ->

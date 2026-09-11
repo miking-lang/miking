@@ -4,6 +4,8 @@ include "./logger.mc"
 include "./objects.mc"
 include "ext/file-ext.mc"
 include "string.mc"
+include "basic-types.mc"
+include "seq.mc"
 
 let docgenFileReadOpen = fileReadOpen
 

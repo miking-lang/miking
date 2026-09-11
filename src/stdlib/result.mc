@@ -1,6 +1,10 @@
 include "map.mc"
 include "either.mc"
 include "common.mc"
+include "basic-types.mc"
+include "seq.mc"
+include "char.mc"
+include "bool.mc"
 
 /-
 

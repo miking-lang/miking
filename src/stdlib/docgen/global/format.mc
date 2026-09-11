@@ -8,6 +8,8 @@
 
 include "option.mc"
 include "string.mc"
+include "basic-types.mc"
+include "seq.mc"
 
 lang Formats
 

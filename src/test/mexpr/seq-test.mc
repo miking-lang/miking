@@ -3,6 +3,7 @@
 --
 -- Test integer primitives
 
+include "bool.mc"
 include "common.mc"
 
 -- Helper function for tests

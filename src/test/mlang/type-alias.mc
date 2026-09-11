@@ -10,41 +10,40 @@ lang Base
 end
 
 lang L1 = Base
-  syn T1 =
+  syn T1 +=
 
   type A1 = {a1 : T1, a2 : T2}
   type A2 = {b1 : A1, b2 : Int}
 
-  syn T2 =
+  syn T2 +=
   | X ()
 end
 
 lang L2 = Base
-  syn T2 =
+  syn T2 +=
   | Y ()
 
   type A3 = Int
 end
 
 lang L3 = L1 + L2
-  syn T1 =
+  syn T1 +=
   | Z ()
   | W ()
 
   type A4 = [(A3, T1)]
 
-  syn T2 =
+  syn T2 +=
   | K A4
 end
 
 lang L4 = L3
   type A5 = (A3, T3)
+  type A6 = Float
 
   syn T3 =
   | A A6
   | B A5
-
-  type A6 = Float
 end
 
 mexpr

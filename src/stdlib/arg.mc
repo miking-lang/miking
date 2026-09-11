@@ -8,6 +8,9 @@ include "string.mc"
 include "seq.mc"
 include "char.mc"
 include "math.mc"
+include "basic-types.mc"
+include "int.mc"
+include "bool.mc"
 
 type ArgResult a = {
   strings : [String],

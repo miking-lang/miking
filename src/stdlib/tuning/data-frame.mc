@@ -6,6 +6,7 @@ include "seq.mc"
 include "common.mc"
 include "string.mc"
 include "eqset.mc"
+include "basic-types.mc"
 
 type DataFrame a = {
   data : [[a]],

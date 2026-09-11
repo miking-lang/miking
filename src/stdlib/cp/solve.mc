@@ -4,6 +4,13 @@ include "ast.mc"
 include "pprint.mc"
 include "sys.mc"
 include "json.mc"
+include "map.mc"
+include "name.mc"
+include "basic-types.mc"
+include "string.mc"
+include "seq.mc"
+include "option.mc"
+include "bool.mc"
 
 lang COPSolve = COP + COPPrettyPrint
   syn COPVarValue =
@@ -44,7 +51,7 @@ lang COPSolve = COP + COPPrettyPrint
 
   sem solve: COPModel -> COPSolverResult
   sem solve =
-  | model -> solve (solverOptionsDefault {}) model
+  | model -> solveOptions (solverOptionsDefault {}) model
 
   sem solveOptions: COPSolverOptions -> COPModel -> COPSolverResult
   sem solveOptions options =

@@ -1,6 +1,7 @@
 
 include "option.mc"
 include "seq.mc"
+include "basic-types.mc"
 
 -- Implements an iterator for traversing (in-)finite sequences.
 

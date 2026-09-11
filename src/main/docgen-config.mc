@@ -1,6 +1,10 @@
+include "arg.mc"
+include "basic-types.mc"
 include "options-config.mc"
 include "options-type.mc"
 include "docgen/options/docgen-options.mc"
+include "docgen/global/format-language.mc"
+include "docgen/global/format.mc"
 include "assoc.mc"
 
 let docGenOptionsConfig : ParseConfig Options = concat optionsConfig [

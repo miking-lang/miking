@@ -3,6 +3,10 @@
 --
 -- File miking.mi is the main file of the Miking tool chain.
 
+include "arg.mc"
+include "basic-types.mc"
+include "char.mc"
+include "common.mc"
 include "parser/tool.mc"
 include "compile.mc"
 include "seq.mc"
@@ -12,6 +16,7 @@ include "run.mc"
 include "assoc.mc"
 include "options.mc"
 include "options-config.mc"
+include "options-type.mc"
 include "docgen.mc"
 include "docgen-config.mc"
 include "tune.mc"

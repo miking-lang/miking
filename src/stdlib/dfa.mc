@@ -1,4 +1,9 @@
 include "nfa.mc"
+include "digraph.mc"
+include "bool.mc"
+include "basic-types.mc"
+include "char.mc"
+include "eqset.mc"
 
 -- Represents a deterministic finite automaton.
 -- Equality and print functions are required for

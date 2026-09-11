@@ -3,6 +3,19 @@ include "mexpr/anf.mc"
 include "mexpr/keyword-maker.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/type-check.mc"
+include "mexpr/info.mc"
+include "map.mc"
+include "error.mc"
+include "mexpr/symbolize.mc"
+include "mexpr/pprint.mc"
+include "seq.mc"
+include "string.mc"
+include "basic-types.mc"
+include "stringid.mc"
+include "mexpr/ast-builder.mc"
+include "bool.mc"
+include "mexpr/eq.mc"
+include "option.mc"
 
 -- Defines AST nodes for holes.
 
@@ -19,23 +32,23 @@ let _expectConstInt : use Ast in Info -> String -> Expr -> Int =
 lang HoleAstBase = IntAst + ANF + KeywordMaker + TypeCheck + Sym
   syn Hole =
 
-  syn Expr =
+  syn Expr +=
   | TmHole {default : Expr,
             depth : Int,
             ty : Type,
             info : Info,
             inner : Hole}
 
-  sem infoTm =
+  sem infoTm +=
   | TmHole h -> h.info
 
-  sem tyTm =
+  sem tyTm +=
   | TmHole {ty = ty} -> ty
 
-  sem withType (ty : Type) =
+  sem withType (ty : Type) +=
   | TmHole t -> TmHole {t with ty = ty}
 
-  sem symbolizeExpr (env : SymEnv) =
+  sem symbolizeExpr (env : SymEnv) +=
   | TmHole h -> TmHole h
 
   sem default =
@@ -43,12 +56,12 @@ lang HoleAstBase = IntAst + ANF + KeywordMaker + TypeCheck + Sym
   | t & TmOpaque _ -> t
   | t -> smap_Expr_Expr default t
 
-  sem isAtomic =
+  sem isAtomic +=
   | TmHole _ -> false
 
   sem pprintHole =
 
-  sem pprintCode (indent : Int) (env : PprintEnv) =
+  sem pprintCode (indent : Int) (env : PprintEnv) +=
   | TmHole t ->
     match pprintCode indent env t.default with (env, default) then
       match pprintHole t.inner with (keyword, bindings) then
@@ -91,14 +104,14 @@ lang HoleAstBase = IntAst + ANF + KeywordMaker + TypeCheck + Sym
 
   sem hsample (stepSize : Int) =
 
-  sem normalize (k : Expr -> Expr) =
+  sem normalize (k : Expr -> Expr) +=
   | TmHole ({default = default} & t) ->
     k (TmHole {t with default = normalizeTerm t.default})
 
-  sem isKeyword =
+  sem isKeyword +=
   | TmHole _ -> true
 
-  sem matchKeywordString (info : Info) =
+  sem matchKeywordString (info : Info) +=
   | "hole" -> Some (1, lam lst. head lst)
 
   sem _mkHole (info : Info) (hty : Type) (holeMap : Map String Expr -> Hole)
@@ -121,7 +134,7 @@ lang HoleAstBase = IntAst + ANF + KeywordMaker + TypeCheck + Sym
 
   sem hty : Info -> Hole -> Type
 
-  sem typeCheckExpr (env: TCEnv) =
+  sem typeCheckExpr (env: TCEnv) +=
   | TmHole t ->
     let default = typeCheckExpr env t.default in
     let ty = hty t.info t.inner in
@@ -143,14 +156,14 @@ end
 
 -- A Boolean hole.
 lang HoleBoolAst = BoolAst + HoleAstBase + BoolTypeAst
-  syn Hole =
+  syn Hole +=
   | BoolHole {}
 
-  sem hsample (stepSize : Int) =
+  sem hsample (stepSize : Int) +=
   | BoolHole {} ->
     get [true_, false_] (randIntU 0 2)
 
-  sem hnext (last : Option Expr) (stepSize : Int) =
+  sem hnext (last : Option Expr) (stepSize : Int) +=
   | BoolHole {} ->
     match last with None () then Some false_
     else match last with Some (TmConst {val = CBool {val = false}}) then
@@ -159,17 +172,17 @@ lang HoleBoolAst = BoolAst + HoleAstBase + BoolTypeAst
       None ()
     else never
 
-  sem hdomainSize (stepSize : Int) =
+  sem hdomainSize (stepSize : Int) +=
   | BoolHole {} -> 2
 
-  sem hdomain (stepSize : Int) =
+  sem hdomain (stepSize : Int) +=
   | BoolHole {} -> [true_, false_]
 
   sem fromString =
   | "true" -> true
   | "false" -> false
 
-  sem matchKeywordString (info : Info) =
+  sem matchKeywordString (info : Info) +=
   | "Boolean" ->
     Some (1,
       let validate = lam expr.
@@ -180,18 +193,18 @@ lang HoleBoolAst = BoolAst + HoleAstBase + BoolTypeAst
 
       lam lst. _mkHole info tybool_ (lam. BoolHole {}) validate (get lst 0))
 
-  sem pprintHole =
+  sem pprintHole +=
   | BoolHole {} ->
     ("Boolean", [])
 
-  sem hty info =
+  sem hty info +=
   | BoolHole {} -> TyBool {info = info}
 
-  sem hfromInt =
+  sem hfromInt +=
   | BoolHole {} ->
     lam e. neqi_ (int_ 0) e
 
-  sem htoInt info v =
+  sem htoInt info v +=
   | BoolHole {} ->
     match v with TmConst {val = CBool {val = b}} then
       if b then 1 else 0
@@ -201,17 +214,17 @@ end
 
 -- An integer hole (range of integers).
 lang HoleIntRangeAst = IntAst + HoleAstBase + IntTypeAst
-  syn Hole =
+  syn Hole +=
   | HIntRange {min : Int,
                max : Int}
 
-  sem hsample (stepSize : Int) =
+  sem hsample (stepSize : Int) +=
   | HIntRange h ->
     let size = hdomainSize stepSize (HIntRange h) in
     let i = randIntU 0 size in
     int_ (addi h.min (muli i stepSize))
 
-  sem hnext (last : Option Expr) (stepSize : Int) =
+  sem hnext (last : Option Expr) (stepSize : Int) +=
   | HIntRange {min = min, max = max} ->
     match last with None () then Some (int_ min)
     else match last with Some (TmConst {val = CInt {val = i}}) then
@@ -224,19 +237,19 @@ lang HoleIntRangeAst = IntAst + HoleAstBase + IntTypeAst
         else None ()
     else never
 
-  sem hdomainSize (stepSize : Int) =
+  sem hdomainSize (stepSize : Int) +=
   | HIntRange {min = min, max = max} ->
     let len = addi (subi max min) 1 in
     let r = divi len stepSize in
     let m = if eqi 0 (modi len stepSize) then 0 else 1 in
     addi r m
 
-  sem hdomain (stepSize : Int) =
+  sem hdomain (stepSize : Int) +=
   | HIntRange ({min = min} & h) ->
     map (lam i. int_ (addi min (muli i stepSize)))
       (create (hdomainSize stepSize (HIntRange h)) (lam i. i))
 
-  sem matchKeywordString (info : Info) =
+  sem matchKeywordString (info : Info) +=
   | "IntRange" ->
     Some (1,
       let validate = lam expr.
@@ -257,18 +270,18 @@ lang HoleIntRangeAst = IntAst + HoleAstBase + IntTypeAst
            else errorSingle [info] (join ["Empty domain: ", int2string min, "..", int2string max]))
         validate (get lst 0))
 
-  sem pprintHole =
+  sem pprintHole +=
   | HIntRange {min = min, max = max} ->
     ("IntRange", [("min", int2string min), ("max", int2string max)])
 
-  sem hty info =
+  sem hty info +=
   | HIntRange {} -> TyInt {info = info}
 
-  sem hfromInt =
+  sem hfromInt +=
   | HIntRange {} ->
     lam e. e
 
-  sem htoInt info v =
+  sem htoInt info v +=
   | HIntRange {} ->
     match v with TmConst {val = CInt {val = i}} then i
     else errorSingle [info] "Expected an Int expression"
@@ -285,25 +298,25 @@ end
 -- Independency annotation
 lang IndependentAst = HoleAnnotation + KeywordMaker + ANF + PrettyPrint
                     + TypeCheck
-  syn Expr =
+  syn Expr +=
   | TmIndependent {lhs : Expr,
                    rhs : Expr,
                    info: Info,
                    ty : Type}
 
-  sem stripTuneAnnotations =
+  sem stripTuneAnnotations +=
   | TmIndependent t -> t.lhs
 
-  sem isKeyword =
+  sem isKeyword +=
   | TmIndependent _ -> true
 
-  sem matchKeywordString (info : Info) =
+  sem matchKeywordString (info : Info) +=
   | "independent" -> Some (2, lam lst.
     let e1 = get lst 0 in
     let e2 = get lst 1 in
     TmIndependent {lhs = e1, rhs = e2, info = info, ty = tyTm e1})
 
-  sem normalize (k : Expr -> Expr) =
+  sem normalize (k : Expr -> Expr) +=
   | TmIndependent t ->
     normalizeName (lam l.
       normalizeName (lam r.
@@ -313,16 +326,16 @@ lang IndependentAst = HoleAnnotation + KeywordMaker + ANF + PrettyPrint
       t.rhs)
     t.lhs
 
-  sem infoTm =
+  sem infoTm +=
   | TmIndependent {info = info} -> info
 
-  sem tyTm =
+  sem tyTm +=
   | TmIndependent {ty = ty} -> ty
 
-  sem withType (ty : Type) =
+  sem withType (ty : Type) +=
   | TmIndependent t -> TmIndependent {t with ty = ty}
 
-  sem smapAccumL_Expr_Expr f acc =
+  sem smapAccumL_Expr_Expr f acc +=
   | TmIndependent t ->
     match f acc t.lhs with (acc, lhs) then
       match f acc t.rhs with (acc, rhs) then
@@ -330,14 +343,14 @@ lang IndependentAst = HoleAnnotation + KeywordMaker + ANF + PrettyPrint
       else never
     else never
 
-  sem pprintCode (indent : Int) (env : PprintEnv) =
+  sem pprintCode (indent : Int) (env : PprintEnv) +=
   | TmIndependent t ->
     match printParen indent env t.lhs with (env, lhs) in
     let aindent = pprintIncr indent in
     match printParen aindent env t.rhs with (env, rhs) in
     (env, join ["independent ", lhs, pprintNewline aindent, rhs])
 
-  sem typeCheckExpr (env: TCEnv) =
+  sem typeCheckExpr (env: TCEnv) +=
   | TmIndependent t ->
     let lhs = typeCheckExpr env t.lhs in
     let rhs = typeCheckExpr env t.rhs in

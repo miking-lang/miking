@@ -9,6 +9,10 @@ include "ast-builder.mc"
 include "eq.mc"
 include "info.mc"
 include "parser/lexer.mc"
+include "bool.mc"
+include "char.mc"
+include "basic-types.mc"
+include "name.mc"
 
 type ParseResult a = {val : a, pos : Pos, str: String}
 type StrPos = {str : String, pos : Pos}
@@ -42,7 +46,7 @@ end
 
 -- Include this fragment if there are no infix operations
 lang ExprParserNoInfix = ExprParser
-  sem parseInfix (p: Pos) (prec: Int) (exp: ParseResult Expr) =
+  sem parseInfix (p: Pos) (prec: Int) (exp: ParseResult Expr) +=
   | _ -> exp
 end
 
@@ -85,7 +89,7 @@ utest parseIdent true (initPos "") "Asd12 "
 
 -- Parse identifier
 lang IdentParser = ExprParser
-  sem parseExprImp (p: Pos) =
+  sem parseExprImp (p: Pos) +=
   | (['_' | 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'g' | 'h' | 'i' | 'j' | 'k' |
       'l' | 'm' | 'n' | 'o' | 'p' | 'q' | 'r' | 's' | 't' | 'u' | 'v' | 'w' |
       'x' | 'y' | 'z' ] ++ s) & xs ->
@@ -98,7 +102,7 @@ end
 
 -- Parsing of boolean literals
 lang BoolParser = ExprParser + IdentParser + ConstAst + BoolAst + UnknownTypeAst
-  sem nextIdent (p: Pos) (xs: String) =
+  sem nextIdent (p: Pos) (xs: String) +=
   | "true" ->
       let p2 = advanceCol p 4 in
       {val = TmConst {val = CBool {val = true},
@@ -158,7 +162,7 @@ utest parseFloatExponent (initPos "") "Not an exponent"
 
 -- Parsing of an unsigned number
 lang UNumParser = ExprParser
-  sem parseExprImp (p : Pos) =
+  sem parseExprImp (p : Pos) +=
   | (['0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'] ++ s) & xs ->
     let n : ParseResult String = parseUInt p xs in
     let nextChar = if null n.str then None () else Some (head n.str) in
@@ -169,7 +173,7 @@ end
 
 -- Parsing of an unsigned integer
 lang UIntParser = UNumParser + ConstAst + IntAst + UnknownTypeAst
-  sem nextNum (p: Pos) (xs: String) (nval: String) =
+  sem nextNum (p: Pos) (xs: String) (nval: String) +=
   | _ ->
     let p2 = advanceCol p (length nval) in
     {val = TmConst {val = CInt {val = string2int nval},
@@ -180,7 +184,7 @@ end
 
 -- Parsing of an unsigned float
 lang UFloatParser = UNumParser + ConstAst + FloatAst + IntAst + UnknownTypeAst
-  sem nextNum (p: Pos) (xs: String) (nval: String) =
+  sem nextNum (p: Pos) (xs: String) (nval: String) +=
   | Some (('.' | 'e' | 'E') & c) ->
     let exponentHelper = lam pos. lam pre. lam expChar. lam s. lam isFloat.
       let exp : ParseResult String = parseFloatExponent (advanceCol pos 1) s in
@@ -246,7 +250,7 @@ end
 lang IfParser =
   ExprParser + IdentParser + KeywordUtils +  MatchAst + BoolPat + UnknownTypeAst
 
-  sem nextIdent (p: Pos) (xs: String) =
+  sem nextIdent (p: Pos) (xs: String) +=
   | "if" ->
      let e1 : ParseResult Expr = parseExprMain (advanceCol p 2) 0 xs in
      let r1 : StrPos = matchKeyword "then" e1.pos e1.str in
@@ -264,7 +268,7 @@ lang IfParser =
 
 -- Parse parentheses
 lang ParenthesesParser = ExprParser + KeywordUtils
-  sem parseExprImp (p: Pos) =
+  sem parseExprImp (p: Pos) +=
   | "(" ++ xs ->
     let e : ParseResult Expr = parseExprMain (advanceCol p 1) 0 xs in
     let r : StrPos = matchKeyword ")" e.pos e.str in
@@ -273,7 +277,7 @@ end
 
 -- Parses a sequence of
 lang SeqParser = ExprParser + KeywordUtils + SeqAst + UnknownTypeAst
-  sem parseExprImp (p: Pos) =
+  sem parseExprImp (p: Pos) +=
   | "[" ++ xs ->
     recursive let work = lam acc. lam first. lam p2. lam str.
       let r : StrPos = eatWSAC p2 str in
@@ -307,7 +311,7 @@ let matchChar : Pos -> String -> {val: Char, pos: Pos, str: String} =
 
 -- Parses strings, including escape characters
 lang StringParser = ExprParser + SeqAst + CharAst + UnknownTypeAst
-  sem parseExprImp (p: Pos) =
+  sem parseExprImp (p: Pos) +=
   | "\"" ++ xs ->
     recursive let work = lam acc. lam p2. lam str : String.
       match str with "\"" ++ xs then
@@ -325,7 +329,7 @@ end
 
 -- Parses character literals
 lang CharParser = ExprParser + KeywordUtils + CharAst + UnknownTypeAst
-  sem parseExprImp (p: Pos) =
+  sem parseExprImp (p: Pos) +=
   | "\'" ++ xs ->
       let r : ParseResult Char = matchChar (advanceCol p 1) xs in
       let r2 : StrPos = matchKeyword "\'" r.pos r.str in
@@ -338,7 +342,7 @@ end
 
 -- Parse variable
 lang VarParser = ExprParser + IdentParser + VarAst + UnknownTypeAst
-  sem nextIdent (p: Pos) (xs: String) =
+  sem nextIdent (p: Pos) (xs: String) +=
   | x ->
       let p2 = advanceCol p (length x) in
       {val = TmVar {ident = nameNoSym x, ty = tyunknown_, info = makeInfo p p2, frozen = false},
@@ -350,7 +354,7 @@ end
 lang FunParser =
   ExprParser + IdentParser + KeywordUtils + LamAst + UnknownTypeAst
 
-  sem nextIdent (p: Pos) (xs: String) =
+  sem nextIdent (p: Pos) (xs: String) +=
   | "lam" ->
     let r : StrPos = eatWSAC (advanceCol p 3) xs in
     let r2 : ParseResult String = parseIdent false r.pos r.str in
@@ -366,7 +370,7 @@ end
 -- Parsing let expressions
 lang LetParser =
   ExprParser + IdentParser + KeywordUtils + LetDeclAst + UnknownTypeAst
-  sem nextIdent (p: Pos) (xs: String) =
+  sem nextIdent (p: Pos) (xs: String) +=
   | "let" ->
     let r : StrPos = eatWSAC (advanceCol p 3) xs in
     let r2 : ParseResult String = parseIdent false r.pos r.str in
@@ -398,7 +402,7 @@ lang ExprInfixParser = ExprParser
   | LeftAssoc ()
   | RightAssoc ()
 
-  sem parseInfix (p: Pos) (prec: Int) (exp: ParseResult Expr) =
+  sem parseInfix (p: Pos) (prec: Int) (exp: ParseResult Expr) +=
   | str ->
     let r : StrPos = eatWSAC p str in
     match parseInfixImp r.pos r.str with Some op then
@@ -421,13 +425,13 @@ end
 
 -- This parser should be used if juxtaposition is NOT used
 lang ExprInfixParserClosed = ExprInfixParser
-  sem parseInfixImp (p: Pos) =
+  sem parseInfixImp (p: Pos) +=
   | _ -> None ()
 end
 
 -- This parser should be used for application using juxaposition
 lang ExprInfixParserJuxtaposition = ExprInfixParser + AppAst + UnknownTypeAst
-  sem parseInfixImp (p: Pos) =
+  sem parseInfixImp (p: Pos) +=
   | str ->
     Some {
       val = lam x. lam y.

@@ -12,6 +12,11 @@ include "mexpr/type-check.mc"
 include "stringid.mc"
 include "name.mc"
 include "map.mc"
+include "mexpr/info.mc"
+include "set.mc"
+include "char.mc"
+include "mexpr/pprint.mc"
+include "mexpr/ast-builder.mc"
 
 
 lang SpecializeExtract = MExprExtract + SpecializeAst

@@ -11,6 +11,16 @@ include "set.mc"
 include "mexpr/ast.mc"
 include "mexpr/type-check.mc"
 include "mexpr/free-vars.mc"
+include "mexpr/info.mc"
+include "basic-types.mc"
+include "map.mc"
+include "option.mc"
+include "seq.mc"
+include "mexpr/eq.mc"
+include "mexpr/symbolize.mc"
+include "mexpr/pprint.mc"
+include "mexpr/ast-builder.mc"
+include "string.mc"
 
 lang MExprExtract = MExprAst + MExprFreeNames
   sem extractAst : Set Name -> Expr -> Expr

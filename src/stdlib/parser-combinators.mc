@@ -1,5 +1,9 @@
 include "string.mc"
 include "common.mc"
+include "bool.mc"
+include "char.mc"
+include "basic-types.mc"
+include "seq.mc"
 
 -- Debug stuff
 let debugFlag = false

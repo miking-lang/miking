@@ -2,6 +2,9 @@ include "ast.mc"
 include "eq.mc"
 include "ast-builder.mc"
 include "info.mc"
+include "basic-types.mc"
+include "seq.mc"
+include "common.mc"
 
 -- This file contains tests for the sfold and smap semantic functions
 -- defined in "ast.mc". These will eventually be automatically generated,

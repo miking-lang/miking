@@ -1,6 +1,7 @@
 -- MExpr implementation of a cons list using explicit constructors.
 
 include "option.mc"
+include "basic-types.mc"
 
 type List a
 con Cons : all a. (a, List a) -> List a

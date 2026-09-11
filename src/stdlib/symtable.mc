@@ -7,6 +7,8 @@
 
 include "name.mc"
 include "seq.mc"
+include "basic-types.mc"
+include "bool.mc"
 
 type SymTable = [Name]
 

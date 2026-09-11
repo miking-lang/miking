@@ -21,6 +21,16 @@ include "mexpr/resymbolize.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type.mc"
 include "mexpr/type-check.mc"
+include "map.mc"
+include "name.mc"
+include "mexpr/info.mc"
+include "error.mc"
+include "seq.mc"
+include "stringid.mc"
+include "basic-types.mc"
+include "set.mc"
+include "bool.mc"
+include "mexpr/ast-builder.mc"
 
 lang Monomorphize = MExprAst + MExprCmp
   -- An instantiation maps type variable identifiers to concrete types. It

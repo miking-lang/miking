@@ -6,12 +6,24 @@ include "pprint.mc"
 include "type-check.mc"
 
 include "mlang/loader.mc"
+include "name.mc"
+include "map.mc"
+include "error.mc"
+include "mexpr/ast-builder.mc"
+include "stringid.mc"
+include "basic-types.mc"
+include "seq.mc"
+include "mexpr/unify.mc"
+include "mexpr/symbolize.mc"
+include "set.mc"
+include "mexpr/type.mc"
+include "mexpr/info.mc"
 
 lang GeneratePprint = Ast + PrettyPrint
   type GPprintEnv =
     { conFunctions : Map Name Name  -- For TyCons
     , varFunctions : Map Name Name  -- For TyVars
-    , newFunctions : [(Name, Expr)]  -- To be defined
+    , newFunctions : [(Name, Type, Expr)]  -- To be defined
 
     , tcEnv : TCEnv -- Current typechecking environment
 
@@ -34,47 +46,47 @@ lang GeneratePprint = Ast + PrettyPrint
 end
 
 lang GeneratePprintInt = GeneratePprint + IntTypeAst
-  sem _getPprintFunction env =
+  sem _getPprintFunction env +=
   | TyInt _ -> (env, nvar_ env.int2string)
 end
 
 lang GeneratePprintFloat = GeneratePprint + FloatTypeAst + FloatStringConversionAst
-  sem _getPprintFunction env =
+  sem _getPprintFunction env +=
   | TyFloat _ -> (env, uconst_ (CFloat2string ()))
 end
 
 lang GeneratePprintBool = GeneratePprint + BoolTypeAst
-  sem _getPprintFunction env =
+  sem _getPprintFunction env +=
   | TyBool _ -> (env, nvar_ env.bool2string)
 end
 
 lang GeneratePprintSeq = GeneratePprint + SeqTypeAst
-  sem _getPprintFunction env =
+  sem _getPprintFunction env +=
   | TySeq x ->
     _getSeqPprintFunction env (unwrapType x.ty)
 
-  sem _getSeqPprintFunction env =
+  sem _getSeqPprintFunction env +=
   | ty ->
     match getPprintFunction env ty with (env, elemF) in
     (env, app_ (nvar_ env.seq2string) elemF)
 end
 
 lang GeneratePprintString = GeneratePprint + SeqTypeAst + CharTypeAst
-  sem _getSeqPprintFunction env =
+  sem _getSeqPprintFunction env +=
   | ty & TyChar _ ->
     let n = nameSym "x" in
     (env, nlam_ n (tyseq_ ty) (cons_ (char_ '"') (snoc_ (app_ (nvar_ env.escapeString) (nvar_ n)) (char_ '"'))))
 end
 
 lang GeneratePprintChar = GeneratePprint + CharTypeAst
-  sem _getPprintFunction env =
+  sem _getPprintFunction env +=
   | ty & TyChar _ ->
     let n = nameSym "c" in
     (env, nlam_ n ty (snoc_ (cons_ (char_ '\'') (app_ (nvar_ env.escapeChar) (nvar_ n))) (char_ '\'')))
 end
 
 lang GeneratePprintRecord = GeneratePprint + RecordTypeAst + MExprIdentifierPrettyPrint
-  sem _getPprintFunction env =
+  sem _getPprintFunction env +=
   | ty & TyRecord x ->
     if mapIsEmpty x.fields then (env, ulam_ "" (str_ "()")) else
 
@@ -107,7 +119,7 @@ lang GeneratePprintRecord = GeneratePprint + RecordTypeAst + MExprIdentifierPret
 end
 
 lang GeneratePprintApp = GeneratePprint + AppTypeAst
-  sem _getPprintFunction env =
+  sem _getPprintFunction env +=
   | TyApp x ->
     match getPprintFunction env x.lhs with (env, lhs) in
     match getPprintFunction env x.rhs with (env, rhs) in
@@ -115,7 +127,7 @@ lang GeneratePprintApp = GeneratePprint + AppTypeAst
 end
 
 lang GeneratePprintCon = GeneratePprint + ConTypeAst + Generalize + UnifyPure
-  sem _getPprintFunction env =
+  sem _getPprintFunction env +=
   | ty & TyCon x ->
     -- TODO(vipa, 2025-01-27): Invalidate old pprint functions if
     -- we've introduced constructors to pre-existing types
@@ -129,16 +141,15 @@ lang GeneratePprintCon = GeneratePprint + ConTypeAst + Generalize + UnifyPure
     let params = match mapLookup x.ident env.tcEnv.tyConEnv with Some (_, params, _)
       then params
       else errorSingle [x.info] (concat "Typecheck environment does not contain information about type " (nameGetStr x.ident)) in
-    let paramFNames = foldl (lam acc. lam n. mapInsert n (nameSetNewSym n) acc) (mapEmpty nameCmp) params in
+    let paramFNames = map (lam n. {f = nameSetNewSym n, tyvar = nameSetNewSym n}) params in
+    let fullType = tyapps_ ty (map (lam x. ntyvar_ x.tyvar) paramFNames) in
+    let prevVarFunctions = env.varFunctions in
+    let env = {env with varFunctions = foldl (lam m. lam p. mapInsert p.tyvar p.f m) env.varFunctions paramFNames} in
 
     let constructors = mapIntersectWith
       (lam. lam pair. pair.1)
       (mapLookupOr (setEmpty nameCmp) x.ident env.tcEnv.conDeps)
       env.tcEnv.conEnv in
-
-    let fullType = tyapps_ ty (map ntyvar_ (mapKeys paramFNames)) in
-    let prevVarFunctions = env.varFunctions in
-    let env = {env with varFunctions = mapUnion env.varFunctions paramFNames} in
 
     let targetName = nameSym "_target" in
     let addMatch = lam acc. lam c. lam t.
@@ -153,12 +164,20 @@ lang GeneratePprintCon = GeneratePprint + ConTypeAst + Generalize + UnifyPure
           (cons_ (char_ '(') (snoc_ (concat_ (str_ (pprintConString (nameGetStr c))) (cons_ (char_ ' ') (app_ subf (nvar_ sub)))) (char_ ')')))
           tm in
         (env, tm)
-      else error "Unification should always be possible here" in
-    match mapFoldWithKey addMatch (env, str_ (join ["<missing case for ", nameGetStr x.ident, ">"])) constructors with (env, matchChain) in
+      else errorSingle [x.info] (join ["Unification should always be possible here (TyCon: ", nameGetStr x.ident, ", t: ", type2str t, ", fullType: ", type2str fullType, ")"]) in
+    match mapFoldWithKey addMatch (env, app_ never_ (str_ (concat " in " (nameGetStr fname)))) constructors with (env, matchChain) in
     let matchChain = nulam_ targetName matchChain in
-    let body = foldr (lam pname. lam body. nulam_ (mapFindExn pname paramFNames) body) matchChain params in
+    let body = foldr (lam p. lam body. nulam_ p.f body) matchChain paramFNames in
+    let tyAnnot = foldr
+      (lam p. lam ty. tyarrow_ (tyarrows_ [ntyvar_ p.tyvar, tystr_]) ty)
+      (tyarrows_ [fullType, tystr_])
+      paramFNames in
+    let tyAnnot = foldr
+      (lam p. lam ty. ntyall_ p.tyvar ty)
+      tyAnnot
+      paramFNames in
 
-    let env = {env with varFunctions = prevVarFunctions, newFunctions = snoc env.newFunctions (fname, body)} in
+    let env = {env with varFunctions = prevVarFunctions, newFunctions = snoc env.newFunctions (fname, tyAnnot, body)} in
     (env, nvar_ fname)
 end
 
@@ -168,21 +187,22 @@ lang GeneratePprintVar = GeneratePprint + VarTypeAst
   -- value of unknown type. We could error instead, or somehow ask
   -- surrounding code to be rewritten to carry an extra pprint
   -- function for the polymorphic type.
-  sem _getPprintFunction env =
+  sem _getPprintFunction env +=
   | TyVar x ->
     match mapLookup x.ident env.varFunctions with Some fname
     then (env, nvar_ fname)
     else (env, ulam_ "" (str_ (join ["<poly (", nameGetStr x.ident, ")>"])))
 end
 
-lang GeneratePprintTensor = GeneratePprint + TensorTypeAst
-  sem _getPprintFunction env =
+lang GeneratePprintTensor = GeneratePprint + TensorTypeAst + TensorOpAst
+  sem _getPprintFunction env +=
   | TyTensor x ->
-    (env, ulam_ "" (str_ "<tensor>"))
+    match getPprintFunction env x.ty with (env, elemF) in
+    (env, app_ (uconst_ (CTensorToString ())) elemF)
 end
 
 lang GeneratePprintMissingCase = GeneratePprint
-  sem _getPprintFunction env =
+  sem _getPprintFunction env +=
   | !TyUnknown _ -> (env, ulam_ "" (str_ "<missing case>"))
   | TyUnknown _ -> (env, ulam_ "" (str_ "<tyunknown>"))
 end
@@ -201,8 +221,8 @@ lang MExprGeneratePprint
   + GeneratePprintTensor
 end
 
-lang GeneratePprintLoader = MCoreLoader + GeneratePprint
-  syn Hook =
+lang GeneratePprintLoader = LoaderInterface + GeneratePprint
+  syn Hook +=
   | PprintHook
     { baseEnv : GPprintEnv
     , functions : Ref (Map Name Name)  -- Names for TyCon related pprint functions
@@ -239,7 +259,7 @@ lang GeneratePprintLoader = MCoreLoader + GeneratePprint
   | _ -> None ()
   | PprintHook hook ->
     let pprintName = nameSym (concat "pprint" (nameGetStr tyConName)) in
-    let loader = _addDeclExn loader (nulet_ pprintName f) in
+    let loader = (_addDeclExn _symEnvEmpty loader (nulet_ pprintName f)).1 in
     Some (loader, modref hook.functions (mapInsert tyConName pprintName (deref hook.functions)))
 
   sem registerCustomPprintFunction : Name -> Expr -> Loader -> Loader
@@ -250,13 +270,18 @@ lang GeneratePprintLoader = MCoreLoader + GeneratePprint
   sem _pprintFunctionsFor tys loader =
   | _ -> None ()
   | PprintHook hook ->
-    match mapAccumL getPprintFunction {hook.baseEnv with conFunctions = deref hook.functions, tcEnv = _getTCEnv loader} tys
-      with (env, printFs) in
+    let f = lam tcEnv.
+      let env = {hook.baseEnv with conFunctions = deref hook.functions, tcEnv = tcEnv} in
+      (tcEnv, mapAccumL getPprintFunction env tys) in
+    match _withTCEnv f loader with (loader, (env, printFs)) in
 
     modref hook.functions env.conFunctions;
     let loader = if null env.newFunctions
       then loader
-      else _addDeclExn loader (nureclets_ env.newFunctions) in
+      -- NOTE(vipa, 2026-08-17): We don't need to capture the
+      -- definitions in a SymEnv, because they're already registered
+      -- in the GPprintEnv
+      else (_addDeclExn _symEnvEmpty loader (nreclets_ env.newFunctions)).1 in
     Some (loader, printFs)
 
   sem pprintFunctionsFor : [Type] -> Loader -> (Loader, [Expr])
@@ -265,7 +290,7 @@ lang GeneratePprintLoader = MCoreLoader + GeneratePprint
 end
 
 lang DPrintViaPprintLoader = GeneratePprintLoader + IOAst
-  syn Hook =
+  syn Hook +=
   | DPrintViaPprintHook ()
 
   sem enableDPrintViaPprint : Loader -> Loader
@@ -276,7 +301,7 @@ lang DPrintViaPprintLoader = GeneratePprintLoader + IOAst
     let loader = addHook loader (DPrintViaPprintHook ()) in
     loader
 
-  sem _postTypecheck loader decl = | DPrintViaPprintHook _ ->
+  sem _postTypecheck loader decl += | DPrintViaPprintHook _ ->
     recursive let work = lam loader. lam tm. switch tm
       case TmConst {val = CDPrint _, ty = ty} then
         match unwrapType ty with TyArrow {from = from} in
@@ -350,6 +375,6 @@ lang OldDPrintViaPprint = GeneratePprint + AppTypeUtils
     -- functions right here, which might duplicate code and such,
     -- becasue it is significantly easier than finding a good location
     -- to insert it
-    bind_ (nureclets_ env.newFunctions) (ulam_ "x" (semi_ (print_ (app_ fn (var_ "x"))) (flushStdout_ unit_)))
+    bind_ (nreclets_ env.newFunctions) (ulam_ "x" (semi_ (print_ (app_ fn (var_ "x"))) (flushStdout_ unit_)))
   | tm -> smap_Expr_Expr (_dprintToPprint env) tm
 end

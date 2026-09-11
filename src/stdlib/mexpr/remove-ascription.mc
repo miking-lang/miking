@@ -1,6 +1,7 @@
 include "ast.mc"
 include "ast-builder.mc"
 include "eq.mc"
+include "name.mc"
 
 lang MExprRemoveTypeAscription = MExprAst
   sem removeTypeAscription : Expr -> Expr

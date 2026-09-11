@@ -6,6 +6,9 @@
 
 include "../parsing/token-readers.mc"
 include "./logger.mc"
+include "string.mc"
+include "char.mc"
+include "docgen/parsing/pos.mc"
 
 -- Visual categories used by the colorizer.
 -- These kinds are purely for display / syntax highlighting,

@@ -15,6 +15,13 @@ include "json.mc"
 include "stdlib.mc"
 include "stringid.mc"
 include "map.mc"
+include "basic-types.mc"
+include "name.mc"
+include "mexpr/ast-builder.mc"
+include "mexpr/symbolize.mc"
+include "seq.mc"
+include "common.mc"
+include "option.mc"
 
 let constructorKey = "__constructor__"
 let dataKey = "__data__"
@@ -62,27 +69,28 @@ lang GenerateJsonSerializers =
 
   }
 
-  sem addJsonSerializers: [Type] -> Expr -> (GJSRes, Expr, GJSEnv)
-  sem addJsonSerializers tys =
-  | expr ->
-    match generateJsonSerializers tys expr with (acc, res, env) in
-    let lib = env.lib in
-    let eta = lam expr.
-      match expr with TmLam _ then expr
-      else let n = nameSym "x" in nulam_ n (app_ expr (nvar_ n))
-    in
-    let bs = join (map (lam s.
-        [(s.serializerName,
-          match s.serializer with Some s then eta s else error "Empty serializer"),
-         (s.deserializerName,
-          match s.deserializer with Some d then eta d else error "Empty deserializer")])
-      (mapValues acc))
-    in
-    let rl = nureclets_ bs in
-    let expr = bind_ expr lib in
-    let expr = bind_ expr rl in
-    let expr = eliminateDuplicateCode expr in
-    (res,expr,env)
+  -- NOTE(vipa, 2026-08-18): This appears to be dead code, and has a type error
+  -- sem addJsonSerializers: [Type] -> Expr -> (GJSRes, Expr, GJSEnv)
+  -- sem addJsonSerializers tys =
+  -- | expr ->
+  --   match generateJsonSerializers tys expr with (acc, res, env) in
+  --   let lib = env.lib in
+  --   let eta = lam expr.
+  --     match expr with TmLam _ then expr
+  --     else let n = nameSym "x" in nulam_ n (app_ expr (nvar_ n))
+  --   in
+  --   let bs = join (map (lam s.
+  --       [(s.serializerName,
+  --         match s.serializer with Some s then eta s else error "Empty serializer"),
+  --        (s.deserializerName,
+  --         match s.deserializer with Some d then eta d else error "Empty deserializer")])
+  --     (mapValues acc))
+  --   in
+  --   let rl = nureclets_ bs in
+  --   let expr = bind_ expr lib in
+  --   let expr = bind_ expr rl in
+  --   let expr = eliminateDuplicateCode expr in
+  --   (res,expr,env)
 
   -- Generate JSON serializers and deserializers. Returns an accumulator of
   -- generated functions and a map from types to serializers/deserializers
@@ -387,8 +395,8 @@ lang GenerateJsonSerializers =
 
 end
 
-lang JsonSerializationLoader = MCoreLoader + GenerateJsonSerializers
-  syn Hook =
+lang JsonSerializationLoader = LoaderInterface + GenerateJsonSerializers
+  syn Hook +=
   | JsonSerializationHook
     { gjsAcc : Ref (Map Name GJSNamedSerializer) -- No implementations, only names (implementations have already been inserted in the program)
     , baseEnv : GJSEnv -- Only the library names matter, everything else is populated later
@@ -451,13 +459,13 @@ lang JsonSerializationLoader = MCoreLoader + GenerateJsonSerializers
     match
       match pair.serializer with TmVar x then (loader, x.ident) else
       let serName = nameSym (concat "serialize" (nameGetStr tyConName)) in
-      let loader = _addDeclExn loader (nulet_ serName pair.serializer) in
+      let loader = (_addDeclExn _symEnvEmpty loader (nulet_ serName pair.serializer)).1 in
       (loader, serName)
     with (loader, serName) in
     match
       match pair.deserializer with TmVar x then (loader, x.ident) else
       let deserName = nameSym (concat "deserialize" (nameGetStr tyConName)) in
-      let loader = _addDeclExn loader (nulet_ deserName pair.deserializer) in
+      let loader = (_addDeclExn _symEnvEmpty loader (nulet_ deserName pair.deserializer)).1 in
       (loader, deserName)
     with (loader, deserName) in
     let named =
@@ -474,7 +482,7 @@ lang JsonSerializationLoader = MCoreLoader + GenerateJsonSerializers
   sem _serializationPairsFor tys loader =
   | _ -> None ()
   | JsonSerializationHook hook ->
-    let tcEnv = _getTCEnv loader in
+    let tcEnv = (_withTCEnv (lam tcEnv. (tcEnv, tcEnv)) loader).1 in
     -- OPT(vipa, 2024-12-13): This reconstruction for each request is
     -- potentially a bit expensive
     let namedTypes = mapMap (lam x. {params = x.1, tyIdent = x.2}) tcEnv.tyConEnv in

@@ -1,6 +1,9 @@
 include "map.mc"
 include "ocaml/ast.mc"
 include "mutex.ext-ocaml.mc"
+include "mexpr/ast.mc"
+include "mexpr/ast-builder.mc"
+include "string.mc"
 
 let impl = lam arg : { expr : String, ty : use Ast in Type }.
   { expr = arg.expr, ty = arg.ty, libraries = [], cLibraries = [] }

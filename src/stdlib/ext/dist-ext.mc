@@ -1,6 +1,8 @@
 include "math.mc"
 include "bool.mc"
 include "seq.mc"
+include "ext/math-ext.mc"
+include "float.mc"
 
 -- Chi2
 external externalChi2LogPdf : Float -> Float -> Float

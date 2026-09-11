@@ -1,5 +1,8 @@
 include "map.mc"
 include "ocaml/ast.mc"
+include "mexpr/ast.mc"
+include "string.mc"
+include "mexpr/ast-builder.mc"
 
 let tyTomlTable_ = otyvarext_ "Toml.Types.table" []
 let tyTomlValue_ = otyvarext_ "Toml.Types.value" []

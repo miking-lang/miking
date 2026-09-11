@@ -6,6 +6,8 @@ include "stringid.mc"
 include "mexpr/ast.mc"
 include "javascript/ast.mc"
 include "javascript/util.mc"
+include "name.mc"
+include "map.mc"
 
 
 ------------------------------------

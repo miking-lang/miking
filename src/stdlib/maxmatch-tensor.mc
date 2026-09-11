@@ -5,6 +5,11 @@
 include "math.mc"
 include "tensor.mc"
 include "common.mc"
+include "seq.mc"
+include "string.mc"
+include "bool.mc"
+include "option.mc"
+include "basic-types.mc"
 
 type Slack = {
   val : Int,                    -- value of slack

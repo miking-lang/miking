@@ -14,6 +14,13 @@ include "seq.mc"
 include "name.mc"
 include "result.mc"
 include "either.mc"
+include "common.mc"
+include "basic-types.mc"
+include "map.mc"
+include "set.mc"
+include "mexpr/ast-builder.mc"
+include "bool.mc"
+include "char.mc"
 
 let gstr = lam t. lam n. bootParserGetString t n
 let gname = lam t. lam n. nameNoSym (bootParserGetString t n)

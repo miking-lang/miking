@@ -10,6 +10,7 @@
 
 -/
 
+include "basic-types.mc"
 include "option.mc"
 include "int.mc"
 include "arr-ext.mc"

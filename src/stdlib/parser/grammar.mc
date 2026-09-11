@@ -8,6 +8,9 @@ include "string.mc"
 include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/cmp.mc"
+include "seq.mc"
+include "bool.mc"
+include "int.mc"
 
 -- Base language for tokens
 lang TokenReprBase
@@ -29,10 +32,10 @@ end
 
 
 lang TokenReprEOF = TokenReprBase
-  syn TokenRepr =
+  syn TokenRepr +=
   | EOFRepr ()
 
-  sem tokReprToStr =
+  sem tokReprToStr +=
   | EOFRepr _ -> "<EOF>"
 end
 
@@ -305,14 +308,14 @@ end
 
 
 lang GrammarTestLanguage = TokenReprBase + TokenReprEOF + ContextFreeGrammar
-  syn TokenRepr =
+  syn TokenRepr +=
   | LParenRepr ()
   | RParenRepr ()
   | PlusRepr ()
   | TimesRepr ()
   | IntRepr ()
 
-  sem tokReprToStr =
+  sem tokReprToStr +=
   | LParenRepr _ -> "<LParen>"
   | RParenRepr _ -> "<RParen>"
   | PlusRepr _ -> "<Plus>"

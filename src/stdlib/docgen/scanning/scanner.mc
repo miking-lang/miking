@@ -4,6 +4,14 @@ include "../global/util.mc"
 include "./scanning-options.mc"
 include "./docgen-ignore.mc"
 include "./scanning-output.mc"
+include "seq.mc"
+include "basic-types.mc"
+include "sys.mc"
+include "string.mc"
+include "stdlib.mc"
+include "hashmap.mc"
+include "fileutils.mc"
+include "bool.mc"
 
 let scan : ScanningOptions -> ScanningOutput =
     lam opt.

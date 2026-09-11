@@ -6,6 +6,8 @@
 include "option.mc"
 include "seq.mc"
 include "string.mc"
+include "basic-types.mc"
+include "bool.mc"
 
 let _prod = foldl muli 1
 

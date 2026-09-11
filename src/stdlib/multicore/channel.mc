@@ -12,6 +12,7 @@ include "thread.mc"
 include "mutex.mc"
 include "cond.mc"
 include "option.mc"
+include "basic-types.mc"
 
 type Channel a = {contents : ARef [a], lock : Mutex, nonEmpty : Cond}
 

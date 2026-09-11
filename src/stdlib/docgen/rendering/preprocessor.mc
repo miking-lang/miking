@@ -5,6 +5,10 @@ include "fileutils.mc"
 include "hashmap.mc"
 include "../options/docgen-options.mc"
 include "../global/format.mc"    
+include "docgen/rendering/rendering-options.mc"
+include "basic-types.mc"
+include "seq.mc"
+include "sys.mc"
 
 let preprocess : use Objects in Object -> RenderingOptions -> () = use ObjectsRenderer in lam obj. lam opt.
     type PathMap = HashMap String () in

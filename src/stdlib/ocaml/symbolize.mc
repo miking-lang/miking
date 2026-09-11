@@ -1,5 +1,9 @@
 include "ocaml/ast.mc"
 include "mexpr/symbolize.mc"
+include "mexpr/ast.mc"
+include "map.mc"
+include "string.mc"
+include "seq.mc"
 
 lang OCamlSym =
   VarSym + AppAst + LamSym + LetSym + RecLetsSym + RecordAst + ConstAst
@@ -9,7 +13,7 @@ lang OCamlSym =
   + RecordTypeAst + ConTypeSym + OCamlExternal
   + OCamlString + OCamlRecord + OCamlLabel
 
-  sem symbolizeExpr (env : SymEnv) =
+  sem symbolizeExpr (env : SymEnv) +=
   | OTmMatch {target = target, arms = arms} ->
     let symbArm = lam arm.
       match arm with (pat, expr) in
@@ -29,7 +33,7 @@ lang OCamlSym =
     OTmConApp {t with ident = ident,
                       args = args}
 
-  sem symbolizePat env patEnv =
+  sem symbolizePat env patEnv +=
   | OPatCon t ->
     let ident =
       getSymbol {kind = "constructor",

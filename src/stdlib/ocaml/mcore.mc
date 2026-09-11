@@ -6,6 +6,15 @@ include "mexpr/type-lift.mc"
 include "ocaml/generate.mc"
 include "ocaml/pprint.mc"
 include "sys.mc"
+include "ocaml/ast.mc"
+include "ocaml/external.mc"
+include "map.mc"
+include "name.mc"
+include "ocaml/external-includes.mc"
+include "set.mc"
+include "string.mc"
+include "ocaml/generate-env.mc"
+include "ocaml/compile.mc"
 
 type Hooks a =
   { debugGenerate : String -> ()

@@ -2,15 +2,29 @@
 -- Miking is licensed under the MIT license.
 -- Copyright (C) David Broman. See file LICENSE.txt
 
+include "basic-types.mc"
+include "bool.mc"
+include "common.mc"
 include "compile.mc"
 include "options.mc"
+include "options-type.mc"
 include "sys.mc"
 include "parse.mc"
+include "seq.mc"
+include "mexpr/boot-parser.mc"
+include "mexpr/keywords.mc"
+include "mexpr/pprint.mc"
+include "mexpr/type-check.mc"
+include "tuning/ast.mc"
 include "tuning/context-expansion.mc"
+include "tuning/graph-coloring.mc"
 include "tuning/hole-cfa.mc"
 include "tuning/dependency-analysis.mc"
 include "tuning/instrumentation.mc"
+include "tuning/nested.mc"
 include "tuning/tune.mc"
+include "tuning/tune-file.mc"
+include "tuning/tune-options.mc"
 
 lang MCoreTune =
   BootParser + MExprTypeCheck +

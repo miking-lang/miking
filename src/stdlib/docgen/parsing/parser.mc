@@ -15,6 +15,17 @@ include "hashmap.mc"
 include "fileutils.mc"
 include "hashmap.mc"
 include "sys.mc"
+include "docgen/mast-gen/mast.mc"
+include "docgen/parsing/token-readers.mc"
+include "docgen/parsing/include-set.mc"
+include "docgen/parsing/pos.mc"
+include "basic-types.mc"
+include "docgen/parsing/utils.mc"
+include "mexpr/info.mc"
+include "docgen/global/logger.mc"
+include "docgen/global/ext-utils.mc"
+include "option.mc"
+include "./pos.mc"
 
 let parse : use Objects in ParsingOptions -> MAst -> Object =
     use Objects in
@@ -30,7 +41,7 @@ let parse : use Objects in ParsingOptions -> MAst -> Object =
         (lam m. lam k. hmInsert k () m)
             (hashmapEmpty ())
         ["let", "lang", "type", "syn", "sem", "con", "mexpr", "use", "utest", "recursive"] in
-    
+
     type ParseRes = { includeSet: IncludeSet (), astStream: AstStreamContext, obj: Object, newPos: Pos } in
     type ParseFileRes = { astStream: AstStreamContext, children: [Object], newPos: Pos } in
 
@@ -38,7 +49,7 @@ let parse : use Objects in ParsingOptions -> MAst -> Object =
     -- This function is parsing the text of the file without any includes
     let parseFile : AstStreamContext -> Pos -> String -> String -> ParseFileRes =
         lam astStream. lam pos. lam namespace. lam content.
-        let isStdlib = pathIsInStdlib namespace in        
+        let isStdlib = pathIsInStdlib namespace in
 
         type CollectRes = { obj: Option Object, rest: String, astStream: AstStreamContext, newPos: Pos } in
         let collectOneNode : String -> CollectRes =
@@ -110,7 +121,7 @@ let parse : use Objects in ParsingOptions -> MAst -> Object =
         in
 
         match collectOneNode content with { obj = obj, astStream = astStream, rest = rest, newPos = newPos } in
-    
+
         match obj with Some obj then
              let res = parseFile astStream newPos namespace rest in
              if null (objName obj) then res -- Mexpr filtering.
@@ -156,7 +167,7 @@ let parse : use Objects in ParsingOptions -> MAst -> Object =
         let progObj = objWithNamespace progObj loc in
         let progObj = objWithPrefix progObj longestPrefix in
         let progObj = objWithSourceCode progObj progSourceCode in
-        
+
         let progNamespace = loc in
 
         let headerDocTree = foldl (lam arg: ParseRes. lam token.
@@ -167,7 +178,7 @@ let parse : use Objects in ParsingOptions -> MAst -> Object =
                 lam arg. lam child.
                 { arg with obj = objAddChild obj child }
             in
-            
+
             match token with TokenInclude { content = content } then
                 match includeSetInsert includeSet loc content () with
                 { includeSet = includeSet, inserted = inserted, path = path } in
@@ -206,12 +217,12 @@ let parse : use Objects in ParsingOptions -> MAst -> Object =
         else
             error (join ["Invalid file path encountered during parsing: ", loc, "."])
     in
-    
+
     match goHere pwd basePath with { path = basePos } in
 
     let includeSet = includeSetNew () in
 
-    match includeSetInsert includeSet "." basePath () with { includeSet = includeSet } in    
+    match includeSetInsert includeSet "." basePath () with { includeSet = includeSet } in
 
     match parse includeSet (buildAstStream ast) pos0 basePath with { includeSet = includeSet, obj = obj } in
 

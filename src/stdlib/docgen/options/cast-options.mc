@@ -14,6 +14,10 @@ include "../parsing/parsing-options.mc"
 include "../server/server-options.mc"
 include "../rendering/rendering-options.mc"
 include "../naming/naming-options.mc"
+include "docgen/global/logger.mc"
+include "docgen/naming/name-context.mc"
+include "docgen/rendering/rendered-map.mc"
+include "docgen/global/format-language.mc"
 
 let getScanningOptions : DocGenOptions -> ScanningOptions = lam opt.
     {

@@ -1,3 +1,4 @@
+include "basic-types.mc"
 include "docgen/options/docgen-options.mc"
 include "tuning/tune-options.mc"
 include "set.mc"
@@ -36,7 +37,5 @@ type Options = {
   output : Option String,
   tuneOptions : TuneOptions,
   docgenOptions : DocGenOptions,
-  mlangPipeline : Bool,
-  experimentalRecords : Bool,
-  disableStrictSumExtension : Bool
+  mlangPipeline : Bool
 }

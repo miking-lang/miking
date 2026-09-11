@@ -18,6 +18,11 @@ include "common.mc"
 include "string.mc"
 include "digraph.mc"
 include "iterator.mc"
+include "basic-types.mc"
+include "seq.mc"
+include "ext/math-ext.mc"
+include "bool.mc"
+include "eqset.mc"
 
 ----------------------------
 -- Base language fragment --
@@ -111,7 +116,7 @@ end
 
 -- Select a solution among the neighbours uniformly at random.
 lang LocalSearchSelectRandomUniform = LocalSearchBase
-  sem select assignments =
+  sem select assignments +=
   | searchState ->
     let searchState : SearchState = searchState in
     match searchState with {cost = cost, inc = inc} then
@@ -125,7 +130,7 @@ end
 
 -- Select a random best neighbour.
 lang LocalSearchSelectRandomBest = LocalSearchBase
-  sem select assignments =
+  sem select assignments +=
   | searchState ->
     let searchState : SearchState = searchState in
     match searchState with {cost = cost, cmp = cmp, inc = inc} then
@@ -159,7 +164,7 @@ end
 
 -- Select the first improving neighbour.
 lang LocalSearchSelectFirstImproving = LocalSearchBase
-  sem select assignments =
+  sem select assignments +=
   | searchState ->
     let searchState : SearchState = searchState in
     match searchState with {cur = cur, cost = cost, cmp = cmp, inc = inc} then
@@ -178,7 +183,7 @@ lang LocalSearchSelectFirstImproving = LocalSearchBase
 end
 
 lang LocalSearchSelectFirst = LocalSearchBase
-  sem select assignments =
+  sem select assignments +=
   | searchState ->
     let searchState : SearchState = searchState in
     match searchState with {cost = cost, inc = inc} then
@@ -190,13 +195,13 @@ end
 
 -- Simulated annealing
 lang LocalSearchSimulatedAnnealing = LocalSearchBase
-  syn MetaState =
+  syn MetaState +=
   | SimulatedAnnealing {temp : Float}
 
   -- Modifies the temperature in each iteration
   sem decay : SearchState -> MetaState -> MetaState
 
-  sem step (searchState : SearchState) =
+  sem step (searchState : SearchState) +=
   | SimulatedAnnealing t ->
     let proposal = select (neighbourhood searchState) searchState in
     match proposal with None () then
@@ -226,7 +231,7 @@ end
 lang LocalSearchTabuSearch = LocalSearchBase
   syn TabuSet =
 
-  syn MetaState =
+  syn MetaState +=
   | TabuSearch {tabu : TabuSet}
 
   sem isTabu : (Assignment, TabuSet) -> Bool
@@ -234,7 +239,7 @@ lang LocalSearchTabuSearch = LocalSearchBase
   -- Update the tabu set
   sem tabuUpdate : (Assignment, TabuSet) -> TabuSet
 
-  sem step (searchState : SearchState) =
+  sem step (searchState : SearchState) +=
   | TabuSearch ({tabu = tabu} & t) ->
     let nonTabus =
       iteratorFilter (lam n. not (isTabu (n, tabu))) (neighbourhood searchState)
@@ -322,13 +327,13 @@ let _tspNeighbours = lam g. lam tour : [TspEdge].
 
 -- Problem-specific definitions.
 lang _testTsp = LocalSearchBase
-  syn Assignment =
+  syn Assignment +=
   | TspTour {tour : [TspEdge]}
 
-  syn Cost =
+  syn Cost +=
   | TspCost {cost : Int}
 
-  sem neighbourhood =
+  sem neighbourhood +=
   | searchState ->
     let ns: [Assignment] =
       let searchState : SearchState = searchState in
@@ -343,7 +348,7 @@ lang _testTsp = LocalSearchBase
   | (TspCost {cost = v1}, TspCost {cost = v2}) ->
     subi v1 v2
 
-  sem debugSearch =
+  sem debugSearch +=
   | searchState ->
     let searchState : SearchState = searchState in
     match searchState with {iter = iter, inc = {cost = TspCost {cost = cost}}}
@@ -357,11 +362,11 @@ lang _testTspSimulatedAnnealing = _testTsp
                                 + LocalSearchSimulatedAnnealing
                                 + LocalSearchSelectRandomUniform
 
-  sem decay (searchState : SearchState) =
+  sem decay (searchState : SearchState) +=
   | SimulatedAnnealing ({temp = temp} & t) ->
     SimulatedAnnealing {t with temp = mulf 0.95 temp}
 
-  sem debugMeta =
+  sem debugMeta +=
   | SimulatedAnnealing {temp = temp} ->
     print (join ["Temperature: ", float2string temp, "\n"])
 end
@@ -369,18 +374,18 @@ end
 lang _testTspTabuSearch = _testTsp
                         + LocalSearchTabuSearch
                         + LocalSearchSelectRandomBest
-  syn TabuSet =
+  syn TabuSet +=
   | TabuList {list : [[TspEdge]]}
 
-  sem isTabu =
+  sem isTabu +=
   | (TspTour {tour = tour}, TabuList {list = list}) ->
     any (_toursEq tour) list
 
-  sem tabuUpdate =
+  sem tabuUpdate +=
   | (TspTour {tour = tour}, TabuList {list = list}) ->
     TabuList {list = cons tour list}
 
-  sem debugMeta =
+  sem debugMeta +=
   | TabuSearch {tabu = TabuList {list = list}} ->
     print (join ["Tabu length: ", int2string (length list), "\n"])
 end
