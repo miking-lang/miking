@@ -1,0 +1,8 @@
+# Compiled evaluator variants, produced by
+#   mi compile ../v<name>.mc --output <name>
+#
+# Each is ~6 MB and is reproducible from the .mc file beside it, so only this
+# file is tracked -- it keeps the directory present so the build command above
+# works without creating it first.
+*
+!.gitignore
