@@ -167,13 +167,13 @@ class $Seq {
 //!end
 
 // Flattens a sequence into a single array, in place.
+// An explicit stack: a sequence built by repeated `cons` is a tree as deep
+// as it is long, which would overflow the call stack.
 //!intrinsic $col $Seq
 function $col(s) {
   if (s.a !== null) return s;
   const dst = new Array(s.n);
   let i = 0;
-  // An explicit stack: a sequence built by repeated `cons` is a tree as deep
-  // as it is long, which would overflow the call stack.
   const st = [s.r, s.l];
   while (st.length !== 0) {
     const t = st.pop();
@@ -373,10 +373,10 @@ function $tSize(shape) {
 // into it. There are no strides, which is why slicing can be a view but
 // transposing cannot. A rank-0 tensor has size 1 and is how `ref.mc` gets
 // mutability.
+// A tensor keeps its shape as a plain array; only the boundary with the
+// program speaks in sequences.
 //!intrinsic $tCreate $tSize $arr $sq
 function $tCreate(shapeSeq, f) {
-  // A tensor keeps its shape as a plain array; only the boundary with the
-  // program speaks in sequences.
   const shape = $arr(shapeSeq);
   const size = $tSize(shape);
   const rank = shape.length;

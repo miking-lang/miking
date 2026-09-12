@@ -121,6 +121,95 @@ recursive let esCollectLams : use Ast in Expr -> ([Name], Expr) =
   else ([], e)
 end
 
+
+-- Counts how often a name is used in an expression.
+recursive let esCountVar : Name -> use Ast in Expr -> Int =
+  use MExprAst in
+  lam id. lam e.
+  match e with TmVar t then (if nameEq t.ident id then 1 else 0)
+  else sfold_Expr_Expr (lam acc. lam sub. addi acc (esCountVar id sub)) 0 e
+end
+
+-- Replaces variables by expressions. Names are symbolized, so no binder can
+-- capture one of the replacements.
+recursive let esSubstVars
+  : Map Name (use Ast in Expr) -> use Ast in Expr -> use Ast in Expr =
+  use MExprAst in
+  lam sub. lam e.
+  match e with TmVar t then
+    match mapLookup t.ident sub with Some r then r else e
+  else smap_Expr_Expr (esSubstVars sub) e
+end
+
+-- A join point that hides a call to the function it sits in: a binding whose
+-- body is a function that does nothing but call `enclosing`, using each of its
+-- parameters at most once.
+--
+-- The parameter limit keeps the substitution from duplicating work, and
+-- requiring the call to be to the enclosing function keeps this from touching
+-- anything a programmer wrote: a small function of one's own, such as
+-- `let f = lam x. lam y. addi x y`, keeps its name and its definition.
+let esJoinPoint
+  : Name -> use Ast in Expr -> Option ([Name], use Ast in Expr) =
+  use MExprAst in
+  lam enclosing. lam body.
+  match esCollectLams body with (params, inner) in
+  if null params then None () else
+  match esCollectApp inner with (TmVar v, ![] & _) then
+    if and (nameEq v.ident enclosing)
+           (forAll (lam p. leqi (esCountVar p inner) 1) params)
+    then Some (params, inner) else None ()
+  else None ()
+
+-- Substitutes a join point back at each saturated call of it.
+recursive let esInlineJoin
+  : Name -> [Name] -> use Ast in Expr -> use Ast in Expr -> use Ast in Expr =
+  use MExprAst in
+  lam id. lam params. lam body. lam e.
+  match esCollectApp e with (TmVar v, args) then
+    let args = map (esInlineJoin id params body) args in
+    if and (nameEq v.ident id) (eqi (length args) (length params)) then
+      esSubstVars (mapFromSeq nameCmp (zip params args)) body
+    else smap_Expr_Expr (esInlineJoin id params body) e
+  else smap_Expr_Expr (esInlineJoin id params body) e
+end
+
+-- Calling a join point hides a tail call behind another call: the lowerer
+-- turns a self-recursive function into one that calls a join point, which
+-- calls the function. Both calls are in tail position, but only a *direct*
+-- self-call becomes a loop, so such a function grows the stack by two frames
+-- per step -- which is what made the compiler, compiled to ECMAScript,
+-- overflow the stack on a long comment.
+--
+-- Substituting the join point back at its call sites restores the direct tail
+-- call, and costs nothing: a call is replaced by a call.
+recursive let esInlineJoinPoints
+  : Option Name -> use Ast in Expr -> use Ast in Expr =
+  use MExprAst in
+  lam enclosing. lam e.
+  match e with TmDecl ({ decl = DeclLet d } & t) then
+    -- Inside this binding's body, it is the enclosing function.
+    let body = esInlineJoinPoints (Some d.ident) d.body in
+    let inexpr = esInlineJoinPoints enclosing t.inexpr in
+    let keep = lam inexpr.
+      TmDecl { t with decl = DeclLet { d with body = body }, inexpr = inexpr } in
+    match enclosing with Some fname then
+      match esJoinPoint fname body with Some (params, inner) then
+        let inexpr = esInlineJoin d.ident params inner inexpr in
+        -- The binding stays only if a use survived, such as one passing it on
+        -- as a value rather than calling it.
+        if eqi (esCountVar d.ident inexpr) 0 then inexpr else keep inexpr
+      else keep inexpr
+    else keep inexpr
+  else match e with TmDecl ({ decl = DeclRecLets r } & t) then
+    let bindings = map
+      (lam b. { b with body = esInlineJoinPoints (Some b.ident) b.body })
+      r.bindings in
+    TmDecl { t with decl = DeclRecLets { r with bindings = bindings }
+           , inexpr = esInlineJoinPoints enclosing t.inexpr }
+  else smap_Expr_Expr (esInlineJoinPoints enclosing) e
+end
+
 -- Orders record fields for output. Tuple fields are named "0", "1", ... and
 -- should read in numeric order rather than the lexicographic one that would
 -- put "10" before "2". `mapBindings` order is by interned SID, which is
@@ -1245,7 +1334,8 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint + MExprArity
     let ctx = { esCompileCtxEmpty with runtimeEnv = runtimeEnv
               , externalsName = externalsName
               , externalDefaults = defaults } in
-    match compileStmts ctx (ESCDiscard ()) ast with (ctx, stmts) in
+    match compileStmts ctx (ESCDiscard ()) (esInlineJoinPoints (None ()) ast)
+      with (ctx, stmts) in
     -- A host need not supply `externals` at all, so fall back to an empty
     -- object; each external then looks itself up in this one binding.
     let stmts =
