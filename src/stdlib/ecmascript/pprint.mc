@@ -185,18 +185,19 @@ lang ESPrettyPrint = ESAst
     match printESExprs env indent 2 t.args with (env, a) in
     (env, join ["new ", c, "(", a, ")"])
   | ESEArrow t ->
-    match esNameGetMany env t.params with (env, params) in
+    -- The parameters belong to the arrow's own scope, along with its body.
+    match esNameDeclareMany (esNameEnterScope env) t.params with (scoped, params) in
     let ps = match params with [p] then p else join ["(", strJoin ", " params, ")"] in
     match t.body with ESFBExpr b then
       -- A concise body starting with `{` would be parsed as a block -- and
       -- `x => { ...r, k: v }` then fails as a rest parameter rather than
       -- quietly meaning something else.
       let prec = if esStartsWithBrace b.expr then 19 else 2 in
-      match printESExprP env indent prec b.expr with (env, body) in
-      (env, join [ps, " => ", body])
+      match printESExprP scoped indent prec b.expr with (scoped, body) in
+      (esNameExitScope env scoped, join [ps, " => ", body])
     else match t.body with ESFBBlock b then
-      match printESBlock env indent b.stmts with (env, body) in
-      (env, join [ps, " => ", body])
+      match printESBlock scoped indent b.stmts with (scoped, body) in
+      (esNameExitScope env scoped, join [ps, " => ", body])
     else never
   | ESEBin t ->
     let prec = esBinOpPrec t.op in
@@ -230,8 +231,9 @@ lang ESPrettyPrint = ESAst
   | [] -> (env, "{}")
   | stmts ->
     let inner = addi indent esIndentIncr in
-    match printESStmts env inner stmts with (env, s) in
-    (env, join ["{", esNl inner, s, esNl indent, "}"])
+    -- A block is a scope: what it declares is not visible after it.
+    match printESStmts (esNameEnterScope env) inner stmts with (scoped, s) in
+    (esNameExitScope env scoped, join ["{", esNl inner, s, esNl indent, "}"])
 
   sem printESStmts : ESNameEnv -> Int -> [ESStmt] -> (ESNameEnv, String)
   sem printESStmts env indent =
@@ -243,11 +245,11 @@ lang ESPrettyPrint = ESAst
   sem printESStmt : ESNameEnv -> Int -> ESStmt -> (ESNameEnv, String)
   sem printESStmt env indent =
   | ESSConst t ->
-    match esNameGet env t.id with (env, id) in
+    match esNameDeclare env t.id with (env, id) in
     match printESExpr env indent t.init with (env, e) in
     (env, join ["const ", id, " = ", e, ";"])
   | ESSLet t ->
-    match esNameGet env t.id with (env, id) in
+    match esNameDeclare env t.id with (env, id) in
     match t.init with Some init then
       match printESExpr env indent init with (env, e) in
       (env, join ["let ", id, " = ", e, ";"])
@@ -290,12 +292,15 @@ lang ESPrettyPrint = ESAst
     match printESBlock env indent t.body with (env, b) in
     (env, join ["while (", c, ") ", b])
   | ESSFunDecl t ->
-    match esNameGet env t.id with (env, id) in
-    match esNameGetMany env t.params with (env, params) in
-    match printESBlock env indent t.body with (env, b) in
-    (env, join ["function ", id, "(", strJoin ", " params, ") ", b])
+    -- The name belongs to the enclosing scope, the parameters to the
+    -- function's own, along with its body.
+    match esNameDeclare env t.id with (env, id) in
+    match esNameDeclareMany (esNameEnterScope env) t.params with (scoped, params) in
+    match printESBlock scoped indent t.body with (scoped, b) in
+    (esNameExitScope env scoped
+    , join ["function ", id, "(", strJoin ", " params, ") ", b])
   | ESSClass t ->
-    match esNameGet env t.id with (env, id) in
+    match esNameDeclare env t.id with (env, id) in
     match t.extends with Some base then
       match esNameGet env base with (env, b) in
       (env, join ["class ", id, " extends ", b, " {}"])
@@ -316,13 +321,13 @@ lang ESPrettyPrint = ESAst
   sem printESImport env =
   | ESImportNamed t ->
     match mapAccumL (lam env. lam n.
-        match esNameGet env n.1 with (env, local) in
+        match esNameDeclare env n.1 with (env, local) in
         (env, if eqString n.0 local then local else join [n.0, " as ", local]))
       env t.names
       with (env, names) in
     (env, join ["import { ", strJoin ", " names, " } from \"", t.from, "\";"])
   | ESImportDefault t ->
-    match esNameGet env t.name with (env, n) in
+    match esNameDeclare env t.name with (env, n) in
     (env, join ["import ", n, " from \"", t.from, "\";"])
 
   sem printESProg : ESNameEnv -> ESProg -> (ESNameEnv, String)
@@ -447,6 +452,44 @@ utest pps (ESSFunDecl { id = a, params = [b], body = [ESSReturn { expr = Some vb
 with "function a(b) {\n  return b;\n}" in
 
 utest pps (ESSFunDecl { id = a, params = [], body = [] }) with "function a() {}" in
+
+-- Sibling scopes cannot see each other, so both parameters read `a`.
+let ppss = lam stmts.
+  match printESStmts esNameEnvEmpty 0 stmts with (_, s) in s in
+let f = nameSym "f" in
+let g = nameSym "g" in
+let p1 = nameSym "a" in
+let p2 = nameSym "a" in
+let fn = lam id. lam p. ESSFunDecl
+  { id = id, params = [p], body = [ESSReturn { expr = Some (ESEVar { id = p }) }] } in
+utest ppss [fn f p1, fn g p2] with join
+  [ "function f(a) {\n  return a;\n}\n"
+  , "function g(a) {\n  return a;\n}" ] in
+
+-- The unit parameter the pattern lowerer emits is unsymbolized (`nameNoSym ""`
+-- in `shallow-patterns.mc`), so every such parameter is the *same* name and
+-- shares one identifier. A second parameter that sanitizes the same way must
+-- still get its own.
+let shared = nameNoSym "" in
+let wild = nameSym "_" in
+utest ppss
+  [ fn f shared
+  , ESSFunDecl { id = g, params = [shared, wild]
+               , body = [ESSReturn { expr = Some (ESEVar { id = wild }) }] } ]
+with join
+  [ "function f(_) {\n  return _;\n}\n"
+  , "function g(_, __1) {\n  return __1;\n}" ] in
+
+-- A name that is visible from inside the function is not shadowed, since the
+-- body refers to it.
+let outer = nameSym "a" in
+utest ppss
+  [ ESSConst { id = outer, init = ESEInt { value = 1 } }
+  , ESSFunDecl { id = f, params = [p1]
+               , body = [ESSReturn { expr = Some (ESEBin
+                   { op = ESOAdd {}, lhs = ESEVar { id = outer }
+                   , rhs = ESEVar { id = p1 } }) }] } ]
+with "const a = 1;\nfunction f(a_1) {\n  return a + a_1;\n}" in
 
 let env = nameSym "env" in
 let prog = ESProg

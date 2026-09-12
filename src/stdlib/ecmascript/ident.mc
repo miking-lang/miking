@@ -51,13 +51,17 @@ type ESNameEnv = {
   used : Set String,
   -- The next suffix to try for each base string, so that allocating a name
   -- does not rescan the suffixes already handed out for it.
-  next : Map String Int
+  next : Map String Int,
+  -- Identifiers declared in the scope currently being printed. Only these are
+  -- released when it ends; see `esNameExitScope`.
+  declared : [String]
 }
 
 let esNameEnvEmpty : ESNameEnv = {
   names = mapEmpty nameCmp,
   used = setOfSeq cmpString esReservedWords,
-  next = mapEmpty cmpString
+  next = mapEmpty cmpString,
+  declared = []
 }
 
 -- Claims `str` so that no name is ever allocated it. Used for identifiers that
@@ -97,7 +101,10 @@ let esIsIdentLike : String -> Bool = lam str.
 -- by `esNameReserve`.
 let esNameGet : ESNameEnv -> Name -> (ESNameEnv, String) =
   lam env. lam id.
-  match mapLookup id env.names with Some str then (env, str)
+  match mapLookup id env.names with Some str then
+    -- Claim it again: the identifier may have been released when an earlier
+    -- scope ended, and nothing else in this scope may take it now.
+    ({ env with used = setInsert str env.used }, str)
   else
     let base = esSanitize (nameGetStr id) in
     recursive let pick = lam i.
@@ -106,9 +113,42 @@ let esNameGet : ESNameEnv -> Name -> (ESNameEnv, String) =
     in
     let start = match mapLookup base env.next with Some i then i else 0 in
     match pick start with (str, i) in
-    ({ names = mapInsert id str env.names
+    ({ env with names = mapInsert id str env.names
      , used = setInsert str env.used
      , next = mapInsert base (addi i 1) env.next }, str)
+
+-- Returns the identifier for a name being *declared* here, recording it as
+-- belonging to this scope.
+let esNameDeclare : ESNameEnv -> Name -> (ESNameEnv, String) =
+  lam env. lam id.
+  match esNameGet env id with (env, str) in
+  ({ env with declared = cons str env.declared }, str)
+
+let esNameDeclareMany : ESNameEnv -> [Name] -> (ESNameEnv, [String]) =
+  lam env. lam ids. mapAccumL esNameDeclare env ids
+
+-- Identifiers only have to differ where they are visible at once. A scope
+-- inherits everything its enclosing scopes have handed out, so it never
+-- shadows a name it might itself refer to -- shadowing would also risk reading
+-- the outer one before the inner declaration, which is an error rather than a
+-- misprint. Sibling scopes cannot see each other, so they are free to repeat.
+let esNameEnterScope : ESNameEnv -> ESNameEnv = lam env. { env with declared = [] }
+
+-- Ends a scope, releasing the identifiers *declared* in it so that a sibling
+-- scope may use them again.
+--
+-- Only those: a name merely mentioned here may be declared later in an
+-- enclosing scope -- two functions calling each other, say -- and releasing
+-- its identifier would let something else claim it before the declaration is
+-- printed. The name-to-identifier mapping is kept either way, for the code
+-- already printed.
+let esNameExitScope : ESNameEnv -> ESNameEnv -> ESNameEnv =
+  lam outer. lam inner.
+  let release = lam used. lam str.
+    if setMem str outer.used then used else setRemove str used in
+  { inner with used = foldl release inner.used inner.declared
+             , next = outer.next
+             , declared = outer.declared }
 
 -- `mapAccumL`-friendly variant, for printing parameter lists and the like.
 let esNameGetMany : ESNameEnv -> [Name] -> (ESNameEnv, [String]) =
@@ -159,6 +199,29 @@ utest s4 with "class_1" in
 let u = nameSym "undefined" in
 match esNameGet env u with (env, s5) in
 utest s5 with "undefined_1" in
+
+-- A sibling scope may reuse what the previous one declared.
+let top = esNameEnvEmpty in
+let first = esNameEnterScope top in
+match esNameDeclare first (nameSym "p") with (first, p1) in
+utest p1 with "p" in
+let top = esNameExitScope top first in
+let second = esNameEnterScope top in
+match esNameDeclare second (nameSym "p") with (second, p2) in
+utest p2 with "p" in
+let top = esNameExitScope top second in
+
+-- A name only *mentioned* in a scope keeps its identifier afterwards: it may
+-- be declared later, in an enclosing scope, and must still print the same.
+let fwd = nameSym "g" in
+let inner = esNameEnterScope top in
+match esNameGet inner fwd with (inner, g1) in
+utest g1 with "g" in
+let top = esNameExitScope top inner in
+match esNameDeclare top (nameSym "g") with (top, g2) in
+utest g2 with "g_1" in
+match esNameGet top fwd with (_, g3) in
+utest g3 with "g" in
 
 -- Explicitly reserved identifiers are respected.
 let env2 = esNameReserve esNameEnvEmpty "env" in
