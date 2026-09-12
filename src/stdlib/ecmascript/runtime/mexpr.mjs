@@ -68,57 +68,20 @@ function $roundfi(x) {
 }
 //!end
 
-// Builds an MExpr string from a JS string literal.
-//
-// MExpr's `[Char]` is an array of one-character strings, like any other
-// sequence, so that `length` and `get` stay O(1) and codepoint-correct.
-// Spreading a JS string iterates by codepoint, so "ab\u{1F600}cd" yields five
-// elements, matching Miking, where JS `.length` would report six.
-//!intrinsic $S
+// Builds a sequence of characters from a JavaScript string literal. Spreading
+// iterates by codepoint, so "ab\u{1F600}cd" yields five elements, matching
+// Miking, where JS `.length` would report six.
+//!intrinsic $S $sq
 function $S(s) {
-  return [...s];
+  return $sq([...s]);
 }
 //!end
 
-// The inverse of `$S`, used at the boundary with a host environment. Hosts
-// take and return ordinary JS strings and never see the internal
-// representation.
-//!intrinsic $jsStr
+// The inverse of `$S`, used at the boundary with a host environment. Hosts take
+// and return ordinary JS strings and never see the internal representation.
+//!intrinsic $jsStr $arr
 function $jsStr(s) {
-  return s.join("");
-}
-//!end
-
-//!intrinsic $set
-function $set(s, i, v) {
-  const out = s.slice();
-  out[i] = v;
-  return out;
-}
-//!end
-
-//!intrinsic $create
-function $create(n, f) {
-  const out = new Array(n);
-  for (let i = 0; i < n; i++) out[i] = f(i);
-  return out;
-}
-//!end
-
-// Returns an MExpr pair, which is a record with fields "0" and "1".
-//!intrinsic $splitAt
-function $splitAt(s, i) {
-  return { "0": s.slice(0, i), "1": s.slice(i) };
-}
-//!end
-
-// Clamped, matching the reference backend for an over-long span. Note that a
-// start index past the end is not well defined there -- the OCaml backend
-// returns a sequence of negative length -- so this returns empty instead.
-//!intrinsic $subsequence
-function $subsequence(s, off, len) {
-  const start = Math.max(0, Math.min(off, s.length));
-  return s.slice(start, Math.min(start + Math.max(0, len), s.length));
+  return $arr(s).join("");
 }
 //!end
 
@@ -184,6 +147,204 @@ function $gensym() {
 }
 //!end
 
+// A sequence, represented as boot's `Rope` is: either the elements of `a` from
+// `o` for `n` of them, or the concatenation of `l` and `r` when `a` is null.
+//
+// Concatenating is therefore O(1), and so are `cons`, `snoc` and taking a
+// subsequence -- a subsequence shares the array it is cut from. Reading an
+// element flattens the tree first, rewriting this node in place so the cost is
+// paid once. Boot uses a mutable `ref` for the same purpose; a JavaScript
+// object cannot change class, so the node carries its own tag instead.
+//
+// Keeping one class, rather than one per case, keeps every field access in the
+// program monomorphic, which is what the JIT rewards.
+//!intrinsic $Seq
+class $Seq {
+  constructor(a, o, n, l, r) {
+    this.a = a; this.o = o; this.n = n; this.l = l; this.r = r;
+  }
+}
+//!end
+
+// Flattens a sequence into a single array, in place.
+//!intrinsic $col $Seq
+function $col(s) {
+  if (s.a !== null) return s;
+  const dst = new Array(s.n);
+  let i = 0;
+  // An explicit stack: a sequence built by repeated `cons` is a tree as deep
+  // as it is long, which would overflow the call stack.
+  const st = [s.r, s.l];
+  while (st.length !== 0) {
+    const t = st.pop();
+    if (t.a !== null) {
+      const a = t.a, o = t.o, n = t.n;
+      for (let k = 0; k < n; k++) dst[i++] = a[o + k];
+    } else {
+      st.push(t.r); st.push(t.l);
+    }
+  }
+  s.a = dst; s.o = 0; s.l = null; s.r = null;
+  return s;
+}
+//!end
+
+// A sequence holding exactly the elements of a JavaScript array.
+//!intrinsic $sq $Seq
+function $sq(a) {
+  return new $Seq(a, 0, a.length, null, null);
+}
+//!end
+
+// The elements of a sequence as a JavaScript array, for the host and for the
+// tensor helpers. Copies only when the sequence is a part of a larger array.
+//!intrinsic $arr $col
+function $arr(s) {
+  const t = $col(s);
+  return t.o === 0 && t.n === t.a.length ? t.a : t.a.slice(t.o, t.o + t.n);
+}
+//!end
+
+//!intrinsic $len $Seq
+function $len(s) {
+  return s.n;
+}
+//!end
+
+//!intrinsic $get $col
+function $get(s, i) {
+  return s.a !== null ? s.a[s.o + i] : $col(s).a[i];
+}
+//!end
+
+//!intrinsic $cat $Seq
+function $cat(x, y) {
+  if (x.n === 0) return y;
+  if (y.n === 0) return x;
+  return new $Seq(null, 0, x.n + y.n, x, y);
+}
+//!end
+
+//!intrinsic $cons $cat $sq
+function $cons(v, s) {
+  return $cat($sq([v]), s);
+}
+//!end
+
+//!intrinsic $snoc $cat $sq
+function $snoc(s, v) {
+  return $cat(s, $sq([v]));
+}
+//!end
+
+// Clamped, matching the reference backend for an over-long span. A start past
+// the end is not well defined there -- it returns a sequence of negative length
+// -- so this returns empty instead.
+//!intrinsic $sub $Seq $col $sq
+function $sub(s, off, cnt) {
+  if (s.n === 0) return s;
+  const start = Math.max(0, Math.min(off, s.n));
+  const n = Math.max(0, Math.min(cnt, s.n - start));
+  if (n === 0) return $sq([]);
+  const t = $col(s);
+  return new $Seq(t.a, t.o + start, n, null, null);
+}
+//!end
+
+//!intrinsic $tail $sub
+function $tail(s) {
+  return $sub(s, 1, s.n - 1);
+}
+//!end
+
+// Returns an MExpr pair, which is a record with fields "0" and "1".
+//!intrinsic $splitAt $sub
+function $splitAt(s, i) {
+  return { "0": $sub(s, 0, i), "1": $sub(s, i, s.n - i) };
+}
+//!end
+
+//!intrinsic $subsequence $sub
+function $subsequence(s, off, len) {
+  return $sub(s, off, len);
+}
+//!end
+
+//!intrinsic $set $arr $sq
+function $set(s, i, v) {
+  const out = $arr(s).slice();
+  out[i] = v;
+  return $sq(out);
+}
+//!end
+
+//!intrinsic $create $sq
+function $create(n, f) {
+  const out = new Array(n);
+  for (let i = 0; i < n; i++) out[i] = f(i);
+  return $sq(out);
+}
+//!end
+
+//!intrinsic $map $col $sq
+function $map(f, s) {
+  const t = $col(s), a = t.a, o = t.o, n = t.n;
+  const out = new Array(n);
+  for (let i = 0; i < n; i++) out[i] = f(a[o + i]);
+  return $sq(out);
+}
+//!end
+
+//!intrinsic $mapi $col $sq
+function $mapi(f, s) {
+  const t = $col(s), a = t.a, o = t.o, n = t.n;
+  const out = new Array(n);
+  for (let i = 0; i < n; i++) out[i] = f(i)(a[o + i]);
+  return $sq(out);
+}
+//!end
+
+//!intrinsic $iter $col
+function $iter(f, s) {
+  const t = $col(s), a = t.a, o = t.o, n = t.n;
+  for (let i = 0; i < n; i++) f(a[o + i]);
+  return undefined;
+}
+//!end
+
+//!intrinsic $iteri $col
+function $iteri(f, s) {
+  const t = $col(s), a = t.a, o = t.o, n = t.n;
+  for (let i = 0; i < n; i++) f(i)(a[o + i]);
+  return undefined;
+}
+//!end
+
+//!intrinsic $foldl $col
+function $foldl(f, acc, s) {
+  const t = $col(s), a = t.a, o = t.o, n = t.n;
+  for (let i = 0; i < n; i++) acc = f(acc)(a[o + i]);
+  return acc;
+}
+//!end
+
+//!intrinsic $foldr $col
+function $foldr(f, acc, s) {
+  const t = $col(s), a = t.a, o = t.o, n = t.n;
+  for (let i = n - 1; i >= 0; i--) acc = f(a[o + i])(acc);
+  return acc;
+}
+//!end
+
+//!intrinsic $rev $col $sq
+function $rev(s) {
+  const t = $col(s), a = t.a, o = t.o, n = t.n;
+  const out = new Array(n);
+  for (let i = 0; i < n; i++) out[i] = a[o + n - 1 - i];
+  return $sq(out);
+}
+//!end
+
 // Row-major linear index, matching boot's cartesian_to_linear_idx. A partial
 // index (fewer entries than the rank) addresses the start of a sub-block,
 // which is what slicing relies on.
@@ -212,8 +373,11 @@ function $tSize(shape) {
 // into it. There are no strides, which is why slicing can be a view but
 // transposing cannot. A rank-0 tensor has size 1 and is how `ref.mc` gets
 // mutability.
-//!intrinsic $tCreate $tSize
-function $tCreate(shape, f) {
+//!intrinsic $tCreate $tSize $arr $sq
+function $tCreate(shapeSeq, f) {
+  // A tensor keeps its shape as a plain array; only the boundary with the
+  // program speaks in sequences.
+  const shape = $arr(shapeSeq);
   const size = $tSize(shape);
   const rank = shape.length;
   const data = new Array(size);
@@ -224,29 +388,36 @@ function $tCreate(shape, f) {
       idx[d] = rem % shape[d];
       rem = (rem - idx[d]) / shape[d];
     }
-    data[i] = f(idx);
+    data[i] = f($sq(idx));
   }
   return { data: data, shape: shape, rank: rank, offset: 0, size: size };
 }
 //!end
 
-//!intrinsic $tUninit $tSize
-function $tUninit(shape) {
+//!intrinsic $tUninit $tSize $arr
+function $tUninit(shapeSeq) {
+  const shape = $arr(shapeSeq);
   const size = $tSize(shape);
   return { data: new Array(size).fill(0), shape: shape,
            rank: shape.length, offset: 0, size: size };
 }
 //!end
 
-//!intrinsic $tGet $tIdx
+//!intrinsic $tGet $tIdx $arr
 function $tGet(t, idx) {
-  return t.data[$tIdx(t.shape, idx) + t.offset];
+  return t.data[$tIdx(t.shape, $arr(idx)) + t.offset];
 }
 //!end
 
-//!intrinsic $tSet $tIdx
+//!intrinsic $tSet $tIdx $arr
 function $tSet(t, idx, v) {
-  t.data[$tIdx(t.shape, idx) + t.offset] = v;
+  t.data[$tIdx(t.shape, $arr(idx)) + t.offset] = v;
+}
+//!end
+
+//!intrinsic $tShape $sq
+function $tShape(t) {
+  return $sq(t.shape);
 }
 //!end
 
@@ -262,8 +433,9 @@ function $tLinSet(t, i, v) {
 }
 //!end
 
-//!intrinsic $tReshape
-function $tReshape(t, shape) {
+//!intrinsic $tReshape $arr
+function $tReshape(t, shapeSeq) {
+  const shape = $arr(shapeSeq);
   return { data: t.data, shape: shape, rank: shape.length,
            offset: t.offset, size: t.size };
 }
@@ -272,8 +444,9 @@ function $tReshape(t, shape) {
 // Shares `data` with its parent, so writing through a slice is visible from
 // the tensor it came from. Do not reach for `Array.slice` here: copying would
 // silently break that aliasing.
-//!intrinsic $tSlice $tIdx $tSize
-function $tSlice(t, slice) {
+//!intrinsic $tSlice $tIdx $tSize $arr
+function $tSlice(t, sliceSeq) {
+  const slice = $arr(sliceSeq);
   if (slice.length === 0) return t;
   const offset = $tIdx(t.shape, slice) + t.offset;
   const rank = t.rank - slice.length;
@@ -302,10 +475,10 @@ function $tCopy(t) {
 }
 //!end
 
-//!intrinsic $tIterSlice $tSlice
+//!intrinsic $tIterSlice $tSlice $sq
 function $tIterSlice(f, t) {
   if (t.rank === 0) { f(0)(t); return undefined; }
-  for (let i = 0; i < t.shape[0]; i++) f(i)($tSlice(t, [i]));
+  for (let i = 0; i < t.shape[0]; i++) f(i)($tSlice(t, $sq([i])));
   return undefined;
 }
 //!end
@@ -323,34 +496,34 @@ function $tEq(eq, t1, t2) {
 
 // Without strides a transposed view is not representable, so this copies --
 // as the reference implementation does.
-//!intrinsic $tTranspose $tCreate $tGet
+//!intrinsic $tTranspose $tCreate $tGet $sq $arr
 function $tTranspose(t, d0, d1) {
   const shape = t.shape.slice();
   const tmp = shape[d0];
   shape[d0] = shape[d1];
   shape[d1] = tmp;
-  return $tCreate(shape, (idx) => {
-    const j = idx.slice();
+  return $tCreate($sq(shape), (idx) => {
+    const j = $arr(idx).slice();
     const s = j[d0];
     j[d0] = j[d1];
     j[d1] = s;
-    return $tGet(t, j);
+    return $tGet(t, $sq(j));
   });
 }
 //!end
 
-//!intrinsic $tToString $jsStr $S $tGet $tSlice
+//!intrinsic $tToString $jsStr $S $tGet $tSlice $sq
 function $tToString(el, t) {
   const recur = (indent, t) => {
-    if (t.rank === 0) return $jsStr(el($tGet(t, [])));
+    if (t.rank === 0) return $jsStr(el($tGet(t, $sq([]))));
     const n = t.shape[0];
     const parts = [];
     if (t.rank === 1) {
-      for (let i = 0; i < n; i++) parts.push(recur("", $tSlice(t, [i])));
+      for (let i = 0; i < n; i++) parts.push(recur("", $tSlice(t, $sq([i]))));
       return "[" + parts.join(", ") + "]";
     }
     const ni = indent + "\t";
-    for (let i = 0; i < n; i++) parts.push(recur(ni, $tSlice(t, [i])));
+    for (let i = 0; i < n; i++) parts.push(recur(ni, $tSlice(t, $sq([i]))));
     return "[\n" + ni + parts.join(",\n" + ni) + "\n" + indent + "]";
   };
   return $S(recur("", t));
@@ -537,11 +710,13 @@ function $ext_externalAtomicFetchAndAdd(env) {
 
 export {
   $fromBig, $slli, $srli, $srai, $roundfi,
+  $Seq, $col, $sq, $arr, $len, $get, $cat, $cons, $snoc, $sub, $tail,
+  $map, $mapi, $iter, $iteri, $foldl, $foldr, $rev,
   $S, $jsStr, $set, $create, $splitAt, $subsequence,
   $f2s, $float2string, $string2float, $stringIsFloat,
   $gensym, $tIdx, $tSize, $tCreate, $tUninit, $tGet, $tSet,
   $tLinGet, $tLinSet, $tReshape, $tSlice, $tSub, $tCopy,
-  $tIterSlice, $tEq, $tTranspose, $tToString,
+  $tIterSlice, $tEq, $tTranspose, $tToString, $tShape,
   $ref, $modref, $conTag, $readBytesResult, $typeOf, $unsupported,
   $noExternal,
   $ext_externalExp,

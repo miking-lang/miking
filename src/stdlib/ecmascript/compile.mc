@@ -194,6 +194,15 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint + MExprArity
   -- written with a dot.
   -- The type a constructor belongs to: strip the quantifiers, take the
   -- arrow's codomain, and strip any type arguments to reach its name.
+  -- Reading an element and the length of a sequence; see `$Seq` in the runtime.
+  sem esSeqGet : ESExpr -> ESExpr -> ESExpr
+  sem esSeqGet s =
+  | i -> ESECall { callee = ESEGlobal { name = "$get" }, args = [s, i] }
+
+  sem esSeqLen : ESExpr -> ESExpr
+  sem esSeqLen =
+  | s -> ESECall { callee = ESEGlobal { name = "$len" }, args = [s] }
+
   sem esConCodomain : Type -> Option Name
   sem esConCodomain =
   | TyAll t -> esConCodomain t.ty
@@ -301,9 +310,11 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint + MExprArity
                              (esRecordFields t.fields) }
     else match esNormTy ty with TySeq t then
       let x = nameSym "x" in
-      ESECall { callee = esMember e "map"
-              , args = [ESEArrow { params = [x]
-                                 , body = ESFBExpr { expr = esToJs t.ty (ESEVar { id = x }) } }] }
+      ESECall { callee = ESEGlobal { name = "$arr" }, args = [ESECall
+        { callee = ESEGlobal { name = "$map" }
+        , args = [ ESEArrow { params = [x]
+                            , body = ESFBExpr { expr = esToJs t.ty (ESEVar { id = x }) } }
+                 , e ] }] }
     else e
 
   -- Converts what a host returns into MExpr's representation. As above, `e`
@@ -323,9 +334,10 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint + MExprArity
                              (esRecordFields t.fields) }
     else match esNormTy ty with TySeq t then
       let x = nameSym "x" in
-      ESECall { callee = esMember e "map"
-              , args = [ESEArrow { params = [x]
-                                 , body = ESFBExpr { expr = esFromJs t.ty (ESEVar { id = x }) } }] }
+      ESECall { callee = ESEGlobal { name = "$map" }
+        , args = [ ESEArrow { params = [x]
+                            , body = ESFBExpr { expr = esFromJs t.ty (ESEVar { id = x }) } }
+                 , ESECall { callee = ESEGlobal { name = "$sq" }, args = [e] } ] }
     else e
 
   sem esVar : Name -> ESExpr
@@ -550,7 +562,8 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint + MExprArity
                 , args = [ESEString { value = map esCharConstVal t.tms }] })
     else
       match compileExprs ctx t.tms with (ctx, stmts, xs) in
-      (ctx, stmts, ESEArray { exprs = xs })
+      (ctx, stmts, ESECall { callee = ESEGlobal { name = "$sq" }
+                           , args = [ESEArray { exprs = xs }] })
   | TmConApp t ->
     match compileExpr ctx t.body with (ctx, stmts, body) in
     (ctx, stmts, ESENew { callee = ESEVar { id = t.ident }, args = [body] })
@@ -827,11 +840,11 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint + MExprArity
     match esPatTarget ctx target with (obj, pre) in
     let n = length t.pats in
     let test = ESEBin { op = ESOEq {}
-                      , lhs = esMember obj "length"
+                      , lhs = esSeqLen obj
                       , rhs = ESEInt { value = n } } in
     let step = lam acc. lam ip.
       match acc with (ctx, i, binds) in
-      match esPatCompile ctx (ESEIndex { obj = obj, index = ESEInt { value = i } }) ip
+      match esPatCompile ctx (esSeqGet obj (ESEInt { value = i })) ip
         with (ctx, _, t2, b2) in
       -- After lowering these sub-patterns only bind, so any test they produce
       -- would be `true`; a refutable one would need `test` extending instead.
@@ -843,14 +856,14 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint + MExprArity
     match esPatTarget ctx target with (obj, pre) in
     let np = length t.prefix in
     let ns = length t.postfix in
-    let len = esMember obj "length" in
+    let len = esSeqLen obj in
     let test = ESEBin { op = ESOGe {}, lhs = len
                       , rhs = ESEInt { value = addi np ns } } in
     -- Prefix elements count from the front, postfix from the back, and the
     -- middle is whatever is left between them.
     let front = lam acc. lam ip.
       match acc with (ctx, i, binds) in
-      match esPatCompile ctx (ESEIndex { obj = obj, index = ESEInt { value = i } }) ip
+      match esPatCompile ctx (esSeqGet obj (ESEInt { value = i })) ip
         with (ctx, _, _, b) in
       (ctx, addi i 1, concat binds b)
     in
@@ -859,15 +872,18 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint + MExprArity
       match acc with (ctx, i, binds) in
       let idx = ESEBin { op = ESOSub {}, lhs = len
                        , rhs = ESEInt { value = subi ns i } } in
-      match esPatCompile ctx (ESEIndex { obj = obj, index = idx }) ip
+      match esPatCompile ctx (esSeqGet obj idx) ip
         with (ctx, _, _, b) in
       (ctx, addi i 1, concat binds b)
     in
     match foldl back (ctx, 0, binds) t.postfix with (ctx, _, binds) in
     match t.middle with PName m then
-      let mid = ESECall { callee = esMember obj "slice"
-        , args = [ ESEInt { value = np }
-                 , ESEBin { op = ESOSub {}, lhs = len, rhs = ESEInt { value = ns } }] } in
+      -- What is left between the prefix and the postfix. A subsequence shares
+      -- the array it is cut from, so this does not copy.
+      let mid = ESECall { callee = ESEGlobal { name = "$sub" }
+        , args = [ obj, ESEInt { value = np }
+                 , ESEBin { op = ESOSub {}, lhs = len
+                          , rhs = ESEInt { value = addi np ns } } ] } in
       (ctx, pre, test, snoc binds (ESSConst { id = m, init = mid }))
     else (ctx, pre, test, binds)
   | p ->
@@ -988,76 +1004,36 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint + MExprArity
       Some (ctx, ESECall
         { callee = esMember (ESEVar { id = ctx.runtimeEnv }) "dprint", args = args })
 
-    -- Sequences are arrays, so most operations are plain JS idioms. Only the
-    -- ones needing a copy, a clamp, or a pair go through the runtime.
-    case CLength _ then match args with [s] in Some (ctx, esMember s "length")
-    case CGet _ then
-      match args with [s, i] in Some (ctx, ESEIndex { obj = s, index = i })
+    -- Sequences are ropes (see `$Seq` in the runtime), so every operation is a
+    -- runtime call. That is what buys the complexity the reference backend
+    -- has: concatenating, consing and taking a subsequence are all O(1),
+    -- where a plain JS array would copy.
+    case CLength _ then rt "$len"
+    case CGet _ then rt "$get"
     case CHead _ then
       match args with [s] in
-      Some (ctx, ESEIndex { obj = s, index = ESEInt { value = 0 } })
-    case CTail _ then
-      match args with [s] in
-      Some (ctx, ESECall { callee = esMember s "slice"
-                    , args = [ESEInt { value = 1 }] })
+      Some (ctx, ESECall { callee = ESEGlobal { name = "$get" }
+                         , args = [s, ESEInt { value = 0 }] })
+    case CTail _ then rt "$tail"
     case CNull _ then
       match args with [s] in
-      Some (ctx, ESEBin { op = ESOEq {}, lhs = esMember s "length"
-                   , rhs = ESEInt { value = 0 } })
-    case CConcat _ then
-      match args with [a, b] in
-      Some (ctx, ESECall { callee = esMember a "concat", args = [b] })
-    case CCons _ then
-      match args with [v, s] in
-      Some (ctx, ESEArray { exprs = [v, ESEUn { op = ESOSpread {}, arg = s }] })
-    case CSnoc _ then
-      match args with [s, v] in
-      Some (ctx, ESEArray { exprs = [ESEUn { op = ESOSpread {}, arg = s }, v] })
-    case CReverse _ then
-      match args with [s] in
-      Some (ctx, ESECall
-        { callee = esMember
-            (ESEArray { exprs = [ESEUn { op = ESOSpread {}, arg = s }] }) "reverse"
-        , args = [] })
-    -- Every function value this backend produces takes exactly one parameter,
-    -- so `map` and `iter` can hand theirs straight to the JS method and let it
-    -- ignore the extra index and array arguments. The indexed and folding
-    -- forms still need a wrapper, because MExpr curries them and `foldr` takes
-    -- its arguments in the opposite order to `reduceRight`.
-    case CMap _ then
-      match args with [f, s] in
-      Some (ctx, ESECall { callee = esMember s "map", args = [f] })
-    case CMapi _ then
-      match args with [f, s] in
-      let x = nameSym "_x" in let i = nameSym "_i" in
-      Some (ctx, ESECall { callee = esMember s "map"
-        , args = [esArrow2 x i (ESECall
-            { callee = ESECall { callee = f, args = [esVar i] }
-            , args = [esVar x] })] })
-    case CIter _ then
-      match args with [f, s] in
-      Some (ctx, ESECall { callee = esMember s "forEach", args = [f] })
-    case CIteri _ then
-      match args with [f, s] in
-      let x = nameSym "_x" in let i = nameSym "_i" in
-      Some (ctx, ESECall { callee = esMember s "forEach"
-        , args = [esArrow2 x i (ESECall
-            { callee = ESECall { callee = f, args = [esVar i] }
-            , args = [esVar x] })] })
-    case CFoldl _ then
-      match args with [f, acc, s] in
-      let a = nameSym "_a" in let x = nameSym "_x" in
-      Some (ctx, ESECall { callee = esMember s "reduce"
-        , args = [esArrow2 a x (ESECall
-            { callee = ESECall { callee = f, args = [esVar a] }
-            , args = [esVar x] }), acc] })
-    case CFoldr _ then
-      match args with [f, acc, s] in
-      let a = nameSym "_a" in let x = nameSym "_x" in
-      Some (ctx, ESECall { callee = esMember s "reduceRight"
-        , args = [esArrow2 a x (ESECall
-            { callee = ESECall { callee = f, args = [esVar x] }
-            , args = [esVar a] }), acc] })
+      Some (ctx, ESEBin
+        { op = ESOEq {}
+        , lhs = ESECall { callee = ESEGlobal { name = "$len" }, args = [s] }
+        , rhs = ESEInt { value = 0 } })
+    case CConcat _ then rt "$cat"
+    case CCons _ then rt "$cons"
+    case CSnoc _ then rt "$snoc"
+    case CReverse _ then rt "$rev"
+    -- The helpers apply their callback the way MExpr hands it over: `map` and
+    -- `iter` take a one-parameter function, while the indexed and folding
+    -- forms are curried.
+    case CMap _ then rt "$map"
+    case CMapi _ then rt "$mapi"
+    case CIter _ then rt "$iter"
+    case CIteri _ then rt "$iteri"
+    case CFoldl _ then rt "$foldl"
+    case CFoldr _ then rt "$foldr"
     -- This backend has a single sequence representation, so the two
     -- representation predicates answer uniformly.
     case CIsList _ then Some (ctx, ESEBool { value = false })
@@ -1100,11 +1076,11 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint + MExprArity
     case CError _ then envStr "error"
     case CArgv _ then
       Some (ctx
-      , ESECall
+      , ESECall { callee = ESEGlobal { name = "$sq" }, args = [ESECall
              { callee = esMember (ESECall
                  { callee = esMember (ESEVar { id = ctx.runtimeEnv }) "argv"
                  , args = [] }) "map"
-             , args = [ESEGlobal { name = "$S" }] })
+             , args = [ESEGlobal { name = "$S" }] }] })
     case CCommand _ then envStr "command"
     case CFileRead _ then envStrOut "readFile"
     case CFileWrite _ then envStr "writeFile"
@@ -1136,8 +1112,10 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint + MExprArity
       Some (ctx, ESECall
         { callee = esMember (ESEVar { id = ctx.runtimeEnv }) "exec"
         , args = [ ESECall { callee = ESEGlobal { name = "$jsStr" }, args = [prog] }
-                 , ESECall { callee = esMember xs "map"
-                           , args = [ESEGlobal { name = "$jsStr" }] } ] })
+                 , ESECall { callee = esMember
+                     (ESECall { callee = ESEGlobal { name = "$arr" }, args = [xs] })
+                     "map"
+                   , args = [ESEGlobal { name = "$jsStr" }] } ] })
     case CTypeOf _ then rt "$typeOf"
     case CRandIntU _ then env "randIntU"
     case CRandSetSeed _ then env "randSetSeed"
@@ -1152,7 +1130,7 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint + MExprArity
     case CTensorLinearGetExn _ then rt "$tLinGet"
     case CTensorLinearSetExn _ then rt "$tLinSet"
     case CTensorRank _ then match args with [t] in Some (ctx, esMember t "rank")
-    case CTensorShape _ then match args with [t] in Some (ctx, esMember t "shape")
+    case CTensorShape _ then rt "$tShape"
     case CTensorReshapeExn _ then rt "$tReshape"
     case CTensorSliceExn _ then rt "$tSlice"
     case CTensorSubExn _ then rt "$tSub"

@@ -417,38 +417,28 @@ utest contains "env.print($jsStr(s));" strOut with true in
 utest contains "function $S(s) {" strOut with true in
 utest contains "function $jsStr(s) {" strOut with true in
 
--- A sequence of anything else is an array literal.
+-- A sequence of anything else is an array wrapped as a sequence.
 let astArr = bind_ (nulet_ sq (seq_ [int_ 1, int_ 2])) (dprint_ (nvar_ sq)) in
-utest esCompileToString astArr with join
-  [ "export default function main(env) {\n"
-  , "  const s = [1, 2];\n"
-  , "  env.dprint(s);\n"
-  , "}\n" ] in
+utest contains "const s = $sq([1, 2]);" (esCompileToString astArr) with true in
 
--- The common sequence operations are plain JS, not runtime calls.
+-- Sequences are ropes, so every operation is a runtime call; that is what
+-- gives them the complexity the reference backend has.
 let astOps = bind_ (nulet_ sq (seq_ [int_ 1, int_ 2]))
   (dprint_ (addi_ (length_ (nvar_ sq)) (get_ (nvar_ sq) (int_ 0)))) in
-utest esCompileToString astOps with join
-  [ "export default function main(env) {\n"
-  , "  const s = [1, 2];\n"
-  , "  env.dprint(s.length + s[0]);\n"
-  , "}\n" ] in
+utest contains "env.dprint($len(s) + $get(s, 0));" (esCompileToString astOps)
+with true in
 
+-- Consing does not copy: it builds a node holding the two parts.
 let astCons = dprint_ (cons_ (int_ 0) (seq_ [int_ 1])) in
-utest esCompileToString astCons with join
-  [ "export default function main(env) {\n"
-  , "  env.dprint([0, ...[1]]);\n"
-  , "}\n" ] in
+let consOut = esCompileToString astCons in
+utest contains "env.dprint($cons(0, $sq([1])));" consOut with true in
+utest contains "function $cat(x, y) {" consOut with true in
 
--- Every function value is a one-parameter arrow, so `map` hands its callback
--- straight to the JS method rather than wrapping it.
 let astMap = dprint_ (map_ (nulam_ (nameSym "c") (int_ 1)) (seq_ [int_ 2])) in
-utest contains "[2].map(c => 1)" (esCompileToString astMap) with true in
+utest contains "$map(c => 1, $sq([2]))" (esCompileToString astMap) with true in
 
--- Only the operations needing a copy, a clamp or a pair go through the
--- runtime.
 let astSub = dprint_ (subsequence_ (seq_ [int_ 1]) (int_ 0) (int_ 1)) in
-utest contains "$subsequence([1], 0, 1)" (esCompileToString astSub) with true in
+utest contains "$subsequence($sq([1]), 0, 1)" (esCompileToString astSub) with true in
 
 -- ---------------------------------------------------------------------
 -- Constructors, recursion and tail calls
