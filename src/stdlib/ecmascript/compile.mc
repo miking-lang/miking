@@ -57,6 +57,12 @@ type ESCompileCtx = {
   -- the program: its values can only be passed around, never inspected.
   constructed : Set Name,
 
+  -- Constants that a name is bound to. The loader's prelude binds every
+  -- builtin this way -- `let addi = addi`, see `includeBuiltinEnv` -- so
+  -- without this a use would compile to a curried call through a wrapper
+  -- rather than to the operation itself.
+  consts : Map Name (use MExprAst in Const),
+
   -- The function currently being compiled and its parameters, when a
   -- saturated self-call in tail position can become a loop rather than
   -- recursion. Cleared inside nested functions.
@@ -77,6 +83,7 @@ let esCompileCtxEmpty : ESCompileCtx = {
   arities = mapEmpty nameCmp,
   variants = setEmpty nameCmp,
   constructed = setEmpty nameCmp,
+  consts = mapEmpty nameCmp,
   selfCall = None (),
   externalsName = nameNoSym "externals",
   usesExternals = false,
@@ -449,6 +456,9 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint + MExprArity
   sem compileExpr : ESCompileCtx -> Expr -> (ESCompileCtx, [ESStmt], ESExpr)
   sem compileExpr ctx =
   | TmVar t ->
+    match mapLookup t.ident ctx.consts with Some c then
+      compileExpr ctx (TmConst { val = c, ty = t.ty, info = t.info })
+    else
     -- A named n-ary function used as a value has to be handed back in curried
     -- form, since whoever receives it will apply one argument at a time.
     match mapLookup t.ident ctx.arities with Some n then
@@ -495,7 +505,9 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint + MExprArity
     match esCollectApp t with (fn, args) in
     match fn with TmConst c then compileConstApp ctx (infoTm t) c.val args
     else match fn with TmVar v then
-      match mapLookup v.ident ctx.arities with Some n then
+      match mapLookup v.ident ctx.consts with Some c then
+        compileConstApp ctx (infoTm t) c args
+      else match mapLookup v.ident ctx.arities with Some n then
         esApplyKnown ctx v.ident n args
       else
         match compileExprs ctx args with (ctx, s, xs) in
@@ -699,6 +711,18 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint + MExprArity
     -- an unused `const`.
     if null (nameGetStr d.ident) then
       compileStmts ctx (ESCDiscard ()) d.body
+    else match d.body with TmConst c then
+      -- Remember it and compile uses as though the constant had been written
+      -- directly, which makes `addi 1 2` read as `1 + 2`; the binding itself
+      -- is then unnecessary.
+      --
+      -- Only operations. A constant that is a value keeps its binding: a
+      -- literal because `const a = 1` names something that had no name, and
+      -- `argv` because it compiles to a call on the runtime environment, which
+      -- should happen once rather than at every use.
+      if gti (constArity c.val) 0 then
+        ({ ctx with consts = mapInsert d.ident c.val ctx.consts }, [])
+      else compileStmts ctx (ESCBind d.ident) d.body
     else match d.body with TmLam _ then
       -- A named function: emit an n-ary declaration and record its arity so
       -- that saturated calls avoid currying. `DeclLet` is not recursive, so
@@ -709,9 +733,12 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint + MExprArity
         arities = mapInsert d.ident (length params) ctx.arities } in
       (ctx, [decl])
     else match d.body with TmVar v then
-      -- An alias inherits the arity it points at, so calls through it stay
-      -- n-ary instead of going through an eta-expanded curried wrapper.
-      match mapLookup v.ident ctx.arities with Some n then
+      -- An alias of a constant is that constant, and an alias of a function
+      -- inherits its arity, so calls through it stay n-ary instead of going
+      -- through an eta-expanded curried wrapper.
+      match mapLookup v.ident ctx.consts with Some c then
+        ({ ctx with consts = mapInsert d.ident c ctx.consts }, [])
+      else match mapLookup v.ident ctx.arities with Some n then
         ({ ctx with arities = mapInsert d.ident n ctx.arities }
         , [ESSConst { id = d.ident, init = ESEVar { id = v.ident } }])
       else compileStmts ctx (ESCBind d.ident) d.body
