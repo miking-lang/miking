@@ -364,6 +364,14 @@ lang DedupBranchesAndInformativeNever = ShallowBase + NeverAst + AppAst + SeqAst
   sem lowerToExpr env scrutinee branches += | fallthrough ->
     let inconsistentError = lam info. lam name.
       errorSingle [info] (join ["Inconsistent pattern; '", nameGetStr name, "' is not always bound."]) in
+
+    let infoOrFallback = lam info.
+      match info with NoInfo _ then
+        foldl (lam acc. lam b. mergeInfo acc (infoPat b.0)) (NoInfo ()) branches
+      else
+        info
+    in
+
     let resultTy =
       let candidates = snoc (map (lam pair. pair.1) branches) fallthrough in
       match find (lam body. match tyTm body with TyUnknown _ then false else true) candidates
@@ -387,13 +395,13 @@ lang DedupBranchesAndInformativeNever = ShallowBase + NeverAst + AppAst + SeqAst
       = lam library. lam branch.
         match branch with (pat, branch) in
         let neverAndContext = switch branch
-          case TmNever {info = info} then Some (info, "")
+          case TmNever {info = info} then Some (infoOrFallback info, "")
           case TmApp {lhs = TmNever {info = info}, rhs = TmSeq seq} then
             let asChar = lam tm. match tm with TmConst {val = CChar {val = v}}
               then Some v
               else None () in
             match optionMapM asChar seq.tms with Some context
-            then Some (info, context)
+            then Some (infoOrFallback info, context)
             else None ()
           case _ then None ()
           end in
