@@ -117,7 +117,11 @@ function makeExternals() {
 // name. It defaults to node's arguments without the interpreter's path, which
 // is right when the host itself is the entry point; a runner script that sits
 // in between passes its own view.
-export function nodeEnv(argv = process.argv.slice(1)) {
+export function nodeEnv(options) {
+  const {
+    argv = process.argv.slice(1)
+  } = options ?? {};
+  
   return {
     externals: makeExternals(),
 
