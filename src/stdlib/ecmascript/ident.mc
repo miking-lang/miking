@@ -48,12 +48,16 @@ type ESNameEnv = {
   -- The identifier assigned to each name seen so far.
   names : Map Name String,
   -- Every identifier handed out, plus any that were reserved up front.
-  used : Set String
+  used : Set String,
+  -- The next suffix to try for each base string, so that allocating a name
+  -- does not rescan the suffixes already handed out for it.
+  next : Map String Int
 }
 
 let esNameEnvEmpty : ESNameEnv = {
   names = mapEmpty nameCmp,
-  used = setOfSeq cmpString esReservedWords
+  used = setOfSeq cmpString esReservedWords,
+  next = mapEmpty cmpString
 }
 
 -- Claims `str` so that no name is ever allocated it. Used for identifiers that
@@ -84,19 +88,27 @@ let esIsIdentLike : String -> Bool = lam str.
 --
 -- The first name to ask for a given string gets it unadorned; later names that
 -- sanitize to the same string get a `_1`, `_2`, ... suffix.
+--
+-- The search resumes from the last suffix handed out for that base rather than
+-- restarting at zero, which would make allocation quadratic in the number of
+-- names sharing a string -- `mi.mc` has tens of thousands sharing `t`, `x` and
+-- the pattern lowerer's `_target`. The `used` check stays, since a suffixed
+-- identifier can also be claimed directly, by an MExpr name spelled `x_1` or
+-- by `esNameReserve`.
 let esNameGet : ESNameEnv -> Name -> (ESNameEnv, String) =
   lam env. lam id.
   match mapLookup id env.names with Some str then (env, str)
   else
     let base = esSanitize (nameGetStr id) in
-    recursive let pick = lam candidate. lam i.
-      if setMem candidate env.used then
-        pick (join [base, "_", int2string i]) (addi i 1)
-      else candidate
+    recursive let pick = lam i.
+      let candidate = if eqi i 0 then base else join [base, "_", int2string i] in
+      if setMem candidate env.used then pick (addi i 1) else (candidate, i)
     in
-    let str = pick base 1 in
+    let start = match mapLookup base env.next with Some i then i else 0 in
+    match pick start with (str, i) in
     ({ names = mapInsert id str env.names
-     , used = setInsert str env.used }, str)
+     , used = setInsert str env.used
+     , next = mapInsert base (addi i 1) env.next }, str)
 
 -- `mapAccumL`-friendly variant, for printing parameter lists and the like.
 let esNameGetMany : ESNameEnv -> [Name] -> (ESNameEnv, [String]) =
@@ -124,6 +136,19 @@ utest s2 with "a" in
 let a2 = nameSym "a" in
 match esNameGet env a2 with (env, s3) in
 utest s3 with "a_1" in
+
+-- Suffixes keep counting up for further names with that string.
+let a3 = nameSym "a" in
+match esNameGet env a3 with (env, s4) in
+utest s4 with "a_2" in
+
+-- An identifier claimed directly is skipped rather than handed out twice.
+let env = esNameReserve esNameEnvEmpty "b_1" in
+let b1 = nameSym "b" in
+let b2 = nameSym "b" in
+let b3 = nameSym "b" in
+match esNameGetMany env [b1, b2, b3] with (_, strs) in
+utest strs with ["b", "b_2", "b_3"] using eqSeq eqString in
 
 -- Reserved words are never handed out.
 let cls = nameSym "class" in

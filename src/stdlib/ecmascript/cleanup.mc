@@ -233,23 +233,11 @@ lang ESCleanup = ESAst
   | ESSExportDefault t -> ESSExportDefault { stmt = esCleanupStmt t.stmt }
   | s -> smapESStmtESExpr esCleanupExpr s
 
+  -- The rewrites run in one *backward* walk, so that every statement is
+  -- decided against a suffix that has already been rewritten.
   sem esCleanupStmts : [ESStmt] -> [ESStmt]
   sem esCleanupStmts =
-  | stmts -> esInlineFix (map esCleanupStmt stmts)
-
-  -- One pass is not enough: dropping a binding can lower another binding's use
-  -- count below the inlining threshold, and the pass has already walked past
-  -- it. Reading `n.inner.a` is the common case -- the record pattern names
-  -- both fields of `inner`, so the scrutinee starts with two uses and only
-  -- drops to one once the unused field binding is removed.
-  --
-  -- Each rewrite deletes exactly one statement, so the length strictly
-  -- decreases and comparing lengths is a sound fixpoint test.
-  sem esInlineFix : [ESStmt] -> [ESStmt]
-  sem esInlineFix =
-  | stmts ->
-    let next = esInline stmts in
-    if eqi (length next) (length stmts) then next else esInlineFix next
+  | stmts -> esInline (map esCleanupStmt stmts)
 
   -- Whether a binding was introduced by the compiler rather than written by
   -- the programmer. MExpr code that wants a name preserved in the output
@@ -318,8 +306,14 @@ lang ESCleanup = ESAst
   sem esInline : [ESStmt] -> [ESStmt]
   sem esInline =
   | [] -> []
-  | [ESSConst { id = id, init = e } & s] ++ rest ->
-    if not (esIsPure e) then cons s (esInline rest)
+  | [s] ++ rest -> esInlineHead (esInline rest) s
+
+  -- Rewrites one statement against the statements that follow it, which have
+  -- already been rewritten themselves.
+  sem esInlineHead : [ESStmt] -> ESStmt -> [ESStmt]
+  sem esInlineHead rest =
+  | ESSConst { id = id, init = e } & s ->
+    if not (esIsPure e) then cons s rest
     else
       let uses = esSum (map (esCountStmt id) rest) in
       let deferred = esSum (map (esCountDeferredStmt id) rest) in
@@ -333,15 +327,18 @@ lang ESCleanup = ESAst
       let movable = or inNextCond
         (not (any (lam n. gti (esCountExpr n e) 0)
                 (join (map esAssignedStmt rest)))) in
-      if and (eqi uses 0) movable then esInline rest
+      if and (eqi uses 0) movable then rest
       else if and movable
                  (and (or (esIsTemporary id) (esIsTrivial e))
                       (and (eqi uses 1) (eqi deferred 0))) then
-        esInline (map (esSubstStmt id e) rest)
-      else cons s (esInline rest)
-  | [s] ++ rest ->
-    match esFoldBranch (cons s rest) with Some folded then esInline folded
-    else cons s (esInline rest)
+        map (esSubstStmt id e) rest
+      else cons s rest
+  | s ->
+    -- Folding replaces this statement and the `if` after it with a single
+    -- binding, which may itself be inlinable, so it is decided in turn.
+    match esFoldBranch (cons s rest) with Some folded then
+      match folded with [h] ++ after then esInlineHead after h else folded
+    else cons s rest
 
   sem esCleanupProg : ESProg -> ESProg
   sem esCleanupProg =
@@ -455,7 +452,8 @@ with [ ESSIf { cond = ESEBool { value = true }
              , thn = [ESSReturn { expr = Some lt }], els = [] } ] in
 
 -- Dropping an unused binding can expose another for inlining, which a single
--- left-to-right pass would miss. This is the `n.inner.a` shape.
+-- forward pass would only see on a second iteration. This is the `n.inner.a`
+-- shape, and the reason the walk goes backwards.
 let inner = nameSym "_t" in
 let fa = nameSym "fa" in
 let fb = nameSym "fb" in
