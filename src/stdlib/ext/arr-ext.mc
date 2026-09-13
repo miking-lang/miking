@@ -137,7 +137,7 @@ external externalExtArrSet ! : all a. ExtArr a -> Int -> a -> ()
 external externalExtArrCopy : all a. ExtArr a -> ExtArr a
 external externalExtArrFill : all a. ExtArr a -> a -> ()
 external externalExtArrOfArr : all a. ExtArrKind a -> Arr a -> ExtArr a
-external externalExtArrSumLogFloat64 : ExtArr Float -> Int -> Float
+external externalExtArrSumLogFloat64 : ExtArr Float -> Float
 
 --------------------------------------------------------------------------------
 -- ExtArr interface
@@ -216,16 +216,15 @@ let extArrToSeq : all a. ExtArr a -> [a]
   = lam a. create (externalExtArrLength a) (externalExtArrGet a)
 
 
--- The sum of the natural logarithms of the first `n` elements, from index 0.
-let extArrSumLogFloat64 : ExtArr Float -> Int -> Float
-  = lam a. lam n. externalExtArrSumLogFloat64 a n
+-- The sum of the natural logarithms of all elements of a double precision float
+-- array. Raises an error if the array is not of kind `extArrKindFloat64`.
+let extArrSumLogFloat64 : ExtArr Float -> Float
+  = lam a. externalExtArrSumLogFloat64 a
 
-utest extArrSumLogFloat64 (extArrOfSeq extArrKindFloat64 [1., 1., 1.]) 3 with 0.
-utest extArrSumLogFloat64 (extArrOfSeq extArrKindFloat64 [2., 3., 5.]) 3
+utest extArrSumLogFloat64 (extArrOfSeq extArrKindFloat64 [1., 1., 1.]) with 0.
+utest extArrSumLogFloat64 (extArrOfSeq extArrKindFloat64 [2., 3., 5.])
   with addf (addf (log 2.) (log 3.)) (log 5.)
-utest extArrSumLogFloat64 (extArrOfSeq extArrKindFloat64 [2., 3., 5.]) 0 with 0.
-utest extArrSumLogFloat64 (extArrOfSeq extArrKindFloat64 [2., 3., 5.]) 2
-  with addf (log 2.) (log 3.)
+utest extArrSumLogFloat64 (extArrOfSeq extArrKindFloat64 []) with 0.
 
 utest extArrToSeq (extArrOfSeq extArrKindFloat64 [1., 2., 3.]) with [1., 2., 3.]
 utest extArrToSeq (extArrOfSeq extArrKindInt [1, 2, 3]) with [1, 2, 3]
