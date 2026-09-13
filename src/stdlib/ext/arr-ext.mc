@@ -4,6 +4,7 @@
 --------------------------------------------------------------------------------
 
 include "common.mc"
+include "ext/math-ext.mc"
 
 --==============================================================================
 -- Mutable arrays with storage internal to MCore.
@@ -136,6 +137,7 @@ external externalExtArrSet ! : all a. ExtArr a -> Int -> a -> ()
 external externalExtArrCopy : all a. ExtArr a -> ExtArr a
 external externalExtArrFill : all a. ExtArr a -> a -> ()
 external externalExtArrOfArr : all a. ExtArrKind a -> Arr a -> ExtArr a
+external externalExtArrSumLogFloat64 : ExtArr Float -> Float
 
 --------------------------------------------------------------------------------
 -- ExtArr interface
@@ -212,6 +214,17 @@ let extArrOfSeq : all a. ExtArrKind a -> [a] -> ExtArr a
 -- Creates a sequence from an external array.
 let extArrToSeq : all a. ExtArr a -> [a]
   = lam a. create (externalExtArrLength a) (externalExtArrGet a)
+
+
+-- The sum of the natural logarithms of all elements of a double precision float
+-- array. Raises an error if the array is not of kind `extArrKindFloat64`.
+let extArrSumLogFloat64 : ExtArr Float -> Float
+  = lam a. externalExtArrSumLogFloat64 a
+
+utest extArrSumLogFloat64 (extArrOfSeq extArrKindFloat64 [1., 1., 1.]) with 0.
+utest extArrSumLogFloat64 (extArrOfSeq extArrKindFloat64 [2., 3., 5.])
+  with addf (addf (log 2.) (log 3.)) (log 5.)
+utest extArrSumLogFloat64 (extArrOfSeq extArrKindFloat64 []) with 0.
 
 utest extArrToSeq (extArrOfSeq extArrKindFloat64 [1., 2., 3.]) with [1., 2., 3.]
 utest extArrToSeq (extArrOfSeq extArrKindInt [1, 2, 3]) with [1, 2, 3]
