@@ -121,17 +121,17 @@ use ESRuntime in
 
 let sections = esRuntimeSections () in
 
-utest mapMem "$slli" sections with true in
-utest mapMem "$srli" sections with true in
-utest mapMem "$srai" sections with true in
+utest mapMem "$cons" sections with true in
+utest mapMem "$cat" sections with true in
+utest mapMem "$sq" sections with true in
 utest mapMem "$roundfi" sections with true in
-utest mapMem "$fromBig" sections with true in
+utest mapMem "$float2string" sections with true in
 
 -- The export list at the bottom of the file is outside every marker.
 utest mapMem "export" sections with false in
 
 -- Dependencies are recorded from the marker line.
-utest (mapFindExn "$slli" sections).deps with ["$fromBig"] in
+utest (mapFindExn "$cons" sections).deps with ["$cat", "$sq"] in
 utest (mapFindExn "$roundfi" sections).deps with [] in
 
 let a = nameSym "a" in
@@ -157,9 +157,12 @@ utest esRuntimeEmit [] with "" in
 
 -- A dependency is pulled in even when it was not asked for.
 let contains = lam needle. lam s. gti (length (strSplit needle s)) 1 in
-let out = esRuntimeEmit ["$slli"] in
-utest contains "function $slli(" out with true in
-utest contains "function $fromBig(" out with true in
+-- `$cons` is `$cat` of a one-element `$sq`, and `$cat` needs the class.
+let out = esRuntimeEmit ["$cons"] in
+utest contains "function $cons(" out with true in
+utest contains "function $cat(" out with true in
+utest contains "function $sq(" out with true in
+utest contains "class $Seq {" out with true in
 utest contains "function $roundfi(" out with false in
 
 ()

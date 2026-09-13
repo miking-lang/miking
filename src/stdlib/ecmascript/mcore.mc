@@ -267,13 +267,13 @@ utest esCompileToString astDead with join
   , "  env.dprint(1);\n"
   , "}\n" ] in
 
--- A shift pulls its runtime definition in behind the program, along with the
--- helper it depends on.
+-- A shift is one of JavaScript's own operators, with JavaScript's semantics:
+-- the operands are taken as 32-bit.
 let astShift = dprint_ (slli_ (int_ 2) (int_ 5)) in
 let shifted = esCompileToString astShift in
-utest contains "env.dprint($slli(2, 5));" shifted with true in
-utest contains "function $slli(a, b) {" shifted with true in
-utest contains "function $fromBig(x) {" shifted with true in
+utest contains "env.dprint(2 << 5);" shifted with true in
+-- A shift is an operator, so it pulls in nothing from the runtime.
+utest contains "MExpr runtime intrinsics" shifted with false in
 -- ... and nothing else from the runtime.
 utest contains "function $roundfi" shifted with false in
 

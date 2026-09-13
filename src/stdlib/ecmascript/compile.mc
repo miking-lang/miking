@@ -1057,10 +1057,9 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint + MExprArity
     case CGti _ then bin (ESOGt {})
     case CLeqi _ then bin (ESOLe {})
     case CGeqi _ then bin (ESOGe {})
-    -- Shifts keep OCaml's 63-bit semantics; see runtime/mexpr.mjs.
-    case CSlli _ then rt "$slli"
-    case CSrli _ then rt "$srli"
-    case CSrai _ then rt "$srai"
+    case CSlli _ then bin (ESOShl {})
+    case CSrli _ then bin (ESOUShr {})
+    case CSrai _ then bin (ESOShr {})
     -- Floats share the `number` representation, so `int2float` is a no-op.
     case CAddf _ then bin (ESOAdd {})
     case CSubf _ then bin (ESOSub {})
