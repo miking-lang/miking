@@ -865,6 +865,19 @@ utest seqJoin [] [[1,2,3],[4,5,6]] with [1,2,3,4,5,6]
 utest seqJoin [7,7,7,7,7] [[1,2,3]] with [1,2,3]
 utest seqJoin [7,7,7,7] [] with []
 
+recursive
+  let intersperse : all a. a -> [a] -> [a] = lam delim. lam ss.
+    switch ss
+    case [] then []
+    case [h] then [h]
+    case [h] ++ t then cons h (cons delim (intersperse delim t))
+    end
+end
+
+utest intersperse 0 [1, 2, 3] with [1, 0, 2, 0, 3]
+utest intersperse 0 [1] with [1]
+utest intersperse 0 [] with []
+
 
 -- Replace all occurrences of the provided sequence `check` by another sequence
 -- `replacement`, in order of left to right.
