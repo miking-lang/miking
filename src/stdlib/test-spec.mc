@@ -326,16 +326,21 @@ lang TestSpec
       ] in
     strJoin "\n" (map f rules)
 
-  sem formatTupFilter : Option (Set String) -> [Rule] -> String
+  sem formatTupFilter : Option (Set String) -> [Rule] -> [String]
   sem formatTupFilter tags = | rules ->
     let rules = match tags with Some tags
       then filter (lam rule. setMem rule.tag tags) rules
       else rules in
     let f = lam rule. concat "build/" (head rule.outputs) in
-    strJoin " " (map f rules)
+    map f rules
 
   sem formatMake : Option (Set String) -> [Rule] -> String
   sem formatMake tags = | rules ->
+    let green = "\\033[0;32m" in
+    let red = "\\033[0;31m" in
+    let colorReset = "\\033[0m" in
+    let passMark = join [green, "✓", colorReset] in
+    let failMark = join [red, "✗", colorReset] in
     let prereq = match tags with Some tags
       then lam rule. if setMem rule.tag tags then cons ' ' (head rule.outputs) else ""
       else lam rule. cons ' ' (head rule.outputs) in
@@ -344,9 +349,11 @@ lang TestSpec
       , strJoin " " rule.inputs
       , if null rule.extraInputs then "" else
         concat " | " (strJoin " " rule.extraInputs)
-      , "\n\t@echo ", rule.dir, ": ", sysShellQuote rule.friendlyCommand
       , "\n\t@mkdir -p ", dirname (head rule.outputs)
-      , "\n\t@cd ", rule.dir, "; ", rule.command, "\n"
+      , "\n\t@cd ", rule.dir, "; if ", rule.command
+      , "; then echo ", sysShellQuote (join [rule.dir, ": ", passMark, " ", rule.friendlyCommand])
+      , "; else st=$$?; echo ", sysShellQuote (join [rule.dir, ": ", failMark, " ", rule.friendlyCommand])
+      , " >&2; exit $$st; fi\n"
       ] in
     join
       [ "ROOT := $(realpath .)\n"
@@ -362,15 +369,15 @@ lang TestSpec
   sem runMake : RunFlags -> Option (Set String) -> [Rule] -> Int
   sem runMake flags tags = | rules ->
     let parallel = match flags.parallel with Some j
-      then concat " -j" (int2string j)
-      else "" in
-    let keepGoing = if flags.keepGoing then " -k" else "" in
+      then [concat "-j" (int2string j)]
+      else [] in
+    let keepGoing = if flags.keepGoing then ["-k"] else [] in
     sysWithTempFile (lam file.
       writeFile file (formatMake tags rules);
       let localFile = if eqi 0 (command "test -f Makefile")
-        then " -f Makefile"
-        else "" in
-      command (join ["exec make __gen_test_rule -f ", file, localFile, parallel, keepGoing]))
+        then ["-f", "Makefile"]
+        else [] in
+      exec "make" (join [["__gen_test_rule", "-f", file], localFile, parallel, keepGoing]))
 
   sem ensureTupSetup : Bool -> [String] -> ()
   sem ensureTupSetup force = | dirs ->
@@ -482,21 +489,15 @@ lang TestSpec
   sem runTup force dirs flags tags = | rules ->
     ensureTupSetup force dirs;
     let parallel = match flags.parallel with Some n
-      then concat " -j" (int2string n)
-      else "" in
+      then [concat "-j" (int2string n)]
+      else [] in
     let keepGoing = if flags.keepGoing
-      then " -k"
-      else "" in
+      then ["-k"]
+      else [] in
     let targets = formatTupFilter tags rules in
     if null targets
     then printLn "No tests specified, did not run tup."; 0
-    else sysWithTempFile (lam file.
-      writeFile file targets;
-      -- NOTE(vipa, 2026-05-06): Something about the way OCaml's
-      -- Sys.command handles really, really long commands makes it
-      -- break to run `tup` directly. Putting the arguments in a file
-      -- and using xargs appears to work, however.
-      command (join ["xargs tup", parallel, keepGoing, " < ", file]))
+    else exec "tup" (join [parallel, keepGoing, targets])
 
   sem runStats : [Rule] -> [Rule] -> Int
   sem runStats selectedRules = | allRules ->
@@ -591,7 +592,7 @@ lang TestSpec
 
   sem negateCommand : Rule -> Rule
   sem negateCommand = | cmd ->
-    { cmd with friendlyCommand = concat "FAIL " cmd.friendlyCommand
+    { cmd with friendlyCommand = concat "XFAIL " cmd.friendlyCommand
     , command = join ["! { ", cmd.command, "; }"]
     }
 
@@ -694,7 +695,7 @@ lang TestSpec
       let needsReRun = if needsCompile then true else not (eqString (head argv) loc.exe) in
       if needsReRun then
         printLn (join ["Running compiled '", loc.exe, "'"]);
-        exit (command (join  ["exec ", loc.exe, " ", strJoin " " (map sysShellQuote (tail argv))]))
+        exec loc.exe (tail argv)
       else ()
     else error (join ["Could not find '", loc.src, "'. Are you at the root of the project?"])
   | None _ ->
