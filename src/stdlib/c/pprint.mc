@@ -6,6 +6,9 @@ include "string.mc"
 include "char.mc"
 
 include "mexpr/pprint.mc"
+include "seq.mc"
+include "name.mc"
+include "basic-types.mc"
 
 -------------
 -- HELPERS --

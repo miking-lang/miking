@@ -3,6 +3,7 @@
 --
 -- Test intrinsics for random numbers
 
+include "bool.mc"
 include "seq.mc"
 include "eqset.mc"
 

@@ -7,6 +7,14 @@ include "./sem-variants.mc"
 include "../global/logger.mc"
 include "../global/util.mc"
 include "../global/objects.mc"
+include "hashmap.mc"
+include "mexpr/info.mc"
+include "basic-types.mc"
+include "seq.mc"
+include "string.mc"
+include "bool.mc"
+include "option.mc"
+include "docgen/mast-gen/mast.mc"
 
 lang AstStreamInterface = Objects + MExprPrettyPrint
 
@@ -52,7 +60,7 @@ end
 
 lang ExternalAstStream = AstStreamInterface
 
-  sem typeStreamHandleDecl =
+  sem typeStreamHandleDecl +=
   | DeclExt {ident = ident, tyIdent = tyIdent, info = info} ->
       lam ctx.
       let obj = ObjLet { ty = Some tyIdent, datas = objDefaultDatas () } in
@@ -63,7 +71,7 @@ end
 
 lang LetAstStream = AstStreamInterface
 
-  sem typeStreamHandleDecl =
+  sem typeStreamHandleDecl +=
   | DeclLet { ident = ident, body = body, tyBody = tyBody, info = info } & decl ->
       lam ctx.
       let obj = ObjLet { ty = Some tyBody, datas = objDefaultDatas () } in
@@ -79,7 +87,7 @@ lang TypeAstStream = AstStreamInterface
   | t -> if eqString "<>" (type2str t) then
          None {} else Some t
 
-  sem typeStreamCreateLangDatabase =
+  sem typeStreamCreateLangDatabase +=
   | TmDecl { decl = DeclType { tyIdent = tyIdent, ident = ident }, inexpr = inexpr } & ctx ->
       lam langName.
       let default = { database = hashmapEmpty (), ctx = ctx } in
@@ -100,7 +108,7 @@ lang TypeAstStream = AstStreamInterface
           default
       
 
-  sem typeStreamHandleDecl =
+  sem typeStreamHandleDecl +=
   | DeclType { ident = ident, tyIdent = tyIdent, info = info } ->
       lam ctx.
       let t = getOptionalType tyIdent in
@@ -112,7 +120,7 @@ end
 
 lang ConAstStream = AstStreamInterface
 
-  sem typeStreamCreateLangDatabase =
+  sem typeStreamCreateLangDatabase +=
   | TmDecl { decl = DeclConDef { ident = ident, tyIdent = tyIdent }, inexpr = inexpr } & ctx ->
       lam langName.
 
@@ -120,7 +128,7 @@ lang ConAstStream = AstStreamInterface
     
       typeStreamCreateLangDatabase inexpr langName
       
-  sem typeStreamHandleDecl =
+  sem typeStreamHandleDecl +=
   | DeclConDef { ident = ident, tyIdent = tyIdent, info = info } ->
       lam ctx.      
       let parentType = getParentType tyIdent in
@@ -131,7 +139,7 @@ end
 
 lang UtestAstStream = AstStreamInterface
 
-  sem typeStreamHandleDecl =
+  sem typeStreamHandleDecl +=
   | DeclUtest { info = info } ->
       lam ctx.      
       let obj = ObjUtest (objDefaultDatas ()) in
@@ -142,7 +150,7 @@ end
 lang RecursiveAstStream = AstStreamInterface
 
 
-  sem typeStreamCreateLangDatabase =
+  sem typeStreamCreateLangDatabase +=
   | TmDecl { decl = DeclRecLets { bindings = bindings, info = info }, inexpr = inexpr } & ctx ->
       lam langName.
       let ident = tail (head bindings).ident.0 in -- sem name always start with a v, so we remove it.
@@ -164,7 +172,7 @@ lang RecursiveAstStream = AstStreamInterface
       
 
 
-  sem typeStreamHandleDecl =
+  sem typeStreamHandleDecl +=
   | DeclRecLets { bindings = bindings, info = info } ->
       lam ctx.
       recursive let createDecl =

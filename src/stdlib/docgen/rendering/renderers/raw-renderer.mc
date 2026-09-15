@@ -10,24 +10,36 @@
 include "../source-code-spliter.mc"
 include "./renderer-interface.mc"
 include "../../global/ext-utils.mc"
+include "docgen/rendering/rendering-options.mc"
+include "docgen/global/util.mc"
+include "docgen/global/source-code.mc"
+include "docgen/rendering/renderers/headers/search.mc"
+include "basic-types.mc"
+include "docgen/global/logger.mc"
+include "seq.mc"
+include "docgen/rendering/rendering-data.mc"
+include "string.mc"
+include "bool.mc"
+include "docgen/naming/name-context.mc"
+include "docgen/global/namespace-utils.mc"
 
 lang RawRenderer = RendererInterface
 
-    sem renderSetup =
+    sem renderSetup +=
     | opt -> ()
 
     -- We just render the parent link.
-    sem renderHeader (obj : Object) =
+    sem renderHeader (obj : Object) +=
     | opt -> let opt = fixOptFormat opt in
       renderParentLink obj opt
 
-    sem renderFooter (obj : Object) =
+    sem renderFooter (obj : Object) +=
     | _ -> ""
 
-    sem renderSearchPath (path: String) =
+    sem renderSearchPath (path: String) +=
     | opt -> pathConcat path (searchPath "")
 
-    sem renderSearchFile (searchDatas: [SearchDictObj]) =
+    sem renderSearchFile (searchDatas: [SearchDictObj]) +=
     | opt -> let opt = fixOptFormat opt in
         let path = renderGetSearchPath opt in
         match docgenFileWriteOpen path with Some wc then
@@ -36,13 +48,13 @@ lang RawRenderer = RendererInterface
         else
               renderingWarn (join ["Failed to write file: ", path, "."])
 
-    
+
     -- Top page section: title + details (e.g., parent langs) + default block.
-    sem renderTopPageDoc (data: RenderingData) =
+    sem renderTopPageDoc (data: RenderingData) +=
     | opt -> let opt = fixOptFormat opt in
         let nl = renderNewLine opt in
         let obj = data.obj in
-        
+
         let renderStemFrom = lam obj. lam from.
             let link = renderSourceCodeStr from (Some obj) opt in
             let sectionTitle = renderBold "From:" opt in
@@ -64,7 +76,7 @@ lang RawRenderer = RendererInterface
             ""
         end in
         renderBlocDefault data false opt "" "" details ""
-    
+
 
 
     -- Default block renderer: composes signature, description, code, and tests.
@@ -82,12 +94,12 @@ lang RawRenderer = RendererInterface
         let code = if opt.noCode then "" else renderCodeWithoutPreview data opt in
         let tests = renderDocTests data asChildren opt in
         join [bonusTopDoc, signature, bonusSignDescDoc, doc, bonusDescCodeDoc, code, bonusBottomDoc, tests]
-            
+
     sem renderGetSearchPath =
     | opt -> ""
 
     -- Documentation block (optionally includes a “goto” link).
-    sem renderDocBloc (data : RenderingData) (asChildren: Bool) =
+    sem renderDocBloc (data : RenderingData) (asChildren: Bool) +=
     | opt -> let opt = fixOptFormat opt in
         let obj = data.obj in
         let link =
@@ -99,24 +111,24 @@ lang RawRenderer = RendererInterface
         in
 
         renderBlocDefault data asChildren opt "" "" link ""
-    
+
     -- Renders the description text of an object (from obj.doc).
-    sem renderDocDescription (desc: String) =
+    sem renderDocDescription (desc: String) +=
     | opt -> let opt = fixOptFormat opt in desc
 
-    sem renderVariants (obj: Object) =
+    sem renderVariants (obj: Object) +=
     | opt -> let opt = fixOptFormat opt in
         switch obj
-        case ObjSyn { variants = variants } then 
+        case ObjSyn { variants = variants } then
             let variants = renderSynVariants obj variants opt in
             renderHidenCode "▶" "▼" variants true opt
         case ObjType {} then
-            let cons = renderTypeConstructors obj opt in            
+            let cons = renderTypeConstructors obj opt in
             if null cons then "" else renderHidenCode "▶" "▼" cons true opt
         case _ then ""
         end
 
-    sem renderPureDocSignature (obj : Object) =
+    sem renderPureDocSignature (obj : Object) +=
     | opt -> let opt = fixOptFormat opt in
         let name = objName obj in
 
@@ -142,23 +154,23 @@ lang RawRenderer = RendererInterface
         end
 
     -- Renders the object signature as source code.
-    sem renderDocSignature (obj : Object) =
+    sem renderDocSignature (obj : Object) +=
     | opt -> let opt = fixOptFormat opt in
         let code = renderPureDocSignature obj opt in
         let variants = renderVariants obj opt in
         let sign = renderSourceCodeStr code (Some obj) opt in
         if null variants then sign else concat sign variants
-        
+
 
     -- Renders the unit tests section (hidden if empty).
-    sem renderDocTests (data: RenderingData) (hide: Bool) =
+    sem renderDocTests (data: RenderingData) (hide: Bool) +=
     | opt -> let opt = fixOptFormat opt in
         let tests = data.tests in
         if null tests then ""
         else if hide then renderHidenCode "Show Tests" "Hide Tests" tests true opt
         else tests
-    
-    sem renderTypeConstructors (obj: Object) =
+
+    sem renderTypeConstructors (obj: Object) +=
     | opt -> let opt = fixOptFormat opt in
         match nameContextGetTypeConstructors opt.nameContext obj with Some constructors then
             strJoin (renderNewLine opt)
@@ -178,7 +190,7 @@ lang RawRenderer = RendererInterface
                  constructors)
         else renderingWarn (join ["Failed to retrieve constructors for type ", objName obj, "."]); ""
 
-    sem renderOneVariant (obj: Object) (v: SynVariant) =
+    sem renderOneVariant (obj: Object) (v: SynVariant) +=
     | opt -> let opt = fixOptFormat opt in
         let right = join [v.name, " ", v.vtype] in
         let right = strToSourceCode right in
@@ -186,25 +198,25 @@ lang RawRenderer = RendererInterface
         let doc = renderRemoveDocForbidenChars v.doc opt in
         if null v.doc then right else join [right, ": ", doc]
 
-    sem renderSynVariants (obj: Object) (variants: [SynVariant]) =
+    sem renderSynVariants (obj: Object) (variants: [SynVariant]) +=
     | opt -> let opt = fixOptFormat opt in
         strJoin "\n" (map (lam v. renderOneVariant obj v opt) variants)
 
     -- Goto link wrapper (uses renderLink).
-    sem renderGotoLink (link: String) =
+    sem renderGotoLink (link: String) +=
     | opt -> let opt = fixOptFormat opt in
         renderLink "[→]" link opt
 
-    sem renderHookLink (title: String) (link: String) (highlight: Bool) =
+    sem renderHookLink (title: String) (link: String) (highlight: Bool) +=
     | opt -> let opt = fixOptFormat opt in
         renderLink title link opt
 
-    sem renderPageLink (title: String) (link: String) =
+    sem renderPageLink (title: String) (link: String) +=
     | opt ->  let opt = fixOptFormat opt in
         renderLink title link opt
 
     -- Goto link wrapper (uses renderLink).
-    sem renderParentLink (obj: Object) =
+    sem renderParentLink (obj: Object) +=
     | opt -> let opt = fixOptFormat opt in
         let namespace = objNamespace obj in
         let subnamespace = namespaceGetSubNamespace namespace in
@@ -232,7 +244,7 @@ lang RawRenderer = RendererInterface
 
 
     -- Renders a comma-separated list of links for objects (with newline).
-    sem renderLinkList (objects: [Object]) =
+    sem renderLinkList (objects: [Object]) +=
     | opt -> let opt = fixOptFormat opt in
         let doc = map (lam u.
             let link = objGetLink u opt (objName u) in
@@ -242,48 +254,49 @@ lang RawRenderer = RendererInterface
         let doc = strJoin ", " doc in
         match doc with "" then "" else
             concat (renderText doc opt) (renderNewLine opt)
-    
+
     -- Renders code as a hidden, toggleable block (raw + preview-less).
-    sem renderCodeWithoutPreview (data: RenderingData) = 
+    sem renderCodeWithoutPreview (data: RenderingData) +=
     | opt -> let opt = fixOptFormat opt in
         if objHasChildren data.obj then
             renderHidenCode "Show Implementation" "Hide Implementation" data.code true opt
         else
             data.code
 
-    -- Renders code with an optional preview section (uses renderHidenCode).
-    sem renderCodeWithPreview (data: RenderingData) =
-    | opt -> let opt = fixOptFormat opt in
-        match data.right with [] then
-            data.left
-        else 
-            join [data.left, renderHidenCode "..." "..." data.right false opt]
+    -- NOTE(vipa, 2026-08-18): Seems to be dead code, and has a type error
+    -- -- Renders code with an optional preview section (uses renderHidenCode).
+    -- sem renderCodeWithPreview (data: RenderingData) +=
+    -- | opt -> let opt = fixOptFormat opt in
+    --     match data.right with [] then
+    --         data.left
+    --     else
+    --         join [data.left, renderHidenCode "..." "..." data.right false opt]
 
     -- Default hidden-code renderer (no-op for raw).
-    sem renderHidenCode (hidden: String) (shown: String) (code : String) (jumpLine: Bool) =
+    sem renderHidenCode (hidden: String) (shown: String) (code : String) (jumpLine: Bool) +=
     | _ -> ""
 
     -- String -> tokenized/colored source code (delegates to renderSourceCode).
-    sem renderSourceCodeStr (code: String) (obj: Option Object) =
+    sem renderSourceCodeStr (code: String) (obj: Option Object) +=
     | opt -> let opt = fixOptFormat opt in
          renderSourceCode (strToSourceCode code) obj opt
 
     -- SourceCode -> rendered string (maps each word with renderWord).
-    sem renderSourceCode (code: SourceCode) (obj: Option Object) =
+    sem renderSourceCode (code: SourceCode) (obj: Option Object) +=
     | opt -> let opt = fixOptFormat opt in
         join (map (lam code. renderWord code obj opt) code)
-    
+
     -- Renders a single token/word according to its form (with escaping).
-    sem renderWord (word: SourceCodeWord) (obj: Option Object) =
+    sem renderWord (word: SourceCodeWord) (obj: Option Object) +=
     | opt -> let opt = fixOptFormat opt in
         let renderSkiped: [Token] -> String = lam skiped.
             join (map (lam s. renderWord ( { word = s, kind = CodeDefault {} } ) obj opt) skiped)
         in
 
         match word with { word = TokenInclude { content = content, skiped = skiped } } then
-            join [renderKeyword "include" opt, renderSkiped skiped, renderString (join ["\"", (renderRemoveCodeForbidenChars content opt), "\""]) opt]    
+            join [renderKeyword "include" opt, renderSkiped skiped, renderString (join ["\"", (renderRemoveCodeForbidenChars content opt), "\""]) opt]
         else match word with { word = word, kind = kind } in
-            let renderer = 
+            let renderer =
                 let lit = lit word in
                 switch word
                 case TokenStr {} then renderString
@@ -302,7 +315,7 @@ lang RawRenderer = RendererInterface
                                           renderType word)
                     case CodeNumber {} then renderNumber
                     case CodeDefault {} then renderDefault
-                    end       
+                    end
                 end
             in
 
@@ -310,11 +323,11 @@ lang RawRenderer = RendererInterface
             let word = renderRemoveCodeForbidenChars word opt in
             renderer word opt
 
-    sem renderCreateTests (tests: [RenderingData]) =
+    sem renderCreateTests (tests: [RenderingData]) +=
     | opt -> let opt = fixOptFormat opt in
         strJoin "\n" (map (lam t. t.code) tests)
 
-    sem renderCreateRenderingData (obj: Object) (tests: [RenderingData]) =
+    sem renderCreateRenderingData (obj: Object) (tests: [RenderingData]) +=
     | opt -> let opt = fixOptFormat opt in
         let split = sourceCodeSplit (objSourceCode obj) in
         let split = (length split.left) in
@@ -325,41 +338,41 @@ lang RawRenderer = RendererInterface
         renderingDataNew obj code split tests
 
     -- Section titles and basic text formatting.
-    sem renderSectionTitle (title: String) =
+    sem renderSectionTitle (title: String) +=
     | opt -> let opt = fixOptFormat opt in
         renderTitle 2 title opt
 
-    sem renderBold (text : String) =
+    sem renderBold (text : String) +=
     | _ -> text
 
-    sem renderItalic (text : String) =
+    sem renderItalic (text : String) +=
     | _ -> text
 
     -- Escaping/sanitizing hooks for docs and code (no-op in raw).
-    sem renderRemoveDocForbidenChars (s: String) =
+    sem renderRemoveDocForbidenChars (s: String) +=
     | _ -> s
 
-     sem renderRemoveCodeForbidenChars (s: String) =
+     sem renderRemoveCodeForbidenChars (s: String) +=
     | _ -> s
 
     -- Title helpers.
-    sem renderTitle (size : Int) (s : String) =
+    sem renderTitle (size : Int) (s : String) +=
     | _ -> s
 
-    sem renderObjTitle (size : Int) (obj : Object) =
+    sem renderObjTitle (size : Int) (obj : Object) +=
     | opt -> let opt = fixOptFormat opt in
         renderTitle size (objTitle obj) opt
-    
+
     -- Text, link, and color helpers (raw → passthrough).
-    sem renderText (text : String) =
+    sem renderText (text : String) +=
     | _ -> text
 
-    sem renderStdlibConstLink (file: String) =
+    sem renderStdlibConstLink (file: String) +=
     | opt ->
         let ext = formatGetExtension opt.fmt in
         normalizePath (join ["/", opt.stdlibFolder, "/", opt.urlPrefix, "/", file, "/index.", ext])
 
-    sem renderHook (obj: Object) (name: String) (highlight: Bool) =
+    sem renderHook (obj: Object) (name: String) (highlight: Bool) +=
     | opt -> let opt = fixOptFormat opt in
          let datas =
              switch name
@@ -375,7 +388,7 @@ lang RawRenderer = RendererInterface
                 else
                     { url = "", obj = None {} }
              end
-         in  
+         in
          if null datas.url then name else
          let link = renderHookLink name datas.url highlight opt in
          match datas.obj with Some obj then
@@ -389,43 +402,43 @@ lang RawRenderer = RendererInterface
          else link
 
 
-    sem renderLink (title : String) (link : String) =
+    sem renderLink (title : String) (link : String) +=
     | _ -> join [title, " (", link, ")"]
 
-    sem renderTooltip (title : String) (content : String) =
+    sem renderTooltip (title : String) (content : String) +=
     | _ -> title
 
-    sem renderTooltipSign (obj: Object) =
+    sem renderTooltipSign (obj: Object) +=
     | opt -> let opt = fixOptFormat opt in
         let sign = renderPureDocSignature obj opt in
         renderSourceCodeStr sign (None {}) opt
 
-    sem renderType (content : String) = 
+    sem renderType (content : String) +=
     | _ -> content
 
-    sem renderVar (content : String) =
-    | _ -> content
-    
-    sem renderKeyword (content : String) =
-    | _ -> content
-    
-    sem renderComment (content : String) =
-    | _ -> content
-    
-    sem renderString (content : String) =
+    sem renderVar (content : String) +=
     | _ -> content
 
-    sem renderNumber (content : String) =
+    sem renderKeyword (content : String) +=
     | _ -> content
-    
-    sem renderDefault (content : String) =
+
+    sem renderComment (content : String) +=
     | _ -> content
-    
-    sem renderMultiLineComment (content : String) =
+
+    sem renderString (content : String) +=
+    | _ -> content
+
+    sem renderNumber (content : String) +=
+    | _ -> content
+
+    sem renderDefault (content : String) +=
+    | _ -> content
+
+    sem renderMultiLineComment (content : String) +=
     | _ -> content
 
     -- Newline helper.
-    sem renderNewLine =
+    sem renderNewLine +=
     | _ -> "\n"
-    
+
 end

@@ -3,6 +3,7 @@
 --
 -- Map intrinstics
 
+include "bool.mc"
 include "char.mc"
 include "map.mc"
 include "seq.mc"

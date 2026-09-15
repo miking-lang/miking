@@ -10,6 +10,17 @@ include "mexpr/invariants.mc"
 
 include "mexpr/cmp.mc"
 include "tuple.mc"
+include "mexpr/attribute-grammar.mc"
+include "set.mc"
+include "name.mc"
+include "map.mc"
+include "thunk.mc"
+include "seq.mc"
+include "string.mc"
+include "common.mc"
+include "mexpr/info.mc"
+include "lazy.mc"
+include "mexpr/ast-builder.mc"
 
 -- The `DeclaredHere` attribute is a helper attribute, and is used to
 -- compute declarations that can "float upwards":
@@ -85,20 +96,20 @@ lang DeclaredHereAttr = AttributeGrammar + MExprAst
     , tyConstructors = setEmpty nameCmp
     }
 
-  syn Attr loc =
+  syn Attr loc +=
   | DeclaredHere (Thunk (InScopeAttr loc))
 
-  sem newAttr label =
+  sem newAttr label +=
   | DeclaredHere _ -> DeclaredHere (mkThunk label)
 
-  sem attrKindToString =
+  sem attrKindToString +=
   | DeclaredHere _ -> "DeclaredHere"
 
   sem openInScopeAttr : all loc. Attr loc -> Thunk (InScopeAttr loc)
   sem openInScopeAttr =
   | DeclaredHere x -> x
 
-  sem processAttrDecl env st loc =
+  sem processAttrDecl env st loc +=
   | (DeclLet x, DeclaredHere here) ->
     match willWrite st here with (st, writeHere) in
     (st, lam. writeHere (_scopeValues [x.ident]))
@@ -133,7 +144,7 @@ lang DeclaredHereAttr = AttributeGrammar + MExprAst
   | PatAnd _
   | PatNot _ -> lam x. x
 
-  sem processAttrPat env st loc =
+  sem processAttrPat env st loc +=
   | pair & (PatOr x, attr & DeclaredHere here) ->
     match willWrite st here with (st, writeHere) in
     match willRead st (openInScopeAttr (getAttrPat attr x.lpat)) with (st, readL) in
@@ -150,7 +161,7 @@ lang DeclaredHereAttr = AttributeGrammar + MExprAst
       _scopeMerge
       (processDeclaredHerePat loc pat)
 
-  sem processAttrType env st loc =
+  sem processAttrType env st loc +=
   | (TyAll x, attr & DeclaredHere here) ->
     match willWrite st here with (st, writeHere) in
     match willRead st (openInScopeAttr (getAttrType attr x.ty)) with (st, readTy) in
@@ -165,19 +176,19 @@ lang DeclaredHereAttr = AttributeGrammar + MExprAst
 end
 
 lang InScopeAttr = AttributeGrammar + DeclaredHereAttr
-  syn Attr loc =
+  syn Attr loc +=
   | InScopeAttr (Thunk (InScopeAttr loc))
 
-  sem newAttr label =
+  sem newAttr label +=
   | InScopeAttr _ -> InScopeAttr (mkThunk label)
 
-  sem attrKindToString =
+  sem attrKindToString +=
   | InScopeAttr _ -> "InScopeAttr"
 
-  sem openInScopeAttr =
+  sem openInScopeAttr +=
   | InScopeAttr x -> x
 
-  sem processAttrExpr env st loc =
+  sem processAttrExpr env st loc +=
   | (TmLam x, attr & InScopeAttr here) ->
     match willRead st here with (st, readHere) in
     match willWrite st (openInScopeAttr (getAttrType attr x.tyAnnot)) with (st, writeTyAnnot) in
@@ -217,7 +228,7 @@ lang InScopeAttr = AttributeGrammar + DeclaredHereAttr
   | pair & (_, InScopeAttr _) ->
     simpleInheritedExpr st pair openInScopeAttr (lam x. x)
 
-  sem processAttrDecl env st loc =
+  sem processAttrDecl env st loc +=
   | (DeclLet x, attr & InScopeAttr here) ->
     match willRead st here with (st, readHere) in
     match willRead st (openInScopeAttr (getAttrType (DeclaredHere noThunk) x.tyAnnot)) with (st, readTyAnnot) in
@@ -253,7 +264,7 @@ lang InScopeAttr = AttributeGrammar + DeclaredHereAttr
   | pair & (DeclConDef _ | DeclUtest _ | DeclExt _, InScopeAttr _) ->
     simpleInheritedDecl st pair openInScopeAttr (lam x. x)
 
-  sem processAttrPat env st loc =
+  sem processAttrPat env st loc +=
   | pair & (_, InScopeAttr _) ->
     simpleInheritedPat st pair openInScopeAttr (lam x. x)
 
@@ -262,23 +273,23 @@ lang InScopeAttr = AttributeGrammar + DeclaredHereAttr
   | TyAll x -> lam scope. _scopeMerge scope (_scopeTyValues [x.ident])
   | _ -> lam x. x
 
-  sem processAttrType env st loc =
+  sem processAttrType env st loc +=
   | pair & (ty, InScopeAttr _) ->
     simpleInheritedType st pair openInScopeAttr (processInScopeAttrType loc ty)
 end
 
 lang UnboundErrorAttr = Invariant + InScopeAttr
   type UnboundErrorAttr loc = Map Name [loc]
-  syn Attr loc =
+  syn Attr loc +=
   | UnboundErrorAttr (Thunk (UnboundErrorAttr loc))
 
-  sem newAttr label =
+  sem newAttr label +=
   | UnboundErrorAttr _ -> UnboundErrorAttr (mkThunk label)
 
-  sem attrKindToString =
+  sem attrKindToString +=
   | UnboundErrorAttr _ -> "UnboundErrorAttr"
 
-  sem printInvariantSummary =
+  sem printInvariantSummary +=
   | UnboundErrorAttr x ->
     let start = wallTimeMs () in
     let x = x.read () in
@@ -351,7 +362,7 @@ lang UnboundErrorAttr = Invariant + InScopeAttr
     )
   | _ -> (st, lam x. x)
 
-  sem processAttrDecl env st loc =
+  sem processAttrDecl env st loc +=
   | pair & (x, UnboundErrorAttr _) ->
     simpleSynthesizedDecl st
       pair
@@ -360,7 +371,7 @@ lang UnboundErrorAttr = Invariant + InScopeAttr
       (mapUnionWith concat)
       (lam x. x)
 
-  sem processAttrExpr env st loc =
+  sem processAttrExpr env st loc +=
   | pair & (x, UnboundErrorAttr _) ->
     match processUnboundErrorAttrExpr env st loc x with (st, addHere) in
     simpleSynthesizedExpr st
@@ -370,7 +381,7 @@ lang UnboundErrorAttr = Invariant + InScopeAttr
       (mapUnionWith concat)
       addHere
 
-  sem processAttrType env st loc =
+  sem processAttrType env st loc +=
   | pair & (x, UnboundErrorAttr _) ->
     match processUnboundErrorAttrType env st loc x with (st, addHere) in
     simpleSynthesizedType st
@@ -380,7 +391,7 @@ lang UnboundErrorAttr = Invariant + InScopeAttr
       (mapUnionWith concat)
       addHere
 
-  sem processAttrPat env st loc =
+  sem processAttrPat env st loc +=
   | pair & (x, UnboundErrorAttr _) ->
     match processUnboundErrorAttrPat env st loc x with (st, addHere) in
     simpleSynthesizedPat st

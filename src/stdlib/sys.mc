@@ -1,4 +1,7 @@
 include "string.mc"
+include "seq.mc"
+include "char.mc"
+include "basic-types.mc"
 
 type ReturnCode = Int
 type ExecResult = {stdout: String, stderr: String, returncode: ReturnCode}

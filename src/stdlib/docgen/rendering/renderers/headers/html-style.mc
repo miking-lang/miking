@@ -1,5 +1,6 @@
 include "./theme-variables.mc"
 include "./search.mc"
+include "seq.mc"
 
 let htmlStylePath = "styles.css"
 

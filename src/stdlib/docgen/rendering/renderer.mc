@@ -9,6 +9,13 @@ include "../global/ext-utils.mc"
 include "../global/util.mc"
 include "../global/logger.mc"
 include "../global/format.mc"
+include "hashmap.mc"
+include "docgen/rendering/renderers/headers/search.mc"
+include "docgen/rendering/rendered-map.mc"
+include "docgen/rendering/rendering-data.mc"
+include "basic-types.mc"
+include "seq.mc"
+include "ext/file-ext.mc"
 
 type RenderingResult = {
      renderedMap: HashMap String (),

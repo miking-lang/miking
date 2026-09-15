@@ -1,3 +1,4 @@
+include "basic-types.mc"
 include "bool.mc"
 include "char.mc"
 include "option.mc"

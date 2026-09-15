@@ -9,6 +9,15 @@ include "symbolize.mc"
 include "type-check.mc"
 include "ast-builder.mc"
 include "free-vars.mc"
+include "mexpr/ast.mc"
+include "bool.mc"
+include "list.mc"
+include "set.mc"
+include "basic-types.mc"
+include "mexpr/const-arity.mc"
+include "int.mc"
+include "map.mc"
+include "seq.mc"
 
 /-
   This file implements constant folding and constant propagation
@@ -54,16 +63,16 @@ lang ConstantFold = Eval + Ast
 end
 
 lang OpaqueConstantFold = ConstantFold + OpaqueAst + FreeVars
-  sem readback =
+  sem readback +=
   | tm & TmOpaque _ -> tm
-  sem constantFoldExpr ctx =
+  sem constantFoldExpr ctx +=
   | tm & TmOpaque x ->
     let referenced = freeVars x.body in
     listFoldl (lam tm. lam pair. if setMem pair.0 referenced then bind_ (nulet_ pair.0 pair.1) tm else tm) tm ctx.env
 end
 
 lang VarConstantFold = ConstantFold + VarAst
-  sem constantFoldExpr ctx =
+  sem constantFoldExpr ctx +=
   | TmVar r ->
     match evalEnvLookup r.ident ctx.env with Some t then t
     else TmVar r
@@ -71,7 +80,7 @@ end
 
 lang AppConstantFold = ConstantFold + AppEval + ConstSideEffect + ConstArity
 
-  syn Expr =
+  syn Expr +=
   -- Partial constant application where all arguments are constant
   | PartialConstAppConsts { expr : Expr,  arity : Int }
   -- Partial constant application where some argument is NOT constant
@@ -90,7 +99,7 @@ lang AppConstantFold = ConstantFold + AppEval + ConstSideEffect + ConstArity
   sem constantFoldConstApp =
   | t -> t
 
-  sem constantFoldExpr ctx =
+  sem constantFoldExpr ctx +=
   | TmApp appr ->
     let lhs = constantFoldExpr ctx appr.lhs in
     let rhs = constantFoldExpr ctx appr.rhs in
@@ -125,16 +134,16 @@ lang AppConstantFold = ConstantFold + AppEval + ConstSideEffect + ConstArity
     case _ then t
     end
 
-  sem isConstant =
+  sem isConstant +=
   | PartialConstAppConsts _ -> true
   | PartialConstApp _ -> false
 
-  sem readback =
+  sem readback +=
   | PartialConstAppConsts r | PartialConstApp r -> readback r.expr
 end
 
 lang LamAppConstantFold = ConstantFold + AppAst + LamAst
-  sem constantFoldExpr ctx =
+  sem constantFoldExpr ctx +=
   | TmApp (appr & {lhs = TmLam lamr}) ->
     let rhs = constantFoldExpr ctx appr.rhs in
     if doPropagate rhs then
@@ -149,7 +158,7 @@ lang LamAppConstantFold = ConstantFold + AppAst + LamAst
 end
 
 lang LetConstantFold = ConstantFold + LetDeclAst
-  sem constantFoldExpr ctx =
+  sem constantFoldExpr ctx +=
   | TmDecl (x & {decl = DeclLet r}) ->
     let body = constantFoldExpr ctx r.body in
     if doPropagate body then
@@ -160,22 +169,22 @@ lang LetConstantFold = ConstantFold + LetDeclAst
 end
 
 lang RecordConstantFold = ConstantFold + RecordAst
-  sem isConstant =
+  sem isConstant +=
   | TmRecord r -> mapAll isConstant r.bindings
 end
 
 lang ConstConstantFold = ConstantFold + ConstAst
-  sem isConstant =
+  sem isConstant +=
   | TmConst _ -> true
 end
 
 lang DataConstantFold = ConstantFold + DataAst
-  sem isConstant =
+  sem isConstant +=
   | TmConApp r -> isConstant r.body
 end
 
 lang MatchConstantFold = ConstantFold + MatchEval
-  sem constantFoldExpr ctx =
+  sem constantFoldExpr ctx +=
   | TmMatch r ->
     let target = constantFoldExpr ctx r.target in
     if isConstant target then
@@ -198,12 +207,12 @@ lang MatchConstantFold = ConstantFold + MatchEval
 end
 
 lang SeqConstantFold = ConstantFold + SeqAst
-  sem isConstant =
+  sem isConstant +=
   | TmSeq r -> forAll isConstant r.tms
 end
 
 lang ArithIntConstantFold = AppConstantFold + ArithIntAst + ArithIntArity
-  sem constantFoldConstAppConsts =
+  sem constantFoldConstAppConsts +=
   | TmApp (r & {
     lhs = TmConst {val = const & (CNegi _)},
     rhs = TmConst {val = CInt {val = n}}
@@ -232,7 +241,7 @@ lang ArithIntConstantFold = AppConstantFold + ArithIntAst + ArithIntArity
 end
 
 lang ArithFloatConstantFold = AppConstantFold + ArithFloatAst + ArithFloatArity
-  sem constantFoldConstAppConsts =
+  sem constantFoldConstAppConsts +=
   | TmApp (r & {
     lhs = TmConst {val = const & (CNegf _)},
     rhs = TmConst {val = CFloat {val = f}}
@@ -262,7 +271,7 @@ end
 lang SeqOpConstantFoldFirstOrder =
   AppConstantFold + SeqOpAst + IntAst + BoolAst + SeqOpArity
 
-  sem constantFoldConstAppConsts =
+  sem constantFoldConstAppConsts +=
   | TmApp {lhs = TmConst {val = CHead _}, rhs = TmSeq r} -> head r.tms
   | TmApp {lhs = TmConst {val = CTail _}, rhs = TmSeq r} ->
     TmSeq { r with tms = tail r.tms }
@@ -288,7 +297,7 @@ lang SeqOpConstantFoldFirstOrder =
   } ->
     TmSeq { r with tms = subsequence r.tms ofs len }
 
-  sem constantFoldConstApp =
+  sem constantFoldConstApp +=
   | TmApp {
     lhs = TmApp {lhs = TmConst {val = CCons _}, rhs = val},
     rhs = TmSeq r

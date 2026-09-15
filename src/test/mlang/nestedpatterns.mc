@@ -1,3 +1,4 @@
+include "basic-types.mc"
 include "option.mc"
 
 -- The commented out fragments are part of things that should produce error messages,
@@ -24,11 +25,11 @@ lang CatchAll
   | _ -> "catchall"
 end
 lang MidSpecific = CatchAll
-  sem foo =
+  sem foo +=
   | (true, _) -> "mid"
 end
 lang FullSpecific = MidSpecific
-  sem foo =
+  sem foo +=
   | (true, true) -> "spec"
 end
 
@@ -82,10 +83,10 @@ lang LexBase
 end
 
 lang LexDecimal = LexBase
-  syn Tok =
+  syn Tok +=
   | IntTok [Char]
 
-  sem lex =
+  sem lex +=
   | (['0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'] ++ _) & str ->
     match lex_int "" str with (n, rest) then
       optionMap (cons (IntTok n)) (lex rest)
@@ -99,15 +100,15 @@ lang LexDecimal = LexBase
 end
 
 lang LexSpace = LexBase
-  sem lex =
+  sem lex +=
   | " " ++ rest -> lex rest
 end
 
 lang LexBinary = LexBase
-  syn Tok =
+  syn Tok +=
   | BinaryIntTok [Char]  -- NOTE(?,?): this should probably reuse IntTok and do conversion, but that's not relevant for this test
 
-  sem lex =
+  sem lex +=
   | (['0', 'b', '0' | '1'] ++ _) & ([_, _] ++ str) ->
     match lex_binary "" str with (n, rest) then
       optionMap (cons (BinaryIntTok n)) (lex rest)

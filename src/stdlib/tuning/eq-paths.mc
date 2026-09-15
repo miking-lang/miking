@@ -2,6 +2,8 @@ include "common.mc"
 include "digraph.mc"
 include "string.mc"
 include "eqset.mc"
+include "char.mc"
+include "seq.mc"
 
 -- Computes equivalence paths for holes.
 

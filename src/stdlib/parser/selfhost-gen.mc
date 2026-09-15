@@ -1,6 +1,12 @@
 include "seq.mc"
 include "parser/ll1.mc"
 include "parser/breakable.mc"
+include "mexpr/info.mc"
+include "name.mc"
+include "basic-types.mc"
+include "option.mc"
+include "parser/lexer.mc"
+include "common.mc"
 lang SelfhostBaseAst
   syn SHExpr =
   syn SHRegex =
@@ -335,9 +341,9 @@ lang LangSHFileAst =
   SelfhostBaseAst
   type LangSHFileRecord =
     {info: Info, name: {i: Info, v: String}, decls: [SHDecl]}
-  syn SHFile =
+  syn SHFile +=
   | LangSHFile LangSHFileRecord
-  sem smapAccumL_SHFile_SHDecl f acc =
+  sem smapAccumL_SHFile_SHDecl f acc +=
   | LangSHFile x ->
     match
       match
@@ -357,10 +363,10 @@ lang LangSHFileAst =
     in
     (acc, LangSHFile
         x)
-  sem get_SHFile_info =
+  sem get_SHFile_info +=
   | LangSHFile target ->
     target.info
-  sem set_SHFile_info val =
+  sem set_SHFile_info val +=
   | LangSHFile target ->
     LangSHFile
       { target with info = val }
@@ -369,12 +375,12 @@ lang StartSHDeclAst =
   SelfhostBaseAst
   type StartSHDeclRecord =
     {info: Info, name: {i: Info, v: Name}}
-  syn SHDecl =
+  syn SHDecl +=
   | StartSHDecl StartSHDeclRecord
-  sem get_SHDecl_info =
+  sem get_SHDecl_info +=
   | StartSHDecl target ->
     target.info
-  sem set_SHDecl_info val =
+  sem set_SHDecl_info val +=
   | StartSHDecl target ->
     StartSHDecl
       { target with info = val }
@@ -383,12 +389,12 @@ lang IncludeSHDeclAst =
   SelfhostBaseAst
   type IncludeSHDeclRecord =
     {info: Info, path: {i: Info, v: String}}
-  syn SHDecl =
+  syn SHDecl +=
   | IncludeSHDecl IncludeSHDeclRecord
-  sem get_SHDecl_info =
+  sem get_SHDecl_info +=
   | IncludeSHDecl target ->
     target.info
-  sem set_SHDecl_info val =
+  sem set_SHDecl_info val +=
   | IncludeSHDecl target ->
     IncludeSHDecl
       { target with info = val }
@@ -397,9 +403,9 @@ lang TypeSHDeclAst =
   SelfhostBaseAst
   type TypeSHDeclRecord =
     {info: Info, name: {i: Info, v: Name}, properties: [{val: SHExpr, name: {i: Info, v: String}}]}
-  syn SHDecl =
+  syn SHDecl +=
   | TypeSHDecl TypeSHDeclRecord
-  sem smapAccumL_SHDecl_SHExpr f acc =
+  sem smapAccumL_SHDecl_SHExpr f acc +=
   | TypeSHDecl x ->
     match
       match
@@ -425,10 +431,10 @@ lang TypeSHDeclAst =
     in
     (acc, TypeSHDecl
         x)
-  sem get_SHDecl_info =
+  sem get_SHDecl_info +=
   | TypeSHDecl target ->
     target.info
-  sem set_SHDecl_info val =
+  sem set_SHDecl_info val +=
   | TypeSHDecl target ->
     TypeSHDecl
       { target with info = val }
@@ -437,9 +443,9 @@ lang TokenSHDeclAst =
   SelfhostBaseAst
   type TokenSHDeclRecord =
     {info: Info, name: Option {i: Info, v: Name}, properties: [{val: SHExpr, name: {i: Info, v: String}}]}
-  syn SHDecl =
+  syn SHDecl +=
   | TokenSHDecl TokenSHDeclRecord
-  sem smapAccumL_SHDecl_SHExpr f acc =
+  sem smapAccumL_SHDecl_SHExpr f acc +=
   | TokenSHDecl x ->
     match
       match
@@ -465,10 +471,10 @@ lang TokenSHDeclAst =
     in
     (acc, TokenSHDecl
         x)
-  sem get_SHDecl_info =
+  sem get_SHDecl_info +=
   | TokenSHDecl target ->
     target.info
-  sem set_SHDecl_info val =
+  sem set_SHDecl_info val +=
   | TokenSHDecl target ->
     TokenSHDecl
       { target with info = val }
@@ -477,12 +483,12 @@ lang PrecedenceTableSHDeclAst =
   SelfhostBaseAst
   type PrecedenceTableSHDeclRecord =
     {info: Info, levels: [{noeq: Option Info, operators: [{i: Info, v: Name}]}], exceptions: [{lefts: [{i: Info, v: Name}], rights: [{i: Info, v: Name}]}]}
-  syn SHDecl =
+  syn SHDecl +=
   | PrecedenceTableSHDecl PrecedenceTableSHDeclRecord
-  sem get_SHDecl_info =
+  sem get_SHDecl_info +=
   | PrecedenceTableSHDecl target ->
     target.info
-  sem set_SHDecl_info val =
+  sem set_SHDecl_info val +=
   | PrecedenceTableSHDecl target ->
     PrecedenceTableSHDecl
       { target with info = val }
@@ -491,9 +497,9 @@ lang ProductionSHDeclAst =
   SelfhostBaseAst
   type ProductionSHDeclRecord =
     {nt: {i: Info, v: Name}, info: Info, kinf: Option Info, name: {i: Info, v: Name}, assoc: Option {i: Info, v: String}, kpref: Option Info, kprod: Option Info, regex: SHRegex, kpostf: Option Info}
-  syn SHDecl =
+  syn SHDecl +=
   | ProductionSHDecl ProductionSHDeclRecord
-  sem smapAccumL_SHDecl_SHRegex f acc =
+  sem smapAccumL_SHDecl_SHRegex f acc +=
   | ProductionSHDecl x ->
     match
       match
@@ -508,10 +514,10 @@ lang ProductionSHDeclAst =
     in
     (acc, ProductionSHDecl
         x)
-  sem get_SHDecl_info =
+  sem get_SHDecl_info +=
   | ProductionSHDecl target ->
     target.info
-  sem set_SHDecl_info val =
+  sem set_SHDecl_info val +=
   | ProductionSHDecl target ->
     ProductionSHDecl
       { target with info = val }
@@ -520,9 +526,9 @@ lang RecordSHRegexAst =
   SelfhostBaseAst
   type RecordSHRegexRecord =
     {info: Info, regex: SHRegex}
-  syn SHRegex =
+  syn SHRegex +=
   | RecordSHRegex RecordSHRegexRecord
-  sem smapAccumL_SHRegex_SHRegex f acc =
+  sem smapAccumL_SHRegex_SHRegex f acc +=
   | RecordSHRegex x ->
     match
       match
@@ -537,10 +543,10 @@ lang RecordSHRegexAst =
     in
     (acc, RecordSHRegex
         x)
-  sem get_SHRegex_info =
+  sem get_SHRegex_info +=
   | RecordSHRegex target ->
     target.info
-  sem set_SHRegex_info val =
+  sem set_SHRegex_info val +=
   | RecordSHRegex target ->
     RecordSHRegex
       { target with info = val }
@@ -549,12 +555,12 @@ lang EmptySHRegexAst =
   SelfhostBaseAst
   type EmptySHRegexRecord =
     {info: Info}
-  syn SHRegex =
+  syn SHRegex +=
   | EmptySHRegex EmptySHRegexRecord
-  sem get_SHRegex_info =
+  sem get_SHRegex_info +=
   | EmptySHRegex target ->
     target.info
-  sem set_SHRegex_info val =
+  sem set_SHRegex_info val +=
   | EmptySHRegex target ->
     EmptySHRegex
       { target with info = val }
@@ -563,12 +569,12 @@ lang LiteralSHRegexAst =
   SelfhostBaseAst
   type LiteralSHRegexRecord =
     {val: {i: Info, v: String}, info: Info}
-  syn SHRegex =
+  syn SHRegex +=
   | LiteralSHRegex LiteralSHRegexRecord
-  sem get_SHRegex_info =
+  sem get_SHRegex_info +=
   | LiteralSHRegex target ->
     target.info
-  sem set_SHRegex_info val =
+  sem set_SHRegex_info val +=
   | LiteralSHRegex target ->
     LiteralSHRegex
       { target with info = val }
@@ -577,9 +583,9 @@ lang TokenSHRegexAst =
   SelfhostBaseAst
   type TokenSHRegexRecord =
     {arg: Option SHExpr, info: Info, name: {i: Info, v: Name}}
-  syn SHRegex =
+  syn SHRegex +=
   | TokenSHRegex TokenSHRegexRecord
-  sem smapAccumL_SHRegex_SHExpr f acc =
+  sem smapAccumL_SHRegex_SHExpr f acc +=
   | TokenSHRegex x ->
     match
       match
@@ -599,10 +605,10 @@ lang TokenSHRegexAst =
     in
     (acc, TokenSHRegex
         x)
-  sem get_SHRegex_info =
+  sem get_SHRegex_info +=
   | TokenSHRegex target ->
     target.info
-  sem set_SHRegex_info val =
+  sem set_SHRegex_info val +=
   | TokenSHRegex target ->
     TokenSHRegex
       { target with info = val }
@@ -611,9 +617,9 @@ lang RepeatPlusSHRegexAst =
   SelfhostBaseAst
   type RepeatPlusSHRegexRecord =
     {info: Info, left: SHRegex}
-  syn SHRegex =
+  syn SHRegex +=
   | RepeatPlusSHRegex RepeatPlusSHRegexRecord
-  sem smapAccumL_SHRegex_SHRegex f acc =
+  sem smapAccumL_SHRegex_SHRegex f acc +=
   | RepeatPlusSHRegex x ->
     match
       match
@@ -628,10 +634,10 @@ lang RepeatPlusSHRegexAst =
     in
     (acc, RepeatPlusSHRegex
         x)
-  sem get_SHRegex_info =
+  sem get_SHRegex_info +=
   | RepeatPlusSHRegex target ->
     target.info
-  sem set_SHRegex_info val =
+  sem set_SHRegex_info val +=
   | RepeatPlusSHRegex target ->
     RepeatPlusSHRegex
       { target with info = val }
@@ -640,9 +646,9 @@ lang RepeatStarSHRegexAst =
   SelfhostBaseAst
   type RepeatStarSHRegexRecord =
     {info: Info, left: SHRegex}
-  syn SHRegex =
+  syn SHRegex +=
   | RepeatStarSHRegex RepeatStarSHRegexRecord
-  sem smapAccumL_SHRegex_SHRegex f acc =
+  sem smapAccumL_SHRegex_SHRegex f acc +=
   | RepeatStarSHRegex x ->
     match
       match
@@ -657,10 +663,10 @@ lang RepeatStarSHRegexAst =
     in
     (acc, RepeatStarSHRegex
         x)
-  sem get_SHRegex_info =
+  sem get_SHRegex_info +=
   | RepeatStarSHRegex target ->
     target.info
-  sem set_SHRegex_info val =
+  sem set_SHRegex_info val +=
   | RepeatStarSHRegex target ->
     RepeatStarSHRegex
       { target with info = val }
@@ -669,9 +675,9 @@ lang RepeatQuestionSHRegexAst =
   SelfhostBaseAst
   type RepeatQuestionSHRegexRecord =
     {info: Info, left: SHRegex}
-  syn SHRegex =
+  syn SHRegex +=
   | RepeatQuestionSHRegex RepeatQuestionSHRegexRecord
-  sem smapAccumL_SHRegex_SHRegex f acc =
+  sem smapAccumL_SHRegex_SHRegex f acc +=
   | RepeatQuestionSHRegex x ->
     match
       match
@@ -686,10 +692,10 @@ lang RepeatQuestionSHRegexAst =
     in
     (acc, RepeatQuestionSHRegex
         x)
-  sem get_SHRegex_info =
+  sem get_SHRegex_info +=
   | RepeatQuestionSHRegex target ->
     target.info
-  sem set_SHRegex_info val =
+  sem set_SHRegex_info val +=
   | RepeatQuestionSHRegex target ->
     RepeatQuestionSHRegex
       { target with info = val }
@@ -698,9 +704,9 @@ lang NamedSHRegexAst =
   SelfhostBaseAst
   type NamedSHRegexRecord =
     {info: Info, name: {i: Info, v: String}, right: SHRegex}
-  syn SHRegex =
+  syn SHRegex +=
   | NamedSHRegex NamedSHRegexRecord
-  sem smapAccumL_SHRegex_SHRegex f acc =
+  sem smapAccumL_SHRegex_SHRegex f acc +=
   | NamedSHRegex x ->
     match
       match
@@ -715,10 +721,10 @@ lang NamedSHRegexAst =
     in
     (acc, NamedSHRegex
         x)
-  sem get_SHRegex_info =
+  sem get_SHRegex_info +=
   | NamedSHRegex target ->
     target.info
-  sem set_SHRegex_info val =
+  sem set_SHRegex_info val +=
   | NamedSHRegex target ->
     NamedSHRegex
       { target with info = val }
@@ -727,9 +733,9 @@ lang AlternativeSHRegexAst =
   SelfhostBaseAst
   type AlternativeSHRegexRecord =
     {info: Info, left: SHRegex, right: SHRegex}
-  syn SHRegex =
+  syn SHRegex +=
   | AlternativeSHRegex AlternativeSHRegexRecord
-  sem smapAccumL_SHRegex_SHRegex f acc =
+  sem smapAccumL_SHRegex_SHRegex f acc +=
   | AlternativeSHRegex x ->
     match
       match
@@ -750,10 +756,10 @@ lang AlternativeSHRegexAst =
     in
     (acc, AlternativeSHRegex
         x)
-  sem get_SHRegex_info =
+  sem get_SHRegex_info +=
   | AlternativeSHRegex target ->
     target.info
-  sem set_SHRegex_info val =
+  sem set_SHRegex_info val +=
   | AlternativeSHRegex target ->
     AlternativeSHRegex
       { target with info = val }
@@ -762,9 +768,9 @@ lang ConcatSHRegexAst =
   SelfhostBaseAst
   type ConcatSHRegexRecord =
     {info: Info, left: SHRegex, right: SHRegex}
-  syn SHRegex =
+  syn SHRegex +=
   | ConcatSHRegex ConcatSHRegexRecord
-  sem smapAccumL_SHRegex_SHRegex f acc =
+  sem smapAccumL_SHRegex_SHRegex f acc +=
   | ConcatSHRegex x ->
     match
       match
@@ -785,10 +791,10 @@ lang ConcatSHRegexAst =
     in
     (acc, ConcatSHRegex
         x)
-  sem get_SHRegex_info =
+  sem get_SHRegex_info +=
   | ConcatSHRegex target ->
     target.info
-  sem set_SHRegex_info val =
+  sem set_SHRegex_info val +=
   | ConcatSHRegex target ->
     ConcatSHRegex
       { target with info = val }
@@ -797,9 +803,9 @@ lang AppSHExprAst =
   SelfhostBaseAst
   type AppSHExprRecord =
     {info: Info, left: SHExpr, right: SHExpr}
-  syn SHExpr =
+  syn SHExpr +=
   | AppSHExpr AppSHExprRecord
-  sem smapAccumL_SHExpr_SHExpr f acc =
+  sem smapAccumL_SHExpr_SHExpr f acc +=
   | AppSHExpr x ->
     match
       match
@@ -820,10 +826,10 @@ lang AppSHExprAst =
     in
     (acc, AppSHExpr
         x)
-  sem get_SHExpr_info =
+  sem get_SHExpr_info +=
   | AppSHExpr target ->
     target.info
-  sem set_SHExpr_info val =
+  sem set_SHExpr_info val +=
   | AppSHExpr target ->
     AppSHExpr
       { target with info = val }
@@ -832,12 +838,12 @@ lang ConSHExprAst =
   SelfhostBaseAst
   type ConSHExprRecord =
     {info: Info, name: {i: Info, v: Name}}
-  syn SHExpr =
+  syn SHExpr +=
   | ConSHExpr ConSHExprRecord
-  sem get_SHExpr_info =
+  sem get_SHExpr_info +=
   | ConSHExpr target ->
     target.info
-  sem set_SHExpr_info val =
+  sem set_SHExpr_info val +=
   | ConSHExpr target ->
     ConSHExpr
       { target with info = val }
@@ -846,12 +852,12 @@ lang StringSHExprAst =
   SelfhostBaseAst
   type StringSHExprRecord =
     {val: {i: Info, v: String}, info: Info}
-  syn SHExpr =
+  syn SHExpr +=
   | StringSHExpr StringSHExprRecord
-  sem get_SHExpr_info =
+  sem get_SHExpr_info +=
   | StringSHExpr target ->
     target.info
-  sem set_SHExpr_info val =
+  sem set_SHExpr_info val +=
   | StringSHExpr target ->
     StringSHExpr
       { target with info = val }
@@ -860,12 +866,12 @@ lang VariableSHExprAst =
   SelfhostBaseAst
   type VariableSHExprRecord =
     {info: Info, name: {i: Info, v: Name}}
-  syn SHExpr =
+  syn SHExpr +=
   | VariableSHExpr VariableSHExprRecord
-  sem get_SHExpr_info =
+  sem get_SHExpr_info +=
   | VariableSHExpr target ->
     target.info
-  sem set_SHExpr_info val =
+  sem set_SHExpr_info val +=
   | VariableSHExpr target ->
     VariableSHExpr
       { target with info = val }
@@ -874,9 +880,9 @@ lang RecordSHExprAst =
   SelfhostBaseAst
   type RecordSHExprRecord =
     {info: Info, fields: [{val: SHExpr, name: {i: Info, v: String}}]}
-  syn SHExpr =
+  syn SHExpr +=
   | RecordSHExpr RecordSHExprRecord
-  sem smapAccumL_SHExpr_SHExpr f acc =
+  sem smapAccumL_SHExpr_SHExpr f acc +=
   | RecordSHExpr x ->
     match
       match
@@ -902,10 +908,10 @@ lang RecordSHExprAst =
     in
     (acc, RecordSHExpr
         x)
-  sem get_SHExpr_info =
+  sem get_SHExpr_info +=
   | RecordSHExpr target ->
     target.info
-  sem set_SHExpr_info val =
+  sem set_SHExpr_info val +=
   | RecordSHExpr target ->
     RecordSHExpr
       { target with info = val }
@@ -914,12 +920,12 @@ lang BadSHFileAst =
   SelfhostBaseAst
   type BadSHFileRecord =
     {info: Info}
-  syn SHFile =
+  syn SHFile +=
   | BadSHFile BadSHFileRecord
-  sem get_SHFile_info =
+  sem get_SHFile_info +=
   | BadSHFile target ->
     target.info
-  sem set_SHFile_info val =
+  sem set_SHFile_info val +=
   | BadSHFile target ->
     BadSHFile
       { target with info = val }
@@ -928,12 +934,12 @@ lang BadSHDeclAst =
   SelfhostBaseAst
   type BadSHDeclRecord =
     {info: Info}
-  syn SHDecl =
+  syn SHDecl +=
   | BadSHDecl BadSHDeclRecord
-  sem get_SHDecl_info =
+  sem get_SHDecl_info +=
   | BadSHDecl target ->
     target.info
-  sem set_SHDecl_info val =
+  sem set_SHDecl_info val +=
   | BadSHDecl target ->
     BadSHDecl
       { target with info = val }
@@ -942,12 +948,12 @@ lang BadSHRegexAst =
   SelfhostBaseAst
   type BadSHRegexRecord =
     {info: Info}
-  syn SHRegex =
+  syn SHRegex +=
   | BadSHRegex BadSHRegexRecord
-  sem get_SHRegex_info =
+  sem get_SHRegex_info +=
   | BadSHRegex target ->
     target.info
-  sem set_SHRegex_info val =
+  sem set_SHRegex_info val +=
   | BadSHRegex target ->
     BadSHRegex
       { target with info = val }
@@ -956,12 +962,12 @@ lang BadSHExprAst =
   SelfhostBaseAst
   type BadSHExprRecord =
     {info: Info}
-  syn SHExpr =
+  syn SHExpr +=
   | BadSHExpr BadSHExprRecord
-  sem get_SHExpr_info =
+  sem get_SHExpr_info +=
   | BadSHExpr target ->
     target.info
-  sem set_SHExpr_info val =
+  sem set_SHExpr_info val +=
   | BadSHExpr target ->
     BadSHExpr
       { target with info = val }
@@ -1125,15 +1131,15 @@ end
 lang LangSHFileOp =
   SHFileOpBase
   + LangSHFileAst
-  syn SHFileOp lstyle rstyle =
+  syn SHFileOp lstyle rstyle +=
   | LangSHFileOp {name: [{i: Info, v: String}], decls: [SHDecl], __br_info: Info, __br_terms: [Info]}
-  sem getInfo_SHFileOp =
+  sem getInfo_SHFileOp +=
   | LangSHFileOp x ->
     x.__br_info
-  sem getTerms_SHFileOp =
+  sem getTerms_SHFileOp +=
   | LangSHFileOp x ->
     x.__br_terms
-  sem unsplit_SHFileOp =
+  sem unsplit_SHFileOp +=
   | AtomP {self = LangSHFileOp x} ->
     (x.__br_info, LangSHFile
       { info = x.__br_info,
@@ -1149,15 +1155,15 @@ end
 lang StartSHDeclOp =
   SHDeclOpBase
   + StartSHDeclAst
-  syn SHDeclOp lstyle rstyle =
+  syn SHDeclOp lstyle rstyle +=
   | StartSHDeclOp {name: [{i: Info, v: Name}], __br_info: Info, __br_terms: [Info]}
-  sem getInfo_SHDeclOp =
+  sem getInfo_SHDeclOp +=
   | StartSHDeclOp x ->
     x.__br_info
-  sem getTerms_SHDeclOp =
+  sem getTerms_SHDeclOp +=
   | StartSHDeclOp x ->
     x.__br_terms
-  sem unsplit_SHDeclOp =
+  sem unsplit_SHDeclOp +=
   | AtomP {self = StartSHDeclOp x} ->
     (x.__br_info, StartSHDecl
       { info = x.__br_info,
@@ -1172,15 +1178,15 @@ end
 lang IncludeSHDeclOp =
   SHDeclOpBase
   + IncludeSHDeclAst
-  syn SHDeclOp lstyle rstyle =
+  syn SHDeclOp lstyle rstyle +=
   | IncludeSHDeclOp {path: [{i: Info, v: String}], __br_info: Info, __br_terms: [Info]}
-  sem getInfo_SHDeclOp =
+  sem getInfo_SHDeclOp +=
   | IncludeSHDeclOp x ->
     x.__br_info
-  sem getTerms_SHDeclOp =
+  sem getTerms_SHDeclOp +=
   | IncludeSHDeclOp x ->
     x.__br_terms
-  sem unsplit_SHDeclOp =
+  sem unsplit_SHDeclOp +=
   | AtomP {self = IncludeSHDeclOp x} ->
     (x.__br_info, IncludeSHDecl
       { info = x.__br_info,
@@ -1195,15 +1201,15 @@ end
 lang TypeSHDeclOp =
   SHDeclOpBase
   + TypeSHDeclAst
-  syn SHDeclOp lstyle rstyle =
+  syn SHDeclOp lstyle rstyle +=
   | TypeSHDeclOp {name: [{i: Info, v: Name}], __br_info: Info, __br_terms: [Info], properties: [{val: SHExpr, name: {i: Info, v: String}}]}
-  sem getInfo_SHDeclOp =
+  sem getInfo_SHDeclOp +=
   | TypeSHDeclOp x ->
     x.__br_info
-  sem getTerms_SHDeclOp =
+  sem getTerms_SHDeclOp +=
   | TypeSHDeclOp x ->
     x.__br_terms
-  sem unsplit_SHDeclOp =
+  sem unsplit_SHDeclOp +=
   | AtomP {self = TypeSHDeclOp x} ->
     (x.__br_info, TypeSHDecl
       { info = x.__br_info,
@@ -1219,15 +1225,15 @@ end
 lang TokenSHDeclOp =
   SHDeclOpBase
   + TokenSHDeclAst
-  syn SHDeclOp lstyle rstyle =
+  syn SHDeclOp lstyle rstyle +=
   | TokenSHDeclOp {name: [{i: Info, v: Name}], __br_info: Info, __br_terms: [Info], properties: [{val: SHExpr, name: {i: Info, v: String}}]}
-  sem getInfo_SHDeclOp =
+  sem getInfo_SHDeclOp +=
   | TokenSHDeclOp x ->
     x.__br_info
-  sem getTerms_SHDeclOp =
+  sem getTerms_SHDeclOp +=
   | TokenSHDeclOp x ->
     x.__br_terms
-  sem unsplit_SHDeclOp =
+  sem unsplit_SHDeclOp +=
   | AtomP {self = TokenSHDeclOp x} ->
     (x.__br_info, TokenSHDecl
       { info = x.__br_info,
@@ -1247,15 +1253,15 @@ end
 lang PrecedenceTableSHDeclOp =
   SHDeclOpBase
   + PrecedenceTableSHDeclAst
-  syn SHDeclOp lstyle rstyle =
+  syn SHDeclOp lstyle rstyle +=
   | PrecedenceTableSHDeclOp {levels: [{noeq: Option Info, operators: [{i: Info, v: Name}]}], __br_info: Info, __br_terms: [Info], exceptions: [{lefts: [{i: Info, v: Name}], rights: [{i: Info, v: Name}]}]}
-  sem getInfo_SHDeclOp =
+  sem getInfo_SHDeclOp +=
   | PrecedenceTableSHDeclOp x ->
     x.__br_info
-  sem getTerms_SHDeclOp =
+  sem getTerms_SHDeclOp +=
   | PrecedenceTableSHDeclOp x ->
     x.__br_terms
-  sem unsplit_SHDeclOp =
+  sem unsplit_SHDeclOp +=
   | AtomP {self = PrecedenceTableSHDeclOp x} ->
     (x.__br_info, PrecedenceTableSHDecl
       { info = x.__br_info,
@@ -1265,15 +1271,15 @@ end
 lang ProductionSHDeclOp =
   SHDeclOpBase
   + ProductionSHDeclAst
-  syn SHDeclOp lstyle rstyle =
+  syn SHDeclOp lstyle rstyle +=
   | ProductionSHDeclOp {nt: [{i: Info, v: Name}], kinf: [Info], name: [{i: Info, v: Name}], assoc: [{i: Info, v: String}], kpref: [Info], kprod: [Info], regex: [SHRegex], kpostf: [Info], __br_info: Info, __br_terms: [Info]}
-  sem getInfo_SHDeclOp =
+  sem getInfo_SHDeclOp +=
   | ProductionSHDeclOp x ->
     x.__br_info
-  sem getTerms_SHDeclOp =
+  sem getTerms_SHDeclOp +=
   | ProductionSHDeclOp x ->
     x.__br_terms
-  sem unsplit_SHDeclOp =
+  sem unsplit_SHDeclOp +=
   | AtomP {self = ProductionSHDeclOp x} ->
     (x.__br_info, ProductionSHDecl
       { info = x.__br_info,
@@ -1357,15 +1363,15 @@ end
 lang RecordSHRegexOp =
   SHRegexOpBase
   + RecordSHRegexAst
-  syn SHRegexOp lstyle rstyle =
+  syn SHRegexOp lstyle rstyle +=
   | RecordSHRegexOp {regex: [SHRegex], __br_info: Info, __br_terms: [Info]}
-  sem getInfo_SHRegexOp =
+  sem getInfo_SHRegexOp +=
   | RecordSHRegexOp x ->
     x.__br_info
-  sem getTerms_SHRegexOp =
+  sem getTerms_SHRegexOp +=
   | RecordSHRegexOp x ->
     x.__br_terms
-  sem unsplit_SHRegexOp =
+  sem unsplit_SHRegexOp +=
   | AtomP {self = RecordSHRegexOp x} ->
     (x.__br_info, RecordSHRegex
       { info = x.__br_info,
@@ -1380,15 +1386,15 @@ end
 lang EmptySHRegexOp =
   SHRegexOpBase
   + EmptySHRegexAst
-  syn SHRegexOp lstyle rstyle =
+  syn SHRegexOp lstyle rstyle +=
   | EmptySHRegexOp {__br_info: Info, __br_terms: [Info]}
-  sem getInfo_SHRegexOp =
+  sem getInfo_SHRegexOp +=
   | EmptySHRegexOp x ->
     x.__br_info
-  sem getTerms_SHRegexOp =
+  sem getTerms_SHRegexOp +=
   | EmptySHRegexOp x ->
     x.__br_terms
-  sem unsplit_SHRegexOp =
+  sem unsplit_SHRegexOp +=
   | AtomP {self = EmptySHRegexOp x} ->
     (x.__br_info, EmptySHRegex
       { info = x.__br_info })
@@ -1396,15 +1402,15 @@ end
 lang LiteralSHRegexOp =
   SHRegexOpBase
   + LiteralSHRegexAst
-  syn SHRegexOp lstyle rstyle =
+  syn SHRegexOp lstyle rstyle +=
   | LiteralSHRegexOp {val: [{i: Info, v: String}], __br_info: Info, __br_terms: [Info]}
-  sem getInfo_SHRegexOp =
+  sem getInfo_SHRegexOp +=
   | LiteralSHRegexOp x ->
     x.__br_info
-  sem getTerms_SHRegexOp =
+  sem getTerms_SHRegexOp +=
   | LiteralSHRegexOp x ->
     x.__br_terms
-  sem unsplit_SHRegexOp =
+  sem unsplit_SHRegexOp +=
   | AtomP {self = LiteralSHRegexOp x} ->
     (x.__br_info, LiteralSHRegex
       { info = x.__br_info,
@@ -1419,15 +1425,15 @@ end
 lang TokenSHRegexOp =
   SHRegexOpBase
   + TokenSHRegexAst
-  syn SHRegexOp lstyle rstyle =
+  syn SHRegexOp lstyle rstyle +=
   | TokenSHRegexOp {arg: [SHExpr], name: [{i: Info, v: Name}], __br_info: Info, __br_terms: [Info]}
-  sem getInfo_SHRegexOp =
+  sem getInfo_SHRegexOp +=
   | TokenSHRegexOp x ->
     x.__br_info
-  sem getTerms_SHRegexOp =
+  sem getTerms_SHRegexOp +=
   | TokenSHRegexOp x ->
     x.__br_terms
-  sem unsplit_SHRegexOp =
+  sem unsplit_SHRegexOp +=
   | AtomP {self = TokenSHRegexOp x} ->
     (x.__br_info, TokenSHRegex
       { info = x.__br_info,
@@ -1453,15 +1459,15 @@ end
 lang RepeatPlusSHRegexOp =
   SHRegexOpBase
   + RepeatPlusSHRegexAst
-  syn SHRegexOp lstyle rstyle =
+  syn SHRegexOp lstyle rstyle +=
   | RepeatPlusSHRegexOp {__br_info: Info, __br_terms: [Info]}
-  sem getInfo_SHRegexOp =
+  sem getInfo_SHRegexOp +=
   | RepeatPlusSHRegexOp x ->
     x.__br_info
-  sem getTerms_SHRegexOp =
+  sem getTerms_SHRegexOp +=
   | RepeatPlusSHRegexOp x ->
     x.__br_terms
-  sem unsplit_SHRegexOp =
+  sem unsplit_SHRegexOp +=
   | PostfixP {self = RepeatPlusSHRegexOp x, leftChildAlts = [ l ] ++ _} ->
     match
       unsplit_SHRegexOp l
@@ -1482,15 +1488,15 @@ end
 lang RepeatStarSHRegexOp =
   SHRegexOpBase
   + RepeatStarSHRegexAst
-  syn SHRegexOp lstyle rstyle =
+  syn SHRegexOp lstyle rstyle +=
   | RepeatStarSHRegexOp {__br_info: Info, __br_terms: [Info]}
-  sem getInfo_SHRegexOp =
+  sem getInfo_SHRegexOp +=
   | RepeatStarSHRegexOp x ->
     x.__br_info
-  sem getTerms_SHRegexOp =
+  sem getTerms_SHRegexOp +=
   | RepeatStarSHRegexOp x ->
     x.__br_terms
-  sem unsplit_SHRegexOp =
+  sem unsplit_SHRegexOp +=
   | PostfixP {self = RepeatStarSHRegexOp x, leftChildAlts = [ l ] ++ _} ->
     match
       unsplit_SHRegexOp l
@@ -1511,15 +1517,15 @@ end
 lang RepeatQuestionSHRegexOp =
   SHRegexOpBase
   + RepeatQuestionSHRegexAst
-  syn SHRegexOp lstyle rstyle =
+  syn SHRegexOp lstyle rstyle +=
   | RepeatQuestionSHRegexOp {__br_info: Info, __br_terms: [Info]}
-  sem getInfo_SHRegexOp =
+  sem getInfo_SHRegexOp +=
   | RepeatQuestionSHRegexOp x ->
     x.__br_info
-  sem getTerms_SHRegexOp =
+  sem getTerms_SHRegexOp +=
   | RepeatQuestionSHRegexOp x ->
     x.__br_terms
-  sem unsplit_SHRegexOp =
+  sem unsplit_SHRegexOp +=
   | PostfixP {self = RepeatQuestionSHRegexOp x, leftChildAlts = [ l ] ++ _} ->
     match
       unsplit_SHRegexOp l
@@ -1540,15 +1546,15 @@ end
 lang NamedSHRegexOp =
   SHRegexOpBase
   + NamedSHRegexAst
-  syn SHRegexOp lstyle rstyle =
+  syn SHRegexOp lstyle rstyle +=
   | NamedSHRegexOp {name: [{i: Info, v: String}], __br_info: Info, __br_terms: [Info]}
-  sem getInfo_SHRegexOp =
+  sem getInfo_SHRegexOp +=
   | NamedSHRegexOp x ->
     x.__br_info
-  sem getTerms_SHRegexOp =
+  sem getTerms_SHRegexOp +=
   | NamedSHRegexOp x ->
     x.__br_terms
-  sem unsplit_SHRegexOp =
+  sem unsplit_SHRegexOp +=
   | PrefixP {self = NamedSHRegexOp x, rightChildAlts = [ r ] ++ _} ->
     match
       unsplit_SHRegexOp r
@@ -1576,19 +1582,19 @@ end
 lang AlternativeSHRegexOp =
   SHRegexOpBase
   + AlternativeSHRegexAst
-  sem groupingsAllowed_SHRegexOp =
+  sem groupingsAllowed_SHRegexOp +=
   | (AlternativeSHRegexOp _, AlternativeSHRegexOp _) ->
     GLeft
       {}
-  syn SHRegexOp lstyle rstyle =
+  syn SHRegexOp lstyle rstyle +=
   | AlternativeSHRegexOp {__br_info: Info, __br_terms: [Info]}
-  sem getInfo_SHRegexOp =
+  sem getInfo_SHRegexOp +=
   | AlternativeSHRegexOp x ->
     x.__br_info
-  sem getTerms_SHRegexOp =
+  sem getTerms_SHRegexOp +=
   | AlternativeSHRegexOp x ->
     x.__br_terms
-  sem unsplit_SHRegexOp =
+  sem unsplit_SHRegexOp +=
   | InfixP {self = AlternativeSHRegexOp x, leftChildAlts = [ l ] ++ _, rightChildAlts = [ r ] ++ _} ->
     match
       (unsplit_SHRegexOp l, unsplit_SHRegexOp r)
@@ -1618,19 +1624,19 @@ end
 lang ConcatSHRegexOp =
   SHRegexOpBase
   + ConcatSHRegexAst
-  sem groupingsAllowed_SHRegexOp =
+  sem groupingsAllowed_SHRegexOp +=
   | (ConcatSHRegexOp _, ConcatSHRegexOp _) ->
     GLeft
       {}
-  syn SHRegexOp lstyle rstyle =
+  syn SHRegexOp lstyle rstyle +=
   | ConcatSHRegexOp {__br_info: Info, __br_terms: [Info]}
-  sem getInfo_SHRegexOp =
+  sem getInfo_SHRegexOp +=
   | ConcatSHRegexOp x ->
     x.__br_info
-  sem getTerms_SHRegexOp =
+  sem getTerms_SHRegexOp +=
   | ConcatSHRegexOp x ->
     x.__br_terms
-  sem unsplit_SHRegexOp =
+  sem unsplit_SHRegexOp +=
   | InfixP {self = ConcatSHRegexOp x, leftChildAlts = [ l ] ++ _, rightChildAlts = [ r ] ++ _} ->
     match
       (unsplit_SHRegexOp l, unsplit_SHRegexOp r)
@@ -1660,19 +1666,19 @@ end
 lang AppSHExprOp =
   SHExprOpBase
   + AppSHExprAst
-  sem groupingsAllowed_SHExprOp =
+  sem groupingsAllowed_SHExprOp +=
   | (AppSHExprOp _, AppSHExprOp _) ->
     GLeft
       {}
-  syn SHExprOp lstyle rstyle =
+  syn SHExprOp lstyle rstyle +=
   | AppSHExprOp {__br_info: Info, __br_terms: [Info]}
-  sem getInfo_SHExprOp =
+  sem getInfo_SHExprOp +=
   | AppSHExprOp x ->
     x.__br_info
-  sem getTerms_SHExprOp =
+  sem getTerms_SHExprOp +=
   | AppSHExprOp x ->
     x.__br_terms
-  sem unsplit_SHExprOp =
+  sem unsplit_SHExprOp +=
   | InfixP {self = AppSHExprOp x, leftChildAlts = [ l ] ++ _, rightChildAlts = [ r ] ++ _} ->
     match
       (unsplit_SHExprOp l, unsplit_SHExprOp r)
@@ -1702,15 +1708,15 @@ end
 lang ConSHExprOp =
   SHExprOpBase
   + ConSHExprAst
-  syn SHExprOp lstyle rstyle =
+  syn SHExprOp lstyle rstyle +=
   | ConSHExprOp {name: [{i: Info, v: Name}], __br_info: Info, __br_terms: [Info]}
-  sem getInfo_SHExprOp =
+  sem getInfo_SHExprOp +=
   | ConSHExprOp x ->
     x.__br_info
-  sem getTerms_SHExprOp =
+  sem getTerms_SHExprOp +=
   | ConSHExprOp x ->
     x.__br_terms
-  sem unsplit_SHExprOp =
+  sem unsplit_SHExprOp +=
   | AtomP {self = ConSHExprOp x} ->
     (x.__br_info, ConSHExpr
       { info = x.__br_info,
@@ -1725,15 +1731,15 @@ end
 lang StringSHExprOp =
   SHExprOpBase
   + StringSHExprAst
-  syn SHExprOp lstyle rstyle =
+  syn SHExprOp lstyle rstyle +=
   | StringSHExprOp {val: [{i: Info, v: String}], __br_info: Info, __br_terms: [Info]}
-  sem getInfo_SHExprOp =
+  sem getInfo_SHExprOp +=
   | StringSHExprOp x ->
     x.__br_info
-  sem getTerms_SHExprOp =
+  sem getTerms_SHExprOp +=
   | StringSHExprOp x ->
     x.__br_terms
-  sem unsplit_SHExprOp =
+  sem unsplit_SHExprOp +=
   | AtomP {self = StringSHExprOp x} ->
     (x.__br_info, StringSHExpr
       { info = x.__br_info,
@@ -1748,15 +1754,15 @@ end
 lang VariableSHExprOp =
   SHExprOpBase
   + VariableSHExprAst
-  syn SHExprOp lstyle rstyle =
+  syn SHExprOp lstyle rstyle +=
   | VariableSHExprOp {name: [{i: Info, v: Name}], __br_info: Info, __br_terms: [Info]}
-  sem getInfo_SHExprOp =
+  sem getInfo_SHExprOp +=
   | VariableSHExprOp x ->
     x.__br_info
-  sem getTerms_SHExprOp =
+  sem getTerms_SHExprOp +=
   | VariableSHExprOp x ->
     x.__br_terms
-  sem unsplit_SHExprOp =
+  sem unsplit_SHExprOp +=
   | AtomP {self = VariableSHExprOp x} ->
     (x.__br_info, VariableSHExpr
       { info = x.__br_info,
@@ -1771,44 +1777,44 @@ end
 lang RecordSHExprOp =
   SHExprOpBase
   + RecordSHExprAst
-  syn SHExprOp lstyle rstyle =
+  syn SHExprOp lstyle rstyle +=
   | RecordSHExprOp {fields: [{val: SHExpr, name: {i: Info, v: String}}], __br_info: Info, __br_terms: [Info]}
-  sem getInfo_SHExprOp =
+  sem getInfo_SHExprOp +=
   | RecordSHExprOp x ->
     x.__br_info
-  sem getTerms_SHExprOp =
+  sem getTerms_SHExprOp +=
   | RecordSHExprOp x ->
     x.__br_terms
-  sem unsplit_SHExprOp =
+  sem unsplit_SHExprOp +=
   | AtomP {self = RecordSHExprOp x} ->
     (x.__br_info, RecordSHExpr
       { info = x.__br_info, fields = x.fields })
 end
 lang SHRegexGrouping =
   SHRegexOpBase
-  syn SHRegexOp lstyle rstyle =
+  syn SHRegexOp lstyle rstyle +=
   | SHRegexGrouping {inner: SHRegex, __br_info: Info, __br_terms: [Info]}
-  sem getInfo_SHRegexOp =
+  sem getInfo_SHRegexOp +=
   | SHRegexGrouping x ->
     x.__br_info
-  sem getTerms_SHRegexOp =
+  sem getTerms_SHRegexOp +=
   | SHRegexGrouping x ->
     x.__br_terms
-  sem unsplit_SHRegexOp =
+  sem unsplit_SHRegexOp +=
   | AtomP {self = SHRegexGrouping x} ->
     (x.__br_info, x.inner)
 end
 lang SHExprGrouping =
   SHExprOpBase
-  syn SHExprOp lstyle rstyle =
+  syn SHExprOp lstyle rstyle +=
   | SHExprGrouping {inner: SHExpr, __br_info: Info, __br_terms: [Info]}
-  sem getInfo_SHExprOp =
+  sem getInfo_SHExprOp +=
   | SHExprGrouping x ->
     x.__br_info
-  sem getTerms_SHExprOp =
+  sem getTerms_SHExprOp +=
   | SHExprGrouping x ->
     x.__br_terms
-  sem unsplit_SHExprOp =
+  sem unsplit_SHExprOp +=
   | AtomP {self = SHExprGrouping x} ->
     (x.__br_info, x.inner)
 end
@@ -1852,9 +1858,9 @@ lang ParseSelfhost =
   + BracketTokenParser
   + OperatorTokenParser
   + MultilineCommentParser
-  sem groupingsAllowed_SHFileOp =
-  sem groupingsAllowed_SHDeclOp =
-  sem groupingsAllowed_SHRegexOp =
+  sem groupingsAllowed_SHFileOp +=
+  sem groupingsAllowed_SHDeclOp +=
+  sem groupingsAllowed_SHRegexOp +=
   | (NamedSHRegexOp _, RepeatPlusSHRegexOp _) ->
     GLeft
       {}
@@ -1894,7 +1900,7 @@ lang ParseSelfhost =
   | (ConcatSHRegexOp _, AlternativeSHRegexOp _) ->
     GLeft
       {}
-  sem groupingsAllowed_SHExprOp =
+  sem groupingsAllowed_SHExprOp +=
 end
 let _table =
   use ParseSelfhost

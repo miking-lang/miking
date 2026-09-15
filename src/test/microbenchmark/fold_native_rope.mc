@@ -2,7 +2,7 @@
 include "benchmarkcommon.mc"
 include "string.mc"
 include "common.mc"
-include "fold.ml"
+include "fold.mc"
 
 mexpr
 

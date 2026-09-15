@@ -3,8 +3,9 @@ include "benchmarkcommon.mc"
 include "bool.mc"
 include "common.mc"
 include "math.mc"
+include "ext/math-ext.mc"
 
-include "rand_sample_n.ml"
+include "rand_sample_n.mc"
 
 -- Generates a uniformly random floating point number in the range [0,1)
 let randFloatUniform: () -> Float = lam.

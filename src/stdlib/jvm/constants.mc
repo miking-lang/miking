@@ -1,4 +1,6 @@
 include "jvm/ast.mc"
+include "seq.mc"
+include "char.mc"
 
 -- Instructions --
 

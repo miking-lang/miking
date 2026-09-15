@@ -10,6 +10,17 @@ include "mexpr/ast-builder.mc"
 include "mexpr/eq.mc"
 include "mexpr/info.mc"
 include "mexpr/type.mc"
+include "stringid.mc"
+include "mexpr/repr-ast.mc"
+include "basic-types.mc"
+include "name.mc"
+include "option.mc"
+include "seq.mc"
+include "string.mc"
+include "mexpr/cmp.mc"
+include "mexpr/pprint.mc"
+include "either.mc"
+include "bool.mc"
 
 
 ----------------------
@@ -107,7 +118,7 @@ lang UnifyRecords = Unify
 end
 
 lang VarTypeUnify = Unify + VarTypeAst
-  sem unifyBase u env =
+  sem unifyBase u env +=
   | (TyVar t1 & ty1, TyVar t2 & ty2) ->
     if nameEq t1.ident t2.ident then u.empty
     else if biMem (t1.ident, t2.ident) env.boundNames then u.empty
@@ -115,14 +126,14 @@ lang VarTypeUnify = Unify + VarTypeAst
 end
 
 lang MetaVarTypeUnify = Unify + MetaVarTypeAst
-  sem unifyBase u env =
+  sem unifyBase u env +=
   | (TyMetaVar _ & ty1, ty2) -> u.unify env ty1 ty2
   | (!TyMetaVar _ & ty1, TyMetaVar _ & ty2) ->
     unifyBase u {env with wrappedLhs = env.wrappedRhs, wrappedRhs = env.wrappedLhs} (ty2, ty1)
 end
 
 lang FunTypeUnify = Unify + FunTypeAst
-  sem unifyBase u env =
+  sem unifyBase u env +=
   | (TyArrow t1, TyArrow t2) ->
     u.combine
       (unifyTypes u env (t1.from, t2.from))
@@ -130,7 +141,7 @@ lang FunTypeUnify = Unify + FunTypeAst
 end
 
 lang AppTypeUnify = Unify + AppTypeAst
-  sem unifyBase u env =
+  sem unifyBase u env +=
   | (TyApp t1, TyApp t2) ->
     u.combine
       (unifyTypes u env (t1.lhs, t2.lhs))
@@ -138,7 +149,7 @@ lang AppTypeUnify = Unify + AppTypeAst
 end
 
 lang AllTypeUnify = Unify + AllTypeAst
-  sem unifyBase u env =
+  sem unifyBase u env +=
   | (TyAll t1, TyAll t2) ->
     u.combine
       (unifyKinds u env (t1.kind, t2.kind))
@@ -147,7 +158,7 @@ lang AllTypeUnify = Unify + AllTypeAst
 end
 
 lang ConTypeUnify = Unify + ConTypeAst
-  sem unifyBase u env =
+  sem unifyBase u env +=
   | (TyCon t1 & ty1, TyCon t2 & ty2) ->
     if nameEq t1.ident t2.ident then
       unifyTypes u env (t1.data, t2.data)
@@ -156,7 +167,7 @@ lang ConTypeUnify = Unify + ConTypeAst
 end
 
 lang DataTypeUnify = Unify + DataTypeAst
-  sem unifyBase u env =
+  sem unifyBase u env +=
   | (TyData t1 & ty1, TyData t2 & ty2) ->
     if mapEq setEq (computeData t1) (computeData t2) then u.empty
     else
@@ -164,58 +175,58 @@ lang DataTypeUnify = Unify + DataTypeAst
 end
 
 lang UnknownTypeUnify = Unify + UnknownTypeAst
-  sem unifyBase u env =
+  sem unifyBase u env +=
   | (TyUnknown _, TyUnknown _) -> u.empty
 end
 
 lang BoolTypeUnify = Unify + BoolTypeAst
-  sem unifyBase u env =
+  sem unifyBase u env +=
   | (TyBool _, TyBool _) -> u.empty
 end
 
 lang IntTypeUnify = Unify + IntTypeAst
-  sem unifyBase u env =
+  sem unifyBase u env +=
   | (TyInt _, TyInt _) -> u.empty
 end
 
 lang FloatTypeUnify = Unify + FloatTypeAst
-  sem unifyBase u env =
+  sem unifyBase u env +=
   | (TyFloat _, TyFloat _) -> u.empty
 end
 
 lang CharTypeUnify = Unify + CharTypeAst
-  sem unifyBase u env =
+  sem unifyBase u env +=
   | (TyChar _, TyChar _) -> u.empty
 end
 
 lang SeqTypeUnify = Unify + SeqTypeAst
-  sem unifyBase u env =
+  sem unifyBase u env +=
   | (TySeq t1, TySeq t2) ->
     unifyTypes u env (t1.ty, t2.ty)
 end
 
 lang TensorTypeUnify = Unify + TensorTypeAst
-  sem unifyBase u env =
+  sem unifyBase u env +=
   | (TyTensor t1, TyTensor t2) ->
     unifyTypes u env (t1.ty, t2.ty)
 end
 
 lang RecordTypeUnify = UnifyRecords + RecordTypeAst
-  sem unifyBase u env =
+  sem unifyBase u env +=
   | (TyRecord t1, TyRecord t2) ->
     unifyRecordsStrict u env t1.fields t2.fields
 end
 
 lang TyWildUnify = Unify + TyWildAst
-  sem unifyBase u env =
+  sem unifyBase u env +=
   | (TyWild _, TyWild _) -> u.empty
 end
 
 lang BaseKindUnify = Unify + PolyKindAst + MonoKindAst
-  sem unifyKinds u env =
+  sem unifyKinds u env +=
   | (_, Mono () | Poly ()) -> u.empty
 
-  sem addKinds u env =
+  sem addKinds u env +=
   | (Mono _ | Poly _, !(Mono _ | Poly _) & k)
   | (!(Mono _ | Poly _) & k, Mono _ | Poly _)
   | (Poly _, (Poly _ | Mono _) & k) ->
@@ -226,11 +237,11 @@ end
 
 
 lang RecordKindUnify = UnifyRecords + RecordKindAst
-  sem unifyKinds u env =
+  sem unifyKinds u env +=
   | (Record r1, Record r2) ->
     unifyRecordsSubset u env r2.fields r1.fields
 
-  sem addKinds u env =
+  sem addKinds u env +=
   | (Record r1, Record r2) ->
     match unifyRecordsUnion u env r1.fields r2.fields with (unifier, fields) in
     (unifier, Record {r1 with fields = fields})
@@ -241,7 +252,7 @@ lang DataKindUnify = Unify + DataKindAst + PolyKindAst + MonoKindAst
   sem hasNoBounds =
   | ks -> if setIsEmpty ks.lower then optionIsNone ks.upper else false
 
-  sem unifyKinds u env =
+  sem unifyKinds u env +=
   | ((Mono _ | Poly _) & k, Data r) ->
     if mapAll hasNoBounds r.types then u.empty
     else u.err (Kinds (k, Data r))
@@ -263,7 +274,7 @@ lang DataKindUnify = Unify + DataKindAst + PolyKindAst + MonoKindAst
     then u.empty
     else u.err (Kinds (Data r1, Data r2))
 
-  sem addKinds u env =
+  sem addKinds u env +=
   | (Data r1, Data r2) ->
     let checkSubset = lam lower1. lam lower2. lam upper.
       optionMapOr true
@@ -296,60 +307,8 @@ lang DataKindUnify = Unify + DataKindAst + PolyKindAst + MonoKindAst
       (u.err (Kinds (Data r1, Data r2)), Data r1)
 end
 
-lang UnifyPure = Unify + MetaVarTypeAst + VarTypeSubstitute
-
-  type UnifyPureResult a = Result () UnifyError a
-  type UnifyPureUnifier = [(UnifyEnv, Type, Type)]
-
-  -- Unify types `ty1` and `ty2`, returning a map of variable substitutions
-  -- equating the two, or giving an error if the types are incompatible.
-  -- This function does not perform any occurs checks, scope checking, or
-  -- level updates, and accepts cyclic equations.
-  sem unifyPure : Type -> Type -> UnifyPureResult (Map Name Type)
-  sem unifyPure ty1 = | ty2 ->
-    let u : Unifier (UnifyPureResult UnifyPureUnifier) = {
-      empty = result.ok [],
-      combine = result.map2 concat,
-      unify = lam env. lam ty1. lam ty2. result.ok [(env, ty1, ty2)],
-      err = result.err
-    }
-    in
-    recursive let work = lam acc. lam unifier.
-      switch unifier
-      case [] then result.ok acc
-      case [ (env, meta, ty) ] ++ rest then
-        switch unwrapType meta
-        case TyMetaVar t then
-          match deref t.contents with Unbound r then
-            let isEqual =
-              match unwrapType ty with TyMetaVar t2 then
-                match deref t2.contents with Unbound r2 then nameEq r.ident r2.ident
-                else error "Unwrapped MetaVar not unbound in unifyPure!"
-              else false
-            in
-            if isEqual then work acc rest else
-              if mapMem r.ident acc then work acc rest else
-                let subst = mapInsert r.ident ty (mapEmpty nameCmp) in
-                let f = substituteMetaVars subst in
-                let g = lam x. (x.0, f x.1, f x.2) in
-                work (mapUnion (mapMap f acc) subst) (map g rest)
-          else error "Unwrapped MetaVar not unbound in unifyPure!"
-        case other then
-          result.bind (unifyTypes u env (other, ty))
-            (lam newUnifier. work acc (concat newUnifier rest))
-        end
-      end
-    in
-    let env : UnifyEnv = {
-      boundNames = biEmpty,
-      wrappedLhs = ty1,
-      wrappedRhs = ty2
-    } in
-    result.bind (unifyTypes u env (ty1, ty2)) (work (mapEmpty nameCmp))
-end
-
 lang ReprTypeUnify = ReprTypeAst + Unify
-  sem unifyBase u env =
+  sem unifyBase u env +=
   | (TyRepr a, TyRepr b) ->
     u.combine
       (u.unifyRepr env a.repr b.repr)

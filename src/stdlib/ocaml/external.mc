@@ -5,6 +5,15 @@ include "ocaml/external-includes.mc"
 include "ocaml/ast.mc"
 include "ocaml/intrinsics-ops.mc"
 include "ocaml/generate-env.mc"
+include "mexpr/ast.mc"
+include "map.mc"
+include "mexpr/info.mc"
+include "name.mc"
+include "basic-types.mc"
+include "mexpr/ast-builder.mc"
+include "string.mc"
+include "error.mc"
+include "seq.mc"
 
 let _approxsize = 10
 let _listToSeqCost = 5
@@ -44,14 +53,14 @@ end
 lang OCamlDataConversionBase = OCamlDataConversion + OCamlAst
   + IntTypeAst + FloatTypeAst + BoolTypeAst
 
-  sem convertDataInner info env t =
+  sem convertDataInner info env t +=
   | (TyInt _, TyInt _) | (TyFloat _, TyFloat _) | (TyBool _, TyBool _) -> (0, t)
 end
 
 lang OCamlDataConversionOpaque = OCamlDataConversion + OCamlAst
   + ConTypeAst + AppTypeAst + UnknownTypeAst + AllTypeAst + VarTypeAst
 
-  sem convertDataInner info env t =
+  sem convertDataInner info env t +=
   | (TyUnknown _ | TyVar _, !(TyAll _)) | (!(TyAll _), TyUnknown _ | TyVar _)
   | (TyCon {ident = _}, !(TyAll _)) | (!(TyAll _), TyCon {ident = _})
   | (TyApp {lhs = TyCon _}, !(TyAll _)) | (!(TyAll _), TyApp {lhs = TyCon _})
@@ -64,7 +73,7 @@ end
 
 lang OCamlDataConversionFun =
   OCamlDataConversion + OCamlAst + FunTypeAst + UnknownTypeAst
-  sem convertDataInner info env t =
+  sem convertDataInner info env t +=
   | (TyArrow {from = ty11, to = ty12}, TyArrow {from = ty21, to = ty22}) ->
      let ident = nameSym "x" in
       let arg =
@@ -101,7 +110,7 @@ lang OCamlDataConversionString =
   OCamlDataConversion + OCamlAst
   + SeqTypeAst + CharTypeAst + UnknownTypeAst + LamAst + AppAst
 
-  sem convertDataInner info env t =
+  sem convertDataInner info env t +=
   | (OTyString _, TySeq {ty = TyChar _} & ty2) ->
     let op = OTmVarExt { ident = intrinsicOpSeq "Helpers.of_utf8" } in
     let t =
@@ -254,7 +263,7 @@ end
 lang OCamlDataConversionList = OCamlDataConversionHelpers + OCamlAst
   + SeqTypeAst + UnknownTypeAst + ExtDeclAst + LamAst
 
-  sem convertDataInner info env t =
+  sem convertDataInner info env t +=
   | (OTyList {ty = ty1}, TySeq {ty = ty2}) ->
     let op = OTmVarExt { ident = intrinsicOpSeq "Helpers.of_list" } in
     let mapop = OTmVarExt { ident = "List.map" } in
@@ -268,7 +277,7 @@ end
 lang OCamlDataConversionArray = OCamlDataConversionHelpers + OCamlAst
   + SeqTypeAst + UnknownTypeAst + ExtDeclAst + LamAst
 
-  sem convertDataInner info env t =
+  sem convertDataInner info env t +=
   | (TySeq {ty = ty1}, OTyArray {ty = ty2}) ->
     let op = OTmVarExt { ident = intrinsicOpSeq "Helpers.to_array_copy" } in
     let mapop = OTmVarExt { ident = intrinsicOpSeq "map" } in
@@ -282,7 +291,7 @@ end
 lang OCamlDataConversionTuple = OCamlDataConversionHelpers + OCamlAst
   + RecordTypeAst + ConTypeAst + UnknownTypeAst
 
-  sem convertDataInner info env t =
+  sem convertDataInner info env t +=
   | (OTyTuple {tys = []}, TyRecord {fields = fields}) |
     (TyRecord {fields = fields}, OTyTuple {tys = []}) ->
     if eqi (mapSize fields) 0 then
@@ -303,7 +312,7 @@ end
 lang OCamlDataConversionRecords = OCamlDataConversion + OCamlAst
   + RecordTypeAst + ConTypeAst + UnknownTypeAst
 
-  sem convertDataInner info env t =
+  sem convertDataInner info env t +=
   | (OTyRecordExt {fields = fields1} & ty1,
     TyCon {ident = ident} & ty2) ->
     match mapLookup ident env.constrs
@@ -409,7 +418,7 @@ end
 lang OCamlDataConversionBigArray = OCamlDataConversionHelpers + OCamlAst
   + TensorTypeAst + UnknownTypeAst + ExtDeclAst + LamAst
 
-  sem convertDataInner info env t =
+  sem convertDataInner info env t +=
   | (OTyBigarrayGenarray
       {ty = TyInt _, elty = OTyBigarrayIntElt _, layout = OTyBigarrayClayout _}
     ,OTyBigarrayGenarray
@@ -576,7 +585,7 @@ end
 lang OCamlGenerateExternalNaive =
   OCamlDataConversionMExpr + OCamlChooseExternalImpl + ExtDeclAst
 
-  sem chooseExternalImpls implsMap env =
+  sem chooseExternalImpls implsMap env +=
   | TmDecl {decl = DeclExt {ident = ident, tyIdent = tyIdent}, inexpr = inexpr, info = info} ->
     let identStr = nameGetStr ident in
     let impls = mapLookup identStr implsMap in

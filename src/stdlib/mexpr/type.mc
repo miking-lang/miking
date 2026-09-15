@@ -5,6 +5,10 @@ include "mexpr/cmp.mc"
 include "mexpr/const-types.mc"
 include "mexpr/eq.mc"
 include "mexpr/pprint.mc"
+include "name.mc"
+include "mexpr/info.mc"
+include "option.mc"
+include "basic-types.mc"
 
 ---------------------------
 -- UNIFICATION VARIABLES --
@@ -27,12 +31,12 @@ lang MetaVarTypeAst = Ast
   | Unbound MetaVarRec
   | Link Type
 
-  syn Type =
+  syn Type +=
   -- Meta type variable
   | TyMetaVar {info     : Info,
                contents : Ref MetaVar}
 
-  sem tyWithInfo (info : Info) =
+  sem tyWithInfo (info : Info) +=
   | TyMetaVar t ->
     switch deref t.contents
     case Unbound _ then
@@ -41,10 +45,10 @@ lang MetaVarTypeAst = Ast
       tyWithInfo info ty
     end
 
-  sem infoTy =
+  sem infoTy +=
   | TyMetaVar {info = info} -> info
 
-  sem smapAccumL_Type_Type (f : acc -> Type -> (acc, Type)) (acc : acc) =
+  sem smapAccumL_Type_Type f acc +=
   | TyMetaVar t ->
     switch deref t.contents
     case Unbound r then
@@ -55,7 +59,7 @@ lang MetaVarTypeAst = Ast
       f acc ty
     end
 
-  sem rappAccumL_Type_Type (f : acc -> Type -> (acc, Type)) (acc : acc) =
+  sem rappAccumL_Type_Type f acc +=
   | TyMetaVar t & ty ->
     recursive let work = lam ty.
       match ty with TyMetaVar x then
@@ -75,7 +79,7 @@ lang MetaVarTypeAst = Ast
 end
 
 lang MetaVarTypeCmp = Cmp + MetaVarTypeAst
-  sem cmpTypeH =
+  sem cmpTypeH +=
   | (TyMetaVar l, TyMetaVar r) ->
     -- NOTE(vipa, 2023-04-19): Any non-link TyMetaVar should have been
     -- unwrapped already, thus we can assume `Unbound` here.
@@ -85,7 +89,7 @@ lang MetaVarTypeCmp = Cmp + MetaVarTypeAst
 end
 
 lang MetaVarTypePrettyPrint = PrettyPrint + MetaVarTypeAst + MonoKindAst
-  sem typePrecedence =
+  sem typePrecedence +=
   | TyMetaVar t ->
     switch deref t.contents
     case Unbound _ then
@@ -93,7 +97,7 @@ lang MetaVarTypePrettyPrint = PrettyPrint + MetaVarTypeAst + MonoKindAst
     case Link ty then
       typePrecedence ty
     end
-  sem getTypeStringCode (indent : Int) (env : PprintEnv) =
+  sem getTypeStringCode (indent : Int) (env : PprintEnv) +=
   | TyMetaVar t ->
     switch deref t.contents
     case Unbound t then
@@ -105,7 +109,7 @@ lang MetaVarTypePrettyPrint = PrettyPrint + MetaVarTypeAst + MonoKindAst
 end
 
 lang MetaVarTypeEq = Eq + MetaVarTypeAst
-  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) =
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) +=
   | TyMetaVar _ & rhs ->
     switch (unwrapType lhs, unwrapType rhs)
     case (TyMetaVar l, TyMetaVar r) then

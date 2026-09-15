@@ -2,6 +2,7 @@
 -- Copyright (C) David Broman. See file LICENSE.txt
 --
 
+include "seq.mc"
 include "string.mc"
 
 -- Data type of info terms
@@ -65,6 +66,9 @@ let infoErrorString : Info -> String -> String = lam fi. lam str.
 
 let infoWarningString : Info -> String -> String = lam fi. lam str.
     join ["WARNING ", info2str fi, ":\n", str]
+
+let infoInfoString : Info -> String -> String = lam fi. lam str.
+    join ["INFO ", info2str fi, ":\n", str]
 
 -- Print an error with info struct info and exit (error code 1)
 let infoErrorExit : Info -> String -> Unknown = lam fi. lam str.

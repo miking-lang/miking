@@ -1,6 +1,10 @@
 include "seq.mc"
 include "set.mc"
 include "common.mc"
+include "map.mc"
+include "basic-types.mc"
+include "option.mc"
+include "string.mc"
 
 -- Gives a compact representation of a set of strings (where a string is a
 -- sequence of elements of any type). All children of a node have a common

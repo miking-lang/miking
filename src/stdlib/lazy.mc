@@ -1,4 +1,5 @@
 include "option.mc"
+include "basic-types.mc"
 
 type LazyContainer a
 con LazyVal : all a. a -> LazyContainer a

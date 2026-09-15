@@ -3,6 +3,11 @@
 include "ast.mc"
 include "common.mc"
 include "mexpr/pprint.mc"
+include "seq.mc"
+include "string.mc"
+include "name.mc"
+include "basic-types.mc"
+include "option.mc"
 
 lang COPPrettyPrintBase = COPAst + IdentifierPrettyPrint
   sem pprintCOPModel: COPModel -> (PprintEnv, String)
@@ -22,7 +27,7 @@ lang COPPrettyPrintBase = COPAst + IdentifierPrettyPrint
   -- NOTE(Linnea, 2023-02-08): Assumes that the base string of the name is a
   -- valid MiniZinc identifier (not a MiniZinc keyword, etc.).
   sem pprintVarName : PprintEnv -> Name -> (PprintEnv, String)
-  sem pprintVarName env =
+  sem pprintVarName env +=
   | name ->
     pprintEnvGetStr env name
 end
@@ -32,7 +37,7 @@ end
 -------------
 
 lang COPDomainIntRangePrettyPrint = COPPrettyPrintBase + COPDomainIntRangeAst
-  sem pprintCOPDomain env =
+  sem pprintCOPDomain env +=
   | COPDomainIntRange {min = min, max = max} ->
     match pprintCOPExpr env min with (env, min) in
     match pprintCOPExpr env max with (env, max) in
@@ -40,7 +45,7 @@ lang COPDomainIntRangePrettyPrint = COPPrettyPrintBase + COPDomainIntRangeAst
 end
 
 lang COPDomainBooleanPrettyPrint = COPPrettyPrintBase + COPDomainBooleanAst
-  sem pprintCOPDomain env =
+  sem pprintCOPDomain env +=
   | COPDomainBoolean {} -> (env, "bool")
 end
 
@@ -49,7 +54,7 @@ end
 ---------------
 
 lang COPVarDeclPrettyPrint = COPPrettyPrintBase + COPVarDeclAst
-  sem pprintCOPDecl env =
+  sem pprintCOPDecl env +=
   | COPVarDecl {id = id, domain = domain } ->
     match pprintVarName env id with (env, id) in
     match pprintCOPDomain env domain with (env, domain) in
@@ -57,7 +62,7 @@ lang COPVarDeclPrettyPrint = COPPrettyPrintBase + COPVarDeclAst
 end
 
 lang COPVarArrayDeclPrettyPrint = COPPrettyPrintBase + COPVarArrayDeclAst
-  sem pprintCOPDecl env =
+  sem pprintCOPDecl env +=
   | COPVarArrayDecl {id = id, domain = domain, length = length} ->
     match pprintVarName env id with (env, id) in
     match pprintCOPExpr env length with (env, length) in
@@ -72,7 +77,7 @@ end
 lang COPConstraintDeclPrettyPrint = COPPrettyPrintBase + COPConstraintDeclAst
   sem pprintCOPConstraint: PprintEnv -> COPConstraint ->
                            (PprintEnv, Option String, String)
-  sem pprintCOPDecl env =
+  sem pprintCOPDecl env +=
   | COPConstraintDecl { constraint = constraint } ->
     match pprintCOPConstraint env constraint with (env, incl, str) in
     ( env, join [optionMapOr "" (lam i. join ["include \"", i, "\";\n"]) incl,
@@ -80,7 +85,7 @@ lang COPConstraintDeclPrettyPrint = COPPrettyPrintBase + COPConstraintDeclAst
 end
 
 lang COPConstraintTablePrettyPrint = COPConstraintDeclPrettyPrint + COPConstraintTableAst
-  sem pprintCOPConstraint env =
+  sem pprintCOPConstraint env +=
   | COPConstraintTable { vars = vars, tuples = tuples } ->
     match pprintCOPExpr env vars with (env, vars) in
     match pprintCOPExpr env tuples with (env, tuples) in
@@ -88,7 +93,7 @@ lang COPConstraintTablePrettyPrint = COPConstraintDeclPrettyPrint + COPConstrain
 end
 
 lang COPConstraintTableReifPrettyPrint = COPConstraintDeclPrettyPrint + COPConstraintTableReifAst
-  sem pprintCOPConstraint env =
+  sem pprintCOPConstraint env +=
   | COPConstraintTableReif { vars = vars, tuples = tuples, b = b } ->
     match pprintCOPExpr env vars with (env, vars) in
     match pprintCOPExpr env tuples with (env, tuples) in
@@ -97,7 +102,7 @@ lang COPConstraintTableReifPrettyPrint = COPConstraintDeclPrettyPrint + COPConst
 end
 
 lang COPConstraintLEPrettyPrint = COPConstraintDeclPrettyPrint + COPConstraintLEAst
-  sem pprintCOPConstraint env =
+  sem pprintCOPConstraint env +=
   | COPConstraintLE { lhs = lhs, rhs = rhs } ->
     match pprintCOPExpr env lhs with (env, lhs) in
     match pprintCOPExpr env rhs with (env, rhs) in
@@ -105,7 +110,7 @@ lang COPConstraintLEPrettyPrint = COPConstraintDeclPrettyPrint + COPConstraintLE
 end
 
 lang COPConstraintLTPrettyPrint = COPConstraintDeclPrettyPrint + COPConstraintLTAst
-  sem pprintCOPConstraint env =
+  sem pprintCOPConstraint env +=
   | COPConstraintLT { lhs = lhs, rhs = rhs } ->
     match pprintCOPExpr env lhs with (env, lhs) in
     match pprintCOPExpr env rhs with (env, rhs) in
@@ -118,7 +123,7 @@ end
 
 lang COPObjectivePrettyPrint = COPPrettyPrintBase
   sem pprintCOPObjectiveH: PprintEnv -> COPObjective -> (PprintEnv, String)
-  sem pprintCOPObjective env =
+  sem pprintCOPObjective env +=
   | obj ->
     match pprintCOPObjectiveH env obj with (env, obj) in
     (env, join ["solve ", obj, ";"])
@@ -126,7 +131,7 @@ end
 
 lang COPObjectiveMinimizePrettyPrint = COPObjectivePrettyPrint
                                      + COPObjectiveMinimizeAst
-  sem pprintCOPObjectiveH env =
+  sem pprintCOPObjectiveH env +=
   | COPMinimize { expr = expr } ->
     match pprintCOPExpr env expr with (env, expr) in
     (env, concat "minimize " expr)
@@ -134,7 +139,7 @@ end
 
 lang COPObjectiveMaximizePrettyPrint = COPObjectivePrettyPrint
                                      + COPObjectiveMaximizeAst
-  sem pprintCOPObjectiveH env =
+  sem pprintCOPObjectiveH env +=
   | COPMaximize { expr = expr } ->
     match pprintCOPExpr env expr with (env, expr) in
     (env, concat "maximize " expr)
@@ -142,7 +147,7 @@ end
 
 lang COPObjectiveSatisfyPrettyPrint = COPObjectivePrettyPrint
                                     + COPObjectiveSatisfyAst
-  sem pprintCOPObjectiveH env =
+  sem pprintCOPObjectiveH env +=
   | COPSatisfy {} -> (env, "satisfy")
 end
 
@@ -151,19 +156,19 @@ end
 -----------------
 
 lang COPExprSumPrettyPrint = COPPrettyPrintBase + COPExprSumAst
-  sem pprintCOPExpr env =
+  sem pprintCOPExpr env +=
   | COPExprSum { expr = expr } ->
     match pprintCOPExpr env expr with (env, expr) in
     (env, join ["sum(", expr, ")"])
 end
 
 lang COPExprVarPrettyPrint = COPPrettyPrintBase + COPExprVarAst
-  sem pprintCOPExpr env =
+  sem pprintCOPExpr env +=
   | COPExprVar { id = id } -> pprintVarName env id
 end
 
 lang COPExprVarAccessPrettyPrint = COPPrettyPrintBase + COPExprVarAccessAst
-  sem pprintCOPExpr env =
+  sem pprintCOPExpr env +=
   | COPExprVarAccess { id = id, index = index } ->
     match pprintVarName env id with (env, id) in
     match pprintCOPExpr env index with (env, index) in
@@ -171,12 +176,12 @@ lang COPExprVarAccessPrettyPrint = COPPrettyPrintBase + COPExprVarAccessAst
 end
 
 lang COPExprIntPrettyPrint = COPPrettyPrintBase + COPExprIntAst
-  sem pprintCOPExpr env =
+  sem pprintCOPExpr env +=
   | COPExprInt { value = value } -> (env, int2string value)
 end
 
 lang COPExprArrayPrettyPrint = COPPrettyPrintBase + COPExprArrayAst
-  sem pprintCOPExpr env =
+  sem pprintCOPExpr env +=
   | COPExprArray { array = array } ->
     match mapAccumL (lam env. lam e. pprintCOPExpr env e) env array
     with (env, array) in
@@ -184,7 +189,7 @@ lang COPExprArrayPrettyPrint = COPPrettyPrintBase + COPExprArrayAst
 end
 
 lang COPExprArray2dPrettyPrint = COPPrettyPrintBase + COPExprArray2dAst
-  sem pprintCOPExpr env =
+  sem pprintCOPExpr env +=
   | COPExprArray2d { array = array } ->
     match mapAccumL (lam env. lam inner.
         match mapAccumL (lam env. lam e. pprintCOPExpr env e) env inner

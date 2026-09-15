@@ -4,6 +4,13 @@ include "result.mc"
 include "ast.mc"
 include "eq.mc"
 include "boot-parser.mc"
+include "basic-types.mc"
+include "seq.mc"
+include "char.mc"
+include "either.mc"
+include "common.mc"
+include "string.mc"
+include "name.mc"
 
 /-
 

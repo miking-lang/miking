@@ -8,6 +8,8 @@ include "eq.mc"
 include "map.mc"
 include "name.mc"
 include "sys.mc"
+include "set.mc"
+include "string.mc"
 
 let _error = "Error in externals.mc: not an external in externalsMap"
 

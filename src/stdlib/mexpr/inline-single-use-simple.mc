@@ -1,5 +1,11 @@
 include "ast.mc"
 include "hoas.mc"
+include "map.mc"
+include "name.mc"
+include "basic-types.mc"
+include "seq.mc"
+include "option.mc"
+include "mexpr/ast-builder.mc"
 
 -- This file implements a simple version of inlining, where every
 -- binding that is used exactly once is inlined.

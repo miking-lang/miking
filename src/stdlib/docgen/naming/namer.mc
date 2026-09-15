@@ -2,6 +2,14 @@ include "./langs-namespace.mc"
 include "./name-map.mc"
 include "./name-context.mc"
 include "../global/objects.mc"
+include "docgen/global/logger.mc"
+include "docgen/naming/naming-options.mc"
+include "docgen/global/source-code.mc"
+include "seq.mc"
+include "basic-types.mc"
+include "bool.mc"
+include "string.mc"
+include "docgen/naming/types-namespace.mc"
 
 type NamingRes = use Objects in  {
      annotatedObj: Object,

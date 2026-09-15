@@ -8,8 +8,8 @@ lang Desugar = Ast + OpaqueAst
   | tm -> smap_Expr_Expr desugarExpr tm
 end
 
-lang DesugarLoader = Ast + MCoreLoader + OpaqueAst
-  syn Hook =
+lang DesugarLoader = Ast + LoaderInterface + OpaqueAst
+  syn Hook +=
   | DesugarHook ()
 
   sem desugarDecl : Loader -> Decl -> (Loader, Decl)
@@ -28,6 +28,6 @@ lang DesugarLoader = Ast + MCoreLoader + OpaqueAst
 
     addHook loader (DesugarHook ())
 
-  sem _postTypecheck loader decl = | DesugarHook _ ->
+  sem _postTypecheck loader decl += | DesugarHook _ ->
     desugarDecl loader decl
 end

@@ -6,6 +6,9 @@ include "set.mc"
 
 include "mexpr/ast.mc"
 include "javascript/ast.mc"
+include "basic-types.mc"
+include "mexpr/info.mc"
+include "seq.mc"
 
 
 --------------------

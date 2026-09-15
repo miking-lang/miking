@@ -5,12 +5,24 @@ include "ast.mc"
 include "type-check.mc"
 
 include "mlang/loader.mc"
+include "name.mc"
+include "map.mc"
+include "mexpr/ast-builder.mc"
+include "stringid.mc"
+include "seq.mc"
+include "mexpr/unify.mc"
+include "mexpr/symbolize.mc"
+include "mexpr/pprint.mc"
+include "basic-types.mc"
+include "error.mc"
+include "set.mc"
+include "type.mc"
 
 lang GenerateEq = Ast
   type GEqEnv =
     { conFunctions : Map Name Name  -- For TyCons
     , varFunctions : Map Name Name  -- For TyVars
-    , newFunctions : [(Name, Expr)]  -- To be defined
+    , newFunctions : [(Name, Type, Expr)]  -- To be defined
 
     , tcEnv : TCEnv -- Current typechecking environment
 
@@ -25,35 +37,42 @@ lang GenerateEq = Ast
 end
 
 lang GenerateEqInt = GenerateEq + IntTypeAst + CmpIntAst
-  sem _getEqFunction env =
+  sem _getEqFunction env +=
   | TyInt _ -> (env, uconst_ (CEqi ()))
 end
 
 lang GenerateEqFloat = GenerateEq + FloatTypeAst + CmpFloatAst
-  sem _getEqFunction env =
+  sem _getEqFunction env +=
   | TyFloat _ -> (env, uconst_ (CEqf ()))
 end
 
 lang GenerateEqBool = GenerateEq + BoolTypeAst
-  sem _getEqFunction env =
+  sem _getEqFunction env +=
   | TyBool _ -> (env, nvar_ env.eqBool)
 end
 
 lang GenerateEqSeq = GenerateEq + SeqTypeAst
-  sem _getEqFunction env =
+  sem _getEqFunction env +=
   | TySeq x ->
     match getEqFunction env x.ty with (env, elemF) in
     (env, app_ (nvar_ env.eqSeq) elemF)
 end
 
+lang GenerateEqTensor = GenerateEq + TensorTypeAst + TensorOpAst
+  sem _getEqFunction env +=
+  | TyTensor x ->
+    match getEqFunction env x.ty with (env, elemF) in
+    (env, app_ (uconst_ (CTensorEq ())) elemF)
+end
+
 lang GenerateEqChar = GenerateEq + CharTypeAst + CmpCharAst
-  sem _getEqFunction env =
+  sem _getEqFunction env +=
   | TyChar _ ->
     (env, uconst_ (CEqc ()))
 end
 
 lang GenerateEqRecord = GenerateEq + RecordTypeAst
-  sem _getEqFunction env =
+  sem _getEqFunction env +=
   | ty & TyRecord x ->
     if mapIsEmpty x.fields then (env, ulam_ "" (ulam_ "" true_)) else
 
@@ -74,7 +93,7 @@ lang GenerateEqRecord = GenerateEq + RecordTypeAst
 end
 
 lang GenerateEqApp = GenerateEq + AppTypeAst
-  sem _getEqFunction env =
+  sem _getEqFunction env +=
   | TyApp x ->
     match getEqFunction env x.lhs with (env, lhs) in
     match getEqFunction env x.rhs with (env, rhs) in
@@ -82,7 +101,7 @@ lang GenerateEqApp = GenerateEq + AppTypeAst
 end
 
 lang GenerateEqCon = GenerateEq + ConTypeAst + Generalize + UnifyPure
-  sem _getEqFunction env =
+  sem _getEqFunction env +=
   | ty & TyCon x ->
     -- TODO(vipa, 2025-01-27): Invalidate old eq functions if
     -- we've introduced constructors to pre-existing types
@@ -96,10 +115,10 @@ lang GenerateEqCon = GenerateEq + ConTypeAst + Generalize + UnifyPure
     let params = match mapLookup x.ident env.tcEnv.tyConEnv with Some (_, params, _)
       then params
       else errorSingle [x.info] (concat "Typecheck environment does not contain information about type " (nameGetStr x.ident)) in
-    let paramFNames = foldl (lam acc. lam n. mapInsert n (nameSetNewSym n) acc) (mapEmpty nameCmp) params in
-    let fullType = tyapps_ ty (map ntyvar_ (mapKeys paramFNames)) in
+    let paramFNames = map (lam n. {f = nameSetNewSym n, tyvar = nameSetNewSym n}) params in
+    let fullType = tyapps_ ty (map (lam x. ntyvar_ x.tyvar) paramFNames) in
     let prevVarFunctions = env.varFunctions in
-    let env = {env with varFunctions = mapUnion env.varFunctions paramFNames} in
+    let env = {env with varFunctions = foldl (lam m. lam p. mapInsert p.tyvar p.f m) env.varFunctions paramFNames} in
 
     let constructors = mapIntersectWith
       (lam. lam pair. pair.1)
@@ -113,7 +132,8 @@ lang GenerateEqCon = GenerateEq + ConTypeAst + Generalize + UnifyPure
       match inst (infoTy t) 0 t with TyArrow {from = from, to = to} in
       let uni = emptyUnification () in
       match unifyPure uni to fullType with Some uni then
-        match getEqFunction env t with (env, subf) in
+        let from = pureApplyUniToType uni from in
+        match getEqFunction env from with (env, subf) in
         let subl = nameSym "subl" in
         let subr = nameSym "subr" in
         let tm = match_ (nvar_ lName) (npcon_ c (npvar_ subl))
@@ -123,11 +143,19 @@ lang GenerateEqCon = GenerateEq + ConTypeAst + Generalize + UnifyPure
           tm in
         (env, tm)
       else error "Unification should always be possible here" in
-    match mapFoldWithKey addMatch (env, never_) constructors with (env, matchChain) in
+    match mapFoldWithKey addMatch (env, app_ never_ (str_ (concat " in " (nameGetStr fname)))) constructors with (env, matchChain) in
     let matchChain = nulam_ lName (nulam_ rName matchChain) in
-    let body = foldr (lam pname. lam body. nulam_ (mapFindExn pname paramFNames) body) matchChain params in
+    let body = foldr (lam p. lam body. nulam_ p.f body) matchChain paramFNames in
+    let tyAnnot = foldr
+      (lam p. lam ty. tyarrow_ (tyarrows_ [ntyvar_ p.tyvar, ntyvar_ p.tyvar, tybool_]) ty)
+      (tyarrows_ [fullType, fullType, tybool_])
+      paramFNames in
+    let tyAnnot = foldr
+      (lam p. lam ty. ntyall_ p.tyvar ty)
+      tyAnnot
+      paramFNames in
 
-    let env = {env with varFunctions = prevVarFunctions, newFunctions = snoc env.newFunctions (fname, body)} in
+    let env = {env with varFunctions = prevVarFunctions, newFunctions = snoc env.newFunctions (fname, tyAnnot, body)} in
     (env, nvar_ fname)
 end
 
@@ -137,11 +165,22 @@ lang GenerateEqVar = GenerateEq + VarTypeAst
   -- arbitrarily say "equal" or "not equal", but that seems error
   -- prone, or we could somehow ask surrounding code to be rewritten
   -- to carry an extra eq function for the polymorphic type.
-  sem _getEqFunction env =
+  sem _getEqFunction env +=
   | TyVar x ->
     match mapLookup x.ident env.varFunctions with Some fname
     then (env, nvar_ fname)
     else errorSingle [x.info] (join ["I don't know how to compare values of the polymorphic type ", nameGetStr x.ident])
+end
+
+lang GenerateEqMetaVarError = GenerateEq + MetaVarTypeAst + PrettyPrint
+  sem _getEqFunction env +=
+  | ty & TyMetaVar x ->
+    switch deref x.contents
+    case Link ty then
+      errorSingle [x.info] "unwrapType didn't unwrap"
+    case Unbound u then
+      errorSingle [x.info] (join ["Not enough information to generate equality function for ", type2str ty, " : ", kind2str u.kind])
+    end
 end
 
 lang MExprGenerateEq
@@ -150,14 +189,15 @@ lang MExprGenerateEq
   + GenerateEqInt
   + GenerateEqFloat
   + GenerateEqSeq
+  + GenerateEqTensor
   + GenerateEqChar
   + GenerateEqApp
   + GenerateEqCon
   + GenerateEqVar
 end
 
-lang GenerateEqLoader = MCoreLoader + GenerateEq
-  syn Hook =
+lang GenerateEqLoader = LoaderInterface + GenerateEq
+  syn Hook +=
   | EqHook
     { baseEnv : GEqEnv
     , functions : Ref (Map Name Name)  -- Names for TyCon related Eq functions
@@ -185,17 +225,34 @@ lang GenerateEqLoader = MCoreLoader + GenerateEq
       } in
     addHook loader hook
 
+  sem _registerCustomEqFunction : Name -> Expr -> Loader -> Hook -> Option (Loader, ())
+  sem _registerCustomEqFunction tyConName f loader =
+  | _ -> None ()
+  | EqHook hook ->
+    let eqName = nameSym (concat "eq" (nameGetStr tyConName)) in
+    let loader = (_addDeclExn _symEnvEmpty loader (nulet_ eqName f)).1 in
+    Some (loader, modref hook.functions (mapInsert tyConName eqName (deref hook.functions)))
+
+  sem registerCustomEqFunction : Name -> Expr -> Loader -> Loader
+  sem registerCustomEqFunction tyConName f = | loader ->
+    (withHookState (_registerCustomEqFunction tyConName f) loader).0
+
   sem _eqFunctionsFor : [Type] -> Loader -> Hook -> Option (Loader, [Expr])
   sem _eqFunctionsFor tys loader =
   | _ -> None ()
   | EqHook hook ->
-    match mapAccumL getEqFunction {hook.baseEnv with conFunctions = deref hook.functions, tcEnv = _getTCEnv loader} tys
-      with (env, printFs) in
+    let f = lam tcEnv.
+      let env = {hook.baseEnv with conFunctions = deref hook.functions, tcEnv = tcEnv} in
+      (tcEnv, mapAccumL getEqFunction env tys) in
+    match _withTCEnv f loader with (loader, (env, printFs)) in
 
     modref hook.functions env.conFunctions;
     let loader = if null env.newFunctions
       then loader
-      else _addDeclExn loader (nureclets_ env.newFunctions) in
+      -- NOTE(vipa, 2026-08-17): We don't need to capture the
+      -- definitions in a SymEnv, because they're already registered
+      -- in the GEqEnv
+      else (_addDeclExn _symEnvEmpty loader (nreclets_ env.newFunctions)).1 in
     Some (loader, printFs)
 
   sem eqFunctionsFor : [Type] -> Loader -> (Loader, [Expr])

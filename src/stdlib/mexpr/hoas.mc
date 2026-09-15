@@ -23,6 +23,13 @@
 include "mexpr/ast.mc"
 include "mexpr/pprint.mc"
 include "mexpr/json-debug.mc"
+include "mexpr/info.mc"
+include "name.mc"
+include "mexpr/ast-builder.mc"
+include "seq.mc"
+include "json.mc"
+include "map.mc"
+include "string.mc"
 
 lang TempLamAst = Ast + PrettyPrint + AstToJson + OpaqueAst
   type TempFixRec =
@@ -36,7 +43,7 @@ lang TempLamAst = Ast + PrettyPrint + AstToJson + OpaqueAst
     , info : Info
     , ty : Type
     }
-  syn Expr =
+  syn Expr +=
   | TempLam TempLamRec
   | TempFix TempFixRec
 
@@ -44,11 +51,11 @@ lang TempLamAst = Ast + PrettyPrint + AstToJson + OpaqueAst
   sem tempLam_ = | f ->
     TempLam {f = f, info = NoInfo (), ty = TyUnknown {info = NoInfo ()}}
 
-  sem isAtomic =
+  sem isAtomic +=
   | TempLam _ -> false
   | TempFix _ -> false
 
-  sem pprintCode indent env =
+  sem pprintCode indent env +=
   | TempLam f ->
     let x = nameSym "x" in
     match pprintVarName env x with (env, str) in
@@ -66,7 +73,7 @@ lang TempLamAst = Ast + PrettyPrint + AstToJson + OpaqueAst
     , join ["/-temp-/recursive let ", fStr, " = lam ", xStr, ".", pprintNewline (pprintIncr indent), body, " in ", fStr]
     )
 
-  sem exprToJson =
+  sem exprToJson +=
   | TempLam f ->
     let x = nameSym "x" in
     JsonObject (mapFromSeq cmpString
@@ -154,19 +161,19 @@ lang TempLamAst = Ast + PrettyPrint + AstToJson + OpaqueAst
     , info = infoTm tm
     }
 
-  sem tyTm =
+  sem tyTm +=
   | TempLam _ -> TyUnknown {info = NoInfo ()}
   | TempFix x -> x.ty
 
-  sem withType ty =
+  sem withType ty +=
   | tm & TempLam _ -> tm
   | TempFix x -> TempFix {x with ty = ty}
 
-  sem infoTm =
+  sem infoTm +=
   | TempLam x -> x.info
   | TempFix x -> x.info
 
-  sem withInfo info =
+  sem withInfo info +=
   | TempLam x -> TempLam {x with info = info}
   | TempFix x -> TempFix {x with info = info}
 

@@ -23,6 +23,10 @@ include "either.mc"
 include "seq.mc"
 include "string.mc"
 include "map.mc"
+include "basic-types.mc"
+include "char.mc"
+include "bool.mc"
+include "int.mc"
 
 type OptName
 con OptShort : Char -> OptName

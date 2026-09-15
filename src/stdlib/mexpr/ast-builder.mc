@@ -7,6 +7,11 @@ include "info.mc"
 include "error.mc"
 include "stringid.mc"
 include "map.mc"
+include "seq.mc"
+include "string.mc"
+include "name.mc"
+include "basic-types.mc"
+include "bool.mc"
 
 -- Info
 let noinfo_ = NoInfo ()

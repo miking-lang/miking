@@ -2,6 +2,7 @@
 -- Copyright (C) The Miking contributors. See file LICENSE.txt
 
 include "string.mc"
+include "seq.mc"
 
 -- Defualt to toString function for utests. Mimics the format of utests without
 -- the `else` construct.

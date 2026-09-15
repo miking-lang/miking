@@ -1,5 +1,6 @@
 include "name.mc"
 include "mexpr/info.mc"
+include "bool.mc"
 
 -- Defines simple convenience functions for name-info tuples.
 
