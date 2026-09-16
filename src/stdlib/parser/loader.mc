@@ -10,7 +10,7 @@ include "seq.mc"
 include "option.mc"
 include "mexpr/info.mc"
 
-lang NativeParserLoader = MLangLoader + MLangParser
+lang NativeParserLoader = MCoreLoader + MLangParser
   sem parseNativeMLangFile : String -> Result () (Info, String) MLangProgram
   sem parseNativeMLangFile = | path ->
     let src = readFile path in
