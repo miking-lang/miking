@@ -12,6 +12,7 @@ include "ecmascript/ast.mc"
 include "ecmascript/ident.mc"
 include "seq.mc"
 include "string.mc"
+include "name.mc"
 
 -- Indentation is two spaces per level.
 let esIndentIncr : Int = 2

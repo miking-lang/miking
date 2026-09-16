@@ -20,6 +20,7 @@ include "seq.mc"
 include "set.mc"
 include "stdlib.mc"
 include "string.mc"
+include "name.mc"
 
 lang ESRuntime = ESAst
 

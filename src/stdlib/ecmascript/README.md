@@ -103,6 +103,56 @@ Some things that needs to be done are:
 * The input AST contains a lot of temporary variables that needs to be removed or inlined.
 
 
+## Tail calls
+
+JavaScript engines do not eliminate tail calls, so a tail call would grow the stack.
+
+A new mutual function is created that takes a tag parameter and runs in a loop.
+
+```ocaml
+recursive
+  let even = lam x. if eqi x 0 then true else odd (subi x 1)
+  let odd = lam x. if eqi x 1 then true else even (subi x 1)
+in
+dprint (even 4000000)
+```
+
+```javascript
+function even(x) {
+  return even_odd(0, x, undefined);
+}
+function odd(x) {
+  return even_odd(1, undefined, x);
+}
+function even_odd(tag, x, x_1) {
+  while (true) {
+    if (tag === 0) {
+      if (x === 0) {
+        return true;
+      } else {
+        x_1 = x - 1;
+        tag = 1;
+        continue;
+      }
+    } else if (tag === 1) {
+      if (x_1 === 1) {
+        return true;
+      } else {
+        x = x_1 - 1;
+        tag = 0;
+        continue;
+      }
+    }
+  }
+}
+env.dprint(even(4000000));
+```
+
+Pattern lowering hides tail calls behind join points: a local binding whose body does
+nothing but call back into the function it sits in.
+Such a binding is substituted back at its call sites, which costs nothing
+and exposes the direct tail call.
+
 ## Data representation
 
 | MExpr | ECMAScript |

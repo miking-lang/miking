@@ -528,6 +528,52 @@ utest contains "const _arg_1 = acc + n;" tail2 with true in
 utest contains "n = _arg;" tail2 with true in
 utest contains "acc = _arg_1;" tail2 with true in
 
+-- Functions that tail-call each other share one loop, since JavaScript does not
+-- eliminate tail calls. Each keeps its name and arity as an entry into it.
+let ev = nameSym "even" in
+let od = nameSym "odd" in
+let xe = nameSym "x" in
+let xo = nameSym "x" in
+let astMutual = bind_
+  (nreclets_
+    [ (ev, tyunknown_, nulam_ xe
+        (if_ (eqi_ (nvar_ xe) (int_ 0)) true_ (app_ (nvar_ od) (subi_ (nvar_ xe) (int_ 1)))))
+    , (od, tyunknown_, nulam_ xo
+        (if_ (eqi_ (nvar_ xo) (int_ 1)) true_ (app_ (nvar_ ev) (subi_ (nvar_ xo) (int_ 1))))) ])
+  (dprint_ (app_ (nvar_ ev) (int_ 4))) in
+let mutual = esCompileToString astMutual in
+utest mutual with join
+  [ "export default function main(env) {\n"
+  , "  function even(x) {\n"
+  , "    return even_odd(0, x, undefined);\n"
+  , "  }\n"
+  , "  function odd(x) {\n"
+  , "    return even_odd(1, undefined, x);\n"
+  , "  }\n"
+  , "  function even_odd(tag, x, x_1) {\n"
+  , "    while (true) {\n"
+  , "      if (tag === 0) {\n"
+  , "        if (x === 0) {\n"
+  , "          return true;\n"
+  , "        } else {\n"
+  , "          x_1 = x - 1;\n"
+  , "          tag = 1;\n"
+  , "          continue;\n"
+  , "        }\n"
+  , "      } else if (tag === 1) {\n"
+  , "        if (x_1 === 1) {\n"
+  , "          return true;\n"
+  , "        } else {\n"
+  , "          x = x_1 - 1;\n"
+  , "          tag = 0;\n"
+  , "          continue;\n"
+  , "        }\n"
+  , "      }\n"
+  , "    }\n"
+  , "  }\n"
+  , "  env.dprint(even(4));\n"
+  , "}\n" ] in
+
 -- Recursion that is not in tail position stays a call.
 let h = nameSym "count" in
 let astNonTail = bind_

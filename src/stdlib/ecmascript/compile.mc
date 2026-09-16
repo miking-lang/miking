@@ -17,6 +17,7 @@ include "error.mc"
 include "string.mc"
 include "bool.mc"
 include "basic-types.mc"
+include "digraph.mc"
 include "ecmascript/ast.mc"
 include "ecmascript/ident.mc"
 include "ecmascript/runtime.mc"
@@ -66,7 +67,11 @@ type ESCompileCtx = {
   -- The function currently being compiled and its parameters, when a
   -- saturated self-call in tail position can become a loop rather than
   -- recursion. Cleared inside nested functions.
-  selfCall : Option (Name, [Name]),
+  tailTargets : Map Name (Int, [Name]),
+
+  -- For a group, the variable selecting which member the loop is running and
+  -- the tag of the member being compiled; `None` for a single function.
+  tailTag : Option (Name, Int),
 
   -- The local holding the host's `env.externals`, bound once at the top of
   -- `main` when the program declares any external; and whether it does.
@@ -84,7 +89,8 @@ let esCompileCtxEmpty : ESCompileCtx = {
   variants = setEmpty nameCmp,
   constructed = setEmpty nameCmp,
   consts = mapEmpty nameCmp,
-  selfCall = None (),
+  tailTargets = mapEmpty nameCmp,
+  tailTag = None (),
   externalsName = nameNoSym "externals",
   usesExternals = false,
   externalDefaults = setEmpty cmpString
@@ -142,7 +148,8 @@ recursive let esSubstVars
 end
 
 -- A join point that hides a call to the function it sits in: a binding whose
--- body is a function that does nothing but call `enclosing`, using each of its
+-- body is a function that does nothing but call one of `enclosing` -- the
+-- function, or any member of its recursive group -- using each of its
 -- parameters at most once.
 --
 -- The parameter limit keeps the substitution from duplicating work, and
@@ -150,13 +157,13 @@ end
 -- anything a programmer wrote: a small function of one's own, such as
 -- `let f = lam x. lam y. addi x y`, keeps its name and its definition.
 let esJoinPoint
-  : Name -> use Ast in Expr -> Option ([Name], use Ast in Expr) =
+  : Set Name -> use Ast in Expr -> Option ([Name], use Ast in Expr) =
   use MExprAst in
   lam enclosing. lam body.
   match esCollectLams body with (params, inner) in
   if null params then None () else
   match esCollectApp inner with (TmVar v, ![] & _) then
-    if and (nameEq v.ident enclosing)
+    if and (setMem v.ident enclosing)
            (forAll (lam p. leqi (esCountVar p inner) 1) params)
     then Some (params, inner) else None ()
   else None ()
@@ -182,32 +189,46 @@ end
 -- overflow the stack on a long comment.
 --
 -- Substituting the join point back at its call sites restores the direct tail
--- call, and costs nothing: a call is replaced by a call.
+-- call, and costs nothing: a call is replaced by a call. In a recursive group
+-- the join point may lead to another member, and the members that tail-call
+-- each other are found from direct calls only (see `esTailCallGroups`).
 recursive let esInlineJoinPoints
-  : Option Name -> use Ast in Expr -> use Ast in Expr =
+  : Set Name -> use Ast in Expr -> use Ast in Expr =
   use MExprAst in
   lam enclosing. lam e.
   match e with TmDecl ({ decl = DeclLet d } & t) then
     -- Inside this binding's body, it is the enclosing function.
-    let body = esInlineJoinPoints (Some d.ident) d.body in
+    let body = esInlineJoinPoints (setOfSeq nameCmp [d.ident]) d.body in
     let inexpr = esInlineJoinPoints enclosing t.inexpr in
     let keep = lam inexpr.
       TmDecl { t with decl = DeclLet { d with body = body }, inexpr = inexpr } in
-    match enclosing with Some fname then
-      match esJoinPoint fname body with Some (params, inner) then
-        let inexpr = esInlineJoin d.ident params inner inexpr in
-        -- The binding stays only if a use survived, such as one passing it on
-        -- as a value rather than calling it.
-        if eqi (esCountVar d.ident inexpr) 0 then inexpr else keep inexpr
-      else keep inexpr
+    match esJoinPoint enclosing body with Some (params, inner) then
+      let inexpr = esInlineJoin d.ident params inner inexpr in
+      -- The binding stays only if a use survived, such as one passing it on
+      -- as a value rather than calling it.
+      if eqi (esCountVar d.ident inexpr) 0 then inexpr else keep inexpr
     else keep inexpr
   else match e with TmDecl ({ decl = DeclRecLets r } & t) then
+    let group = setOfSeq nameCmp (map (lam b. b.ident) r.bindings) in
     let bindings = map
-      (lam b. { b with body = esInlineJoinPoints (Some b.ident) b.body })
+      (lam b. { b with body = esInlineJoinPoints group b.body })
       r.bindings in
     TmDecl { t with decl = DeclRecLets { r with bindings = bindings }
            , inexpr = esInlineJoinPoints enclosing t.inexpr }
   else smap_Expr_Expr (esInlineJoinPoints enclosing) e
+end
+
+-- The functions a body calls in tail position, with how many arguments each
+-- call passes: the calls `compileStmts` reaches with a `return` continuation,
+-- and so those that can become jumps.
+recursive let esTailCallees : use Ast in Expr -> [(Name, Int)] =
+  use MExprAst in
+  lam e.
+  match e with TmDecl t then esTailCallees t.inexpr
+  else match e with TmMatch t then concat (esTailCallees t.thn) (esTailCallees t.els)
+  else match e with TmApp _ then
+    match esCollectApp e with (TmVar v, args) then [(v.ident, length args)] else []
+  else []
 end
 
 -- Orders record fields for output. Tuple fields are named "0", "1", ... and
@@ -512,13 +533,13 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint + MExprArity
   | TmNever t ->
     (ctx, [esThrow t.info "ecmascript: reached a `never` expression"])
   | TmApp _ & t ->
-    -- A saturated self-call in tail position: rebind the parameters and jump
-    -- back to the top rather than recursing.
-    match (cont, ctx.selfCall) with (ESCReturn _, Some (fname, params)) then
-      match esCollectApp t with (fn, args) in
-      match fn with TmVar v then
-        if and (nameEq v.ident fname) (eqi (length args) (length params)) then
-          esTailCall ctx params args
+    -- A saturated tail call to a function this loop serves: rebind that
+    -- function's parameters and jump back to the top rather than calling.
+    match cont with ESCReturn _ then
+      match esCollectApp t with (TmVar v, args) then
+        match mapLookup v.ident ctx.tailTargets with Some (tag, params) then
+          if eqi (length args) (length params) then esTailCall ctx tag params args
+          else esCompileToCont ctx cont t
         else esCompileToCont ctx cont t
       else esCompileToCont ctx cont t
     else esCompileToCont ctx cont t
@@ -532,23 +553,29 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint + MExprArity
 
   -- Parameters are rebound simultaneously, so with more than one they go
   -- through temporaries first: assigning in sequence would let a later
-  -- argument see an already-updated parameter.
+  -- argument see an already-updated parameter. Jumping to another member of a
+  -- group also selects it.
   sem esTailCall
-    : ESCompileCtx -> [Name] -> [Expr] -> (ESCompileCtx, [ESStmt])
-  sem esTailCall ctx params =
+    : ESCompileCtx -> Int -> [Name] -> [Expr] -> (ESCompileCtx, [ESStmt])
+  sem esTailCall ctx tag params =
   | args ->
     match compileExprs ctx args with (ctx, stmts, xs) in
-    match params with [p] then
-      (ctx, join [stmts
-        , [ESSAssign { target = ESEVar { id = p }, value = head xs }]
-        , [ESSContinue {}]])
-    else
-      let temps = map (lam. nameSym "_arg") params in
-      let binds = zipWith (lam n. lam x. ESSConst { id = n, init = x }) temps xs in
-      let assigns = zipWith (lam p. lam n.
-          ESSAssign { target = ESEVar { id = p }, value = ESEVar { id = n } })
-        params temps in
-      (ctx, join [stmts, binds, assigns, [ESSContinue {}]])
+    let rebind =
+      match params with [p] then
+        [ESSAssign { target = ESEVar { id = p }, value = head xs }]
+      else
+        let temps = map (lam. nameSym "_arg") params in
+        let binds = zipWith (lam n. lam x. ESSConst { id = n, init = x }) temps xs in
+        let assigns = zipWith (lam p. lam n.
+            ESSAssign { target = ESEVar { id = p }, value = ESEVar { id = n } })
+          params temps in
+        concat binds assigns in
+    let select =
+      match ctx.tailTag with Some (tagVar, current) then
+        if eqi tag current then []
+        else [ESSAssign { target = ESEVar { id = tagVar }, value = ESEInt { value = tag } }]
+      else [] in
+    (ctx, join [stmts, rebind, select, [ESSContinue {}]])
 
   ----------------------
   -- EXPRESSION MODE --
@@ -582,13 +609,14 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint + MExprArity
     -- it will apply one argument at a time: emit curried arrows.
     --
     -- Entering a new function also ends the enclosing function's tail
-    -- position. Without clearing it, a self-call inside this lambda would emit
+    -- position. Without clearing it, a tail call inside this lambda would emit
     -- a `continue` belonging to a loop it is not inside.
     match esCollectLams t with (params, body) in
-    let outer = ctx.selfCall in
-    let ctx = { ctx with selfCall = None () } in
+    let outerTargets = ctx.tailTargets in
+    let outerTag = ctx.tailTag in
+    let ctx = { ctx with tailTargets = mapEmpty nameCmp, tailTag = None () } in
     match compileStmts ctx (ESCReturn ()) body with (ctx, stmts) in
-    let ctx = { ctx with selfCall = outer } in
+    let ctx = { ctx with tailTargets = outerTargets, tailTag = outerTag } in
     -- A lone `return e;` reads better as a concise arrow body.
     let innerBody = match stmts with [ESSReturn { expr = Some e }]
       then ESFBExpr { expr = e } else ESFBBlock { stmts = stmts } in
@@ -681,15 +709,96 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint + MExprArity
     : ESCompileCtx -> Name -> [Name] -> Expr -> (ESCompileCtx, ESStmt)
   sem esCompileFun ctx id params =
   | body ->
-    let outer = ctx.selfCall in
-    let ctx = { ctx with selfCall = Some (id, params) } in
+    let outerTargets = ctx.tailTargets in
+    let outerTag = ctx.tailTag in
+    let ctx = { ctx with tailTargets = mapFromSeq nameCmp [(id, (0, params))]
+              , tailTag = None () } in
     match compileStmts ctx (ESCReturn ()) body with (ctx, stmts) in
-    let ctx = { ctx with selfCall = outer } in
+    let ctx = { ctx with tailTargets = outerTargets, tailTag = outerTag } in
     let stmts =
       if esHasContinue stmts
       then [ESSWhile { cond = ESEBool { value = true }, body = stmts }]
       else stmts in
     (ctx, ESSFunDecl { id = id, params = params, body = stmts })
+
+  -- Splits a recursive group into the sets of members that tail-call each
+  -- other, directly or through one another: the strongly connected components
+  -- of the tail-call graph. Only those need to share a loop; a member outside
+  -- any cycle compiles on its own.
+  sem esTailCallGroups : [(Name, [Decl], [Name], Expr)] -> [[Name]]
+  sem esTailCallGroups =
+  | funs ->
+    let arity = mapFromSeq nameCmp (map (lam f. (f.0, length f.2)) funs) in
+    let g = foldl (lam g. lam f. digraphMaybeAddVertex f.0 g)
+      (digraphEmpty nameCmp (lam. lam. true)) funs in
+    let addCall = lam from. lam g. lam call.
+      match call with (callee, nargs) in
+      match mapLookup callee arity with Some n then
+        if and (eqi n nargs) (not (nameEq callee from))
+        then digraphAddEdge from callee () g else g
+      else g in
+    let g = foldl (lam g. lam f. foldl (addCall f.0) g (esTailCallees f.3)) g funs in
+    digraphTarjan g
+
+  -- Compiles functions that tail-call each other. JavaScript engines do not
+  -- eliminate tail calls, so calling back and forth grows the stack a frame
+  -- per call, where the OCaml backend runs in constant space. The functions
+  -- share one loop instead: a worker takes every member's parameters and a
+  -- tag saying which member is running, and a tail call to a member rebinds
+  -- its parameters, selects it and goes round again.
+  --
+  -- Each member keeps its name and arity as an entry into the worker, so
+  -- callers are unaffected. An entry's parameters are fresh names, since the
+  -- member's own parameters belong to the worker.
+  sem esCompileGroup
+    : ESCompileCtx -> [(Name, [Decl], [Name], Expr)] -> (ESCompileCtx, [ESStmt])
+  sem esCompileGroup ctx =
+  | members ->
+    -- Named for its members while that stays short; the parser's groups have
+    -- four members with twenty-character names.
+    let worker = nameSym
+      (match members with [(a, _, _, _), (b, _, _, _)]
+       then join [nameGetStr a, "_", nameGetStr b]
+       else concat (nameGetStr (head members).0) "_group") in
+    let tagVar = nameSym "tag" in
+    let tagged = mapi (lam i. lam m. (i, m)) members in
+    let targets = foldl (lam acc. lam im.
+        match im with (i, (name, _, params, _)) in
+        mapInsert name (i, params) acc) (mapEmpty nameCmp) tagged in
+    match mapAccumL esCompileDecl ctx (join (map (lam m. m.1) members))
+      with (ctx, wrapStmts) in
+    let allParams = join (map (lam m. m.2) members) in
+    let entry = lam im.
+      match im with (i, (name, _, params, _)) in
+      let fresh = map (lam p. nameSym (nameGetStr p)) params in
+      let sub = mapFromSeq nameCmp (zip params fresh) in
+      let args = map (lam p.
+          match mapLookup p sub with Some f then ESEVar { id = f } else esUnit)
+        allParams in
+      ESSFunDecl { id = name, params = fresh
+                 , body = [ESSReturn { expr = Some (ESECall
+                     { callee = ESEVar { id = worker }
+                     , args = cons (ESEInt { value = i }) args }) }] } in
+    let outerTargets = ctx.tailTargets in
+    let outerTag = ctx.tailTag in
+    let compileMember = lam ctx. lam im.
+      match im with (i, (_, _, _, body)) in
+      let ctx = { ctx with tailTargets = targets, tailTag = Some (tagVar, i) } in
+      compileStmts ctx (ESCReturn ()) body in
+    match mapAccumL compileMember ctx tagged with (ctx, bodies) in
+    let ctx = { ctx with tailTargets = outerTargets, tailTag = outerTag } in
+    -- Every member tests its own tag, the last one too: left untested, its
+    -- body's first conditional would read as part of the dispatch.
+    let dispatch = foldr (lam ib. lam els.
+        match ib with (i, stmts) in
+        [ESSIf { cond = ESEBin { op = ESOEq {}, lhs = ESEVar { id = tagVar }
+                               , rhs = ESEInt { value = i } }
+               , thn = stmts, els = els }])
+      [] (mapi (lam i. lam b. (i, b)) bodies) in
+    let loop = ESSWhile { cond = ESEBool { value = true }, body = dispatch } in
+    (ctx, join [ join wrapStmts, map entry tagged
+               , [ESSFunDecl { id = worker, params = cons tagVar allParams
+                             , body = [loop] }] ])
 
   -- Compiles one declaration to the statements that introduce it. Shared by
   -- both compilation modes, so a declaration behaves the same whether it is
@@ -724,21 +833,40 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint + MExprArity
           { ctx with arities = mapInsert b.ident (length params) ctx.arities }
         else ctx)
       ctx d.bindings in
-    let step = lam acc. lam b.
-      match acc with (ctx, stmts) in
-      match esStripDecls b.body with (wrapping, TmLam _ & fn) then
-        -- Declarations wrapping the function are emitted before it. Function
-        -- declarations hoist in JS, so this stays correct even if one of them
-        -- refers back into the group.
+    let funs = map (lam b.
+        match esStripDecls b.body with (wrapping, TmLam _ & fn) then
+          match esCollectLams fn with (params, body) in
+          (b.ident, wrapping, params, body)
+        else errorSingle [b.info] (join
+          [ "ecmascript: a recursive binding must be a function, but "
+          , nameGetStr b.ident, " is bound to ", esExprName b.body ]))
+      d.bindings in
+    let groups = esTailCallGroups funs in
+    let groupOf = foldl (lam m. lam ig.
+        match ig with (i, g) in foldl (lam m. lam n. mapInsert n i m) m g)
+      (mapEmpty nameCmp) (mapi (lam i. lam g. (i, g)) groups) in
+    -- Functions are emitted in their original order, a group where its first
+    -- member was. Declarations wrapping a function are emitted before it.
+    -- Function declarations hoist in JS, so this stays correct even if one of
+    -- them refers back into the group.
+    let step = lam acc. lam f.
+      match acc with (ctx, stmts, emitted) in
+      match f with (name, wrapping, params, body) in
+      let gi = mapFindExn name groupOf in
+      if setMem gi emitted then acc else
+      let emitted = setInsert gi emitted in
+      match get groups gi with [_] then
         match mapAccumL esCompileDecl ctx wrapping with (ctx, wrapStmts) in
-        match esCollectLams fn with (params, body) in
-        match esCompileFun ctx b.ident params body with (ctx, decl) in
-        (ctx, join [stmts, join wrapStmts, [decl]])
-      else errorSingle [b.info] (join
-        [ "ecmascript: a recursive binding must be a function, but "
-        , nameGetStr b.ident, " is bound to ", esExprName b.body ])
+        match esCompileFun ctx name params body with (ctx, decl) in
+        (ctx, join [stmts, join wrapStmts, [decl]], emitted)
+      else
+        let group = setOfSeq nameCmp (get groups gi) in
+        let members = filter (lam m. setMem m.0 group) funs in
+        match esCompileGroup ctx members with (ctx, groupStmts) in
+        (ctx, concat stmts groupStmts, emitted)
     in
-    foldl step (ctx, []) d.bindings
+    match foldl step (ctx, [], setEmpty subi) funs with (ctx, stmts, _) in
+    (ctx, stmts)
   | DeclExt d ->
     -- An external resolves once, where it is declared: to the host's
     -- implementation when `env.externals` supplies one, else to a default
@@ -1333,7 +1461,7 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint + MExprArity
     let ctx = { esCompileCtxEmpty with runtimeEnv = runtimeEnv
               , externalsName = externalsName
               , externalDefaults = defaults } in
-    match compileStmts ctx (ESCDiscard ()) (esInlineJoinPoints (None ()) ast)
+    match compileStmts ctx (ESCDiscard ()) (esInlineJoinPoints (setEmpty nameCmp) ast)
       with (ctx, stmts) in
     -- A host need not supply `externals` at all, so fall back to an empty
     -- object; each external then looks itself up in this one binding.
