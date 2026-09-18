@@ -1,36 +1,42 @@
 lang Base
   syn Expr =
+  syn Value =
+  | VInt Int
+  | VBool Bool
 
   sem eval =
 end
 
 lang Arith = Base
-  syn Expr =
+  syn Expr +=
   | Num Int
-  | Add (Int, Int)
+  | Add (Expr, Expr)
 
-  sem eval =
-  | Num n -> n
+  sem eval +=
+  | Num n -> VInt n
   | Add(t) ->
     let e1 = t.0 in
     let e2 = t.1 in
-    addi (eval e1) (eval e2)
+    match eval e1 with VInt a in
+    match eval e2 with VInt b in
+    VInt (addi a b)
 end
 
 lang MyBool = Base
-  syn Expr =
+  syn Expr +=
   | True ()
   | False ()
   | If(Expr, Expr, Expr)
 
-  sem eval =
-  | True _ -> true
-  | False _ -> false
+  sem eval +=
+  | True _ -> VBool true
+  | False _ -> VBool false
   | If t ->
     let cnd = t.0 in
     let thn = t.1 in
     let els = t.2 in
-    if eval cnd
+    match eval cnd with VBool b in
+    if b
     then eval thn
     else eval els
 end
@@ -38,14 +44,13 @@ end
 lang ArithBool = Arith + MyBool end
 
 lang ArithBool2 = Arith + MyBool
-  syn Expr =
-  | IsZero Int
+  syn Expr +=
+  | IsZero Expr
 
-  sem eval =
+  sem eval +=
   | IsZero n ->
-    if eqi (eval n) 0
-    then true
-    else false
+    match eval n with VInt v in
+    VBool (eqi v 0)
 end
 
 lang User
@@ -54,7 +59,7 @@ lang User
   sem inspect =
   | Unit _ ->
     use Arith in
-    eval (Add (Num 1, Num 2))
+    match eval (Add (Num 1, Num 2)) with VInt n in n
   sem bump (x : Int) =
   | Unit _ -> addi x 1
 end
@@ -73,18 +78,18 @@ lang FooBase
 end
 
 lang FooA = FooBase
-  syn Val =
+  syn Val +=
   | A {}
 
-  sem foo =
+  sem foo +=
   | A _ -> "A"
 end
 
 lang FooB = FooBase
-  syn Val =
+  syn Val +=
   | B {}
 
-  sem foo =
+  sem foo +=
   | B _ -> "B"
 end
 
@@ -95,27 +100,27 @@ lang FooCombined = FooA + FooTrans end
 mexpr
 
 (use ArithBool2 in
-  utest eval (Add (Num 1, Num 2)) with 3 in
+  utest eval (Add (Num 1, Num 2)) with VInt 3 in
   utest eval (If (IsZero (Num 0)
                  ,Num 1
-                 ,Num 2)) with 1
+                 ,Num 2)) with VInt 1
   in
   utest eval (Add (Num 10
                   ,If (IsZero (Add (Num 0, Num 3))
                       ,Num 10
-                      ,Add (Num 5, (Num (negi 2)))))) with 13
+                      ,Add (Num 5, (Num (negi 2)))))) with VInt 13
   in ());
 
 (use ArithBool in
-  utest eval (Add (Num 1, Num 2)) with 3 in
+  utest eval (Add (Num 1, Num 2)) with VInt 3 in
   utest eval (If (True ()
                  ,Num 1
-                 ,Num 2)) with 1
+                 ,Num 2)) with VInt 1
   in
   utest eval (Add (Num 10
                   ,If (False ()
                       ,Num 10
-                      ,Add (Num 5, (Num (negi 2)))))) with 13
+                      ,Add (Num 5, (Num (negi 2)))))) with VInt 13
   in ());
 
 
@@ -125,15 +130,15 @@ mexpr
   ());
 
 (use Overlap in
-  utest eval (Add (Num 1, Num 2)) with 3 in
+  utest eval (Add (Num 1, Num 2)) with VInt 3 in
   utest eval (If (IsZero (Num 0)
                  ,Num 1
-                 ,Num 2)) with 1
+                 ,Num 2)) with VInt 1
   in
   utest eval (Add (Num 10
                   ,If (IsZero (Add (Num 0, Num 3))
                       ,Num 10
-                      ,Add (Num 5, (Num (negi 2)))))) with 13 in
+                      ,Add (Num 5, (Num (negi 2)))))) with VInt 13 in
   ());
 
 let e1 = use ArithBool in If(True(), Num 1, Num 2) in

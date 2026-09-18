@@ -2,6 +2,13 @@
 -- Used in the src/main/compile.mc file.
 
 include "javascript/compile.mc"
+include "map.mc"
+include "string.mc"
+include "javascript/util.mc"
+include "mexpr/ast.mc"
+include "common.mc"
+include "basic-types.mc"
+include "seq.mc"
 
 let platformMapJS = mapFromSeq cmpString
   [("generic", CompileJSTP_Generic ())

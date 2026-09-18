@@ -3,6 +3,8 @@ include "./../global/format.mc"
 include "../naming/name-context.mc"
 
 include "./rendered-map.mc"
+include "docgen/global/logger.mc"
+include "docgen/global/util.mc"
 
 -- The configuration object passed around during rendering.
 type RenderingOptions = use Formats in use FormatLanguages in

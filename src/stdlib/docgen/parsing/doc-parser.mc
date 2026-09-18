@@ -1,4 +1,7 @@
 include "./token-readers.mc"
+include "basic-types.mc"
+include "docgen/parsing/pos.mc"
+include "docgen/global/util.mc"
 
 -- Takes in arguemant the raw code of the file
 -- and output it's documentation if there is one.

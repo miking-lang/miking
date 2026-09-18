@@ -1,3 +1,4 @@
+include "bool.mc"
 include "common.mc"
 include "string.mc"
 

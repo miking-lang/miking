@@ -7,6 +7,11 @@ include "mexpr/info.mc"
 include "mexpr/pprint.mc"
 include "ast.mc"
 include "ast-builder.mc"
+include "seq.mc"
+include "string.mc"
+include "mexpr/ast.mc"
+include "basic-types.mc"
+include "common.mc"
 
 -- Language fragment string parser translation
 let pprintLangString = lam str.
@@ -23,14 +28,14 @@ end
 
 
 lang UsePrettyPrint = PrettyPrint + UseDeclAst + MLangIdentifierPrettyPrint
-  sem pprintDeclCode (indent : Int) (env: PprintEnv) =
+  sem pprintDeclCode (indent : Int) (env: PprintEnv) +=
   | DeclUse t ->
     match pprintLangName env t.ident with (env,ident) in
     (env, join ["use ", ident])
 end
 
 lang TyUsePrettyPrint = MExprPrettyPrint + TyUseAst + MLangIdentifierPrettyPrint
-  sem getTypeStringCode (indent : Int) (env : PprintEnv) =
+  sem getTypeStringCode (indent : Int) (env : PprintEnv) +=
   | TyUse t ->
     match pprintLangName env t.ident with (env, ident) in
     match getTypeStringCode indent env t.inty with (env, inty) in
@@ -38,39 +43,6 @@ lang TyUsePrettyPrint = MExprPrettyPrint + TyUseAst + MLangIdentifierPrettyPrint
                 "in", pprintNewline indent,
                 inty])
 end
-
-lang QualifiedNamePrettyPrint = MExprPrettyPrint + QualifiedTypeAst +
-                                MLangIdentifierPrettyPrint
-  sem getTypeStringCode (indent : Int) (env : PprintEnv) =
-  | TyQualifiedName t ->
-    let prefix = if t.pos then "< " else "> " in
-    match pprintLangName env t.lhs with (env, lhs) in
-    match pprintTypeName env t.rhs with (env, rhs) in
-
-    if and (null t.plus) (null t.minus) then
-      (env, join [prefix, lhs, "::", rhs])
-    else
-      let pprintList = lam env. lam pairs.
-        mapAccumL (lam env. lam pair.
-          match pair with (t, c) in
-          match pprintTypeName env t with (env, t) in
-          match pprintTypeName env c with (env, c) in
-          (env, join [t, "::", c])
-        ) env pairs
-      in
-
-      let plus = if null t.plus then "" else
-        match pprintList env t.plus with (env, plus) in
-        concat " + " (strJoin ", " plus) in
-
-      let minus = if null t.minus then "" else
-        match pprintList env t.minus with (env, minus) in
-        concat " - " (strJoin ", " minus) in
-
-      (env, join [prefix, "(", lhs, "::", rhs, plus, minus, ")"])
-
-end
-
 
 lang LangDeclPrettyPrint = PrettyPrint + LangDeclAst + MLangIdentifierPrettyPrint
   sem pprintDeclSequenceCode : Int -> PprintEnv -> [Decl] -> (PprintEnv, String)
@@ -84,11 +56,11 @@ lang LangDeclPrettyPrint = PrettyPrint + LangDeclAst + MLangIdentifierPrettyPrin
     match declFoldResult with (env, declStrings) in
     (env, strJoin (pprintNewline indent) declStrings)
 
-  sem pprintDeclCode (indent : Int) (env : PprintEnv) =
+  sem pprintDeclCode (indent : Int) (env : PprintEnv) +=
   | DeclLang t ->
     match pprintLangName env t.ident with (env, langNameStr) in
     match
-      mapAccumL pprintLangName env t.includes
+      mapAccumL (lam acc. lam x. pprintLangName acc x.0) env t.includes
     with (env, inclStrs) in
     match pprintDeclSequenceCode (pprintIncr indent) env t.decls
     with (env, declSeqStr) in
@@ -110,7 +82,7 @@ end
 
 
 lang SynDeclPrettyPrint = PrettyPrint + SynDeclAst + DataPrettyPrint
-  sem pprintDeclCode (indent : Int) (env : PprintEnv) =
+  sem pprintDeclCode (indent : Int) (env : PprintEnv) +=
   | DeclSyn t ->
     match pprintTypeName env t.ident with (env, typeNameStr) in
     match mapAccumL pprintEnvGetStr env t.params with (env, params) in
@@ -124,9 +96,9 @@ lang SynDeclPrettyPrint = PrettyPrint + SynDeclAst + DataPrettyPrint
       ) env t.defs
     with (env, defStrings) in
 
-    let eqSym = switch t.declKind
-      case BaseKind _ then " ="
-      case SumExtKind _ then " +="
+    let eqSym = switch t.kind
+      case SynBase _ then " ="
+      case SynSum _ then " +="
     end in
 
     (env, strJoin (pprintNewline indent)
@@ -134,7 +106,7 @@ lang SynDeclPrettyPrint = PrettyPrint + SynDeclAst + DataPrettyPrint
 end
 
 lang SemDeclPrettyPrint = PrettyPrint + SemDeclAst + UnknownTypeAst
-  sem pprintDeclCode (indent : Int) (env : PprintEnv) =
+  sem pprintDeclCode (indent : Int) (env : PprintEnv) +=
   | DeclSem t ->
     match pprintEnvGetStr env t.ident with (env, baseStr) in
     match
@@ -145,37 +117,36 @@ lang SemDeclPrettyPrint = PrettyPrint + SemDeclAst + UnknownTypeAst
       else (env, None ())
     with (env, mDecl) in
     match
-      match (t.args, t.cases) with !(None _, []) then
+      match t.impl with Some impl then
         -- sem impl
         match
-          match t.args with Some args in
-          mapAccumL (lam env. lam arg.
-            match pprintEnvGetStr env arg.ident with (env, baseStr) in
-            match arg.tyAnnot with TyUnknown _ then
+          mapAccumL (lam env. lam param.
+            match pprintEnvGetStr env param.ident with (env, baseStr) in
+            match param.tyAnnot with TyUnknown _ then
               (env, baseStr)
             else
-              match getTypeStringCode indent env arg.tyAnnot with (env, tyStr) in
+              match getTypeStringCode indent env param.tyAnnot with (env, tyStr) in
               (env, join ["(", baseStr, " : ", tyStr, ")"])
-          ) env args
-        with (env, argStrs) in
+          ) env impl.params
+        with (env, paramStrs) in
         match
           mapAccumL (lam env. lam semcase.
             match getPatStringCode (pprintIncr indent) env semcase.pat
             with (env, patStr) in
-            match pprintCode (pprintIncr indent) env semcase.thn
+            match pprintCode (pprintIncr indent) env semcase.body
             with (env, exprStr) in
             (env, join ["| ", patStr, " ->", pprintNewline (pprintIncr indent), exprStr])
-          ) env t.cases
-        with (arg, caseStrs) in
+          ) env impl.cases
+        with (param, caseStrs) in
 
-        let eqSym = switch t.declKind
-          case BaseKind _ then " ="
-          case SumExtKind _ then " +="
+        let eqSym = switch t.kind
+          case SemBase _ then " ="
+          case SemSum _ then " +="
           case _ then "?"
         end in
 
         let final = strJoin (pprintNewline indent) (
-                cons (join ["sem ", baseStr, strJoin " " (cons "" argStrs), eqSym])
+                cons (join ["sem ", baseStr, strJoin " " (cons "" paramStrs), eqSym])
                      caseStrs) in
         (env, Some final)
       else (env, None ())
@@ -185,7 +156,7 @@ end
 
 
 lang IncludeDeclPrettyPrint = PrettyPrint + IncludeDeclAst
-  sem pprintDeclCode (indent : Int) (env : PprintEnv) =
+  sem pprintDeclCode (indent : Int) (env : PprintEnv) +=
   | DeclInclude t -> (env, join ["include \"", escapeString t.path, "\""])
 end
 
@@ -206,7 +177,7 @@ end
 lang MLangPrettyPrint = MExprPrettyPrint +
 
   -- Extended expressions and types
-  UsePrettyPrint + TyUsePrettyPrint + QualifiedNamePrettyPrint +
+  UsePrettyPrint + TyUsePrettyPrint + -- QualifiedNamePrettyPrint +
 
   -- Declarations
   LangDeclPrettyPrint + SynDeclPrettyPrint + SemDeclPrettyPrint +

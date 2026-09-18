@@ -7,6 +7,9 @@ include "./include-set.mc"
 include "./pos.mc"
     
 include "hashmap.mc"
+include "seq.mc"
+include "bool.mc"
+include "char.mc"
 
 -- Interface definition for a generic TokenReader
 lang TokenReaderInterface
@@ -51,19 +54,19 @@ end
     
 -- Reader for multi lignes comments ( /* ... */ style )
 lang MultiLineCommentTokenReader = TokenReaderInterface
-    syn Token =
+    syn Token +=
       | TokenMultiLineComment { content: String, lit: String }
 
-    sem lit =
+    sem lit +=
         | TokenMultiLineComment { lit = lit } -> lit
 
-    sem content =
+    sem content +=
         | TokenMultiLineComment { content = content } -> content
 
-    sem tokenToString =
+    sem tokenToString +=
         | TokenMultiLineComment {} -> "MultiLineComment"
     
-    sem next =
+    sem next +=
         | "/-" ++ str -> lam pos.
             recursive
             let extract =
@@ -92,19 +95,19 @@ end
     
 -- Reader for single-line comments ( -- ... )
 lang CommentTokenReader = TokenReaderInterface
-    syn Token =
+    syn Token +=
       | TokenComment { content: String, lit: String }
 
-    sem lit =
+    sem lit +=
         | TokenComment { lit = lit } -> lit        
 
-    sem content =
+    sem content +=
         | TokenComment { content = content } -> content
 
-    sem tokenToString =
+    sem tokenToString +=
         | TokenComment {} -> "Comment"
     
-    sem next =
+    sem next +=
         | "--" ++ str -> lam pos.
             recursive
             let extract =
@@ -123,16 +126,16 @@ end
 
 -- Reader for string literals ( "..." )
 lang StrTokenReader = TokenReaderInterface
-    syn Token =
+    syn Token +=
       | TokenStr { content: String, between: String }
 
-    sem lit =
+    sem lit +=
         | TokenStr { content = content } -> content
 
-    sem tokenToString =
+    sem tokenToString +=
         | TokenStr {} -> "Str"
     
-    sem next /- : String -> NextResult -/ =
+    sem next /- : String -> NextResult -/ +=
         | "\"" ++ str -> lam pos.
             recursive
             let extract =
@@ -168,16 +171,16 @@ let isSep = lam s. hmMem s separatorMap
 
 -- Reader for words (non-separator sequences)
 lang WordTokenReader = TokenReaderInterface
-    syn Token =
+    syn Token +=
       | TokenWord { content: String }
 
-    sem lit =
+    sem lit +=
         | TokenWord { content = content } -> content
 
-    sem tokenToString =
+    sem tokenToString +=
         | TokenWord {} -> "Word"
     
-    sem next =
+    sem next +=
          | str -> lam pos.
             match str with [x] then
                 let token = TokenWord { content = [x] } in
@@ -210,16 +213,16 @@ end
 
 -- Reader for separators (spaces, newlines, tabs, etc.)
 lang SeparatorTokenReader = TokenReaderInterface
-    syn Token =
+    syn Token +=
       | TokenSeparator { content: String }
 
-    sem lit =
+    sem lit +=
         | TokenSeparator { content = content } -> content
 
-    sem tokenToString =
+    sem tokenToString +=
         | TokenSeparator {} -> "Separator"
     
-    sem next =
+    sem next +=
         | [(' ' | '\t' | '\n' ) & c] ++ str -> lam pos.
             recursive
             let extract =
@@ -235,16 +238,16 @@ end
     
 -- Reader for End-of-File
 lang EofTokenReader = TokenReaderInterface
-    syn Token =
+    syn Token +=
       | TokenEof {}
 
-    sem tokenToString =
+    sem tokenToString +=
         | TokenEof {} -> "Eof"
     
-    sem lit =
+    sem lit +=
         | TokenEof {} -> ""
     
-    sem next =
+    sem next +=
         | ""  -> lam pos.
             {
                 token =TokenEof {},
@@ -275,13 +278,13 @@ end
     
 -- Reader for include directives ( include "file" )
 lang IncludeTokenReader = CommAndSepSkiper
-    syn Token =
+    syn Token +=
         | TokenInclude { content: String, lit: String, skiped: [Token] }
 
-    sem lit =
+    sem lit +=
         | TokenInclude { content = content, lit = lit } -> lit
 
-    sem tokenToString =
+    sem tokenToString +=
         | TokenInclude {} -> "Include"
 
     sem includeNext =
@@ -293,7 +296,7 @@ lang IncludeTokenReader = CommAndSepSkiper
                 parsingWarn "Expected a string literal after `include` directive during lexing.";
                 buildResult (TokenWord { content = concat "include" firstSep }) pos str
 
-    sem next =
+    sem next +=
         | "include " ++ str -> lam pos. includeNext str pos " "
         | "include\n" ++ str -> lam pos. includeNext str pos "\n"
         | "include\t" ++ str -> lam pos. includeNext str pos "\t"
@@ -304,13 +307,13 @@ end
 
 -- This token is not readable but is at the root of a DocTree, the content is the name of the file and the includeSet a set will all the files.
 lang ProgramTokenReader = TokenReaderInterface
-    syn Token =
+    syn Token +=
         | TokenProgram { content: String }
 
-    sem lit =
+    sem lit +=
         | TokenProgram {} -> ""
 
-    sem tokenToString =
+    sem tokenToString +=
         | TokenProgram {} -> "Program"
 end
 

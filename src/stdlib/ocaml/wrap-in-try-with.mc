@@ -9,6 +9,11 @@ include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
 include "ocaml/ast.mc"
 include "either.mc"
+include "basic-types.mc"
+include "mexpr/info.mc"
+include "name.mc"
+include "map.mc"
+include "stringid.mc"
 
 lang OCamlTryWithWrap = MExprAst + OCamlAst
   sem wrapTopInTryWith : Top -> Either Decl Top

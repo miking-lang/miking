@@ -2,8 +2,10 @@
 -- making sure that the results match.
 
 include "result.mc"
+include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/boot-parser.mc"
+include "mexpr/eq.mc"
 include "mexpr/eval.mc"
 include "mexpr/pprint.mc"
 include "mexpr/symbolize.mc"

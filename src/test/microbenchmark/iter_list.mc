@@ -1,6 +1,6 @@
 
 include "benchmarkcommon.mc"
-include "iter.ml"
+include "iter.mc"
 
 mexpr
 

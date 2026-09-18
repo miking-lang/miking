@@ -1,4 +1,11 @@
 include "digraph.mc"
+include "map.mc"
+include "bool.mc"
+include "seq.mc"
+include "set.mc"
+include "basic-types.mc"
+include "eqset.mc"
+include "string.mc"
 
 -- Represents a graph with labeled edges.
 

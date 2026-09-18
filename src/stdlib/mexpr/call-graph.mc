@@ -7,6 +7,12 @@ include "mexpr/ast.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type-check.mc"
+include "name.mc"
+include "error.mc"
+include "seq.mc"
+include "map.mc"
+include "set.mc"
+include "basic-types.mc"
 
 lang MExprCallGraph = MExprAst
   sem constructCallGraph =

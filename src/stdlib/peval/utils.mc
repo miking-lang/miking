@@ -10,6 +10,12 @@ include "mexpr/utils.mc"
 include "mexpr/ast.mc"
 
 include "set.mc"
+include "map.mc"
+include "name.mc"
+include "string.mc"
+include "seq.mc"
+include "bool.mc"
+include "basic-types.mc"
 
 lang SpecializeUtils = SpecializeAst + SpecializeInclude + MExprFindSym
 

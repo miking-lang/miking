@@ -5,6 +5,13 @@ include "string.mc"
 include "mexpr/ast.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/symbolize.mc"
+include "name.mc"
+include "option.mc"
+include "basic-types.mc"
+include "seq.mc"
+include "mexpr/pprint.mc"
+include "mexpr/ast-builder.mc"
+include "bool.mc"
 
 lang MExprSubstitute = MExprAst
   -- Applies the substitutions of the provided map to the identifiers of the

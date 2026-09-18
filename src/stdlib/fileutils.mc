@@ -3,6 +3,8 @@ include "seq.mc"
 include "string.mc"
 include "sys.mc"
 include "common.mc"
+include "basic-types.mc"
+include "bool.mc"
 
 let filepathConcat : String -> String -> String = lam dir. lam path.
   if eqc '/' (last dir) then

@@ -9,31 +9,45 @@ include "mexpr/invariants.mc"
 include "mexpr/invariants/in-scope.mc"
 
 include "mexpr/cmp.mc"
+include "map.mc"
+include "name.mc"
+include "thunk.mc"
+include "common.mc"
+include "seq.mc"
+include "string.mc"
+include "set.mc"
+include "mexpr/info.mc"
+include "tuple.mc"
+include "lazy.mc"
+include "mexpr/ast-builder.mc"
 
 lang DefinedAttr = Invariant + MExprAst + DeclaredHereAttr
   type DefinedAttr loc = Map Name [loc]
-  syn Attr loc =
+  syn Attr loc +=
   | DefinedAttr (Thunk (DefinedAttr loc))
 
-  sem newAttr label =
+  sem newAttr label +=
   | DefinedAttr _ -> DefinedAttr (mkThunk label)
 
-  sem attrKindToString =
+  sem attrKindToString +=
   | DefinedAttr _ -> "DefinedAttr"
 
-  sem printInvariantSummary =
+  sem printInvariantSummary +=
   | DefinedAttr x ->
     let start = wallTimeMs () in
     let x = x.read () in
     let timeMs = subf (wallTimeMs ()) start in
-    let numNoSym =
-      mapFoldWithKey (lam n. lam k. lam. if nameHasSym k then n else addi n 1) 0 x in
-    let numMultiDef = mapFoldWithKey
-      (lam n. lam. lam defs. match defs with [_, _] ++ _ then addi n 1 else n) 0 x in
+    let noSym =
+      mapFoldWithKey (lam ex. lam k. lam. if nameHasSym k then ex else exampleAdd k ex) (exampleSeqEmpty 3) x in
+    let multiDef = mapFoldWithKey
+      (lam ex. lam n. lam defs. match defs with [_, _] ++ _ then exampleAdd (n, defs) ex else ex) (exampleSeqEmpty 3) x in
+    let multiDefToStr = lam pair.
+      match pair with (n, defs) in
+      join [nameGetStr n, "", strJoin "\n" (map (invariantLoc2Str "      ") defs)] in
     printLn (join
-      [ "  Definitions: ", int2string numNoSym, " names without symbols, "
-      , int2string numMultiDef, " with multiple definitions ("
-      , float2string timeMs, "ms)."
+      [ "  Definitions: ", int2string (exampleCount noSym), " names without symbols", examplesToShortStr nameGetStr noSym, ", "
+      , int2string (exampleCount multiDef), " with multiple definitions ("
+      , float2string timeMs, "ms).", examplesToLongStr "Multi-def examples:" multiDefToStr multiDef
       ])
 
   sem openDefinedAttr : all loc. Attr loc -> Thunk (DefinedAttr loc)
@@ -65,7 +79,7 @@ lang DefinedAttr = Invariant + MExprAst + DeclaredHereAttr
   | TyAll x -> mapInsertWith concat x.ident [loc]
   | _ -> lam x. x
 
-  sem processAttrDecl env st loc =
+  sem processAttrDecl env st loc +=
   | pair & (_, DefinedAttr _) ->
     simpleSynthesizedDecl st
       pair
@@ -74,7 +88,7 @@ lang DefinedAttr = Invariant + MExprAst + DeclaredHereAttr
       (mapUnionWith concat)
       (lam x. x)
 
-  sem processAttrExpr env st loc =
+  sem processAttrExpr env st loc +=
   | (TmMatch x, attr & DefinedAttr here) ->
     match willWrite st here with (st, writeHere) in
     match willRead st (openDefinedAttr (getAttrExpr attr x.target)) with (st, readTarget) in
@@ -97,7 +111,7 @@ lang DefinedAttr = Invariant + MExprAst + DeclaredHereAttr
       (mapUnionWith concat)
       addHere
 
-  sem processAttrType env st loc =
+  sem processAttrType env st loc +=
   | pair & (ty, DefinedAttr _) ->
     simpleSynthesizedType st
       pair

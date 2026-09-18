@@ -21,6 +21,11 @@ include "./objects-renderer.mc"
 
 include "mexpr/type-check.mc"
 include "mexpr/pprint.mc"
+include "docgen/parsing/token-readers.mc"
+include "mexpr/type.mc"
+include "docgen/rendering/renderers/headers/search.mc"
+include "basic-types.mc"
+include "seq.mc"
 
 lang RendererInterface = 
     Formats + ObjectsRenderer + TokenReader + SourceCodeWordKinds + 

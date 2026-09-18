@@ -5,17 +5,17 @@ lang ConstArity = ConstAst
 end
 
 lang UnsafeCoerceArity = ConstArity + UnsafeCoerceAst
-  sem constArity =
+  sem constArity +=
   | CUnsafeCoerce _ -> 1
 end
 
 lang IntArity = ConstArity + IntAst
-  sem constArity =
+  sem constArity +=
   | CInt _ -> 0
 end
 
 lang ArithIntArity = ConstArity + ArithIntAst
-  sem constArity =
+  sem constArity +=
   | CAddi _ -> 2
   | CSubi _ -> 2
   | CMuli _ -> 2
@@ -25,19 +25,19 @@ lang ArithIntArity = ConstArity + ArithIntAst
 end
 
 lang ShiftIntArity = ConstArity + ShiftIntAst
-  sem constArity =
+  sem constArity +=
   | CSlli _ -> 2
   | CSrli _ -> 2
   | CSrai _ -> 2
 end
 
 lang FloatArity = ConstArity + FloatAst
-  sem constArity =
+  sem constArity +=
   | CFloat _ -> 0
 end
 
 lang ArithFloatArity = ConstArity + ArithFloatAst
-  sem constArity =
+  sem constArity +=
   | CAddf _ -> 2
   | CSubf _ -> 2
   | CMulf _ -> 2
@@ -46,7 +46,7 @@ lang ArithFloatArity = ConstArity + ArithFloatAst
 end
 
 lang FloatIntConversionArity = ConstArity + FloatIntConversionAst
-  sem constArity =
+  sem constArity +=
   | CFloorfi _ -> 1
   | CCeilfi _ -> 1
   | CRoundfi _ -> 1
@@ -54,12 +54,12 @@ lang FloatIntConversionArity = ConstArity + FloatIntConversionAst
 end
 
 lang BoolArity = ConstArity + BoolAst
-  sem constArity =
+  sem constArity +=
   | CBool _ -> 0
 end
 
 lang CmpIntArity = ConstArity + CmpIntAst
-  sem constArity =
+  sem constArity +=
   | CEqi _ -> 2
   | CNeqi _ -> 2
   | CLti _ -> 2
@@ -69,7 +69,7 @@ lang CmpIntArity = ConstArity + CmpIntAst
 end
 
 lang CmpFloatArity = ConstArity + CmpFloatAst
-  sem constArity =
+  sem constArity +=
   | CEqf _ -> 2
   | CLtf _ -> 2
   | CLeqf _ -> 2
@@ -79,42 +79,42 @@ lang CmpFloatArity = ConstArity + CmpFloatAst
 end
 
 lang CharArity = ConstArity + CharAst
-  sem constArity =
+  sem constArity +=
   | CChar _ -> 0
 end
 
 lang CmpCharArity = ConstArity + CmpCharAst
-  sem constArity =
+  sem constArity +=
   | CEqc _ -> 2
 end
 
 lang IntCharConversionArity = ConstArity + IntCharConversionAst
-  sem constArity =
+  sem constArity +=
   | CInt2Char _ -> 1
   | CChar2Int _ -> 1
 end
 
 lang FloatStringConversionArity = ConstArity+ FloatStringConversionAst
-  sem constArity =
+  sem constArity +=
   | CStringIsFloat _ -> 1
   | CString2float _ -> 1
   | CFloat2string _ -> 1
 end
 
 lang SymbArity = ConstArity + SymbAst
-  sem constArity =
+  sem constArity +=
   | CSymb _ -> 0
   | CGensym _ -> 1
   | CSym2hash _ -> 1
 end
 
 lang CmpSymbArity = ConstArity + CmpSymbAst
-  sem constArity =
+  sem constArity +=
   | CEqsym _ -> 2
 end
 
 lang SeqOpArity = ConstArity + SeqOpAst
-  sem constArity =
+  sem constArity +=
   | CSet _ -> 3
   | CGet _ -> 2
   | CCons _ -> 2
@@ -141,7 +141,7 @@ lang SeqOpArity = ConstArity + SeqOpAst
 end
 
 lang FileOpArity = ConstArity + FileOpAst
-  sem constArity =
+  sem constArity +=
   | CFileRead _ -> 1
   | CFileWrite _ -> 2
   | CFileExists _ -> 1
@@ -149,7 +149,7 @@ lang FileOpArity = ConstArity + FileOpAst
 end
 
 lang IOArity = ConstArity + IOAst
-  sem constArity =
+  sem constArity +=
   | CPrint _ -> 1
   | CPrintError _ -> 1
   | CDPrint _ -> 1
@@ -160,13 +160,13 @@ lang IOArity = ConstArity + IOAst
 end
 
 lang RandomNumberGeneratorArity = ConstArity + RandomNumberGeneratorAst
-  sem constArity =
+  sem constArity +=
   | CRandIntU _ -> 2
   | CRandSetSeed _ -> 1
 end
 
 lang SysArity = ConstArity + SysAst
-  sem constArity =
+  sem constArity +=
   | CExit _ -> 1
   | CError _ -> 1
   | CArgv _ -> 0
@@ -175,30 +175,30 @@ lang SysArity = ConstArity + SysAst
 end
 
 lang TimeArity = ConstArity + TimeAst
-  sem constArity =
+  sem constArity +=
   | CWallTimeMs _ -> 1
   | CSleepMs _ -> 1
 end
 
 lang ConTagArity = ConstArity + ConTagAst
-  sem constArity =
+  sem constArity +=
   | CConstructorTag _ -> 1
 end
 
 lang TypeOpArity = ConstArity + TypeOpAst
-  sem constArity =
+  sem constArity +=
   | CTypeOf _ -> 1
 end
 
 lang RefOpArity = ConstArity + RefOpAst
-  sem constArity =
+  sem constArity +=
   | CRef _ -> 1
   | CModRef _ -> 2
   | CDeRef _ -> 1
 end
 
 lang TensorOpArity = ConstArity + TensorOpAst
-  sem constArity =
+  sem constArity +=
   | CTensorCreateUninitInt _ -> 1
   | CTensorCreateUninitFloat _ -> 1
   | CTensorCreateInt _ -> 2
@@ -221,7 +221,7 @@ lang TensorOpArity = ConstArity + TensorOpAst
 end
 
 lang BootParserArity = ConstArity + BootParserAst
-  sem constArity =
+  sem constArity +=
   | CBootParserParseMExprString _ -> 3
   | CBootParserParseMLangString _ -> 1
   | CBootParserParseMLangFile _ -> 1

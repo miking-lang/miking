@@ -5,8 +5,10 @@
 -- structure representing the file and its includes.
 
 include "../parsing/token-readers.mc"
+include "../parsing/pos.mc"
 include "../global/ext-utils.mc"
 include "sys.mc"
+include "basic-types.mc"
 
 -- Represents a parsed file header, including its includes, header tokens, and full text.
 type ParsingFile = use TokenReader in {
@@ -23,7 +25,7 @@ let parsingFileEmpty = { includes = [], fileText = "", headerTokens = [] }
 -- Header tokens are limited to includes, comments, and separators.
 -- Parsing stops at the first non-header token.
 let parsingOpenFile : String -> Option ParsingFile = use TokenReader in lam file.
-    
+
     recursive let work : String -> Pos -> ParsingFile -> ParsingFile = lam s. lam pos. lam acc.
         match next s pos with { stream = stream, token = token, pos = pos } in
         let go = lam acc. work stream pos { acc with headerTokens = cons { token = token, pos = pos } acc.headerTokens } in
@@ -34,7 +36,7 @@ let parsingOpenFile : String -> Option ParsingFile = use TokenReader in lam file
         case _ then { includes = reverse acc.includes, headerTokens = reverse acc.headerTokens, fileText = s }
         end
     in
-    
+
     match docgenFileReadOpen file with Some rc then
         let s = docgenFileReadString rc in
         docgenFileReadClose rc;

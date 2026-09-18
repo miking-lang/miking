@@ -5,6 +5,10 @@ include "javascript/intrinsics.mc"
 include "name.mc"
 include "bool.mc"
 include "set.mc"
+include "seq.mc"
+include "mexpr/info.mc"
+include "basic-types.mc"
+include "error.mc"
 
 
 -- Block Optimizations

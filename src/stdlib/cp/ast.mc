@@ -32,12 +32,12 @@ end
 -------------
 
 lang COPDomainIntRangeAst = COPAst
-  syn COPDomain =
+  syn COPDomain +=
   | COPDomainIntRange { min: COPExpr, max: COPExpr }
 end
 
 lang COPDomainBooleanAst = COPAst
-  syn COPDomain =
+  syn COPDomain +=
   | COPDomainBoolean {}
 end
 
@@ -46,13 +46,13 @@ end
 ---------------
 
 lang COPVarDeclAst = COPAst
-  syn COPDecl =
+  syn COPDecl +=
   | COPVarDecl { id: Name,
                  domain: COPDomain }
 end
 
 lang COPVarArrayDeclAst = COPAst
-  syn COPDecl =
+  syn COPDecl +=
   | COPVarArrayDecl { id: Name,
                       domain: COPDomain,
                       length: COPExpr }
@@ -64,31 +64,31 @@ end
 
 lang COPConstraintDeclAst = COPAst
   syn COPConstraint =
-  syn COPDecl =
+  syn COPDecl +=
   | COPConstraintDecl { constraint: COPConstraint }
 end
 
 -- Table constraint
 lang COPConstraintTableAst = COPConstraintDeclAst
-  syn COPConstraint =
+  syn COPConstraint +=
   | COPConstraintTable { vars: COPExpr, tuples: COPExpr }
 end
 
 -- Reified table constraint: table('vars', 'tuples') <=> 'b'
 lang COPConstraintTableReifAst = COPConstraintDeclAst
-  syn COPConstraint =
+  syn COPConstraint +=
   | COPConstraintTableReif { vars: COPExpr, tuples: COPExpr, b: COPExpr }
 end
 
 -- Constrain 'lhs' to be smaller or equal to 'rhs'
 lang COPConstraintLEAst = COPConstraintDeclAst
-  syn COPConstraint =
+  syn COPConstraint +=
   | COPConstraintLE { lhs: COPExpr, rhs: COPExpr }
 end
 
 -- Constrain 'lhs' to be smaller than 'rhs'
 lang COPConstraintLTAst = COPConstraintDeclAst
-  syn COPConstraint =
+  syn COPConstraint +=
   | COPConstraintLT { lhs: COPExpr, rhs: COPExpr }
 end
 
@@ -97,23 +97,23 @@ end
 ----------------
 
 lang COPObjectiveMinimizeAst = COPAst
-  syn COPObjective =
+  syn COPObjective +=
   | COPMinimize { expr: COPExpr }
 
-  sem isOptimization =
+  sem isOptimization +=
   | COPMinimize _ -> true
 end
 
 lang COPObjectiveMaximizeAst = COPAst
-  syn COPObjective =
+  syn COPObjective +=
   | COPMaximize { expr: COPExpr }
 
-  sem isOptimization =
+  sem isOptimization +=
   | COPMaximize _ -> true
 end
 
 lang COPObjectiveSatisfyAst = COPAst
-  syn COPObjective =
+  syn COPObjective +=
   | COPSatisfy {}
 end
 
@@ -122,32 +122,32 @@ end
 -----------------
 
 lang COPExprSumAst = COPAst
-  syn COPExpr =
+  syn COPExpr +=
   | COPExprSum { expr: COPExpr }
 end
 
 lang COPExprVarAst = COPAst
-  syn COPExpr =
+  syn COPExpr +=
   | COPExprVar { id: Name }
 end
 
 lang COPExprVarAccessAst = COPAst
-  syn COPExpr =
+  syn COPExpr +=
   | COPExprVarAccess { id: Name, index: COPExpr }
 end
 
 lang COPExprIntAst = COPAst
-  syn COPExpr =
+  syn COPExpr +=
   | COPExprInt { value: Int }
 end
 
 lang COPExprArrayAst = COPAst
-  syn COPExpr =
+  syn COPExpr +=
   | COPExprArray { array: [COPExpr] }
 end
 
 lang COPExprArray2dAst = COPAst
-  syn COPExpr =
+  syn COPExpr +=
   | COPExprArray2d { array: [[COPExpr]] }
 end
 

@@ -5,6 +5,13 @@ include "ast-builder.mc"
 include "repr-ast.mc"
 
 include "pprint.mc"
+include "error.mc"
+include "name.mc"
+include "seq.mc"
+include "map.mc"
+include "stringid.mc"
+include "basic-types.mc"
+include "set.mc"
 
 -------------------
 -- BASE FRAGMENT --
@@ -83,13 +90,13 @@ end
 -----------
 
 lang VarCmp = Cmp + VarAst
-  sem cmpExprH =
+  sem cmpExprH +=
   | (TmVar l, TmVar r) ->
     nameCmp l.ident r.ident
 end
 
 lang AppCmp = Cmp + AppAst
-  sem cmpExprH =
+  sem cmpExprH +=
   | (TmApp l, TmApp r) ->
     let lhsDiff = cmpExpr l.lhs r.lhs in
     if eqi lhsDiff 0 then cmpExpr l.rhs r.rhs
@@ -97,7 +104,7 @@ lang AppCmp = Cmp + AppAst
 end
 
 lang LamCmp = Cmp + LamAst
-  sem cmpExprH =
+  sem cmpExprH +=
   | (TmLam l, TmLam r) ->
     let identDiff = nameCmp l.ident r.ident in
     if eqi identDiff 0 then cmpExpr l.body r.body
@@ -105,7 +112,7 @@ lang LamCmp = Cmp + LamAst
 end
 
 lang DeclCmp = Cmp + DeclAst
-  sem cmpExprH =
+  sem cmpExprH +=
   | (TmDecl l, TmDecl r) ->
     let res = cmpDecl l.decl r.decl in
     if neqi res 0 then res else
@@ -123,29 +130,29 @@ lang LetBindingCmp = Cmp + LetDeclAst
 end
 
 lang LetCmp = Cmp + LetDeclAst + LetBindingCmp
-  sem cmpDeclH =
+  sem cmpDeclH +=
   | (DeclLet l, DeclLet r) ->
     cmpLetBindRec l r
 end
 
 lang RecLetsCmp = Cmp + RecLetsDeclAst + LetBindingCmp
-  sem cmpDeclH =
+  sem cmpDeclH +=
   | (DeclRecLets l, DeclRecLets r) ->
     seqCmp cmpLetBindRec l.bindings r.bindings
 end
 
 lang ConstCmp = Cmp + ConstAst
-  sem cmpExprH =
+  sem cmpExprH +=
   | (TmConst l, TmConst r) -> cmpConst l.val r.val
 end
 
 lang SeqCmp = Cmp + SeqAst
-  sem cmpExprH =
+  sem cmpExprH +=
   | (TmSeq l, TmSeq r) -> seqCmp cmpExpr l.tms r.tms
 end
 
 lang RecordCmp = Cmp + RecordAst
-  sem cmpExprH =
+  sem cmpExprH +=
   | (TmRecord l, TmRecord r) -> mapCmp cmpExpr l.bindings r.bindings
   | (TmRecordUpdate l, TmRecordUpdate r) ->
     let recDiff = cmpExpr l.rec r.rec in
@@ -157,7 +164,7 @@ lang RecordCmp = Cmp + RecordAst
 end
 
 lang TypeCmp = Cmp + TypeDeclAst
-  sem cmpDeclH =
+  sem cmpDeclH +=
   | (DeclType l, DeclType r) ->
     let identDiff = nameCmp l.ident r.ident in
     if eqi identDiff 0 then
@@ -166,13 +173,13 @@ lang TypeCmp = Cmp + TypeDeclAst
 end
 
 lang DataCmp = Cmp + DataAst + DataDeclAst
-  sem cmpExprH =
+  sem cmpExprH +=
   | (TmConApp l, TmConApp r) ->
     let identDiff = nameCmp l.ident r.ident in
     if eqi identDiff 0 then cmpExpr l.body r.body
     else identDiff
 
-  sem cmpDeclH =
+  sem cmpDeclH +=
   | (DeclConDef l, DeclConDef r) ->
     let identDiff = nameCmp l.ident r.ident in
     if eqi identDiff 0 then
@@ -181,7 +188,7 @@ lang DataCmp = Cmp + DataAst + DataDeclAst
 end
 
 lang MatchCmp = Cmp + MatchAst
-  sem cmpExprH =
+  sem cmpExprH +=
   | (TmMatch l, TmMatch r) ->
     let targetDiff = cmpExpr l.target r.target in
     if eqi targetDiff 0 then
@@ -195,7 +202,7 @@ lang MatchCmp = Cmp + MatchAst
 end
 
 lang UtestCmp = Cmp + UtestDeclAst
-  sem cmpDeclH =
+  sem cmpDeclH +=
   | (DeclUtest l, DeclUtest r) ->
     let testDiff = cmpExpr l.test r.test in
     if eqi testDiff 0 then
@@ -222,12 +229,12 @@ lang UtestCmp = Cmp + UtestDeclAst
 end
 
 lang NeverCmp = Cmp + NeverAst
-  sem cmpExprH =
+  sem cmpExprH +=
   | (TmNever _, TmNever _) -> 0
 end
 
 lang ExtCmp = Cmp + ExtDeclAst
-  sem cmpDeclH =
+  sem cmpDeclH +=
   | (DeclExt l, DeclExt r) ->
     let identDiff = nameCmp l.ident r.ident in
     if eqi identDiff 0 then
@@ -245,12 +252,12 @@ end
 ---------------
 
 lang IntCmp = Cmp + IntAst
-  sem cmpConstH =
+  sem cmpConstH +=
   | (CInt l, CInt r) -> subi l.val r.val
 end
 
 lang FloatCmp = Cmp + FloatAst
-  sem cmpConstH =
+  sem cmpConstH +=
   | (CFloat l, CFloat r) ->
     let x = subf l.val r.val in
     if gtf x 0.0 then 1
@@ -259,7 +266,7 @@ lang FloatCmp = Cmp + FloatAst
 end
 
 lang BoolCmp = Cmp + BoolAst
-  sem cmpConstH =
+  sem cmpConstH +=
   | (CBool l, CBool r) ->
     let lval = if l.val then 1 else 0 in
     let rval = if r.val then 1 else 0 in
@@ -267,12 +274,12 @@ lang BoolCmp = Cmp + BoolAst
 end
 
 lang CharCmp = Cmp + CharAst
-  sem cmpConstH =
+  sem cmpConstH +=
   | (CChar l, CChar r) -> subi (char2int l.val) (char2int r.val)
 end
 
 lang SymbCmp = Cmp + SymbAst
-  sem cmpConstH =
+  sem cmpConstH +=
   | (CSymb l, CSymb r) -> subi (sym2hash l.val) (sym2hash r.val)
 end
 
@@ -289,17 +296,17 @@ lang PatNameCmp = Cmp
 end
 
 lang NamedPatCmp = Cmp + NamedPat + PatNameCmp
-  sem cmpPatH =
+  sem cmpPatH +=
   | (PatNamed l, PatNamed r) -> cmpPatName (l.ident, r.ident)
 end
 
 lang SeqTotPatCmp = Cmp + SeqTotPat
-  sem cmpPatH =
+  sem cmpPatH +=
   | (PatSeqTot l, PatSeqTot r) -> seqCmp cmpPat l.pats r.pats
 end
 
 lang SeqEdgePatCmp = Cmp + SeqEdgePat + PatNameCmp
-  sem cmpPatH =
+  sem cmpPatH +=
   | (PatSeqEdge l, PatSeqEdge r) ->
     let prefixDiff = seqCmp cmpPat l.prefix r.prefix in
     if eqi prefixDiff 0 then
@@ -311,12 +318,12 @@ lang SeqEdgePatCmp = Cmp + SeqEdgePat + PatNameCmp
 end
 
 lang RecordPatCmp = Cmp + RecordPat
-  sem cmpPatH =
+  sem cmpPatH +=
   | (PatRecord l, PatRecord r) -> mapCmp cmpPat l.bindings r.bindings
 end
 
 lang DataPatCmp = Cmp + DataPat
-  sem cmpPatH =
+  sem cmpPatH +=
   | (PatCon l, PatCon r) ->
     let identDiff = nameCmp l.ident r.ident in
     if eqi identDiff 0 then
@@ -325,17 +332,17 @@ lang DataPatCmp = Cmp + DataPat
 end
 
 lang IntPatCmp = Cmp + IntPat
-  sem cmpPatH =
+  sem cmpPatH +=
   | (PatInt l, PatInt r) -> subi l.val r.val
 end
 
 lang CharPatCmp = Cmp + CharPat
-  sem cmpPatH =
+  sem cmpPatH +=
   | (PatChar l, PatChar r) -> subi (char2int l.val) (char2int r.val)
 end
 
 lang BoolPatCmp = Cmp + BoolPat
-  sem cmpPatH =
+  sem cmpPatH +=
   | (PatBool l, PatBool r) ->
     let lval = if l.val then 1 else 0 in
     let rval = if r.val then 1 else 0 in
@@ -343,7 +350,7 @@ lang BoolPatCmp = Cmp + BoolPat
 end
 
 lang AndPatCmp = Cmp + AndPat
-  sem cmpPatH =
+  sem cmpPatH +=
   | (PatAnd l, PatAnd r) ->
     let lpatDiff = cmpPat l.lpat r.lpat in
     if eqi lpatDiff 0 then cmpPat l.rpat r.rpat
@@ -351,7 +358,7 @@ lang AndPatCmp = Cmp + AndPat
 end
 
 lang OrPatCmp = Cmp + OrPat
-  sem cmpPatH =
+  sem cmpPatH +=
   | (PatOr l, PatOr r) ->
     let lpatDiff = cmpPat l.lpat r.lpat in
     if eqi lpatDiff 0 then cmpPat l.rpat r.rpat
@@ -359,7 +366,7 @@ lang OrPatCmp = Cmp + OrPat
 end
 
 lang NotPatCmp = Cmp + NotPat
-  sem cmpPatH =
+  sem cmpPatH +=
   | (PatNot l, PatNot r) -> cmpPat l.subpat r.subpat
 end
 
@@ -368,32 +375,32 @@ end
 -----------
 
 lang UnknownTypeCmp = Cmp + UnknownTypeAst
-  sem cmpTypeH =
+  sem cmpTypeH +=
   | (TyUnknown _, TyUnknown _) -> 0
 end
 
 lang BoolTypeCmp = Cmp + BoolTypeAst
-  sem cmpTypeH =
+  sem cmpTypeH +=
   | (TyBool _, TyBool _) -> 0
 end
 
 lang IntTypeCmp = Cmp + IntTypeAst
-  sem cmpTypeH =
+  sem cmpTypeH +=
   | (TyInt _, TyInt _) -> 0
 end
 
 lang FloatTypeCmp = Cmp + FloatTypeAst
-  sem cmpTypeH =
+  sem cmpTypeH +=
   | (TyFloat _, TyFloat _) -> 0
 end
 
 lang CharTypeCmp = Cmp + CharTypeAst
-  sem cmpTypeH =
+  sem cmpTypeH +=
   | (TyChar _, TyChar _) -> 0
 end
 
 lang FunTypeCmp = Cmp + FunTypeAst
-  sem cmpTypeH =
+  sem cmpTypeH +=
   | (TyArrow t1, TyArrow t2) ->
     let fromDiff = cmpType t1.from t2.from in
     if eqi fromDiff 0 then cmpType t1.to t2.to
@@ -401,27 +408,27 @@ lang FunTypeCmp = Cmp + FunTypeAst
 end
 
 lang SeqTypeCmp = Cmp + SeqTypeAst
-  sem cmpTypeH =
+  sem cmpTypeH +=
   | (TySeq { ty = t1 }, TySeq { ty = t2 }) -> cmpType t1 t2
 end
 
 lang TensorTypeCmp = Cmp + TensorTypeAst
-  sem cmpTypeH =
+  sem cmpTypeH +=
   | (TyTensor { ty = t1 }, TyTensor { ty = t2 }) -> cmpType t1 t2
 end
 
 lang RecordTypeCmp = Cmp + RecordTypeAst
-  sem cmpTypeH =
+  sem cmpTypeH +=
   | (TyRecord t1, TyRecord t2) -> mapCmp cmpType t1.fields t2.fields
 end
 
 lang VariantTypeCmp = Cmp + VariantTypeAst
-  sem cmpTypeH =
+  sem cmpTypeH +=
   | (TyVariant t1, TyVariant t2) -> mapCmp cmpType t1.constrs t2.constrs
 end
 
 lang ConTypeCmp = Cmp + ConTypeAst
-  sem cmpTypeH =
+  sem cmpTypeH +=
   | (TyCon t1, TyCon t2) ->
     let nameDiff = nameCmp t1.ident t2.ident in
     if eqi nameDiff 0 then cmpType t1.data t2.data
@@ -429,18 +436,18 @@ lang ConTypeCmp = Cmp + ConTypeAst
 end
 
 lang DataTypeCmp = Cmp + DataTypeAst
-  sem cmpTypeH =
+  sem cmpTypeH +=
   | (TyData l, TyData r) ->
     mapCmp setCmp (computeData l) (computeData r)
 end
 
 lang VarTypeCmp = Cmp + VarTypeAst
-  sem cmpTypeH =
+  sem cmpTypeH +=
   | (TyVar t1, TyVar t2) -> nameCmp t1.ident t2.ident
 end
 
 lang AllTypeCmp = Cmp + AllTypeAst
-  sem cmpTypeH =
+  sem cmpTypeH +=
   | (TyAll t1, TyAll t2) ->
     let identDiff = nameCmp t1.ident t2.ident in
     if eqi identDiff 0 then
@@ -452,7 +459,7 @@ lang AllTypeCmp = Cmp + AllTypeAst
 end
 
 lang AppTypeCmp = Cmp + AppTypeAst
-  sem cmpTypeH =
+  sem cmpTypeH +=
   | (TyApp t1, TyApp t2) ->
     let lhsDiff = cmpType t1.lhs t2.lhs in
     if eqi lhsDiff 0 then cmpType t1.rhs t2.rhs
@@ -460,18 +467,18 @@ lang AppTypeCmp = Cmp + AppTypeAst
 end
 
 lang AliasTypeCmp = Cmp + AliasTypeAst
-  sem cmpTypeH =
+  sem cmpTypeH +=
   | (TyAlias t1, ty2) -> cmpTypeH (t1.content, ty2)
   | (ty1 & !TyAlias _, TyAlias t2) -> cmpTypeH (ty1, t2.content)
 end
 
 lang TyWildCmp = Cmp + TyWildAst
-  sem cmpTypeH =
+  sem cmpTypeH +=
   | (TyWild _, TyWild _) -> 0
 end
 
 lang ReprTypeCmp = Cmp + ReprTypeAst
-  sem cmpTypeH =
+  sem cmpTypeH +=
   | (TyRepr l, TyRepr r) ->
     let lRep = deref (botRepr l.repr) in
     let rRep = deref (botRepr r.repr) in
@@ -486,7 +493,7 @@ lang ReprTypeCmp = Cmp + ReprTypeAst
 end
 
 lang ReprSubstCmp = Cmp + ReprSubstAst
-  sem cmpTypeH =
+  sem cmpTypeH +=
   | (TySubst l, TySubst r) ->
     let res = nameCmp l.subst r.subst in
     if neqi 0 res then res else
@@ -494,19 +501,19 @@ lang ReprSubstCmp = Cmp + ReprSubstAst
 end
 
 lang BaseKindCmp = Cmp + MonoKindAst + PolyKindAst
-  sem cmpKind =
+  sem cmpKind +=
   | (Mono (), Mono ()) -> 0
   | (Poly (), Poly ()) -> 0
 end
 
 lang RecordKindCmp = Cmp + RecordKindAst
-  sem cmpKind =
+  sem cmpKind +=
   | (Record l, Record r) ->
     mapCmp cmpType l.fields r.fields
 end
 
 lang DataKindCmp = Cmp + DataKindAst
-  sem cmpKind =
+  sem cmpKind +=
   | (Data l, Data r) ->
     let recCmp = lam r1. lam r2.
       let lowerDiff = setCmp r1.lower r2.lower in

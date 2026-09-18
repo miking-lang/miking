@@ -7,6 +7,16 @@ include "mexpr/cmp.mc"
 include "mexpr/eq.mc"
 include "mexpr/type-check.mc"
 include "mexpr/pprint.mc"
+include "int.mc"
+include "mexpr/ast.mc"
+include "map.mc"
+include "set.mc"
+include "name.mc"
+include "option.mc"
+include "basic-types.mc"
+include "seq.mc"
+include "mexpr/symbolize.mc"
+include "mexpr/ast-builder.mc"
 
 type PosIndex = Int
 type ProgramPos = [PosIndex]
@@ -141,7 +151,7 @@ lang CSE = MExprCmp
 end
 
 lang AppCSE = CSE + AppAst
-  sem cseSearchH (pos : ProgramPos) (env : CSESearchEnv) =
+  sem cseSearchH (pos : ProgramPos) (env : CSESearchEnv) +=
   | app & (TmApp t) ->
     match t.ty with TyArrow _ then
       sfold_Expr_Expr (cseSearch pos) env app
@@ -150,17 +160,17 @@ lang AppCSE = CSE + AppAst
       else cseCount pos env app
     else cseCount pos env app
 
-  sem cseApplyH (env : CSEApplyEnv) =
+  sem cseApplyH (env : CSEApplyEnv) +=
   | app & (TmApp _) -> cseReplace env app
 end
 
 lang LamCSE = CSE + LamAst
-  sem cseSearchH (pos : ProgramPos) (env : CSESearchEnv) =
+  sem cseSearchH (pos : ProgramPos) (env : CSESearchEnv) +=
   | TmLam t ->
     let pos = snoc pos env.index in
     cseSearch pos env t.body
 
-  sem cseApplyH (env : CSEApplyEnv) =
+  sem cseApplyH (env : CSEApplyEnv) +=
   | TmLam t ->
     match cseApply env t.body with (acc, body) then
       let body = insertSubexpressionDeclarations env body in
@@ -169,13 +179,13 @@ lang LamCSE = CSE + LamAst
 end
 
 lang LetCSE = CSE + LetDeclAst
-  sem cseSearchH (pos : ProgramPos) (env : CSESearchEnv) =
+  sem cseSearchH (pos : ProgramPos) (env : CSESearchEnv) +=
   | TmDecl { decl = DeclLet t, inexpr = inexpr } ->
     let env : CSESearchEnv = cseSearch pos env t.body in
     let inexprPos = snoc pos env.index in
     cseSearch inexprPos env inexpr
 
-  sem cseApplyH (env : CSEApplyEnv) =
+  sem cseApplyH (env : CSEApplyEnv) +=
   | TmDecl (d & { decl = DeclLet t, inexpr = inexpr }) ->
     match cseApply env t.body with (thnEnv, body) then
       match cseApply thnEnv inexpr with (env, inexpr) then
@@ -188,7 +198,7 @@ lang LetCSE = CSE + LetDeclAst
 end
 
 lang RecLetsCSE = CSE + RecLetsDeclAst
-  sem cseSearchH (pos : ProgramPos) (env : CSESearchEnv) =
+  sem cseSearchH (pos : ProgramPos) (env : CSESearchEnv) +=
   | TmDecl { decl = DeclRecLets t, inexpr = inexpr } ->
     let recursiveIdents =
       foldl
@@ -203,7 +213,7 @@ lang RecLetsCSE = CSE + RecLetsDeclAst
         t.bindings in
     cseSearch pos bindEnv inexpr
 
-  sem cseApplyH (env : CSEApplyEnv) =
+  sem cseApplyH (env : CSEApplyEnv) +=
   | TmDecl (d & {decl = DeclRecLets t, inexpr = inexpr}) ->
     let applyBinding : CSEApplyEnv -> DeclLetRecord
                     -> (CSEApplyEnv, DeclLetRecord) =
@@ -223,7 +233,7 @@ lang RecLetsCSE = CSE + RecLetsDeclAst
 end
 
 lang MatchCSE = CSE + MatchAst
-  sem cseSearchH (pos : ProgramPos) (env : CSESearchEnv) =
+  sem cseSearchH (pos : ProgramPos) (env : CSESearchEnv) +=
   | TmMatch t ->
     let env : CSESearchEnv = cseSearch pos env t.target in
     let thnPos = snoc pos env.index in
@@ -231,7 +241,7 @@ lang MatchCSE = CSE + MatchAst
     let elsPos = snoc pos env.index in
     cseSearch elsPos env t.els
 
-  sem cseApplyH (env : CSEApplyEnv) =
+  sem cseApplyH (env : CSEApplyEnv) +=
   | TmMatch t ->
     match cseApply env t.target with (thnEnv, target) then
       match cseApply thnEnv t.thn with (elsEnv, thn) then
@@ -247,18 +257,18 @@ lang MatchCSE = CSE + MatchAst
 end
 
 lang RecordCSE = CSE + RecordAst
-  sem cseSearchH (pos : ProgramPos) (env : CSESearchEnv) =
+  sem cseSearchH (pos : ProgramPos) (env : CSESearchEnv) +=
   | record & (TmRecord _) -> cseCount pos env record
 
-  sem cseApplyH (env : CSEApplyEnv) =
+  sem cseApplyH (env : CSEApplyEnv) +=
   | record & (TmRecord _) -> cseReplace env record
 end
 
 lang DataCSE = CSE + DataAst
-  sem cseSearchH (pos : ProgramPos) (env : CSESearchEnv) =
+  sem cseSearchH (pos : ProgramPos) (env : CSESearchEnv) +=
   | conApp & (TmConApp _) -> cseCount pos env conApp
 
-  sem cseApplyH (env : CSEApplyEnv) =
+  sem cseApplyH (env : CSEApplyEnv) +=
   | conApp & (TmConApp _) -> cseReplace env conApp
 end
 

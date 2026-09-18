@@ -1,6 +1,9 @@
 -- Matrix functions
 
 include "ext/matrix-ext.mc"
+include "tensor.mc"
+include "float.mc"
+include "seq.mc"
 
 let matrixCreate: [Int] -> [Float] -> Tensor[Float] =
   tensorOfSeqExn tensorCreateCArrayFloat

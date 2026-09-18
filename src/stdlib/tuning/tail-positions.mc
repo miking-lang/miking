@@ -6,6 +6,14 @@ include "mexpr/mexpr.mc"
 include "mexpr/anf.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/symbolize.mc"
+include "mexpr/ast.mc"
+include "name.mc"
+include "seq.mc"
+include "mexpr/ast-builder.mc"
+include "mexpr/pprint.mc"
+include "mexpr/eval.mc"
+include "common.mc"
+include "string.mc"
 
 lang TailPositions = MExprAst
   sem tailPositionsReclet : all a. all b.

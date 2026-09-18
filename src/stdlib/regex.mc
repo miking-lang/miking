@@ -1,5 +1,11 @@
 include "dfa.mc"
 include "eqset.mc"
+include "seq.mc"
+include "bool.mc"
+include "nfa.mc"
+include "basic-types.mc"
+include "string.mc"
+include "option.mc"
 
 -- Represents basic regular expressions.
 type RegEx a

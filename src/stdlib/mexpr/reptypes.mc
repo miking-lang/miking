@@ -12,6 +12,30 @@ include "multicore/pseq.mc"
 include "sys.mc"
 include "json.mc"
 include "these.mc"
+include "../annotate.mc"
+include "mexpr/ast-builder.mc"
+include "mexpr/repr-ast.mc"
+include "mexpr/expansive.mc"
+include "map.mc"
+include "name.mc"
+include "basic-types.mc"
+include "common.mc"
+include "seq.mc"
+include "stringid.mc"
+include "option.mc"
+include "error.mc"
+include "mexpr/unify.mc"
+include "mexpr/pprint.mc"
+include "mexpr/symbolize.mc"
+include "mexpr/info.mc"
+include "string.mc"
+include "bool.mc"
+include "set.mc"
+include "float.mc"
+include "either.mc"
+include "int.mc"
+include "char.mc"
+include "multicore/thread-pool.mc"
 
 lang AnnotateSimple = HtmlAnnotator + AnnotateSources
 end
@@ -21,7 +45,7 @@ end
 let _symCmp = lam a. lam b. subi (sym2hash a) (sym2hash b)
 
 lang LamRepTypesAnalysis = TypeCheck + LamAst + SubstituteNewReprs
-  sem typeCheckExpr env =
+  sem typeCheckExpr env +=
   | TmLam t ->
     let tyParam = substituteNewReprs env t.tyParam in
     let body = typeCheckExpr (_insertVar t.ident tyParam env) t.body in
@@ -31,7 +55,7 @@ end
 
 lang LetRepTypesAnalysis = TypeCheck + LetDeclAst + SubstituteNewReprs + OpImplAst + OpDeclAst + NonExpansive + MetaVarDisableGeneralize
 
-  sem typeCheckExpr env =
+  sem typeCheckExpr env +=
   | TmDecl (x & {decl = DeclLet t}) ->
     let newLvl = addi 1 env.currentLvl in
     let isValue = nonExpansive true t.body in
@@ -116,7 +140,7 @@ lang LetRepTypesAnalysis = TypeCheck + LetDeclAst + SubstituteNewReprs + OpImplA
 end
 
 lang RecLetsRepTypesAnalysis = TypeCheck + RecLetsDeclAst + MetaVarDisableGeneralize + RecordAst + OpImplAst + OpDeclAst + RepTypesHelpers + NonExpansive + SubstituteNewReprs + PropagateTypeAnnot + SubstituteUnknown + ResolveType
-  sem typeCheckExpr env =
+  sem typeCheckExpr env +=
   | TmDecl (x & {decl = DeclRecLets t}) ->
     let newLvl = addi 1 env.currentLvl in
     -- First: Generate a new environment containing the recursive bindings
@@ -304,7 +328,7 @@ lang RecLetsRepTypesAnalysis = TypeCheck + RecLetsDeclAst + MetaVarDisableGenera
 end
 
 lang VarRepTypesAnalysis = TypeCheck + VarAst + OpVarAst + RepTypesHelpers + SubstituteNewReprs + NeverAst + MatchAst + NamedPat + RecordPat
-  sem typeCheckExpr env =
+  sem typeCheckExpr env +=
   | TmVar t ->
     let opInfo = mapLookup t.ident env.reptypes.opNamesInScope in
     match opInfo with Some (Some (rName, label)) then
@@ -356,7 +380,7 @@ lang VarRepTypesAnalysis = TypeCheck + VarAst + OpVarAst + RepTypesHelpers + Sub
 end
 
 lang OpImplRepTypesAnalysis = TypeCheck + OpImplAst + ResolveType + SubstituteNewReprs + RepTypesHelpers + ApplyReprSubsts
-  sem typeCheckExpr env =
+  sem typeCheckExpr env +=
   | TmDecl (t & {decl = DeclOpImpl x}) ->
     let typeCheckBody = lam env.
       let env = {env with reptypes = {env.reptypes with inImpl = true}} in
@@ -1848,7 +1872,7 @@ lang SolTreeSolver
 end
 
 lang SolTreeLazySolver = SolTreeSolver
-  sem solTreeMinimumSolution debug fs env = | tree ->
+  sem solTreeMinimumSolution debug fs env += | tree ->
     let tree = solTreeConvert tree in
     let propagate = lam tree. solTreePropagate fs env true tree in
     let lazyMaterialize = lam tree. solTreeLazyMaterialize fs env tree in
@@ -1857,7 +1881,7 @@ lang SolTreeLazySolver = SolTreeSolver
 end
 
 lang SolTreeSoloSolver = SolTreeSolver
-  sem solTreeMinimumSolution debug fs env = | tree ->
+  sem solTreeMinimumSolution debug fs env += | tree ->
     let tree = solTreeConvert tree in
     recursive
       let materialize = lam splits. lam tree.
@@ -2055,36 +2079,36 @@ let rtAsSingle : all a. all constraint. all var. all val. all relevant. all iden
   RepTree relevant constraint var val ident a
   -> Option (RTSingleRec a constraint var val relevant ident)
   = lam tree. match tree with RTSingle x then Some x else None ()
-recursive let rtGetMinCost : all a. all constraint. all var. all val. all relevant. all ident.
-  RepTree relevant constraint var val ident a
-  -> Float
-  = lam tree. switch tree
-    case RTSingle x then x.cost
-    case RTAnd x then
-      foldl (lam acc. lam child. addf acc (mulf child.scale (rtGetMinCost child.val)))
-        x.selfCost x.children
-    case RTOr {singles = [], others = []} then 9999999.9999
-    case RTOr ({others = [alt] ++ alts1, singles = alts2} | {others = alts1, singles = [alt] ++ alts2}) then
-      foldl (lam acc. lam alt. minf acc (rtGetMinCost alt)) (rtGetMinCost alt) (concat alts1 alts2)
-    end
-end
-recursive let rtScale : all a. all constraint. all var. all val. all relevant. all ident.
-  Float
-  -> RepTree relevant constraint var val ident a
-  -> RepTree relevant constraint var val ident a
-  = lam scale. lam tree. switch tree
-    case RTSingle x then RTSingle {x with cost = mulf scale x.cost}
-    case RTAnd x then
-      let selfCost = mulf scale x.selfCost in
-      let children = map (lam child. {child with scale = mulf scale child.scale}) x.children in
-      RTAnd {x with selfCost = selfCost, children = children}
-    case RTOr x then
-      let selfCost = mulf scale x.selfCost in
-      let others = map (rtScale scale) x.others in
-      let singles = map (rtScale scale) x.singles in
-      RTOr {x with selfCost = selfCost, others = others, singles = singles}
-    end
-end
+-- recursive let rtGetMinCost : all a. all constraint. all var. all val. all relevant. all ident.
+--   RepTree relevant constraint var val ident a
+--   -> Float
+--   = lam tree. switch tree
+--     case RTSingle x then x.cost
+--     case RTAnd x then
+--       foldl (lam acc. lam child. addf acc (mulf child.scale (rtGetMinCost child.val)))
+--         x.selfCost x.children
+--     case RTOr {singles = [], others = []} then 9999999.9999
+--     case RTOr ({others = [alt] ++ alts1, singles = alts2} | {others = alts1, singles = [alt] ++ alts2}) then
+--       foldl (lam acc. lam alt. minf acc (rtGetMinCost alt)) (rtGetMinCost alt) (concat alts1 alts2)
+--     end
+-- end
+-- recursive let rtScale : all a. all constraint. all var. all val. all relevant. all ident.
+--   Float
+--   -> RepTree relevant constraint var val ident a
+--   -> RepTree relevant constraint var val ident a
+--   = lam scale. lam tree. switch tree
+--     case RTSingle x then RTSingle {x with cost = mulf scale x.cost}
+--     case RTAnd x then
+--       let selfCost = mulf scale x.selfCost in
+--       let children = map (lam child. {child with scale = mulf scale child.scale}) x.children in
+--       RTAnd {x with selfCost = selfCost, children = children}
+--     case RTOr x then
+--       let selfCost = mulf scale x.selfCost in
+--       let others = map (rtScale scale) x.others in
+--       let singles = map (rtScale scale) x.singles in
+--       RTOr {x with selfCost = selfCost, others = others, singles = singles}
+--     end
+-- end
 let rtSetRelevantAbove : all a. all constraint. all var. all val. all relevant. all ident.
   relevant
   -> RepTree relevant constraint var val ident a
@@ -4383,16 +4407,16 @@ con SFEOr : [SolForError] -> SolForError
 
 lang NonMemoTreeBuilder = RepTypesShallowSolverInterface + UnifyPure + RepTypesHelpers + PrettyPrint + Cmp + Generalize + VarAccessHelpers + LocallyNamelessStuff + WildToMeta
   -- Global
-  syn SolverGlobal a = | SGContent ()
-  sem initSolverGlobal = | _ -> SGContent ()
+  syn SolverGlobal a += | SGContent ()
+  sem initSolverGlobal += | _ -> SGContent ()
 
   -- Branch
   type SBContent a =
     { implsPerOp : Map Name (Set (OpImpl a))
     , nameless : NamelessState
     }
-  syn SolverBranch a = | SBContent (SBContent a)
-  sem initSolverBranch = | global -> SBContent
+  syn SolverBranch a += | SBContent (SBContent a)
+  sem initSolverBranch += | global -> SBContent
     { implsPerOp = mapEmpty nameCmp
     , nameless =
       { metas = []
@@ -4410,7 +4434,7 @@ lang NonMemoTreeBuilder = RepTypesShallowSolverInterface + UnifyPure + RepTypesH
     , subSols : [SolContent a]
     }
   syn SolContent a = | SolContent (SolContentRec a)
-  syn SolverSolution a = | SSContent (SolContent a)
+  syn SolverSolution a += | SSContent (SolContent a)
 
   type Relevant = VarMap Int  -- NOTE(vipa, 2024-01-21): The meta-level/repr-scope of the var
   type Constraint = Unification
@@ -4462,18 +4486,18 @@ lang NonMemoTreeBuilder = RepTypesShallowSolverInterface + UnifyPure + RepTypesH
   -- Top Query
   type RTree a = RepTree Relevant Constraint Var Val NodeIdent (SolContent a)
   type STQContent a = [{scale : OpCost, val : RTree a}]
-  syn SolverTopQuery a = | STQContent (STQContent a)
-  sem initSolverTopQuery = | global ->
+  syn SolverTopQuery a += | STQContent (STQContent a)
+  sem initSolverTopQuery += | global ->
     STQContent []
 
-  sem addImpl global branch = | impl ->
+  sem addImpl global branch += | impl ->
     match branch with SBContent branch in
     let branch =
       let set = setInsert impl (setEmpty cmpOpImpl) in
       {branch with implsPerOp = mapInsertWith setUnion impl.op set branch.implsPerOp} in
     SBContent branch
 
-  sem addOpUse debug global branch query = | opUse ->
+  sem addOpUse debug global branch query += | opUse ->
     match branch with SBContent branch in
     match query with STQContent query in
     switch solFor (setEmpty cmpOpPair) branch opUse
@@ -4520,7 +4544,7 @@ lang NonMemoTreeBuilder = RepTypesShallowSolverInterface + UnifyPure + RepTypesH
       (SBContent branch, STQContent (snoc query {scale = opUse.scaling, val = res}))
     end
 
-  sem debugSolution global = | sols ->
+  sem debugSolution global += | sols ->
     let sum = foldl addf 0.0 (map (lam x. match x with SSContent (SolContent x) in x.scaledTotalCost) sols) in
     recursive let work = lam indent. lam sol.
       match sol with SolContent sol in
@@ -4539,10 +4563,10 @@ lang NonMemoTreeBuilder = RepTypesShallowSolverInterface + UnifyPure + RepTypesH
       , join (map (lam s. match s with SSContent x in work "" x) sols)
       ]
 
-  sem concretizeSolution global = | SSContent (SolContent x) ->
+  sem concretizeSolution global += | SSContent (SolContent x) ->
     (x.impl.token, x.highestImpl, map (lam x. SSContent x) x.subSols)
 
-  sem cmpSolution a = | b ->
+  sem cmpSolution a += | b ->
     match (a, b) with (SSContent a, SSContent b) in
     recursive let work = lam a. lam b.
       match (a, b) with (SolContent a, SolContent b) in
@@ -4746,7 +4770,7 @@ lang TreeSolverBase = NonMemoTreeBuilder
   sem solveWork : all a. Bool -> Option RTS -> TSTree a -> a
   sem solveWorkAll : all a. Bool -> TSTree a -> [a]
 
-  sem topSolve debug file global = | STQContent query ->
+  sem topSolve debug file global += | STQContent query ->
     let top = RTAnd
       { children = query
       , selfCost = 0.0
@@ -4776,7 +4800,7 @@ lang TreeSolverBase = NonMemoTreeBuilder
         sol in
       saveSol (solveWork debug rts (rtRecordSolution top))
     else solveWork debug (None ()) top
-  sem topSolveAll debug global = | STQContent query ->
+  sem topSolveAll debug global += | STQContent query ->
     let top = RTAnd
       { children = query
       , selfCost = 0.0
@@ -5068,22 +5092,22 @@ lang TreeSolverBase = NonMemoTreeBuilder
     }
 end
 
-lang TreeSolverGreedy = TreeSolverBase
-  sem solveWork debug prev = | top ->
-    let propagateInterface = mkPropagateInterface () in
-    let debugInterface = mkDebugInterface () in
-    let materializeLazyInterface = mkMaterializeLazyInterface () in
-    let partitionInternalInterface = mkPartitionInternalInterface () in
-    match rtPropagate propagateInterface top with (_, Some top) then
-      -- let top = rtPartitionInternalComponents partitionInternalInterface top in
-      let stream = rtMaterializeLazyRecursive materializeLazyInterface top in
-      match lazyStreamUncons stream with Some (res, _) then res else
-      errorSingle [] "Could not find a consistent assignment of impls across the program"
-    else errorSingle [] "Could not find a consistent assignment of impls across the program"
-end
+-- lang TreeSolverGreedy = TreeSolverBase
+--   sem solveWork debug prev += | top ->
+--     let propagateInterface = mkPropagateInterface () in
+--     let debugInterface = mkDebugInterface () in
+--     let materializeLazyInterface = mkMaterializeLazyInterface () in
+--     let partitionInternalInterface = mkPartitionInternalInterface () in
+--     match rtPropagate propagateInterface top with (_, Some top) then
+--       -- let top = rtPartitionInternalComponents partitionInternalInterface top in
+--       let stream = rtMaterializeLazyRecursive materializeLazyInterface top in
+--       match lazyStreamUncons stream with Some (res, _) then res else
+--       errorSingle [] "Could not find a consistent assignment of impls across the program"
+--     else errorSingle [] "Could not find a consistent assignment of impls across the program"
+-- end
 
 lang TreeSolverGuided = TreeSolverBase
-  sem solveWork debug prev = | top ->
+  sem solveWork debug prev += | top ->
     let propagateInterface = mkPropagateInterface () in
     let partitionInternalInterface = mkPartitionInternalInterface () in
     let materializeConsistentInterface = mkMaterializeConsistentInterface () in
@@ -5710,7 +5734,7 @@ lang ComposableSolver = TreeSolverBase + Z3Stuff
 end
 
 lang TreeSolverPartIndep = ComposableSolver
-  sem solveWork debug prev = | top ->
+  sem solveWork debug prev += | top ->
     let s = mkCSSteps debug in
     let bottomUp = lam x. s.fix (s.chain
       [ s.collapseLeaves
@@ -5769,7 +5793,7 @@ lang TreeSolverPartIndep = ComposableSolver
 end
 
 lang TreeSolverEnum = ComposableSolver
-  sem solveWork debug prev = | top ->
+  sem solveWork debug prev += | top ->
     let s = mkCSSteps debug in
     let materializeStatelessInterface = mkMaterializeStatelessInterface () in
     let bottomUp = lam x. s.fix (s.chain
@@ -5835,7 +5859,7 @@ lang TreeSolverEnum = ComposableSolver
 end
 
 lang TreeSolverFast = ComposableSolver
-  sem solveWork debug prev = | top ->
+  sem solveWork debug prev += | top ->
     let s = mkCSSteps debug in
     let materializeStatelessInterface = mkMaterializeStatelessInterface () in
     let bottomUp = lam x. s.fix (s.chain
@@ -5892,7 +5916,7 @@ lang TreeSolverFast = ComposableSolver
 end
 
 lang TreeSolverZ3 = ComposableSolver
-  sem solveWork debug prev = | top ->
+  sem solveWork debug prev += | top ->
     let s = mkCSSteps debug in
     let inner = lam tree. s.seq (s.debug "pre indep-branch") s.z3 tree in
     let solve = s.chain
@@ -5919,7 +5943,7 @@ lang TreeSolverZ3 = ComposableSolver
 end
 
 lang TreeSolverBottomUp = ComposableSolver
-  sem solveWork debug prev = | top ->
+  sem solveWork debug prev += | top ->
     let s = mkCSSteps debug in
     let bottomUp = lam x. s.fix (s.chain
       [ s.collapseLeaves
@@ -5950,7 +5974,7 @@ lang TreeSolverBottomUp = ComposableSolver
     match s.getDone (solve top) with Some s then s.value else
     errorSingle [] "Could not find a consistent assignment of impls across the program"
 
-  sem solveWorkAll debug = | top ->
+  sem solveWorkAll debug += | top ->
     let propagateInterface =
       { mkPropagateInterface ()
         with pruneRedundant = None ()
@@ -5993,7 +6017,7 @@ lang TreeSolverBottomUp = ComposableSolver
 end
 
 lang TreeSolverGreedy = ComposableSolver
-  sem solveWork debug prev = | top ->
+  sem solveWork debug prev += | top ->
     let s = mkCSSteps debug in
     let inner = s.lazy in
     let solve = s.chain
@@ -6020,7 +6044,7 @@ lang TreeSolverGreedy = ComposableSolver
 end
 
 lang TreeSolverFilterByBest = TreeSolverBase
-  sem solveWork debug prev = | top ->
+  sem solveWork debug prev += | top ->
     let propagateInterface = mkPropagateInterface () in
     let debugInterface = mkDebugInterface () in
     let collapseLeavesInterface = mkCollapseLeavesInterface () in

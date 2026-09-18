@@ -7,6 +7,24 @@ include "seq.mc"
 include "mexpr/cmp.mc"
 include "mexpr/boot-parser.mc"
 include "mlang/pprint.mc"
+include "mexpr/info.mc"
+include "parser/lexer.mc"
+include "name.mc"
+include "string.mc"
+include "parser/ll1.mc"
+include "mexpr/pprint.mc"
+include "mexpr/eq.mc"
+include "mexpr/ast.mc"
+include "basic-types.mc"
+include "map.mc"
+include "mexpr/ast-builder.mc"
+include "error.mc"
+include "option.mc"
+include "common.mc"
+include "int.mc"
+include "set.mc"
+include "bool.mc"
+include "mlang/ast.mc"
 
 type Res a = Result (Info, String) (Info, String) a
 
@@ -14,14 +32,14 @@ type Res a = Result (Info, String) (Info, String) a
 -- analysis, thus only containing a TokenRepr, no Token. This is used
 -- for all tokens declared with the `token` declaration.
 lang PreToken = TokenParser
-  syn Token =
-  syn TokenRepr =
+  syn Token +=
+  syn TokenRepr +=
   | PreRepr {constructorName : Name}
 
-  sem tokReprToStr =
+  sem tokReprToStr +=
   | PreRepr x -> join ["<", nameGetStr x.constructorName, ">"]
 
-  sem tokReprCmp2 =
+  sem tokReprCmp2 +=
   | (PreRepr l, PreRepr r) -> nameCmp l.constructorName r.constructorName
 end
 
@@ -32,13 +50,13 @@ end
 -- language fragments included, which we don't have in the
 -- *generating* code, we only have that in the *generated* code.
 lang PreLitToken = TokenParser
-  syn TokenRepr =
+  syn TokenRepr +=
   | PreLitRepr {lit : String}
 
-  sem tokReprToStr =
+  sem tokReprToStr +=
   | PreLitRepr x -> snoc (cons '\'' x.lit) '\''
 
-  sem tokReprCmp2 =
+  sem tokReprCmp2 +=
   | (PreLitRepr l, PreLitRepr r) -> cmpString l.lit r.lit
 end
 

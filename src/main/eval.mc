@@ -3,13 +3,19 @@
 -- Copyright (C) David Broman. See file LICENSE.txt
 
 include "options.mc"
+include "options-type.mc"
 include "parse.mc"
 include "seq.mc"
 include "name.mc"
+include "bool.mc"
+include "common.mc"
 
+include "annotate.mc"
+include "mexpr/keywords.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/profiling.mc"
+include "mexpr/pprint.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/mexpr.mc"
 include "mexpr/builtin.mc"

@@ -1,5 +1,8 @@
+include "map.mc"
+include "mexpr/ast.mc"
 include "mexpr/boot-parser.mc"
 include "ocaml/external.mc"
+include "ocaml/external-includes.mc"
 
 type ParseOptions = {
   -- Keep utests

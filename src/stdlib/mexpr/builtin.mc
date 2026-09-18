@@ -2,6 +2,8 @@ include "ast.mc"
 include "map.mc"
 include "set.mc"
 include "stringid.mc"
+include "name.mc"
+include "string.mc"
 
 let builtin = use MExprAst in
   [ ("unsafeCoerce", CUnsafeCoerce ())

@@ -21,6 +21,10 @@ include "multicore/thread.ext-ocaml.mc"
 include "multicore/mutex.ext-ocaml.mc"
 include "multicore/cond.ext-ocaml.mc"
 include "ext/reflection-ext.ext-ocaml.mc"
+include "mexpr/ast.mc"
+include "map.mc"
+include "seq.mc"
+include "string.mc"
 
 
 type ExternalImpl = {

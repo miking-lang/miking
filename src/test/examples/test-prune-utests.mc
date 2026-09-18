@@ -3,6 +3,7 @@
   using `boot eval --test`. All test that should remain should fail.
 -/
 
+include "ext/math-ext.mc"
 include "math.mc"
 
 

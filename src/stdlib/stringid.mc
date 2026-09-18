@@ -9,6 +9,7 @@
 
 include "map.mc"
 include "string.mc"
+include "bool.mc"
 
 -- Right now, we use an integer as the identifier,
 -- so that the map intrinsics can be used.

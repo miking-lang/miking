@@ -9,6 +9,9 @@ include "parser.mc"
 include "info.mc"
 include "pprint.mc"
 include "seq.mc"
+include "mexpr/symbolize.mc"
+include "bool.mc"
+include "char.mc"
 
 lang MExpr = MExprAst + MExprParser + MExprEval + MExprPrettyPrint + MExprSym
 end

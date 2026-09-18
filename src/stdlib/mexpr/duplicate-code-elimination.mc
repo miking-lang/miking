@@ -11,6 +11,12 @@ include "mexpr/ast-builder.mc"
 include "mexpr/eq.mc"
 include "mexpr/info.mc"
 include "mexpr/symbolize.mc"
+include "string.mc"
+include "name.mc"
+include "basic-types.mc"
+include "seq.mc"
+include "option.mc"
+include "mexpr/pprint.mc"
 
 lang MExprEliminateDuplicateCode = MExprAst
   -- NOTE(larshum, 2022-09-13): For now, we need to consider both the info

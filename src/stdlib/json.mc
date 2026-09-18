@@ -15,6 +15,11 @@ include "option.mc"
 include "tensor.mc"
 include "math.mc"
 include "common.mc"
+include "seq.mc"
+include "basic-types.mc"
+include "bool.mc"
+include "char.mc"
+include "float.mc"
 
 type JsonValue
 con JsonObject: Map String JsonValue -> JsonValue

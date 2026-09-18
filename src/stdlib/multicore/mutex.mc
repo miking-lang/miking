@@ -4,6 +4,7 @@
 -- Mutual-exclusion locks.
 
 include "thread.mc"
+include "seq.mc"
 
 type Mutex
 

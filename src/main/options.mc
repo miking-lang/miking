@@ -1,6 +1,12 @@
 include "arg.mc"
+include "basic-types.mc"
+include "bool.mc"
+include "char.mc"
 include "common.mc"
 include "options-type.mc"
+include "seq.mc"
+include "set.mc"
+include "string.mc"
 include "docgen/options/docgen-options.mc"
 include "tuning/tune-options.mc"
 
@@ -37,10 +43,8 @@ let optionsDefault : Options = {
   disableJsTCO = false,
   output = None (),
   tuneOptions = tuneOptionsDefault,
-  docgenOptions = docGenOptionsDefault,    
-  mlangPipeline = false,
-  experimentalRecords = false,
-  disableStrictSumExtension = false
+  docgenOptions = docGenOptionsDefault,
+  mlangPipeline = false
 }
 
 -- Get the help string for options

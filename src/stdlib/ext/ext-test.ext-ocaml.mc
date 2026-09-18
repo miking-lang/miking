@@ -1,5 +1,8 @@
 include "map.mc"
 include "ocaml/ast.mc"
+include "mexpr/ast.mc"
+include "mexpr/ast-builder.mc"
+include "string.mc"
 
 let implWithLibs =
   lam arg : { expr : String, ty : use Ast in Type, libraries : [String] }.

@@ -16,6 +16,16 @@ include "string.mc"
 include "stringid.mc"
 include "error.mc"
 include "either.mc"
+include "mexpr/ast.mc"
+include "mexpr/eval.mc"
+include "name.mc"
+include "mexpr/info.mc"
+include "basic-types.mc"
+include "map.mc"
+include "mexpr/pprint.mc"
+include "mexpr/symbolize.mc"
+include "mexpr/eq.mc"
+include "peval/include.mc"
 
 lang SpecializeLift = SpecializeAst + SpecializeUtils + MExprAst + ClosAst
 
@@ -87,13 +97,13 @@ end
 
 lang SpecializeLiftApp = SpecializeLift + AppAst
 
-  sem liftExpr names args =
+  sem liftExpr names args +=
   | TmApp {lhs = lhs, rhs = rhs, info = info, ty=typ} ->
     match liftExprAccum names args [lhs, rhs] with (args, [lhs, rhs]) in
     let bindings = [("lhs", lhs), ("rhs", rhs)] in
     (args, createConAppExpr names tmAppName bindings typ info)
 
-  sem tyConInfo =
+  sem tyConInfo +=
   | TyApp {info = info} -> (info, tyAppName)
 end
 
@@ -171,20 +181,20 @@ lang SpecializeLiftVar = SpecializeLift + VarAst
     Some (args, createConAppExpr names tmRecName bindings typ info)
   | _ -> None ()
 
-  sem liftExpr names args =
+  sem liftExpr names args +=
   | TmVar {ident = id, ty = typ, info=info, frozen=frozen} & t->
     match liftName names args id with (args, lIdent) in
     let bindings = [("ident", lIdent), ("frozen", bool_ frozen)] in
     (args, createConAppExpr names tmVarName bindings typ info)
 
-  sem tyConInfo =
+  sem tyConInfo +=
   | TyVar {info = info} -> (info, tyVarName)
 
 end
 
 lang SpecializeLiftRecord = SpecializeLift + RecordAst
 
-  sem liftExpr names args =
+  sem liftExpr names args +=
   | TmRecord {bindings = binds, info=info, ty = typ} ->
     match unzip (mapToSeq binds) with (ids, exprs) in
     match liftExprAccum names args exprs with (args, lExprs) in
@@ -203,7 +213,7 @@ lang SpecializeLiftRecord = SpecializeLift + RecordAst
 end
 
 lang SpecializeLiftSeq = SpecializeLift
-  sem liftExpr names args =
+  sem liftExpr names args +=
   | TmSeq {tms = exprs, ty = typ, info = info} ->
     match liftExprAccum names args exprs with (args, lExprs) in
     let bindings = [("tms", seq_ lExprs)] in
@@ -221,7 +231,7 @@ lang SpecializeLiftConst = SpecializeLift + ConstAst
   | CSymb {val = v} -> error "Cannot lift symbols as consts"
   | t -> []
 
-  sem liftExpr names args =
+  sem liftExpr names args +=
   | TmConst {val = const, ty = typ, info = info} ->
     let bindings = buildConstBindings const in
     -- Build "Const"
@@ -229,7 +239,7 @@ lang SpecializeLiftConst = SpecializeLift + ConstAst
     let bindings = [("val", const)] in
     (args, createConAppExpr names tmConstName bindings typ info)
 
-  sem tyConInfo =
+  sem tyConInfo +=
   | TyInt {info = info} -> (info, tyIntName)
   | TyBool {info = info} -> (info, tyBoolName)
   | TyFloat {info = info} -> (info, tyFloatName)
@@ -239,7 +249,7 @@ end
 
 lang SpecializeLiftSpecialize = SpecializeLift + VarAst + SpecializeAst
 
-  sem liftExpr names args =
+  sem liftExpr names args +=
   | TmSpecialize _ ->
     error "Nested specialize"
 end
@@ -287,7 +297,7 @@ lang SpecializeLiftLam = SpecializeLift + LamAst + MExprFreeVars + SpecializeLif
     let typedFvs = getTypesOfVars fvs (mapEmpty nameCmp) expr in
     buildEnv names args typedFvs
 
-  sem liftExpr names args =
+  sem liftExpr names args +=
   | TmLam {ident=id, body = body, ty = typ, info = info} ->
     match liftExpr names args body with (args, lExpr) in
     match liftName names args id with (args, lName) in
@@ -372,7 +382,7 @@ lang SpecializeLiftMatch = SpecializeLift + MatchAst
     let bindings = [("subpat", subpat)] in
     (args, createConAppExpr names patNotName bindings ty info)
 
-  sem liftExpr names args =
+  sem liftExpr names args +=
   | TmMatch {target=target, pat=pat, thn=thn, els=els, ty=ty, info=info} ->
     match liftPattern names args pat with (args, lPat) in
     match liftExprAccum names args [target, thn, els]
@@ -384,7 +394,7 @@ end
 
 
 lang SpecializeLiftDecl = SpecializeLift + DeclAst
-  sem liftExpr names args =
+  sem liftExpr names args +=
   | TmDecl x ->
     match liftDecl names args x.decl with (args, decl) in
     match liftExpr names args x.inexpr with (args, inexpr) in
@@ -396,7 +406,7 @@ lang SpecializeLiftDecl = SpecializeLift + DeclAst
 end
 
 lang SpecializeLiftLet = SpecializeLift + LetDeclAst
-  sem liftDecl names args =
+  sem liftDecl names args +=
   | DeclLet {ident=ident, body=body, info=info} ->
     match liftExpr names args body with (args, lBody) in
     match liftName names args ident with (args, lName) in
@@ -423,7 +433,7 @@ lang SpecializeLiftRecLets = SpecializeLift + RecLetsDeclAst
     let lBinds = seq_ lBinds in
     (args, lBinds)
 
-  sem liftDecl names args =
+  sem liftDecl names args +=
   | DeclRecLets {bindings = binds, info=info} ->
     match liftRecLetsBindings names args binds with (args, lBinds) in
     let bindings = [("bindings", lBinds)] in
@@ -431,7 +441,7 @@ lang SpecializeLiftRecLets = SpecializeLift + RecLetsDeclAst
 end
 
 lang SpecializeLiftDataAst = SpecializeLift + DataAst + DataDeclAst
-  sem liftDecl names args =
+  sem liftDecl names args +=
   | DeclConDef x ->
     match liftName names args x.ident with (args, ident) in
     let tyIdent = liftType names x.tyIdent in
@@ -441,7 +451,7 @@ lang SpecializeLiftDataAst = SpecializeLift + DataAst + DataDeclAst
       ] in
     (args, createConAppInfo names declConDefName bindings x.info)
 
-  sem liftExpr names args =
+  sem liftExpr names args +=
   | TmConApp {ident=ident, body=body, ty=ty, info=info} ->
     match liftName names args ident with (args, ident) in
     match liftExpr names args body with (args, body) in
@@ -451,7 +461,7 @@ end
 
 lang SpecializeLiftTypeAst = SpecializeLift + TypeDeclAst
 
-  sem liftDecl names args =
+  sem liftDecl names args +=
   | DeclType {ident=ident, params=params, tyIdent=tyId, info=info} ->
     match liftName names args ident with (args, ident) in
     match mapAccumL (liftName names) args params with (args, params) in
@@ -464,7 +474,7 @@ end
 
 lang SpecializeLiftNever = SpecializeLift + NeverAst
 
-  sem liftExpr names args =
+  sem liftExpr names args +=
   | TmNever {ty=ty, info=info} ->
     (args, createConAppExpr names tmNeverName [] ty info)
 end

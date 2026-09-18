@@ -1,6 +1,8 @@
 include "hashmap.mc"
 include "stdlib.mc"
 include "../global/util.mc"
+include "fileutils.mc"
+include "basic-types.mc"
 
 type IncludeSet a = HashMap String a
 

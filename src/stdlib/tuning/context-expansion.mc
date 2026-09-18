@@ -9,6 +9,23 @@ include "sys.mc"
 include "digraph.mc"
 
 include "graph-coloring.mc"
+include "mexpr/ast.mc"
+include "name.mc"
+include "tuning/prefix-tree.mc"
+include "tuning/name-info.mc"
+include "map.mc"
+include "tuning/ast.mc"
+include "tuning/call-graph.mc"
+include "basic-types.mc"
+include "mexpr/boot-parser.mc"
+include "mexpr/symbolize.mc"
+include "common.mc"
+include "mexpr/keywords.mc"
+include "seq.mc"
+include "string.mc"
+include "mexpr/eval.mc"
+include "bool.mc"
+include "char.mc"
 
 -- Implements context expansion for a program with holes.
 
