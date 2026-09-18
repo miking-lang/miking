@@ -1,12 +1,14 @@
 # MCore interpreter micro-benchmarks
 
-Small, self-contained MCore programs for comparing three evaluators:
+Small, self-contained MCore programs for comparing three evaluators against
+natively compiled code:
 
-| Evaluator | Command | Implementation |
+| Backend | Command | Implementation |
 | --- | --- | --- |
 | boot | `mi-boot eval prog.mc` | the OCaml interpreter in `src/boot` |
 | `mi eval` | `mi eval prog.mc` | `src/stdlib/mexpr/eval.mc`, the self-hosted interpreter |
 | fast-eval | `mi eval --fast-eval prog.mc` | `src/stdlib/mexpr/eval-fast.mc`, the experimental evaluator that pre-compiles the AST into nested closures |
+| compiled | `mi compile prog.mc`, then run the executable | the OCaml backend — the floor the evaluators are measured against |
 
 ## Running
 
@@ -15,14 +17,48 @@ Small, self-contained MCore programs for comparing three evaluators:
 ./run.sh fib loop-sum           # only these
 ./run.sh -s 20 fib              # override the SCALE parameter
 ./run.sh -r 5 fib               # best of 5 runs (default 3)
-./run.sh -e fast,eval           # skip an evaluator (fast | eval | boot)
+./run.sh -e fast,eval           # pick backends (fast | eval | boot | comp)
+./run.sh -p floors              # pick passes (floors | main | high)
 ./run.sh -t 60                  # per-run timeout in seconds
 MI=../build/mi-cheat ./run.sh   # pick a different `mi`
 ```
 
+The runner has three passes, selected with `-p`:
+
+| Pass | What it reports |
+| --- | --- |
+| `floors` | what each backend costs on `noop.mc` before it evaluates anything |
+| `main` | every benchmark under all four backends at the suite's default scales |
+| `high` | `--fast-eval` against compiled code only, at raised per-benchmark scales |
+
+The `high` pass exists because the default scales are set by the *slowest*
+backend, which leaves compiled code sitting a few milliseconds above its own
+startup floor — too close to it for the ratio to mean anything. `run.sh` carries
+a table of per-benchmark scales at which `--fast-eval` runs for roughly three
+seconds; compiled code is several times faster again, so both are then far above
+their floors and the ratio is a measurement rather than an artefact.
+
+Regenerate that table with `./calibrate.py`, which probes each benchmark and
+brackets in on a scale hitting the target. Its probes are timeout-protected,
+which matters more than it sounds: `ackermann` doubles per `+1` of `scale` and
+`tak` is steeper still, so extrapolating from a single point sends them to a
+scale that never returns. Where no integer scale lands inside the window — again
+`ackermann`, which straddles it — it takes whichever neighbour is closer in log
+space.
+
 The runner reports the best wall-clock time of `-r` runs, and uses the process
-exit code as a checksum: if the evaluators disagree the row is flagged
+exit code as a checksum: if the backends disagree the row is flagged
 `MISMATCH`.
+
+The `mi compile` column times **only the executable**. Each program is compiled
+once, before the timing loop, and the build's own wall time is reported
+separately in the `cc` column (a few hundred milliseconds per program) so that
+it is visible without being charged to the measurement.
+
+`mi compile` shells out to `ocamlfind`, which needs boot's OCaml library on
+`OCAMLPATH`; the runner exports `OCAMLPATH=../build/lib` for you. Without it
+every compile fails with ``Package `boot' not found`` while the three
+evaluators keep working, which makes the cause easy to misread.
 
 **Do not wrap the timed command in `timeout`.** The `timeout` on this system
 (uutils coreutils 0.8.0, not GNU) rounds the child's elapsed time up to the
@@ -32,9 +68,17 @@ result into a staircase. The runner enforces its `-t` limit with a background
 watchdog beside the child instead, which keeps millisecond resolution.
 
 `noop.mc` measures startup, parsing, symbolization and type checking with an
-empty program -- about 70ms for `mi`, 5ms for a compiled evaluator from
-`../fast-eval-variants`. Subtract it from every other row to get the time
-actually spent evaluating.
+empty program. The four backends differ by more than an order of magnitude
+here, which is why the `floors` pass reports them up front and every net figure
+subtracts the backend's own floor rather than one number for all four: `mi`
+loads, symbolizes and type checks a self-hosted front end before it evaluates
+anything, `mi-boot` has no such front end, and a compiled executable does no
+front-end work at all.
+
+Scales in this suite were chosen so that the *slowest* evaluator finishes in
+reasonable time, so the compiled column will often land close to its own
+startup floor. Raise the scale with `-s` before reading much into a compiled
+row of a few milliseconds.
 
 `--fast-eval` is new, so a stale `build/mi` will reject it with
 `ERROR: Unknown option --fast-eval.`; rebuild with `make` (or `make cheat`)
@@ -44,7 +88,7 @@ first.
 
 Every program ends in `exit (modi <result> 251)`, because the fast evaluator
 has no printing primitives. The exit code doubles as a cheap correctness check
-across evaluators. Intermediate values are kept small with `modi ... 1000003`
+across backends -- compiled code included. Intermediate values are kept small with `modi ... 1000003`
 so that 63-bit overflow cannot make the backends disagree.
 
 Each scalable program has exactly one tunable parameter on a line of the form
@@ -59,7 +103,7 @@ program exercises and how it scales.
 ## What the fast evaluator supports
 
 `eval-fast.mc` covers a deliberately small subset of MExpr, and the benchmarks
-stay inside it so that all three evaluators can run the same source:
+stay inside it so that all four backends can run the same source:
 
 * terms: variables, application, lambda, `let`, `recursive let`, `type`,
   `con`, constants, `match`, records, record update, sequences, `never`
@@ -135,36 +179,6 @@ Apart from `mutual-rec` and `mutual-rec-outer`, every benchmark uses separate
 single-binding `recursive` groups even where a single multi-binding group would
 read more naturally, so that the pair above is the only place multi-binding
 groups are measured.
-
-## A bug this suite surfaced (fixed)
-
-`mutual-rec-outer` used to cost `--fast-eval` about two orders of magnitude more
-per iteration than `mutual-rec`, and was quadratic in `scale` — the one row
-where `--fast-eval` was an order of magnitude *slower* than `mi eval`. In
-`RecLetsEval` in `src/stdlib/mexpr/eval-fast.mc` the `env` inside the fold was
-the *accumulator*, which shadowed the environment `reclet` was called with.
-Binding *k* of a group therefore tied its knot with `reclet` applied to an
-environment that already contained bindings *1..k-1*, so every call to a binding
-other than the first prepended another copy of the group to the environment. The
-environment grew without bound while the program ran, and anything looked up
-below it got further away on every iteration.
-
-```diff
-   recursive let reclet = lam env.
-     foldl
--      (lam env. lam t.
-+      (lam acc. lam t.
-         match t with (s, cls) in
--        Cons ((s, VCls (lam val. cls (reclet env) val)), env))
-+        Cons ((s, VCls (lam val. cls (reclet env) val)), acc))
-       env ts
-   in reclet
-```
-
-Groups with a single binding were unaffected, since there the accumulator *is*
-the incoming environment — which is why the rest of the suite never saw it, and
-why the two `mutual-rec` benchmarks are kept at the same scale as a regression
-check on it.
 
 ## Related
 
