@@ -237,6 +237,37 @@ lang DataEvalF = EvalF + DataAst + DataDeclAst
   | DeclConDef _ -> lam env. env
 end
 
+lang UtestEvalF = EvalF + UtestDeclAst
+  sem mkEvalDeclF =
+  | DeclUtest r ->
+    warnSingle [r.info] "Skipping evaluation of utest";
+    lam env. env
+end
+
+lang ExtEvalF = EvalF + ExtDeclAst
+  sem mkEvalDeclF =
+  | DeclExt r ->
+    warnSingle [r.info]
+      (concat "Skipping external declaration for: " (nameGetStr r.ident));
+    lam env. env
+end
+
+lang PlaceholderEvalF = EvalF + PlaceholderAst
+  syn Val =
+  | VPlaceholder {}
+
+  sem readback =
+  | VPlaceholder _ -> TmPlaceholder {}
+
+  sem mkEvalF =
+  | TmPlaceholder _ -> lam env. VPlaceholder {}
+end
+
+lang OpaqueEvalF = EvalF + OpaqueAst
+  sem mkEvalF =
+  | TmOpaque r -> mkEvalF r.body
+end
+
 ---------------
 -- CONSTANTS --
 ---------------
@@ -644,8 +675,6 @@ end
 
 -- Missing, relative to `MExprAst` in `ast.mc`:
 --
--- * Terms: TmPlaceholder, TmOpaque.
--- * Decls: DeclUtest, DeclExt.
 -- * Constants: SymbAst, CmpSymbAst, FloatStringConversionAst, FileOpAst,
 --   IOAst, RandomNumberGeneratorAst, TimeAst, ConTagAst, RefOpAst, TypeOpAst,
 --   TensorOpAst and BootParserAst.  SysAst is only partially covered: CExit
@@ -656,7 +685,8 @@ end
 lang MExprEvalF =
   -- Terms and Decls
   VarEvalF + AppEvalF + LamEvalF + DeclEvalF + ConstEvalF + MatchEvalF +
-  RecordEvalF + SeqEvalF + NeverEvalF + DataEvalF +
+  RecordEvalF + SeqEvalF + NeverEvalF + DataEvalF + UtestEvalF + ExtEvalF +
+  PlaceholderEvalF + OpaqueEvalF +
 
   -- Decls
   LetEvalF + RecLetsEval + TypeEvalF +
