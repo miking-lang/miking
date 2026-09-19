@@ -1429,9 +1429,9 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint + MExprArity
   | ast ->
     let runtimeEnv = nameSym "env" in
     let externalsName = nameSym "externals" in
-    -- The runtime file is the table of which externals have a default.
+    -- The intrinsics are the table of which externals have a default.
     let defaults = setOfSeq cmpString
-      (filter (isPrefix eqc "$ext_") (mapKeys (esRuntimeSections ()))) in
+      (filter (isPrefix eqc "$ext_") (mapKeys esRuntimeByName)) in
     let ctx = { esCompileCtxEmpty with runtimeEnv = runtimeEnv
               , externalsName = externalsName
               , externalDefaults = defaults } in
