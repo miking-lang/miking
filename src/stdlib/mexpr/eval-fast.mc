@@ -53,27 +53,27 @@ lang AppEvalF = EvalF + AppAst + ConstAst + UnknownTypeAst
     -- are disjoint, since each looks through a different number of TmApp
     -- layers before expecting a TmConst, and a constant used as a value still
     -- falls through to `mkEvalFApp`.
-    match r with
-      {lhs = TmApp {lhs = TmApp {lhs = TmConst c, rhs = a}, rhs = b}, rhs = d}
-    then
+    switch r
+    case {lhs = TmApp {lhs = TmApp {lhs = TmConst c, rhs = a}, rhs = b}, rhs = d} then
       match mkDeltaF c.val with VConst3 (_, f) then
         let a = mkEvalF a in
         let b = mkEvalF b in
         let d = mkEvalF d in
         lam env. f (a env) (b env) (d env)
       else mkEvalFApp r
-    else match r with {lhs = TmApp {lhs = TmConst c, rhs = a}, rhs = b} then
+    case {lhs = TmApp {lhs = TmConst c, rhs = a}, rhs = b} then
       match mkDeltaF c.val with VConst2 (_, f) then
         let a = mkEvalF a in
         let b = mkEvalF b in
         lam env. f (a env) (b env)
       else mkEvalFApp r
-    else match r with {lhs = TmConst c, rhs = a} then
+    case {lhs = TmConst c, rhs = a} then
       match mkDeltaF c.val with VConst1 (_, f) then
         let a = mkEvalF a in
         lam env. f (a env)
       else mkEvalFApp r
-    else mkEvalFApp r
+    case _ then mkEvalFApp r
+    end
 
   sem mkEvalFApp : {lhs : Expr, rhs : Expr, ty : Type, info : Info}
                 -> EvalFEnv -> Val
