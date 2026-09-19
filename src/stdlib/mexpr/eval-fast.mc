@@ -667,6 +667,204 @@ lang TypeOpEvalF = ConstEvalF + TypeOpAst
   | c & CTypeOf _ -> VConst1 (c, lam. error "CTypeOf: unimplemented")
 end
 
+lang TensorOpEvalF =
+  ConstEvalF + IntEvalF + FloatEvalF + SeqEvalF + BoolEvalF + RecordEvalF +
+  StringConvEvalF + TensorOpAst
+
+  syn Val =
+  | VTensorInt (Tensor[Int])
+  | VTensorFloat (Tensor[Float])
+  | VTensorExpr (Tensor[Val])
+
+  sem readback =
+  | VTensorInt _ | VTensorFloat _ | VTensorExpr _ -> None ()
+
+  sem valSeqToShape : Val -> [Int]
+  sem valSeqToShape =
+  | VSeq vals -> map (lam v. match v with VInt i in i) vals
+
+  sem shapeToValSeq : [Int] -> Val
+  sem shapeToValSeq =
+  | is -> VSeq (map (lam i. VInt i) is)
+
+  sem tensorValRank : Val -> Int
+  sem tensorValRank =
+  | VTensorInt t -> tensorRank t
+  | VTensorFloat t -> tensorRank t
+  | VTensorExpr t -> tensorRank t
+
+  sem tensorValShape : Val -> [Int]
+  sem tensorValShape =
+  | VTensorInt t -> tensorShape t
+  | VTensorFloat t -> tensorShape t
+  | VTensorExpr t -> tensorShape t
+
+  sem tensorValGetExn : [Int] -> Val -> Val
+  sem tensorValGetExn is =
+  | VTensorInt t -> VInt (tensorGetExn t is)
+  | VTensorFloat t -> VFloat (tensorGetExn t is)
+  | VTensorExpr t -> tensorGetExn t is
+
+  sem tensorValLinearGetExn : Int -> Val -> Val
+  sem tensorValLinearGetExn i =
+  | VTensorInt t -> VInt (tensorLinearGetExn t i)
+  | VTensorFloat t -> VFloat (tensorLinearGetExn t i)
+  | VTensorExpr t -> tensorLinearGetExn t i
+
+  sem tensorValReshapeExn : [Int] -> Val -> Val
+  sem tensorValReshapeExn is =
+  | VTensorInt t -> VTensorInt (tensorReshapeExn t is)
+  | VTensorFloat t -> VTensorFloat (tensorReshapeExn t is)
+  | VTensorExpr t -> VTensorExpr (tensorReshapeExn t is)
+
+  sem tensorValCopy : Val -> Val
+  sem tensorValCopy =
+  | VTensorInt t -> VTensorInt (tensorCopy t)
+  | VTensorFloat t -> VTensorFloat (tensorCopy t)
+  | VTensorExpr t -> VTensorExpr (tensorCopy t)
+
+  sem tensorValTransposeExn : Int -> Int -> Val -> Val
+  sem tensorValTransposeExn d0 d1 =
+  | VTensorInt t -> VTensorInt (tensorTransposeExn t d0 d1)
+  | VTensorFloat t -> VTensorFloat (tensorTransposeExn t d0 d1)
+  | VTensorExpr t -> VTensorExpr (tensorTransposeExn t d0 d1)
+
+  sem tensorValSliceExn : [Int] -> Val -> Val
+  sem tensorValSliceExn is =
+  | VTensorInt t -> VTensorInt (tensorSliceExn t is)
+  | VTensorFloat t -> VTensorFloat (tensorSliceExn t is)
+  | VTensorExpr t -> VTensorExpr (tensorSliceExn t is)
+
+  sem tensorValSubExn : Int -> Int -> Val -> Val
+  sem tensorValSubExn ofs len =
+  | VTensorInt t -> VTensorInt (tensorSubExn t ofs len)
+  | VTensorFloat t -> VTensorFloat (tensorSubExn t ofs len)
+  | VTensorExpr t -> VTensorExpr (tensorSubExn t ofs len)
+
+  sem tensorValIterSlice : Val -> Val -> Val
+  sem tensorValIterSlice f =
+  | VTensorInt t ->
+    tensorIterSlice
+      (lam i. lam s. applyF (applyF (f, VInt i), VTensorInt s); ()) t;
+    VRecord (mapEmpty cmpSID)
+  | VTensorFloat t ->
+    tensorIterSlice
+      (lam i. lam s. applyF (applyF (f, VInt i), VTensorFloat s); ()) t;
+    VRecord (mapEmpty cmpSID)
+  | VTensorExpr t ->
+    tensorIterSlice
+      (lam i. lam s. applyF (applyF (f, VInt i), VTensorExpr s); ()) t;
+    VRecord (mapEmpty cmpSID)
+
+  sem tensorValToString : Val -> Val -> Val
+  sem tensorValToString el2str =
+  | VTensorInt t ->
+    stringToVal
+      (tensor2string (lam x. valToString (applyF (el2str, VInt x))) t)
+  | VTensorFloat t ->
+    stringToVal
+      (tensor2string (lam x. valToString (applyF (el2str, VFloat x))) t)
+  | VTensorExpr t ->
+    stringToVal (tensor2string (lam x. valToString (applyF (el2str, x))) t)
+
+  sem tensorValSetExn : [Int] -> Val -> Val -> Val
+  sem tensorValSetExn is t =
+  | v ->
+    (switch (t, v)
+     case (VTensorInt t, VInt v) then tensorSetExn t is v
+     case (VTensorFloat t, VFloat v) then tensorSetExn t is v
+     case (VTensorExpr t, v) then tensorSetExn t is v
+     case _ then error "tensorValSetExn: type error"
+     end);
+    VRecord (mapEmpty cmpSID)
+
+  sem tensorValLinearSetExn : Int -> Val -> Val -> Val
+  sem tensorValLinearSetExn i t =
+  | v ->
+    (switch (t, v)
+     case (VTensorInt t, VInt v) then tensorLinearSetExn t i v
+     case (VTensorFloat t, VFloat v) then tensorLinearSetExn t i v
+     case (VTensorExpr t, v) then tensorLinearSetExn t i v
+     case _ then error "tensorValLinearSetExn: type error"
+     end);
+    VRecord (mapEmpty cmpSID)
+
+  sem tensorValEq : Val -> Val -> Val -> Val
+  sem tensorValEq eq t1 =
+  | t2 ->
+    let veq = lam a. lam b.
+      match applyF (applyF (eq, a), b) with VBool b in b in
+    VBool
+      (switch (t1, t2)
+       case (VTensorInt t1, VTensorInt t2) then
+         tensorEq (lam a. lam b. veq (VInt a) (VInt b)) t1 t2
+       case (VTensorInt t1, VTensorFloat t2) then
+         tensorEq (lam a. lam b. veq (VInt a) (VFloat b)) t1 t2
+       case (VTensorInt t1, VTensorExpr t2) then
+         tensorEq (lam a. lam b. veq (VInt a) b) t1 t2
+       case (VTensorFloat t1, VTensorInt t2) then
+         tensorEq (lam a. lam b. veq (VFloat a) (VInt b)) t1 t2
+       case (VTensorFloat t1, VTensorFloat t2) then
+         tensorEq (lam a. lam b. veq (VFloat a) (VFloat b)) t1 t2
+       case (VTensorFloat t1, VTensorExpr t2) then
+         tensorEq (lam a. lam b. veq (VFloat a) b) t1 t2
+       case (VTensorExpr t1, VTensorInt t2) then
+         tensorEq (lam a. lam b. veq a (VInt b)) t1 t2
+       case (VTensorExpr t1, VTensorFloat t2) then
+         tensorEq (lam a. lam b. veq a (VFloat b)) t1 t2
+       case (VTensorExpr t1, VTensorExpr t2) then
+         tensorEq veq t1 t2
+       case _ then error "tensorValEq: not a tensor"
+       end)
+
+  sem mkDeltaF =
+  | c & CTensorCreateUninitInt _ -> VConst1
+    (c, lam shape. VTensorInt (tensorCreateUninitInt (valSeqToShape shape)))
+  | c & CTensorCreateUninitFloat _ -> VConst1
+    (c, lam shape. VTensorFloat (tensorCreateUninitFloat (valSeqToShape shape)))
+  | c & CTensorCreateInt _ -> VConst2
+    (c, lam shape. lam f.
+      VTensorInt
+        (tensorCreateCArrayInt
+          (valSeqToShape shape)
+          (lam is. match applyF (f, shapeToValSeq is) with VInt n in n)))
+  | c & CTensorCreateFloat _ -> VConst2
+    (c, lam shape. lam f.
+      VTensorFloat
+        (tensorCreateCArrayFloat
+          (valSeqToShape shape)
+          (lam is. match applyF (f, shapeToValSeq is) with VFloat x in x)))
+  | c & CTensorCreate _ -> VConst2
+    (c, lam shape. lam f.
+      VTensorExpr
+        (tensorCreateDense
+          (valSeqToShape shape) (lam is. applyF (f, shapeToValSeq is))))
+  | c & CTensorGetExn _ -> VConst2
+    (c, lam t. lam idx. tensorValGetExn (valSeqToShape idx) t)
+  | c & CTensorSetExn _ -> VConst3
+    (c, lam t. lam idx. lam v. tensorValSetExn (valSeqToShape idx) t v)
+  | c & CTensorLinearGetExn _ -> VConst2
+    (c, lam t. lam i. match i with VInt i in tensorValLinearGetExn i t)
+  | c & CTensorLinearSetExn _ -> VConst3
+    (c, lam t. lam i. lam v. match i with VInt i in tensorValLinearSetExn i t v)
+  | c & CTensorRank _ -> VConst1 (c, lam t. VInt (tensorValRank t))
+  | c & CTensorShape _ -> VConst1 (c, lam t. shapeToValSeq (tensorValShape t))
+  | c & CTensorReshapeExn _ -> VConst2
+    (c, lam t. lam shape. tensorValReshapeExn (valSeqToShape shape) t)
+  | c & CTensorCopy _ -> VConst1 (c, tensorValCopy)
+  | c & CTensorTransposeExn _ -> VConst3
+    (c, lam t. lam d0. lam d1.
+      match (d0, d1) with (VInt d0, VInt d1) in tensorValTransposeExn d0 d1 t)
+  | c & CTensorSliceExn _ -> VConst2
+    (c, lam t. lam idx. tensorValSliceExn (valSeqToShape idx) t)
+  | c & CTensorSubExn _ -> VConst3
+    (c, lam t. lam ofs. lam len.
+      match (ofs, len) with (VInt ofs, VInt len) in tensorValSubExn ofs len t)
+  | c & CTensorIterSlice _ -> VConst2 (c, tensorValIterSlice)
+  | c & CTensorEq _ -> VConst3 (c, tensorValEq)
+  | c & CTensorToString _ -> VConst2 (c, tensorValToString)
+end
+
 --------------
 -- PATTERNS --
 --------------
@@ -816,7 +1014,7 @@ end
 
 -- Missing, relative to `MExprAst` in `ast.mc`:
 --
--- * Constants: TensorOpAst and BootParserAst.
+-- * Constants: BootParserAst.
 --
 -- Types and kinds are not evaluated, so nothing is missing there.
 
@@ -836,7 +1034,7 @@ lang MExprEvalF =
   FloatIntConversionEvalF + SeqOpEvalF + StringConvEvalF + SysEvalF +
   SymbEvalF + CmpSymbEvalF + ConTagEvalF + FloatStringConversionEvalF +
   FileOpEvalF + IOEvalF + RandomNumberGeneratorEvalF + TimeEvalF +
-  RefOpEvalF + TypeOpEvalF +
+  RefOpEvalF + TypeOpEvalF + TensorOpEvalF +
 
   -- Patterns
   NamedPatEvalF + BoolPatEval + RecordPatEval + SeqTotPatEvalF +
@@ -1022,6 +1220,187 @@ utest
         , ulet_ "_" (modref_ (var_ "r") (int_ 2)) ]
         (deref_ (var_ "r"))))
 with Some (int_ 2) using eq else toString in
+
+-- TensorOpEvalF
+
+let tensorCreateUninitInt_ = lam shape. app_ (uconst_ (CTensorCreateUninitInt ())) shape in
+let tensorCreateUninitFloat_ = lam shape. app_ (uconst_ (CTensorCreateUninitFloat ())) shape in
+
+utest readback (eval (utensorRank_ (tensorCreateUninitInt_ (seq_ [int_ 2, int_ 3]))))
+with Some (int_ 2) using eq else toString in
+
+utest readback (eval (utensorShape_ (tensorCreateUninitFloat_ (seq_ [int_ 4]))))
+with Some (seq_ [int_ 4]) using eq else toString in
+
+-- create (int/float/generic) + get, rank-1 and rank-0
+utest
+  readback
+    (eval
+      (bindall_
+        [ulet_ "t" (tensorCreateInt_ (seq_ [int_ 3]) (ulam_ "is" (get_ (var_ "is") (int_ 0))))]
+        (utuple_
+          [ utensorGetExn_ (var_ "t") (seq_ [int_ 0])
+          , utensorGetExn_ (var_ "t") (seq_ [int_ 1])
+          , utensorGetExn_ (var_ "t") (seq_ [int_ 2]) ])))
+with Some (utuple_ [int_ 0, int_ 1, int_ 2]) using eq else toString in
+
+utest
+  readback (eval (utensorGetExn_ (tensorCreateFloat_ (seq_ []) (ulam_ "is" (float_ 3.14))) (seq_ [])))
+with Some (float_ 3.14) using eq else toString in
+
+utest
+  readback
+    (eval
+      (utensorGetExn_
+        (utensorCreate_ (seq_ [int_ 2])
+          (ulam_ "is" (utuple_ [get_ (var_ "is") (int_ 0), get_ (var_ "is") (int_ 0)])))
+        (seq_ [int_ 1])))
+with Some (utuple_ [int_ 1, int_ 1]) using eq else toString in
+
+-- set then get round trip
+utest
+  readback
+    (eval
+      (bindall_
+        [ ulet_ "t" (tensorCreateInt_ (seq_ [int_ 3]) (ulam_ "is" (int_ 0)))
+        , ulet_ "_" (utensorSetExn_ (var_ "t") (seq_ [int_ 1]) (int_ 42)) ]
+        (utensorGetExn_ (var_ "t") (seq_ [int_ 1]))))
+with Some (int_ 42) using eq else toString in
+
+-- linear get/set
+utest
+  readback
+    (eval
+      (bindall_
+        [ ulet_ "t" (tensorCreateInt_ (seq_ [int_ 3]) (ulam_ "is" (int_ 0)))
+        , ulet_ "_" (utensorLinearSetExn_ (var_ "t") (int_ 2) (int_ 9)) ]
+        (utensorLinearGetExn_ (var_ "t") (int_ 2))))
+with Some (int_ 9) using eq else toString in
+
+-- rank and shape
+utest
+  readback
+    (eval
+      (bindall_
+        [ulet_ "t" (tensorCreateInt_ (seq_ [int_ 2, int_ 3]) (ulam_ "is" (int_ 0)))]
+        (utuple_ [utensorRank_ (var_ "t"), utensorShape_ (var_ "t")])))
+with Some (utuple_ [int_ 2, seq_ [int_ 2, int_ 3]]) using eq else toString in
+
+-- reshape's resulting shape
+utest
+  readback
+    (eval
+      (utensorShape_
+        (utensorReshapeExn_
+          (tensorCreateInt_ (seq_ [int_ 6]) (ulam_ "is" (int_ 0)))
+          (seq_ [int_ 2, int_ 3]))))
+with Some (seq_ [int_ 2, int_ 3]) using eq else toString in
+
+-- copy independence: mutating the copy leaves the original unaffected
+utest
+  readback
+    (eval
+      (bindall_
+        [ ulet_ "t" (tensorCreateInt_ (seq_ [int_ 1]) (ulam_ "is" (int_ 7)))
+        , ulet_ "c" (utensorCopy_ (var_ "t"))
+        , ulet_ "_" (utensorSetExn_ (var_ "c") (seq_ [int_ 0]) (int_ 99)) ]
+        (utuple_
+          [ utensorGetExn_ (var_ "t") (seq_ [int_ 0])
+          , utensorGetExn_ (var_ "c") (seq_ [int_ 0]) ])))
+with Some (utuple_ [int_ 7, int_ 99]) using eq else toString in
+
+-- transpose's resulting shape
+utest
+  readback
+    (eval
+      (utensorShape_
+        (utensorTransposeExn_
+          (tensorCreateInt_ (seq_ [int_ 2, int_ 3]) (ulam_ "is" (int_ 0)))
+          (int_ 0) (int_ 1))))
+with Some (seq_ [int_ 3, int_ 2]) using eq else toString in
+
+-- slice's resulting rank and shape
+utest
+  readback
+    (eval
+      (bindall_
+        [ulet_ "t" (tensorCreateInt_ (seq_ [int_ 2, int_ 3]) (ulam_ "is" (int_ 0)))]
+        (utuple_
+          [ utensorRank_ (utensorSliceExn_ (var_ "t") (seq_ [int_ 0]))
+          , utensorShape_ (utensorSliceExn_ (var_ "t") (seq_ [int_ 0])) ])))
+with Some (utuple_ [int_ 1, seq_ [int_ 3]]) using eq else toString in
+
+-- sub's resulting rank and shape
+utest
+  readback
+    (eval
+      (bindall_
+        [ulet_ "t" (tensorCreateInt_ (seq_ [int_ 6]) (ulam_ "is" (int_ 0)))]
+        (utuple_
+          [ utensorRank_ (utensorSubExn_ (var_ "t") (int_ 2) (int_ 3))
+          , utensorShape_ (utensorSubExn_ (var_ "t") (int_ 2) (int_ 3)) ])))
+with Some (utuple_ [int_ 1, seq_ [int_ 3]]) using eq else toString in
+
+-- iterSlice: mutating through a slice is visible in the original tensor
+-- (tensors are views, not copies)
+utest
+  readback
+    (eval
+      (bindall_
+        [ ulet_ "t" (tensorCreateInt_ (seq_ [int_ 3]) (ulam_ "is" (int_ 0)))
+        , ulet_ "_"
+            (utensorIterSlice_
+              (ulam_ "i" (ulam_ "s" (utensorSetExn_ (var_ "s") (seq_ []) (var_ "i"))))
+              (var_ "t")) ]
+        (utuple_
+          [ utensorGetExn_ (var_ "t") (seq_ [int_ 0])
+          , utensorGetExn_ (var_ "t") (seq_ [int_ 1])
+          , utensorGetExn_ (var_ "t") (seq_ [int_ 2]) ])))
+with Some (utuple_ [int_ 0, int_ 1, int_ 2]) using eq else toString in
+
+-- eq: same-kind equal and unequal
+utest
+  readback
+    (eval
+      (bindall_
+        [ ulet_ "t1" (tensorCreateInt_ (seq_ [int_ 2]) (ulam_ "is" (get_ (var_ "is") (int_ 0))))
+        , ulet_ "t2" (tensorCreateInt_ (seq_ [int_ 2]) (ulam_ "is" (get_ (var_ "is") (int_ 0)))) ]
+        (utensorEq_ (ulam_ "a" (ulam_ "b" (eqi_ (var_ "a") (var_ "b"))))
+          (var_ "t1") (var_ "t2"))))
+with Some true_ using eq else toString in
+
+utest
+  readback
+    (eval
+      (bindall_
+        [ ulet_ "t1" (tensorCreateInt_ (seq_ [int_ 2]) (ulam_ "is" (int_ 0)))
+        , ulet_ "t2" (tensorCreateInt_ (seq_ [int_ 2]) (ulam_ "is" (int_ 1))) ]
+        (utensorEq_ (ulam_ "a" (ulam_ "b" (eqi_ (var_ "a") (var_ "b"))))
+          (var_ "t1") (var_ "t2"))))
+with Some false_ using eq else toString in
+
+-- eq: mixed kind (int tensor vs. generic tensor storing plain ints)
+utest
+  readback
+    (eval
+      (bindall_
+        [ ulet_ "t1" (tensorCreateInt_ (seq_ [int_ 2]) (ulam_ "is" (get_ (var_ "is") (int_ 0))))
+        , ulet_ "t2" (utensorCreate_ (seq_ [int_ 2]) (ulam_ "is" (get_ (var_ "is") (int_ 0)))) ]
+        (utensorEq_ (ulam_ "a" (ulam_ "b" (eqi_ (var_ "a") (var_ "b"))))
+          (var_ "t1") (var_ "t2"))))
+with Some true_ using eq else toString in
+
+-- toString, matching the same bracket/tab/comma format used elsewhere in
+-- the suite (a constant element-to-string function isolates the format
+-- check from int-to-string conversion, which isn't available inside this
+-- restricted expression language)
+utest
+  readback
+    (eval
+      (utensor2string_
+        (ulam_ "x" (str_ "n"))
+        (tensorCreateInt_ (seq_ [int_ 2, int_ 3]) (ulam_ "is" (int_ 0)))))
+with Some (str_ "[\n\t[n, n, n],\n\t[n, n, n]\n]") using eq else toString in
 
 -- SysEvalF (remaining constants)
 
