@@ -611,6 +611,33 @@ lang CharPatEvalF = MatchEvalF + CharEvalF + CharPat
     else None ()
 end
 
+lang AndPatEvalF = MatchEvalF + AndPat
+  sem mkTryMatch =
+  | PatAnd r ->
+    let lpat = mkTryMatch r.lpat in
+    let rpat = mkTryMatch r.rpat in
+    lam val. lam env.
+      match lpat val env with Some env then rpat val env
+      else None ()
+end
+
+lang OrPatEvalF = MatchEvalF + OrPat
+  sem mkTryMatch =
+  | PatOr r ->
+    let lpat = mkTryMatch r.lpat in
+    let rpat = mkTryMatch r.rpat in
+    lam val. lam env.
+      match lpat val env with Some env then Some env else rpat val env
+end
+
+lang NotPatEvalF = MatchEvalF + NotPat
+  sem mkTryMatch =
+  | PatNot r ->
+    let subpat = mkTryMatch r.subpat in
+    lam val. lam env.
+      match subpat val env with Some _ then None () else Some env
+end
+
 ------------------
 -- COMPOSITIONS --
 ------------------
@@ -623,7 +650,6 @@ end
 --   IOAst, RandomNumberGeneratorAst, TimeAst, ConTagAst, RefOpAst, TypeOpAst,
 --   TensorOpAst and BootParserAst.  SysAst is only partially covered: CExit
 --   has a delta function, CError, CArgv, CCommand and CExec do not.
--- * Patterns: PatAnd, PatOr and PatNot.
 --
 -- Types and kinds are not evaluated, so nothing is missing there.
 
@@ -643,7 +669,8 @@ lang MExprEvalF =
 
   -- Patterns
   NamedPatEvalF + BoolPatEval + RecordPatEval + SeqTotPatEvalF +
-  SeqEdgePatEvalF + DataPatEvalF + IntPatEvalF + CharPatEvalF
+  SeqEdgePatEvalF + DataPatEvalF + IntPatEvalF + CharPatEvalF +
+  AndPatEvalF + OrPatEvalF + NotPatEvalF
 end
 
 lang TestLang = MExprEvalF + MExprEq + MExprPrettyPrint end

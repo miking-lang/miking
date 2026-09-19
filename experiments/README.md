@@ -108,7 +108,8 @@ stay inside it so that all four backends can run the same source:
 * terms: variables, application, lambda, `let`, `recursive let`, `type`,
   `con`, constants, `match`, records, record update, sequences, `never`
 * patterns: variable, wildcard, boolean, integer, character, record (so tuples
-  too), constructor (`PatCon`), and both sequence forms -- `PatSeqTot` and
+  too), constructor (`PatCon`), and-pattern, or-pattern, not-pattern
+  (`PatAnd`/`PatOr`/`PatNot`), and both sequence forms -- `PatSeqTot` and
   `PatSeqEdge`
 * constants: `Int` and `Float` arithmetic, shifts, comparisons and conversions;
   `Bool`; `Char` with `eqc`, `int2char` and `char2int`; every sequence constant
@@ -151,6 +152,7 @@ kind of recursive data with real constructors instead.
 | `seq-index` | `get` and `length` with no allocation in the loop | linear |
 | `seq-build` | `cons`, `snoc`, `concat`, `subsequence`: rope growth | linear |
 | `seq-pattern` | `PatSeqEdge`, both `[x] ++ rest` and `[x] ++ mid ++ [y]` | linear |
+| `fizzbuzz-pattern` | `PatAnd`/`PatOr`/`PatNot` pattern combinators | linear |
 | `seq-set` | `set`, the only three-argument sequence constant | linear |
 | `seq-sort` | merge sort: `splitAt`, patterns, non-tail recursion | n log n |
 | `strings` | `int2char`, `char2int`, `eqc` over a character sequence | linear |
