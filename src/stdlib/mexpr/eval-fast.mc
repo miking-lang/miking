@@ -581,6 +581,20 @@ lang SeqEdgePatEvalF = MatchEvalF + SeqEvalF + SeqEdgePat
       else None ()
 end
 
+lang DataPatEvalF = MatchEvalF + DataEvalF + DataPat
+  sem mkTryMatch =
+  | PatCon r ->
+    match nameGetSym r.ident with Some s then
+      let s = sym2hash s in
+      let subpat = mkTryMatch r.subpat in
+      lam val. lam env.
+        match val with VConApp (c, arg) then
+          if eqi c s then subpat arg env
+          else None ()
+        else None ()
+    else error "Unsymbolized PatCon in mkTryMatch!"
+end
+
 lang IntPatEvalF = MatchEvalF + IntEvalF + IntPat
   sem mkTryMatch =
   | PatInt r -> lam val. lam env.
@@ -609,8 +623,7 @@ end
 --   IOAst, RandomNumberGeneratorAst, TimeAst, ConTagAst, RefOpAst, TypeOpAst,
 --   TensorOpAst and BootParserAst.  SysAst is only partially covered: CExit
 --   has a delta function, CError, CArgv, CCommand and CExec do not.
--- * Patterns: PatCon, PatAnd, PatOr and PatNot.  DataEvalF can thus build a
---   constructor, but nothing can take one apart.
+-- * Patterns: PatAnd, PatOr and PatNot.
 --
 -- Types and kinds are not evaluated, so nothing is missing there.
 
@@ -630,7 +643,7 @@ lang MExprEvalF =
 
   -- Patterns
   NamedPatEvalF + BoolPatEval + RecordPatEval + SeqTotPatEvalF +
-  SeqEdgePatEvalF + IntPatEvalF + CharPatEvalF
+  SeqEdgePatEvalF + DataPatEvalF + IntPatEvalF + CharPatEvalF
 end
 
 lang TestLang = MExprEvalF + MExprEq + MExprPrettyPrint end
