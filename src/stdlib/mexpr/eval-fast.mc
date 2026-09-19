@@ -865,6 +865,101 @@ lang TensorOpEvalF =
   | c & CTensorToString _ -> VConst2 (c, tensorValToString)
 end
 
+lang BootParserEvalF =
+  ConstEvalF + IntEvalF + FloatEvalF + BoolEvalF + RecordEvalF +
+  StringConvEvalF + BootParserAst
+
+  syn Val =
+  | VBootParserTree BootParseTree
+
+  sem readback =
+  | VBootParserTree _ -> None ()
+
+  sem valSeqToStrings : Val -> [String]
+  sem valSeqToStrings =
+  | VSeq vals -> map valToString vals
+
+  sem mkDeltaF =
+  | c & CBootParserParseMExprString _ -> VConst3
+    (c, lam opts. lam keywords. lam src.
+      match opts with VRecord bindings in
+      match mapLookup (stringToSid "0") bindings with Some (VBool allowFree) in
+      VBootParserTree
+        (bootParserParseMExprString
+          (allowFree,) (valSeqToStrings keywords) (valToString src)))
+  | c & CBootParserParseMLangString _ -> VConst1
+    (c, lam src. VBootParserTree (bootParserParseMLangString (valToString src)))
+  | c & CBootParserParseMLangFile _ -> VConst1
+    (c, lam f. VBootParserTree (bootParserParseMLangFile (valToString f)))
+  | c & CBootParserParseMCoreFile _ -> VConst3
+    (c, lam opts. lam keywords. lam filename.
+      match opts with VRecord bindings in
+      match
+        map (lam k. mapLookup (stringToSid k) bindings)
+          ["0", "1", "2", "3", "4", "5"]
+      with
+        [ Some (VBool keepUtests), Some (VBool pruneExternalUtests)
+        , Some externalsExclude, Some (VBool warn)
+        , Some (VBool eliminateDeadCode), Some (VBool allowFree) ]
+      in
+      let pruneArg =
+        ( keepUtests, pruneExternalUtests, valSeqToStrings externalsExclude
+        , warn, eliminateDeadCode, allowFree ) in
+      VBootParserTree
+        (bootParserParseMCoreFile
+          pruneArg (valSeqToStrings keywords) (valToString filename)))
+  | c & CBootParserGetId _ -> VConst1
+    (c, lam t. match t with VBootParserTree t in VInt (bootParserGetId t))
+  | c & CBootParserGetTerm _ -> VConst2
+    (c, lam t. lam n.
+      match (t, n) with (VBootParserTree t, VInt n) in
+      VBootParserTree (bootParserGetTerm t n))
+  | c & CBootParserGetTop _ -> VConst2
+    (c, lam t. lam n.
+      match (t, n) with (VBootParserTree t, VInt n) in
+      VBootParserTree (bootParserGetTop t n))
+  | c & CBootParserGetDecl _ -> VConst2
+    (c, lam t. lam n.
+      match (t, n) with (VBootParserTree t, VInt n) in
+      VBootParserTree (bootParserGetDecl t n))
+  | c & CBootParserGetType _ -> VConst2
+    (c, lam t. lam n.
+      match (t, n) with (VBootParserTree t, VInt n) in
+      VBootParserTree (bootParserGetType t n))
+  | c & CBootParserGetConst _ -> VConst2
+    (c, lam t. lam n.
+      match (t, n) with (VBootParserTree t, VInt n) in
+      VBootParserTree (bootParserGetConst t n))
+  | c & CBootParserGetPat _ -> VConst2
+    (c, lam t. lam n.
+      match (t, n) with (VBootParserTree t, VInt n) in
+      VBootParserTree (bootParserGetPat t n))
+  | c & CBootParserGetCopat _ -> VConst2
+    (c, lam t. lam n.
+      match (t, n) with (VBootParserTree t, VInt n) in
+      VBootParserTree (bootParserGetCopat t n))
+  | c & CBootParserGetInfo _ -> VConst2
+    (c, lam t. lam n.
+      match (t, n) with (VBootParserTree t, VInt n) in
+      VBootParserTree (bootParserGetInfo t n))
+  | c & CBootParserGetString _ -> VConst2
+    (c, lam t. lam n.
+      match (t, n) with (VBootParserTree t, VInt n) in
+      stringToVal (bootParserGetString t n))
+  | c & CBootParserGetInt _ -> VConst2
+    (c, lam t. lam n.
+      match (t, n) with (VBootParserTree t, VInt n) in
+      VInt (bootParserGetInt t n))
+  | c & CBootParserGetFloat _ -> VConst2
+    (c, lam t. lam n.
+      match (t, n) with (VBootParserTree t, VInt n) in
+      VFloat (bootParserGetFloat t n))
+  | c & CBootParserGetListLength _ -> VConst2
+    (c, lam t. lam n.
+      match (t, n) with (VBootParserTree t, VInt n) in
+      VInt (bootParserGetListLength t n))
+end
+
 --------------
 -- PATTERNS --
 --------------
@@ -1012,11 +1107,8 @@ end
 -- COMPOSITIONS --
 ------------------
 
--- Missing, relative to `MExprAst` in `ast.mc`:
---
--- * Constants: BootParserAst.
---
--- Types and kinds are not evaluated, so nothing is missing there.
+-- Every term, decl, and constant family in `MExprAst` (`ast.mc`) is now
+-- covered. Types and kinds are not evaluated, so nothing is missing there.
 
 lang MExprEvalF =
   -- Terms and Decls
@@ -1034,7 +1126,7 @@ lang MExprEvalF =
   FloatIntConversionEvalF + SeqOpEvalF + StringConvEvalF + SysEvalF +
   SymbEvalF + CmpSymbEvalF + ConTagEvalF + FloatStringConversionEvalF +
   FileOpEvalF + IOEvalF + RandomNumberGeneratorEvalF + TimeEvalF +
-  RefOpEvalF + TypeOpEvalF + TensorOpEvalF +
+  RefOpEvalF + TypeOpEvalF + TensorOpEvalF + BootParserEvalF +
 
   -- Patterns
   NamedPatEvalF + BoolPatEval + RecordPatEval + SeqTotPatEvalF +
@@ -1401,6 +1493,97 @@ utest
         (ulam_ "x" (str_ "n"))
         (tensorCreateInt_ (seq_ [int_ 2, int_ 3]) (ulam_ "is" (int_ 0)))))
 with Some (str_ "[\n\t[n, n, n],\n\t[n, n, n]\n]") using eq else toString in
+
+-- BootParserEvalF
+
+-- There is no `bootParser*_` ast-builder helper, so these are built by hand
+-- from the raw constants, the same trick used for `CConstructorTag` and
+-- `CTensorCreateUninit*` above. An MExpr tuple already compiles to a record
+-- keyed "0", "1", ... -- exactly the shape the two `Parse*` constants below
+-- expect for their options argument, so no separate record-builder is
+-- needed.
+let bootParserParseMExprString_ = lam allowFree. lam keywords. lam src.
+  appf3_ (uconst_ (CBootParserParseMExprString ()))
+    (utuple_ [bool_ allowFree]) (seq_ (map str_ keywords)) (str_ src) in
+let bootParserGetId_ = lam t. app_ (uconst_ (CBootParserGetId ())) t in
+let bootParserGetTerm_ = lam t. lam n.
+  appf2_ (uconst_ (CBootParserGetTerm ())) t (int_ n) in
+let bootParserGetString_ = lam t. lam n.
+  appf2_ (uconst_ (CBootParserGetString ())) t (int_ n) in
+let bootParserGetInt_ = lam t. lam n.
+  appf2_ (uconst_ (CBootParserGetInt ())) t (int_ n) in
+let bootParserGetFloat_ = lam t. lam n.
+  appf2_ (uconst_ (CBootParserGetFloat ())) t (int_ n) in
+let bootParserGetConst_ = lam t. lam n.
+  appf2_ (uconst_ (CBootParserGetConst ())) t (int_ n) in
+let bootParserGetListLength_ = lam t. lam n.
+  appf2_ (uconst_ (CBootParserGetListLength ())) t (int_ n) in
+
+-- Parse "x" with `allowFree` (mirrors `boot-parser.mc`'s own `allowFree`
+-- test): root tag 100 = TmVar, string field 0 = the identifier, int field 0
+-- = the frozen flag.
+utest
+  readback
+    (eval
+      (bindall_ [ulet_ "t" (bootParserParseMExprString_ true [] "x")]
+        (utuple_
+          [ bootParserGetId_ (var_ "t")
+          , bootParserGetString_ (var_ "t") 0
+          , bootParserGetInt_ (var_ "t") 0 ])))
+with Some (utuple_ [int_ 100, str_ "x", int_ 0]) using eq else toString in
+
+-- Parse "lam x. x": root tag 102 = TmLam, string field 0 = the parameter.
+-- `GetTerm` at field 0 gives the body sub-tree (tag 100 = TmVar, string
+-- field 0 = "x" again) -- the one thing the plain-literal tests above don't
+-- reach.
+utest
+  readback
+    (eval
+      (bindall_
+        [ ulet_ "t" (bootParserParseMExprString_ false [] "lam x. x")
+        , ulet_ "body" (bootParserGetTerm_ (var_ "t") 0) ]
+        (utuple_
+          [ bootParserGetId_ (var_ "t")
+          , bootParserGetString_ (var_ "t") 0
+          , bootParserGetId_ (var_ "body")
+          , bootParserGetString_ (var_ "body") 0 ])))
+with Some (utuple_ [int_ 102, str_ "x", int_ 100, str_ "x"])
+using eq else toString in
+
+-- Parse "3.14": root tag 105 = TmConst. `GetConst` at field 0 gives a const
+-- sub-tree of tag 302 = CFloat, whose float field 0 is the value --
+-- exercises `GetConst`/`GetFloat`.
+utest
+  readback
+    (eval
+      (bindall_
+        [ ulet_ "t" (bootParserParseMExprString_ false [] "3.14")
+        , ulet_ "c" (bootParserGetConst_ (var_ "t") 0) ]
+        (utuple_
+          [ bootParserGetId_ (var_ "t")
+          , bootParserGetId_ (var_ "c")
+          , bootParserGetFloat_ (var_ "c") 0 ])))
+with Some (utuple_ [int_ 105, int_ 302, float_ 3.14]) using eq else toString in
+
+-- Parse "[1, 2, 3]": root tag 106 = TmSeq, whose list-length field 0 is the
+-- element count -- exercises `GetListLength`.
+utest
+  readback
+    (eval
+      (bindall_ [ulet_ "t" (bootParserParseMExprString_ false [] "[1, 2, 3]")]
+        (utuple_
+          [ bootParserGetId_ (var_ "t")
+          , bootParserGetListLength_ (var_ "t") 0 ])))
+with Some (utuple_ [int_ 106, int_ 3]) using eq else toString in
+
+-- `GetTop`/`GetDecl`/`GetCopat` and `ParseMLangString`/`ParseMLangFile`/
+-- `ParseMCoreFile` are implemented (identical in shape to the constants
+-- tested above) but not separately exercised here: `GetTop`/`GetDecl` are
+-- MLang-only, `GetCopat` isn't reached by any `matchTerm`/`matchPat`/
+-- `matchConst` case in `boot-parser.mc`, and the other `Parse*` variants
+-- need MLang source or a real file on disk. `mi eval --fast-eval --test
+-- src/test/mexpr/pprint-eval.mc` exercises the full `matchTerm`/`matchType`/
+-- `matchPat` machinery this fragment supports, end to end.
 
 -- SysEvalF (remaining constants)
 
