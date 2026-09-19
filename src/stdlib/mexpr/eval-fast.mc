@@ -199,14 +199,18 @@ lang NeverEvalF = EvalF + NeverAst
          "Reached a never term, which should be impossible in a well-typed program."
 end
 
+let nameGetSymOrGetFreshSym = lam n.
+  match nameGetSym n with Some s then s else gensym ()
+
 lang LetEvalF = EvalF + LetDeclAst
   sem mkEvalDeclF =
   | DeclLet r ->
-    match nameGetSym r.ident with Some s then
-      let s = sym2hash s in
-      let body = mkEvalF r.body in
-      lam env. Cons ((s, body env), env)
-    else errorSingle [r.info] "Unsymbolized DeclLet in mkEvalDeclF!"
+    -- NOTE(oerikss, 2026-09-16): We assume here that unsymbolized let bindings
+    -- are not referred to en the rest of the code. This can appear for example
+    -- in generated code that involves sequencing of expressions.
+    let s = sym2hash (nameGetSymOrGetFreshSym r.ident) in
+    let body = mkEvalF r.body in
+    lam env. Cons ((s, body env), env)
 end
 
 lang RecLetsEval = EvalF + RecLetsDeclAst + LamEvalF
@@ -216,13 +220,12 @@ lang RecLetsEval = EvalF + RecLetsDeclAst + LamEvalF
       map
         (lam b.
           match b.body with TmLam r then
-            match (nameGetSym b.ident, nameGetSym r.ident) with
-              (Some s1, Some s2) then
-              let s1 = sym2hash s1 in
-              let s2 = sym2hash s2 in
-              let body = mkEvalF r.body in
-              (s1, lam env. lam val. body (Cons ((s2, val), env)))
-            else errorSingle [r.info] "Unsymbolized DeclRecLets in mkEvalDeclF!"
+            -- NOTE(oerikss, 2026-09-16): We assume here that unsymbolized let
+            -- bindings are not referred to en the rest of the code.
+            let s1 = sym2hash (nameGetSymOrGetFreshSym b.ident) in
+            let s2 = sym2hash (nameGetSymOrGetFreshSym r.ident) in
+            let body = mkEvalF r.body in
+            (s1, lam env. lam val. body (Cons ((s2, val), env)))
           else
             errorSingle [infoTm b.body]
               "Right-hand side of recursive let must be a lambda")
