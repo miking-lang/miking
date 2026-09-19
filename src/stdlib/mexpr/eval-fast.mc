@@ -139,9 +139,24 @@ lang MatchEvalF = EvalF + MatchAst
   sem mkTryMatch : Pat -> Val -> EvalFEnv -> Option EvalFEnv
 end
 
-lang RecordEvalF = EvalF + RecordAst
+lang RecordEvalF = EvalF + RecordAst + UnknownTypeAst
   syn Val =
   | VRecord (Map SID Val)
+
+  sem readback =
+  | VRecord bindings ->
+    optionMap
+      (lam bindings.
+        TmRecord { bindings = bindings
+                 , ty = TyUnknown { info = NoInfo () }
+                 , info = NoInfo ()
+                 })
+      (mapFoldlOption
+        (lam acc. lam k. lam v.
+          match readback v with Some e then Some (mapInsert k e acc)
+          else None ())
+        (mapEmpty cmpSID)
+        bindings)
 
   sem mkEvalF =
   | TmRecord r ->
@@ -252,12 +267,13 @@ lang ExtEvalF = EvalF + ExtDeclAst
     lam env. env
 end
 
-lang PlaceholderEvalF = EvalF + PlaceholderAst
+lang PlaceholderEvalF = EvalF + PlaceholderAst + UnknownTypeAst
   syn Val =
   | VPlaceholder {}
 
   sem readback =
-  | VPlaceholder _ -> TmPlaceholder {}
+  | VPlaceholder _ -> Some
+    (TmPlaceholder { ty = TyUnknown { info = NoInfo () }, info = NoInfo () })
 
   sem mkEvalF =
   | TmPlaceholder _ -> lam env. VPlaceholder {}
