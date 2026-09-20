@@ -167,7 +167,7 @@ lang AVLTreeImpl
     let hd = subi (avlHeight l) (avlHeight t.r) in
     if lti hd (negi 1) then (k, v, avlBalanceRight t.key t.value l t.r)
     else (k, v, avlCreate t.key t.value l t.r)
-  | Leaf _ -> error "avlSplitLast: empty tree"
+  | Leaf _ -> error "avlSplitFirst: empty tree"
 
   sem avlBalanceRight : all k. all v. k -> v -> AVL k v -> AVL k v -> AVL k v
   sem avlBalanceRight k v l =
