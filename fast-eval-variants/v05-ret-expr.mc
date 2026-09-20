@@ -5,10 +5,21 @@
 -- type, so the same integer is `TmConst {val = CInt {val = n}, ty = ..., info =
 -- ...}` -- three blocks deep, two of whose fields the evaluator never reads.
 -- Closures and partially applied constants have nowhere to live in `Expr`, so
--- they are added to it as new constructors.
+-- they are added to it as new constructors, the same way constructor-application
+-- values (`VConApp`) are.
 --
 -- This is the allocation-shape question: how much does carrying `ty` and `info`
 -- on every intermediate value cost?
+--
+-- SCOPE: the baseline has grown several constant families since this variant
+-- was first written (symbols, sys/file/IO, random, time, refs, type-of, tensors,
+-- the boot parser) that have no natural `Expr` encoding and that nothing in
+-- ../experiments exercises. Rather than invent untested `Expr` encodings for
+-- them, this variant simply does not compose them -- `SysEvalF` here is cut
+-- down to the one case (`CExit`) every benchmark's checksum convention needs.
+-- Everything `../experiments` actually exercises (arithmetic, comparisons,
+-- sequences, records, closures, `match` including constructor and
+-- and/or/not patterns) is fully supported.
 
 include "mexpr/ast.mc"
 include "mexpr/eq.mc"
@@ -55,7 +66,7 @@ lang VarEvalF = EvalF + VarAst
   | TmVar r ->
     match nameGetSym r.ident with Some s1 then
       evalFEnvLookup (sym2hash s1)
-    else error "Unsymbolized TmVarin mkEvalF!"
+    else errorSingle [r.info] "Unsymbolized TmVarin mkEvalF!"
 end
 
 lang AppEvalF = EvalF + AppAst + ConstAst + UnknownTypeAst
@@ -71,34 +82,27 @@ lang AppEvalF = EvalF + AppAst + ConstAst + UnknownTypeAst
 
   sem mkEvalF =
   | TmApp r ->
-    -- A constant applied to exactly as many arguments as it takes: resolve the
-    -- delta function once, while compiling, and emit a closure that calls it
-    -- directly.  The general path would instead build a VConst2/VConst1 chain
-    -- and take it apart again on every single evaluation.  The three shapes
-    -- are disjoint, since each looks through a different number of TmApp
-    -- layers before expecting a TmConst, and a constant used as a value still
-    -- falls through to `mkEvalFApp`.
-    match r with
-      {lhs = TmApp {lhs = TmApp {lhs = TmConst c, rhs = a}, rhs = b}, rhs = d}
-    then
+    switch r
+    case {lhs = TmApp {lhs = TmApp {lhs = TmConst c, rhs = a}, rhs = b}, rhs = d} then
       match mkDeltaF c.val with VConst3 (_, f) then
         let a = mkEvalF a in
         let b = mkEvalF b in
         let d = mkEvalF d in
         lam env. f (a env) (b env) (d env)
       else mkEvalFApp r
-    else match r with {lhs = TmApp {lhs = TmConst c, rhs = a}, rhs = b} then
+    case {lhs = TmApp {lhs = TmConst c, rhs = a}, rhs = b} then
       match mkDeltaF c.val with VConst2 (_, f) then
         let a = mkEvalF a in
         let b = mkEvalF b in
         lam env. f (a env) (b env)
       else mkEvalFApp r
-    else match r with {lhs = TmConst c, rhs = a} then
+    case {lhs = TmConst c, rhs = a} then
       match mkDeltaF c.val with VConst1 (_, f) then
         let a = mkEvalF a in
         lam env. f (a env)
       else mkEvalFApp r
-    else mkEvalFApp r
+    case _ then mkEvalFApp r
+    end
 
   sem mkEvalFApp : {lhs : Expr, rhs : Expr, ty : Type, info : Info}
                 -> EvalFEnv -> Val
@@ -124,7 +128,7 @@ lang LamEvalF = AppEvalF + LamAst
       let s = sym2hash s in
       let body = mkEvalF r.body in
       lam env. VCls (lam val. body (Cons ((s, val), env)))
-    else error "Unsymbolized TmLam in mkEvalF!"
+    else errorSingle [r.info] "Unsymbolized TmLam in mkEvalF!"
 
   sem applyF =
   | (VCls cls, val) -> cls val
@@ -154,7 +158,12 @@ lang ConstEvalF = AppEvalF + ConstAst + UnknownTypeAst
   sem mkDeltaF =| _ -> error "Unsupported Const in mkDeltaF!"
 end
 
-lang MatchEvalF = EvalF + MatchAst
+lang MatchEvalF = EvalF
+  sem mkTryMatch : Pat -> Val -> EvalFEnv -> Option EvalFEnv
+  sem mkTryMatch =| _ -> error "Unsupported Pat in mkTryMatch!"
+end
+
+lang MatchEvalFEager = MatchEvalF + MatchAst
   sem mkEvalF =
   | TmMatch r ->
     let target = mkEvalF r.target in
@@ -163,9 +172,6 @@ lang MatchEvalF = EvalF + MatchAst
     let tryMatch = mkTryMatch r.pat in
     lam env.
       match tryMatch (target env) env with Some env then thn env else els env
-
-  sem mkTryMatch : Pat -> Val -> EvalFEnv -> Option EvalFEnv
-  sem mkTryMatch =| _ -> error "Unsupported Pat in mkTryMatch!"
 end
 
 lang RecordEvalF = EvalF + RecordAst + UnknownTypeAst
@@ -201,34 +207,41 @@ lang NeverEvalF = EvalF + NeverAst
          "Reached a never term, which should be impossible in a well-typed program."
 end
 
+let nameGetSymOrGetFreshSym = lam n.
+  match nameGetSym n with Some s then s else gensym ()
+
 lang LetEvalF = EvalF + LetDeclAst
   sem mkEvalDeclF =
   | DeclLet r ->
-    match nameGetSym r.ident with Some s then
-      let s = sym2hash s in
-      let body = mkEvalF r.body in
-      lam env. Cons ((s, body env), env)
-    else error "Unsymbolized DeclLet in mkEvalDeclF!"
+    -- NOTE(oerikss, 2026-09-16): We assume here that unsymbolized let bindings
+    -- are not referred to en the rest of the code. This can appear for example
+    -- in generated code that involves sequencing of expressions.
+    let s = sym2hash (nameGetSymOrGetFreshSym r.ident) in
+    let body = mkEvalF r.body in
+    lam env. Cons ((s, body env), env)
 end
 
-lang RecLetsEval = EvalF + RecLetsDeclAst + LamEvalF
+lang RecLetsEvalFList = EvalF + RecLetsDeclAst + LamEvalF
   sem mkEvalDeclF =
   | DeclRecLets r ->
     let ts =
-      map
-        (lam b.
-          match b.body with TmLam r then
-            match (nameGetSym b.ident, nameGetSym r.ident) with
-              (Some s1, Some s2) then
-              let s1 = sym2hash s1 in
-              let s2 = sym2hash s2 in
-              let body = mkEvalF r.body in
-              (s1, lam env. lam val. body (Cons ((s2, val), env)))
-            else error "Unsymbolized DeclRecLets in mkEvalDeclF!"
-          else error "Right-hand side of recursive let must be a lambda")
-        r.bindings in
-    recursive let reclet = lam env.
       foldl
+        (lam acc. lam b.
+          match b.body with TmLam r then
+            -- NOTE(oerikss, 2026-09-16): We assume here that unsymbolized let
+            -- bindings are not referred to en the rest of the code.
+            let s1 = sym2hash (nameGetSymOrGetFreshSym b.ident) in
+            let s2 = sym2hash (nameGetSymOrGetFreshSym r.ident) in
+            let body = mkEvalF r.body in
+            Cons ((s1, lam env. lam val. body (Cons ((s2, val), env))), acc)
+          else
+            errorSingle [infoTm b.body]
+              "Right-hand side of recursive let must be a lambda")
+        (Nil ())
+        r.bindings in
+    let ts = listReverse ts in
+    recursive let reclet = lam env.
+      listFoldl
         (lam acc. lam t.
           match t with (s, cls) in
           Cons ((s, VCls (lam val. cls (reclet env) val)), acc))
@@ -243,13 +256,50 @@ lang TypeEvalF = EvalF + TypeDeclAst
 end
 
 lang DataEvalF = EvalF + DataAst + DataDeclAst
+  -- Constructor-application values reuse the same `Int` tag trick as the
+  -- baseline (hash the constructor's symbol once, while compiling), just as a
+  -- new `Expr` variant rather than a new `Val` variant.
+  syn Expr =
+  | VConApp (Int, Expr)
+
+  sem readback =
+  | VConApp _ -> None ()
+
   sem mkEvalF =
   | TmConApp r ->
     let body = mkEvalF r.body in
-    lam env. TmConApp { r with body = body env }
+    match nameGetSym r.ident with Some s then
+      let s = sym2hash s in
+      lam env. VConApp (s, body env)
+    else errorSingle [r.info] "Unsymbolized TmConApp in mkEvalF!"
 
   sem mkEvalDeclF =
   | DeclConDef _ -> lam env. env
+end
+
+lang UtestEvalF = EvalF + UtestDeclAst
+  sem mkEvalDeclF =
+  | DeclUtest r ->
+    warnSingle [r.info] "Skipping evaluation of utest";
+    lam env. env
+end
+
+lang ExtEvalF = EvalF + ExtDeclAst
+  sem mkEvalDeclF =
+  | DeclExt r ->
+    warnSingle [r.info]
+      (concat "Skipping external declaration for: " (nameGetStr r.ident));
+    lam env. env
+end
+
+lang PlaceholderEvalF = EvalF + PlaceholderAst
+  sem mkEvalF =
+  | TmPlaceholder r -> lam env. TmPlaceholder r
+end
+
+lang OpaqueEvalF = EvalF + OpaqueAst
+  sem mkEvalF =
+  | TmOpaque r -> mkEvalF r.body
 end
 
 ---------------
@@ -333,28 +383,6 @@ lang CharEvalF = ConstEvalF + CharAst + UnknownTypeAst
   sem mkDeltaF =
   | c & CChar _ -> (TmConst { val = c, ty = TyUnknown { info = NoInfo () }, info = NoInfo () })
 end
-
--- lang IOEvalF = ConstEvalF + IOAst + SeqAst + RecordAst + UnknownTypeAst
---   sem mkDeltaF =
---   | (CPrint _, [TmSeq s]) ->
---     let s = _evalSeqOfCharsToString info s.tms in
---     print s;
---     uunit_
---   | (CPrintError _, [TmSeq s]) ->
---     let s = _evalSeqOfCharsToString info s.tms in
---     printError s;
---     uunit_
---   | (CDPrint _, [_]) -> uunit_
---   | (CFlushStdout _, [_]) ->
---     flushStdout ();
---     uunit_
---   | (CFlushStderr _, [_]) ->
---     flushStderr ();
---     uunit_
---   | (CReadLine _, [_]) ->
---     let s = readLine () in
---     TmSeq {tms = map char_ s, ty = tyunknown_, info = NoInfo ()}
--- end
 
 lang CmpCharEvalF = ConstEvalF + CharEvalF + BoolEvalF + CmpCharAst
   sem mkDeltaF =
@@ -607,6 +635,20 @@ lang SeqEdgePatEvalF = MatchEvalF + SeqEvalF + SeqEdgePat
       else None ()
 end
 
+lang DataPatEvalF = MatchEvalF + DataEvalF + DataPat
+  sem mkTryMatch =
+  | PatCon r ->
+    match nameGetSym r.ident with Some s then
+      let s = sym2hash s in
+      let subpat = mkTryMatch r.subpat in
+      lam val. lam env.
+        match val with VConApp (c, arg) then
+          if eqi c s then subpat arg env
+          else None ()
+        else None ()
+    else error "Unsymbolized PatCon in mkTryMatch!"
+end
+
 lang IntPatEvalF = MatchEvalF + IntEvalF + IntPat
   sem mkTryMatch =
   | PatInt r -> lam val. lam env.
@@ -623,17 +665,45 @@ lang CharPatEvalF = MatchEvalF + CharEvalF + CharPat
     else None ()
 end
 
+lang AndPatEvalF = MatchEvalF + AndPat
+  sem mkTryMatch =
+  | PatAnd r ->
+    let lpat = mkTryMatch r.lpat in
+    let rpat = mkTryMatch r.rpat in
+    lam val. lam env.
+      match lpat val env with Some env then rpat val env
+      else None ()
+end
+
+lang OrPatEvalF = MatchEvalF + OrPat
+  sem mkTryMatch =
+  | PatOr r ->
+    let lpat = mkTryMatch r.lpat in
+    let rpat = mkTryMatch r.rpat in
+    lam val. lam env.
+      match lpat val env with Some env then Some env else rpat val env
+end
+
+lang NotPatEvalF = MatchEvalF + NotPat
+  sem mkTryMatch =
+  | PatNot r ->
+    let subpat = mkTryMatch r.subpat in
+    lam val. lam env.
+      match subpat val env with Some _ then None () else Some env
+end
+
 ------------------
 -- COMPOSITIONS --
 ------------------
 
 lang MExprEvalF =
   -- Terms and Decls
-  VarEvalF + AppEvalF + LamEvalF + DeclEvalF + ConstEvalF + MatchEvalF +
-  RecordEvalF + SeqEvalF + NeverEvalF + DataEvalF +
+  VarEvalF + AppEvalF + LamEvalF + DeclEvalF + ConstEvalF + MatchEvalFEager +
+  RecordEvalF + SeqEvalF + NeverEvalF + DataEvalF + UtestEvalF + ExtEvalF +
+  PlaceholderEvalF + OpaqueEvalF +
 
   -- Decls
-  LetEvalF + RecLetsEval + TypeEvalF +
+  LetEvalF + RecLetsEvalFList + TypeEvalF +
 
   -- Constants
   UnsafeCoerceEvalF + IntEvalF + ArithIntEvalF + ShiftIntEvalF +  BoolEvalF +
@@ -643,7 +713,8 @@ lang MExprEvalF =
 
   -- Patterns
   NamedPatEvalF + BoolPatEval + RecordPatEval + SeqTotPatEvalF +
-  SeqEdgePatEvalF + IntPatEvalF + CharPatEvalF
+  SeqEdgePatEvalF + DataPatEvalF + IntPatEvalF + CharPatEvalF +
+  AndPatEvalF + OrPatEvalF + NotPatEvalF
 end
 
 ------------

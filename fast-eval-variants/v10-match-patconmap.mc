@@ -1,36 +1,27 @@
--- PATTERNS: lower nested patterns first, then assume shallow ones.
+-- MATCH DISPATCH: build a constructor -> branches map for long PatCon chains.
 --
--- `mexpr/shallow-patterns.mc` rewrites a program so that every `match` tests one
--- level of one constructor, with variables or wildcards underneath -- nested
--- patterns become nested matches instead.  This variant runs that lowering
--- between type checking and `mkEvalF`, and then takes the simplification it
--- licenses: `mkTryMatch` no longer builds a sub-matcher per field or element and
--- threads an `Option` through them.  It reads the names to bind at build time and
--- emits a closure that does a type test, a length test where there is one, and a
--- fixed number of indexed reads.
+-- The baseline compiles a chain of `match x with C1 ... else match x with C2
+-- ... else ...` on the same target variable as a linear sequence of `eqi` tag
+-- comparisons (`DataPatEvalF`'s `mkTryMatch`), one per arm tried in order.
+-- `eval-fast.mc` itself carries this fragment, written but never composed into
+-- the real evaluator: once a chain has at least `minPatConChain` (5) `PatCon`
+-- arms on the same target, it instead builds a `Map Int (List alt)` from
+-- constructor tag to branch once, while compiling, and does one `mapLookup`
+-- (O(log n)) at run time instead of trying each arm in turn (O(n) in the
+-- worst case). `experiments/tree-pattern.mc` (2 constructors) never crosses
+-- the threshold; `experiments/variant-pattern.mc` (20 constructors) always
+-- does -- that pairing is the point of this variant.
 --
--- The sequence-edge case collapses furthest.  Lowering emits `minLength`
--- wildcards as the prefix, no postfix and a wildcard middle, so what is left at
--- run time is a single `geqi` -- no `splitAt`, no subsequence allocation, no
--- `zipWith`.
---
--- The comparison is not free, though, and it is the point of the variant: the
--- lowering is an extra pass over the whole AST before evaluation starts, and it
--- makes the AST bigger, so a program that matches very little may well come out
--- behind.
---
--- The baseline has since grown a `nameGetSymOrGetFreshSym` fallback for
--- unsymbolized `let`/`recursive let` bindings and a live `IOEvalF`, so unlike
--- the original version of this variant, nothing extra is needed here to
--- tolerate `lowerAll`'s discarded bindings or its `print`-based fallthrough
--- error message -- the baseline already covers both.
+-- This was tried in-place in `eval-fast.mc` and measured no speedup on this
+-- suite, which is exactly the kind of result worth being able to re-check in
+-- isolation rather than take on faith.
 
-include "mexpr/shallow-patterns.mc"
 include "mexpr/ast.mc"
 include "mexpr/eq.mc"
 include "mexpr/pprint.mc"
 include "utest.mc"
 include "list.mc"
+include "map.mc"
 include "option.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/symbolize.mc"
@@ -326,6 +317,73 @@ end
 lang OpaqueEvalF = EvalF + OpaqueAst
   sem mkEvalF =
   | TmOpaque r -> mkEvalF r.body
+end
+
+lang MatchEvalFEagerPatConMap =
+  MatchEvalFEager + DataEvalF + VarAst + MatchAst + DataPat
+
+  -- NOTE: Building the constructor -> branches map below has some overhead, so
+  -- we only bother with it once the chain of matches on the same target is long
+  -- enough (at least `minPatConChain` cases) for the O(log n) dispatch to pay
+  -- off.
+  sem minPatConChain : () -> Int
+  sem minPatConChain =
+  | () -> 5
+
+  sem countPatConChain : Name -> Expr -> Int
+  sem countPatConChain ident =
+  | TmMatch (r & {target = TmVar v, pat = PatCon _}) ->
+    if nameEq ident v.ident then addi 1 (countPatConChain ident r.els)
+    else 0
+  | _ -> 0
+
+  sem mkEvalF =
+  | tm & TmMatch (r & {target = TmVar v1
+                 ,pat = PatCon _
+                 ,els = TmMatch {target = TmVar v2, pat = PatCon _}}) ->
+    let target = mkEvalF r.target in
+    if and (nameEq v1.ident v2.ident)
+           (geqi (countPatConChain v1.ident tm) (minPatConChain ())) then
+      match mkEvalFPatConMap v1.ident (mapEmpty subi) tm with (cases, els) in
+      -- NOTE: Several branches in the chain may match on the same constructor
+      -- (e.g. `Node (t & {l = Leaf _})` followed by a more general `Node t`),
+      -- so each map entry holds an ordered list of alternatives to try rather
+      -- than a single one; the first alternative whose sub-pattern matches
+      -- wins.
+      recursive let tryAlts : List (Val -> EvalFEnv -> Option EvalFEnv, EvalFEnv -> Val)
+                            -> Val -> EvalFEnv -> Option Val =
+        lam alts. lam arg. lam env.
+          match alts with Cons ((subpat, thn), rest) then
+            match subpat arg env with Some env then Some (thn env)
+            else tryAlts rest arg env
+          else None ()
+      in
+      lam env.
+        match target env with VConApp (c, arg) then
+          match mapLookup c cases with Some alts then
+            match tryAlts alts arg env with Some res then res
+            else els env
+          else els env
+        else els env
+    else
+      let thn = mkEvalF r.thn in
+      let els = mkEvalF r.els in
+      let tryMatch = mkTryMatch r.pat in
+      lam env.
+        match tryMatch (target env) env with Some env then thn env else els env
+
+  sem mkEvalFPatConMap ident cases =
+  | tm & TmMatch (r & {target = TmVar v, pat = PatCon p}) ->
+    if nameEq ident v.ident then
+      match nameGetSym p.ident with Some s then
+        let s = sym2hash s in
+        let thn = mkEvalF r.thn in
+        let subpat = mkTryMatch p.subpat in
+        let alts = match mapLookup s cases with Some alts then alts else Nil () in
+        mkEvalFPatConMap ident (mapInsert s (Cons ((subpat, thn), alts)) cases) r.els
+      else error "Unsymbolized PatCon in mkEvalFPatConMap!"
+    else (mapMap listReverse cases, mkEvalF tm)
+  | tm -> (mapMap listReverse cases, mkEvalF tm)
 end
 
 ---------------
@@ -1018,133 +1076,67 @@ lang BoolPatEval = MatchEvalF + BoolEvalF + BoolAst + BoolPat
     else None ()
 end
 
-lang RecordPatEval =
-  MatchEvalF + RecordEvalF + RecordAst + RecordPat + NamedPat
-
+lang RecordPatEval = MatchEvalF + RecordEvalF + RecordAst + RecordPat
   sem mkTryMatch =
   | PatRecord r ->
-    -- After `lowerAll` every field pattern is a variable or a wildcard, so the
-    -- fields to bind are settled at build time: no sub-matchers to call, no
-    -- Option to thread through them, and -- since a lowered record pattern is
-    -- infallible on a record -- no failure case beyond the type test.
-    let binds =
-      foldl
-        (lam acc. lam kp.
-          match kp with (k, p) in
-          match p with PatNamed {ident = PName name} then
-            match nameGetSym name with Some s then snoc acc (k, sym2hash s)
-            else error "Unsymbolized PatRecord field in mkTryMatch!"
-          else match p with PatNamed {ident = PWildcard _} then acc
-          else error "Non-shallow PatRecord in mkTryMatch; run lowerAll first!")
-        []
-        (mapBindings r.bindings)
-    in
-    if null binds then lam. lam env. Some env
-    else
-      lam val. lam env.
-        match val with VRecord rb then
-          Some
-            (foldl
-              (lam env. lam ks.
-                match ks with (k, s) in Cons ((s, mapFindExn k rb), env))
-              env binds)
-        else None ()
+    let pbindings = mapMap mkTryMatch r.bindings in
+    lam val. lam env.
+      match val with VRecord rbindings then
+        mapFoldlOption
+          (lam env. lam k. lam pat.
+            match mapLookup k rbindings with Some val then pat val env
+            else None ())
+          env
+          pbindings
+      else None ()
 end
 
-lang SeqTotPatEvalF =
-  MatchEvalF + SeqEvalF + SeqTotPat + NamedPat
-
+lang SeqTotPatEvalF = MatchEvalF + SeqEvalF + SeqTotPat
   sem mkTryMatch =
   | PatSeqTot r ->
-    -- Lowered element patterns are variables or wildcards, so the match is a
-    -- length test followed by a fixed set of indexed reads.
-    let n = length r.pats in
-    let binds =
-      foldl
-        (lam acc. lam ip.
-          match ip with (i, p) in
-          match p with PatNamed {ident = PName name} then
-            match nameGetSym name with Some s then snoc acc (i, sym2hash s)
-            else error "Unsymbolized PatSeqTot element in mkTryMatch!"
-          else match p with PatNamed {ident = PWildcard _} then acc
-          else error "Non-shallow PatSeqTot in mkTryMatch; run lowerAll first!")
-        []
-        (mapi (lam i. lam p. (i, p)) r.pats)
-    in
+    let pats = map mkTryMatch r.pats in
+    let n = length pats in
     lam val. lam env.
       match val with VSeq vals then
         if eqi (length vals) n then
-          Some
-            (foldl
-              (lam env. lam is.
-                match is with (i, s) in Cons ((s, get vals i), env))
-              env binds)
+          optionFoldlM
+            (lam env. lam pv. match pv with (pat, v) in pat v env)
+            env
+            (zipWith (lam pat. lam v. (pat, v)) pats vals)
         else None ()
       else None ()
 end
 
-lang SeqEdgePatEvalF =
-  MatchEvalF + SeqEvalF + SeqEdgePat + NamedPat
-
+lang SeqEdgePatEvalF = MatchEvalF + SeqEvalF + SeqEdgePat
   sem mkTryMatch =
   | PatSeqEdge r ->
-    -- `lowerAll` turns every sequence-edge pattern into a pure length test:
-    -- the prefix is `minLength` wildcards, the postfix is empty and the middle
-    -- is a wildcard.  The bind lists below are therefore empty on lowered
-    -- input and the whole match collapses to one `geqi`.
+    let pats = map mkTryMatch (concat r.prefix r.postfix) in
     let npre = length r.prefix in
     let npost = length r.postfix in
     let nfix = addi npre npost in
-    let collect = lam pats.
-      foldl
-        (lam acc. lam ip.
-          match ip with (i, p) in
-          match p with PatNamed {ident = PName name} then
-            match nameGetSym name with Some s then snoc acc (i, sym2hash s)
-            else error "Unsymbolized PatSeqEdge element in mkTryMatch!"
-          else match p with PatNamed {ident = PWildcard _} then acc
-          else error "Non-shallow PatSeqEdge in mkTryMatch; run lowerAll first!")
-        []
-        (mapi (lam i. lam p. (i, p)) pats)
-    in
-    let pre = collect r.prefix in
-    let post = collect r.postfix in
+    -- The middle binds the remaining subsequence, or is dropped for `_`.
     let middle =
       match r.middle with PName name then
-        match nameGetSym name with Some s then Some (sym2hash s)
-        else error "Unsymbolized PatSeqEdge middle in mkTryMatch!"
-      else None ()
+        match nameGetSym name with Some s then
+          let s = sym2hash s in
+          lam vals. lam env. Some (Cons ((s, VSeq vals), env))
+        else error "Unsymbolized PatSeqEdge in mkTryMatch!"
+      else lam. lam env. Some env
     in
-    if if null pre then
-         if null post then optionIsNone middle else false
-       else false
-    then
-      -- The shape `lowerAll` actually produces.
-      lam val. lam env.
-        match val with VSeq vals then
-          if geqi (length vals) nfix then Some env else None ()
-        else None ()
-    else
-      lam val. lam env.
-        match val with VSeq vals then
-          let n = length vals in
-          if geqi n nfix then
-            let env =
-              foldl
-                (lam env. lam is.
-                  match is with (i, s) in Cons ((s, get vals i), env))
-                env pre in
-            let env =
-              foldl
-                (lam env. lam is.
-                  match is with (i, s) in
-                  Cons ((s, get vals (subi n (subi npost i))), env))
-                env post in
-            match middle with Some s then
-              Some (Cons ((s, VSeq (subsequence vals npre (subi n nfix))), env))
-            else Some env
+    lam val. lam env.
+      match val with VSeq vals then
+        if geqi (length vals) nfix then
+          match splitAt vals npre with (pre, rest) in
+          match splitAt rest (subi (length rest) npost) with (mid, post) in
+          match
+            optionFoldlM
+              (lam env. lam pv. match pv with (pat, v) in pat v env)
+              env
+              (zipWith (lam pat. lam v. (pat, v)) pats (concat pre post))
+          with Some env then middle mid env
           else None ()
         else None ()
+      else None ()
 end
 
 lang DataPatEvalF = MatchEvalF + DataEvalF + DataPat
@@ -1214,6 +1206,7 @@ end
 lang MExprEvalF =
   -- Terms and Decls
   VarEvalF + AppEvalF + LamEvalF + DeclEvalF + ConstEvalF + MatchEvalFEager +
+  MatchEvalFEagerPatConMap +
   RecordEvalF + SeqEvalF + NeverEvalF + DataEvalF + UtestEvalF + ExtEvalF +
   PlaceholderEvalF + OpaqueEvalF +
 
@@ -1243,8 +1236,7 @@ end
 -- exactly the way `mi eval` does, then evaluates it with the evaluator above.
 -- Build with `mi compile <this file> --output <name>`, run as `<name> FILE.mc`.
 
-lang RunnerF =
-  MExprEvalF + BootParser + MExprSym + MExprTypeCheck + MExprLowerNestedPatterns
+lang RunnerF = MExprEvalF + BootParser + MExprSym + MExprTypeCheck
 end
 
 mexpr
@@ -1258,7 +1250,6 @@ match argv with [_, file] ++ _ then
       file in
   let ast = symbolize ast in
   let ast = removeMetaVarExpr (typeCheckExpr typcheckEnvDefault ast) in
-  let ast = lowerAll ast in
   let eval = mkEvalF ast in eval (Nil ());
   ()
 else
