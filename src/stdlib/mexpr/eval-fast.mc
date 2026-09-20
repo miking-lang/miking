@@ -1,5 +1,6 @@
 include "lazy.mc"
 include "list.mc"
+include "map.mc"
 include "option.mc"
 include "utest.mc"
 
@@ -296,8 +297,8 @@ end
 lang RecLetsEvalFListLazy = EvalF + RecLetsDeclAst + LamEvalF
   sem mkEvalDeclF =
   | DeclRecLets r ->
-    let ts = lazy (lam. 
-      let ts = 
+    let ts = lazy (lam.
+      let ts =
         foldl
           (lam acc. lam b.
             match b.body with TmLam r then
@@ -374,6 +375,74 @@ end
 lang OpaqueEvalF = EvalF + OpaqueAst
   sem mkEvalF =
   | TmOpaque r -> mkEvalF r.body
+end
+
+
+lang MatchEvalFEagerPatConMap =
+  MatchEvalFEager + DataEvalF + VarAst + MatchAst + DataPat
+
+  -- NOTE: Building the constructor -> branches map below has some overhead, so
+  -- we only bother with it once the chain of matches on the same target is long
+  -- enough (at least `minPatConChain` cases) for the O(log n) dispatch to pay
+  -- off.
+  sem minPatConChain : () -> Int
+  sem minPatConChain =
+  | () -> 5
+
+  sem countPatConChain : Name -> Expr -> Int
+  sem countPatConChain ident =
+  | TmMatch (r & {target = TmVar v, pat = PatCon _}) ->
+    if nameEq ident v.ident then addi 1 (countPatConChain ident r.els)
+    else 0
+  | _ -> 0
+
+  sem mkEvalF =
+  | tm & TmMatch (r & {target = TmVar v1
+                 ,pat = PatCon _
+                 ,els = TmMatch {target = TmVar v2, pat = PatCon _}}) ->
+    let target = mkEvalF r.target in
+    if and (nameEq v1.ident v2.ident)
+           (geqi (countPatConChain v1.ident tm) (minPatConChain ())) then
+      match mkEvalFPatConMap v1.ident (mapEmpty subi) tm with (cases, els) in
+      -- NOTE: Several branches in the chain may match on the same constructor
+      -- (e.g. `Node (t & {l = Leaf _})` followed by a more general `Node t`),
+      -- so each map entry holds an ordered list of alternatives to try rather
+      -- than a single one; the first alternative whose sub-pattern matches
+      -- wins.
+      recursive let tryAlts : List (Val -> EvalFEnv -> Option EvalFEnv, EvalFEnv -> Val)
+                            -> Val -> EvalFEnv -> Option Val =
+        lam alts. lam arg. lam env.
+          match alts with Cons ((subpat, thn), rest) then
+            match subpat arg env with Some env then Some (thn env)
+            else tryAlts rest arg env
+          else None ()
+      in
+      lam env.
+        match target env with VConApp (c, arg) then
+          match mapLookup c cases with Some alts then
+            match tryAlts alts arg env with Some res then res
+            else els env
+          else els env
+        else els env
+    else
+      let thn = mkEvalF r.thn in
+      let els = mkEvalF r.els in
+      let tryMatch = mkTryMatch r.pat in
+      lam env.
+        match tryMatch (target env) env with Some env then thn env else els env
+
+  sem mkEvalFPatConMap ident cases =
+  | tm & TmMatch (r & {target = TmVar v, pat = PatCon p}) ->
+    if nameEq ident v.ident then
+      match nameGetSym p.ident with Some s then
+        let s = sym2hash s in
+        let thn = mkEvalF r.thn in
+        let subpat = mkTryMatch p.subpat in
+        let alts = match mapLookup s cases with Some alts then alts else Nil () in
+        mkEvalFPatConMap ident (mapInsert s (Cons ((subpat, thn), alts)) cases) r.els
+      else error "Unsymbolized PatCon in mkEvalFPatConMap!"
+    else (mapMap listReverse cases, mkEvalF tm)
+  | tm -> (mapMap listReverse cases, mkEvalF tm)
 end
 
 ---------------
