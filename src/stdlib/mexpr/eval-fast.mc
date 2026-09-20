@@ -1,10 +1,12 @@
+include "lazy.mc"
+include "list.mc"
+include "option.mc"
+include "utest.mc"
+
 include "mexpr/ast.mc"
 include "mexpr/eq.mc"
 include "mexpr/pprint.mc"
 include "mexpr/symbolize.mc"
-include "utest.mc"
-include "list.mc"
-include "option.mc"
 
 lang EvalF = Ast
   syn Val =
@@ -127,7 +129,11 @@ lang ConstEvalF = AppEvalF + ConstAst + UnknownTypeAst
   | (VConst3 (c, f), val) -> VConst2 (c, f val)
 end
 
-lang MatchEvalF = EvalF + MatchAst
+lang MatchEvalF = EvalF
+  sem mkTryMatch : Pat -> Val -> EvalFEnv -> Option EvalFEnv
+end
+
+lang MatchEvalFEager = MatchEvalF + MatchAst
   sem mkEvalF =
   | TmMatch r ->
     let target = mkEvalF r.target in
@@ -136,8 +142,26 @@ lang MatchEvalF = EvalF + MatchAst
     let tryMatch = mkTryMatch r.pat in
     lam env.
       match tryMatch (target env) env with Some env then thn env else els env
+end
 
-  sem mkTryMatch : Pat -> Val -> EvalFEnv -> Option EvalFEnv
+lang MatchEvalFLazy = MatchEvalF + MatchAst + NeverAst
+  sem mkEvalF =
+  | TmMatch (r & {els = TmNever _}) ->
+    let target = mkEvalF r.target in
+    let thn = mkEvalF r.thn in
+    let els = mkEvalF r.els in
+    let tryMatch = mkTryMatch r.pat in
+    lam env.
+      match tryMatch (target env) env with Some env then thn env
+      else els env
+  | TmMatch r ->
+    let target = mkEvalF r.target in
+    let thn = lazy (lam. mkEvalF r.thn) in
+    let els = lazy (lam. mkEvalF r.els) in
+    let tryMatch = mkTryMatch r.pat in
+    lam env.
+      match tryMatch (target env) env with Some env then lazyForce thn env
+      else lazyForce els env
 end
 
 lang RecordEvalF = EvalF + RecordAst + UnknownTypeAst
@@ -213,29 +237,88 @@ lang LetEvalF = EvalF + LetDeclAst
     lam env. Cons ((s, body env), env)
 end
 
-lang RecLetsEval = EvalF + RecLetsDeclAst + LamEvalF
+lang RecLetsEvalF = EvalF + RecLetsDeclAst + LamEvalF
+   sem mkEvalDeclF =
+   | DeclRecLets r ->
+     let ts =
+      map
+        (lam b.
+           match b.body with TmLam r then
+             -- NOTE(oerikss, 2026-09-16): We assume here that unsymbolized let
+             -- bindings are not referred to en the rest of the code.
+             let s1 = sym2hash (nameGetSymOrGetFreshSym b.ident) in
+             let s2 = sym2hash (nameGetSymOrGetFreshSym r.ident) in
+             let body = mkEvalF r.body in
+             (s1, lam env. lam val. body (Cons ((s2, val), env)))
+           else
+             errorSingle [infoTm b.body]
+               "Right-hand side of recursive let must be a lambda")
+         r.bindings in
+     recursive let reclet = lam env.
+       foldl
+         (lam acc. lam t.
+           match t with (s, cls) in
+           Cons ((s, VCls (lam val. cls (reclet env) val)), acc))
+        env ts
+    in
+    reclet
+end
+
+lang RecLetsEvalFList = EvalF + RecLetsDeclAst + LamEvalF
   sem mkEvalDeclF =
   | DeclRecLets r ->
     let ts =
-      map
-        (lam b.
+      foldl
+        (lam acc. lam b.
           match b.body with TmLam r then
             -- NOTE(oerikss, 2026-09-16): We assume here that unsymbolized let
             -- bindings are not referred to en the rest of the code.
             let s1 = sym2hash (nameGetSymOrGetFreshSym b.ident) in
             let s2 = sym2hash (nameGetSymOrGetFreshSym r.ident) in
             let body = mkEvalF r.body in
-            (s1, lam env. lam val. body (Cons ((s2, val), env)))
+            Cons ((s1, lam env. lam val. body (Cons ((s2, val), env))), acc)
           else
             errorSingle [infoTm b.body]
               "Right-hand side of recursive let must be a lambda")
+        (Nil ())
         r.bindings in
+    let ts = listReverse ts in
     recursive let reclet = lam env.
-      foldl
+      listFoldl
         (lam acc. lam t.
           match t with (s, cls) in
           Cons ((s, VCls (lam val. cls (reclet env) val)), acc))
         env ts
+    in
+    reclet
+end
+
+lang RecLetsEvalFListLazy = EvalF + RecLetsDeclAst + LamEvalF
+  sem mkEvalDeclF =
+  | DeclRecLets r ->
+    let ts = lazy (lam. 
+      let ts = 
+        foldl
+          (lam acc. lam b.
+            match b.body with TmLam r then
+              -- NOTE(oerikss, 2026-09-16): We assume here that unsymbolized let
+              -- bindings are not referred to en the rest of the code.
+              let s1 = sym2hash (nameGetSymOrGetFreshSym b.ident) in
+              let s2 = sym2hash (nameGetSymOrGetFreshSym r.ident) in
+              let body = mkEvalF r.body in
+              Cons ((s1, lam env. lam val. body (Cons ((s2, val), env))), acc)
+            else
+              errorSingle [infoTm b.body]
+                "Right-hand side of recursive let must be a lambda")
+          (Nil ())
+          r.bindings in
+      listReverse ts) in
+    recursive let reclet = lam env.
+      listFoldl
+        (lam acc. lam t.
+          match t with (s, cls) in
+          Cons ((s, VCls (lam val. cls (reclet env) val)), acc))
+        env (lazyForce ts)
     in
     reclet
 end
@@ -1112,12 +1195,12 @@ end
 
 lang MExprEvalF =
   -- Terms and Decls
-  VarEvalF + AppEvalF + LamEvalF + DeclEvalF + ConstEvalF + MatchEvalF +
+  VarEvalF + AppEvalF + LamEvalF + DeclEvalF + ConstEvalF + MatchEvalFEager +
   RecordEvalF + SeqEvalF + NeverEvalF + DataEvalF + UtestEvalF + ExtEvalF +
   PlaceholderEvalF + OpaqueEvalF +
 
   -- Decls
-  LetEvalF + RecLetsEval + TypeEvalF +
+  LetEvalF + RecLetsEvalFList + TypeEvalF +
 
   -- Constants
   UnsafeCoerceEvalF + IntEvalF + ArithIntEvalF + ShiftIntEvalF +  BoolEvalF +

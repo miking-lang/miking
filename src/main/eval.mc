@@ -2,27 +2,28 @@
 -- Miking is licensed under the MIT license.
 -- Copyright (C) David Broman. See file LICENSE.txt
 
-include "options.mc"
-include "options-type.mc"
-include "parse.mc"
-include "seq.mc"
-include "name.mc"
 include "bool.mc"
 include "common.mc"
+include "name.mc"
+include "options-type.mc"
+include "options.mc"
+include "parse.mc"
+include "seq.mc"
 
 include "annotate.mc"
-include "mexpr/keywords.mc"
-include "mexpr/boot-parser.mc"
 include "mexpr/ast-builder.mc"
-include "mexpr/profiling.mc"
-include "mexpr/pprint.mc"
-include "mexpr/symbolize.mc"
-include "mexpr/mexpr.mc"
+include "mexpr/boot-parser.mc"
 include "mexpr/builtin.mc"
-include "mexpr/eval.mc"
+include "mexpr/demote-recursive.mc"
 include "mexpr/eval-fast.mc"
-include "mexpr/type-check.mc"
+include "mexpr/eval.mc"
+include "mexpr/keywords.mc"
+include "mexpr/mexpr.mc"
+include "mexpr/pprint.mc"
+include "mexpr/profiling.mc"
 include "mexpr/remove-ascription.mc"
+include "mexpr/symbolize.mc"
+include "mexpr/type-check.mc"
 include "mexpr/type-lift.mc"
 include "mexpr/utest-generate.mc"
 include "peval/ast.mc"
@@ -31,7 +32,8 @@ include "peval/ast.mc"
 lang ExtMCore =
   BootParser + MExpr + MExprTypeCheck + MExprRemoveTypeAscription +
   MExprTypeCheck + MExprTypeLift + MExprUtestGenerate +
-  MExprProfileInstrument + MExprEval + MExprEvalF + SpecializeAst
+  MExprProfileInstrument + MExprEval + MExprEvalF + MExprDemoteRecursive +
+  SpecializeAst
 
   sem updateArgv : [String] -> Expr -> Expr
   sem updateArgv args =
@@ -66,6 +68,8 @@ let eval = lam files. lam options : Options. lam args.
 
     let ast = symbolize ast in
 
+    let ast = demoteRecursive ast in
+
     let ast =
       if options.debugProfile then
         instrumentProfiling ast
@@ -88,7 +92,7 @@ let eval = lam files. lam options : Options. lam args.
     if options.exitBefore then exit 0
     else
       if options.fastEval then
-        let eval = mkEvalF ast in eval (Nil ()); ()
+        let eval = mkEvalF (updateArgv args ast) in eval (Nil ()); ()
       else eval (evalCtxEmpty ()) (updateArgv args ast); ()
   in
   iter evalFile files
