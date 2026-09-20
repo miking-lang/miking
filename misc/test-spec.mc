@@ -171,13 +171,6 @@ testMain substituters directories location (lam api.
         , "src/stdlib/mexpr/nestable-records/merged.mc"
         , "src/stdlib/mexpr/reptypes.mc"
         , "src/stdlib/parser/selfhost-gen.mc"
-        
-        -- symlinks, skip
-        , "src/test/microbenchmark/fold.mc"
-        , "src/test/microbenchmark/iter.mc"
-        , "src/test/microbenchmark/map_n.mc"
-        , "src/test/microbenchmark/rand_sample_n.mc"
-        , "src/test/microbenchmark/matrix_mul_carray_genarray.mc"
         ])
         -- contains some experimental stuff
       (dirIs "src/test/meta")
