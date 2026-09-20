@@ -140,6 +140,7 @@ kind of recursive data with real constructors instead.
 | `closures` | closure allocation and higher-order application chains | quadratic |
 | `church-list` | recursive data built from closures, folded three times | linear |
 | `tree-pattern` | `con`/`PatCon` on a real (non-Church-encoded) recursive type, folded three times | linear |
+| `variant-pattern` | `con`/`PatCon` dispatch across 20 constructors in one match chain, crossing eval-fast.mc's dispatch-map threshold | linear |
 | `records` | record construction, multi-field `{s with ...}`, record patterns | linear |
 | `tuples` | tuple construction and patterns, no record update | linear |
 | `primes` | trial division: `muli`/`modi` in two nested tail loops | ~scale^1.5 |
@@ -181,6 +182,9 @@ rows isolates one thing:
 * `church-list` vs `tree-pattern` -- the same shape of benchmark (build once,
   fold three times) with recursive data Church-encoded as closures against a
   real `con` type taken apart with `PatCon`.
+* `tree-pattern` vs `variant-pattern` -- the same build-and-dispatch shape on
+  a `con` type, but 2 constructors against 20, isolating the effect of
+  crossing `eval-fast.mc`'s `minPatConChain` dispatch-map threshold.
 
 Apart from `mutual-rec` and `mutual-rec-outer`, every benchmark uses separate
 single-binding `recursive` groups even where a single multi-binding group would
