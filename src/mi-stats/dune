@@ -1,0 +1,8 @@
+(executable
+ (name main)
+ (foreign_stubs
+  (language cxx)
+  (names root)
+  (include_dirs cpp vendor vendor/eigen vendor/boost)
+  (flags (:standard -std=c++17)))
+ (link_flags (-cclib -lstdc++)))
