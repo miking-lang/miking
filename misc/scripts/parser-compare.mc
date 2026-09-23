@@ -20,8 +20,6 @@ include "string.mc"
 include "result.mc"
 include "stdlib::parser/parser.mc"
 
-let emptyEqEnv = {varEnv = biEmpty, conEnv = biEmpty}
-
 -- The lexer counts a tab as `tabSpace` (2) columns wide when skipping
 -- whitespace between tokens (see lexer.mc's `eatWSAC`), but as a single
 -- (raw) column when it occurs inside a string or char literal (`matchChar`
@@ -74,11 +72,31 @@ use BootParserMLang in
 
 let lex = lam s. nextToken {pos = initPos "reparse", str = s} in
 
-let eqPatTop : Pat -> Pat -> Bool = lam p1. lam p2.
-  match eqPat emptyEqEnv emptyEqEnv biEmpty p1 p2 with Some _ then true else false
-in
+let eqDeclTop : Decl -> Decl -> Bool = lam a. lam b. eqi (cmpDecl a b) 0 in
+let eqExprTop : Expr -> Expr -> Bool = lam a. lam b. eqi (cmpExpr a b) 0 in
+let eqTypeTop : Type -> Type -> Bool = lam a. lam b. eqi (cmpType a b) 0 in
+let eqPatTop : Pat -> Pat -> Bool = lam a. lam b. eqi (cmpPat a b) 0 in
 
 let eqInfoStruct : Info -> Info -> Bool = lam a. lam b. eqi (infoCmp a b) 0 in
+
+-- Boot's AST records only the *number* of type parameters of a `syn`
+-- declaration (`Data (fi, ident, List.length params, ...)` in
+-- `parser.mly`); the names survive solely because `set_con_params`
+-- copies them onto every constructor. A `syn` without constructors
+-- therefore loses them altogether, and `mlang/boot-parser.mc` invents
+-- `p` for each one. Erase the names on both sides so the comparison
+-- doesn't flag a difference the boot AST is unable to represent.
+recursive let eraseEmptySynParams : Decl -> Decl = lam d.
+  let d = smap_Decl_Decl eraseEmptySynParams d in
+  match d with DeclSyn r then
+    if null r.defs then
+      DeclSyn {r with params = make (length r.params) (nameNoSym "p")}
+    else d
+  else d
+in
+let eraseEmptySynParamsProgram : MLangProgram -> MLangProgram = lam p.
+  {p with decls = map eraseEmptySynParams p.decls}
+in
 
 -- Reparses the source span an info field points at with `parseFn`, and
 -- reports an issue (appended to `acc`) unless the result is present and
@@ -117,7 +135,7 @@ in
 recursive
   let checkInfoDecl : Info -> String -> [String] -> Decl -> [String] = lam parentInfo. lam src. lam acc. lam d.
     let info = infoDecl d in
-    let acc = checkNode src acc "decl" parentInfo info d parseDecl eqDecl in
+    let acc = checkNode src acc "decl" parentInfo info d parseDecl eqDeclTop in
     let acc = sfold_Decl_Decl (checkInfoDecl info src) acc d in
     let acc = sfold_Decl_Expr (checkInfoExpr info src) acc d in
     let acc = sfold_Decl_Type (checkInfoType info src) acc d in
@@ -125,7 +143,7 @@ recursive
     acc
   let checkInfoExpr : Info -> String -> [String] -> Expr -> [String] = lam parentInfo. lam src. lam acc. lam e.
     let info = infoTm e in
-    let acc = checkNode src acc "expr" parentInfo info e parseExpr eqExpr in
+    let acc = checkNode src acc "expr" parentInfo info e parseExpr eqExprTop in
     let acc = sfold_Expr_Expr (checkInfoExpr info src) acc e in
     let acc = sfold_Expr_Type (checkInfoType info src) acc e in
     let acc = sfold_Expr_Pat (checkInfoPat info src) acc e in
@@ -137,7 +155,7 @@ recursive
     -- span purely for error-reporting purposes. That span isn't meant to
     -- be independently reparseable as "the type that was written here".
     let acc = match t with TyUnknown _ then acc
-      else checkNode src acc "type" parentInfo info t parseType eqType in
+      else checkNode src acc "type" parentInfo info t parseType eqTypeTop in
     sfold_Type_Type (checkInfoType info src) acc t
   let checkInfoPat : Info -> String -> [String] -> Pat -> [String] = lam parentInfo. lam src. lam acc. lam p.
     let info = infoPat p in
@@ -170,7 +188,9 @@ let astOk =
     printLn (join [path, ": (boot could not parse this file; skipping AST comparison)"]);
     true
   case (_, Right bootProg) then
-    if eqProgram prog bootProg then true
+    if eqi (cmpProgram (eraseEmptySynParamsProgram prog)
+                       (eraseEmptySynParamsProgram bootProg)) 0
+    then true
     else (printLn (join [path, ": NATIVE/BOOT AST MISMATCH"]); false)
   end
 in

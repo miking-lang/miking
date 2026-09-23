@@ -18,13 +18,13 @@ include "common.mc"
 include "lexer.mc"
 include "mexpr/info.mc"
 include "mexpr/ast.mc"
-include "mexpr/eq.mc"
+include "mexpr/cmp.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/json-debug.mc"
 include "mexpr/pprint.mc"
 include "mlang/ast.mc"
-include "mlang/eq.mc"
+include "mlang/cmp.mc"
 include "mlang/boot-parser.mc"
 include "mlang/pprint.mc"
 include "json.mc"
@@ -2489,7 +2489,7 @@ lang ProjParser = AstParserBase + MatchAst + NeverAst + RecordPat + NamedPat + V
   sem constructPostfixExpr +=
   | (OpExprProj (info, label), target) ->
     let fullInfo = mergeInfo (infoTm target) info in
-    let tmpIdent = nameNoSym "t" in
+    let tmpIdent = nameNoSym "X" in
     parseOk (TmMatch {
       target = target,
       pat = PatRecord {
@@ -3062,7 +3062,7 @@ lang TestParser =
     MLangParser
   + MExprPrettyPrint
   + MLangPrettyPrint
-  + MLangEq
+  + MLangCmp
   + MExprToJson
 end
 
@@ -3092,7 +3092,7 @@ let compare = lam str.
     case (Some a, Some b) then
       match eqString (jsonStr a) (jsonStr b) with true then
         OkSame ()
-      else match eqExpr a b with true then
+      else match eqi (cmpExpr a b) 0 with true then
         OkSameExInfo ()
       else
         Fail ()
@@ -3135,7 +3135,7 @@ let compareProg = lam str.
   let b = parseBootProg str in
   switch (result.toOption a, result.toOption b)
     case (Some a, Some b) then
-      if eqProgram a b then OkSameExInfo () else Fail ()
+      if eqi (cmpProgram a b) 0 then OkSameExInfo () else Fail ()
     case (None (), None ()) then
       OkFail ()
     case _ then
