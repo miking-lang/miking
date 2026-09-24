@@ -10,7 +10,6 @@ include "mexpr/mexpr.mc"
 include "peval/peval.mc"
 include "error.mc"
 include "list.mc"
-include "mexpr/parser.mc"
 include "mexpr/pprint.mc"
 include "mexpr/symbolize.mc"
 include "basic-types.mc"
@@ -18,7 +17,7 @@ include "seq.mc"
 
 
 lang SpecializeAst =
-  KeywordMaker + MExprAst + MExprParser + MExprPrettyPrint + MExprSym
+  KeywordMaker + MExprAst + MExprPrettyPrint + MExprSym
   + MExprEq + Eval + PrettyPrint + MExprTypeCheck + LamEval
 
 

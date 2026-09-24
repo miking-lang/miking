@@ -117,46 +117,6 @@ lang BoolParser = ExprParser + IdentParser + ConstAst + BoolAst + UnknownTypeAst
        pos = p2, str = xs}
 end
 
-let parseUInt : Pos -> String -> {val: String, pos: Pos, str: String} =
-  lam p. lam str.
-  recursive
-  let work = lam p2. lam str. lam num.
-    match str with [x] ++ xs then
-      let c = char2int x in
-      if and (geqi c 48) (leqi c 57)
-      then work (advanceCol p2 1) xs (snoc num x)
-      else {val = num, pos = p2, str = str}
-    else {val = num, pos = p2, str = str}
-  in work p str ""
-
-utest parseUInt (initPos "") "123"
-  with {val = "123", pos = posVal "" 1 3, str = ""}
-utest parseUInt (initPos "") "1 "
-  with {val = "1", pos = posVal "" 1 1, str = " "}
-utest parseUInt (initPos "") "12.0"
-  with {val = "12", pos = posVal "" 1 2, str = ".0"}
-utest parseUInt (initPos "") "2x"
-  with {val = "2", pos = posVal "" 1 1, str = "x"}
-utest parseUInt (initPos "") "Not a number"
-  with {val = emptyStr, pos = posVal "" 1 0, str = "Not a number"}
-
-let parseFloatExponent : Pos -> String -> {val: String, pos: Pos, str: String} =
-  lam p. lam str.
-    match str with ['+' | '-'] ++ xs & s then
-      let n : ParseResult String = parseUInt (advanceCol p 1) xs in
-      match n.val with "" then n
-      else {val = cons (head s) n.val, pos = n.pos, str = n.str}
-    else
-      parseUInt p str
-
-utest parseFloatExponent (initPos "") "1"
-  with {val = "1", pos = posVal "" 1 1, str = ""}
-utest parseFloatExponent (initPos "") "-12  "
-  with {val = "-12", pos = posVal "" 1 3, str = "  "}
-utest parseFloatExponent (initPos "") "+3"
-  with {val = "+3", pos = posVal "" 1 2, str = ""}
-utest parseFloatExponent (initPos "") "-2.5"
-  with {val = "-2", pos = posVal "" 1 2, str = ".5"}
 utest parseFloatExponent (initPos "") "Not an exponent"
   with {val = emptyStr, pos = posVal "" 1 0, str = "Not an exponent"}
 
@@ -293,21 +253,6 @@ lang SeqParser = ExprParser + KeywordUtils + SeqAst + UnknownTypeAst
 end
 
 
--- Matches a character (including escape character).
-let matchChar : Pos -> String -> {val: Char, pos: Pos, str: String} =
-  lam p. lam str : String.
-  let ret = lam c. lam s. lam n. {val = c, pos = (advanceCol p n), str = s} in
-    match str with "\\" ++ xs then
-      match xs with "\\" ++ xs then ret '\\' xs 2 else
-      match xs with "n" ++ xs then ret '\n' xs 2 else
-      match xs with "t" ++ xs then ret '\t' xs 2 else
-      match xs with "\"" ++ xs then ret '\"' xs 2 else
-      match xs with "'" ++ xs then ret '\'' xs 2 else
-      posErrorExit (advanceCol p 1) "Unknown escape character."
-    else match str with [x] ++ xs then ret x xs 1
-    else posErrorExit p "Unexpected end of file."
-    -- TODO (David, 2020-09-27): Shoud we allow newlines etc. inside strings
-    -- TODO (David, 2020-09-27): Add all other relevant escape characters
 
 -- Parses strings, including escape characters
 lang StringParser = ExprParser + SeqAst + CharAst + UnknownTypeAst

@@ -277,7 +277,17 @@ end
 
 lang TypeEq = Eq + TypeDeclAst
   sem eqDeclH (env : EqEnv) (free : EqEnv) (lhs : Decl) +=
-  | DeclType _ -> error "eqDecl not implemented for DeclType!"
+  | DeclType {ident = i2, params = p2, tyIdent = ty2} ->
+    match lhs with DeclType {ident = i1, params = p1, tyIdent = ty1} then
+      if eqi (length p1) (length p2) then
+        let tyVarEnv = foldl2 (lam tyVarEnv. lam n1. lam n2. biInsert (n1,n2) tyVarEnv) biEmpty p1 p2 in
+        let typeEnv = {tyVarEnv = tyVarEnv} in
+        let typeFree = {freeTyVars = biEmpty, freeTyFlex = biEmpty} in
+        match eqTypeH typeEnv typeFree ty1 ty2 with Some _ then
+          Some ({env with conEnv = biInsert (i1,i2) env.conEnv}, free)
+        else None ()
+      else None ()
+    else None ()
 end
 
 lang DataEq = Eq + DataDeclAst + DataAst

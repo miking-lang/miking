@@ -821,9 +821,22 @@ lang MCoreLoader = MLangLoader + ConstTransformerMLang + BootParserMLang
   | FMCore {includeMExpr : Bool}
   sem _fileType += | _ ++ ".mc" -> FMCore {includeMExpr = false}
 
+  -- An `.mc` file is parsed with the boot parser by default. This hook
+  -- replaces that with another parser producing the same
+  -- `MLangProgram`, see `parser/loader.mc` for the native parser.
+  syn Hook +=
+  | NativeParserHook {parse : String -> Result () (Info, String) MLangProgram}
+
+  sem _parseMLangProgram : String -> Loader -> Result () (Info, String) MLangProgram
+  sem _parseMLangProgram path = | loader ->
+    match getHookOpt (lam x. match x with NativeParserHook x then Some x.parse else None ()) loader
+    with Some parse
+    then parse path
+    else parseMLangFile path
+
   sem _loadFile path += | (FMCore {includeMExpr = includeMExpr}, loader) ->
     let prog =
-      switch result.consume (parseMLangFile path)
+      switch result.consume (_parseMLangProgram path loader)
       case (_, Right prog) then prog
       case (_, Left errs) then
         errorMulti errs (join ["Parse error while parsing '", path, "'"])
