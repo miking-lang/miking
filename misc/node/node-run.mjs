@@ -5,14 +5,14 @@
 // so something has to supply one. This is that something for Node; it is a
 // sample host, not part of the compiler.
 //
-// Usage: node misc/scripts/es-node-run.mjs <module.mjs> [args...]
+// Usage: node misc/node/node-run.mjs <module.mjs> [args...]
 
 import { pathToFileURL } from "node:url";
-import { nodeEnv } from "../../src/stdlib/ecmascript/hosts/node.mjs";
+import { nodeEnv } from "./node-env.mjs";
 
 const target = process.argv[2];
 if (target === undefined) {
-  process.stderr.write("usage: es-node-run.mjs <module.mjs> [args...]\n");
+  process.stderr.write("usage: node-run.mjs <module.mjs> [args...]\n");
   process.exit(1);
 }
 

@@ -19,11 +19,11 @@ The backend is designed to generate 100% generic code.
 The generated code does not make any assumptions about the host runtime that it is running on.
 This is solved by having the entire program be wrapped in a exported function that takes a
 single argument that is a environment with host specific implementations.
-An example host environment for nodejs can be found in [hosts/node.mjs](./hosts/node.mjs).
-There is also a provided script [misc/scripts/es-node-run.mjs](../../../misc/scripts/es-node-run.mjs).
+An example host environment for nodejs can be found in [misc/node/node-env.mjs](../../../misc/node/node-env.mjs).
+There is also a provided script [misc/node/node-run.mjs](../../../misc/node/node-run.mjs).
 That will run a program with the default nodejs environment.
 
-The backend targets the mlang-pipeline only since it does not implement boot specific intrinsics.
+The backend targets the native-parser since we want to be able to run the compiler in the browser.
 
 ## Readability
 

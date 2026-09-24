@@ -13,17 +13,17 @@ let parserCompareSub =
     }
   ) in
 
--- `misc/scripts/es-node-run.mjs` supplies a runtime environment to a module
+-- `misc/node/node-run.mjs` supplies a runtime environment to a module
 -- built by the `ecmascript` backend.
 let esNodeRunSub =
   ( 'e'
   , { tup =
-      { actual = "node $(ROOT)/misc/scripts/es-node-run.mjs"
-      , deps = ["$(ROOT)/misc/scripts/es-node-run.mjs"]
+      { actual = "node $(ROOT)/misc/node/node-run.mjs"
+      , deps = ["$(ROOT)/misc/node/node-run.mjs"]
       }
     , make =
-      { actual = "node $(ROOT)/misc/scripts/es-node-run.mjs"
-      , deps = ["misc/scripts/es-node-run.mjs"]
+      { actual = "node $(ROOT)/misc/node/node-run.mjs"
+      , deps = ["misc/node/node-run.mjs"]
       }
     , friendly = "ES-NODE-RUN"
     }
