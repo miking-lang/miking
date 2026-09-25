@@ -14,6 +14,7 @@ include "annotate.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/builtin.mc"
+include "mexpr/constant-fold.mc"
 include "mexpr/demote-recursive.mc"
 include "mexpr/eval-fast.mc"
 include "mexpr/eval.mc"
@@ -43,6 +44,9 @@ lang ExtMCore =
 end
 
 lang TyAnnotFull = MExprPrettyPrint + TyAnnot + HtmlAnnotator
+end
+
+lang ConstantFoldExt = MExprConstantFold + MExprArity
 end
 
 -- Main function for evaluating a program using the interpreter
@@ -89,10 +93,13 @@ let eval = lam files. lam options : Options. lam args.
     -- If option --test, then generate utest runner calls. Otherwise strip away
     -- all utest nodes from the AST.
     let ast = generateUtest options.runTests ast in
+    let ast = use ConstantFoldExt in constantFold ast in
     if options.exitBefore then exit 0
     else
       if options.fastEval then
-        let eval = mkEvalF (updateArgv args ast) in eval (Nil ()); ()
+        let cs = optionBind options.debugStackTrace
+          (lam n. optionMap ref (callstackInit n)) in
+        let eval = mkEvalF cs (updateArgv args ast) in eval (Nil ()); ()
       else eval (evalCtxEmpty ()) (updateArgv args ast); ()
   in
   iter evalFile files

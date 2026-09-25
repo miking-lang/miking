@@ -18,6 +18,7 @@ let optionsDefault : Options = {
   debugTypeAnnot = false,
   debugTypeCheck = false,
   debugProfile = false,
+  debugStackTrace = None (),
   debugShallow = false,
   debugConstantFold = false,
   debugDprint = false,
