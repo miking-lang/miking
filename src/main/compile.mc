@@ -149,7 +149,7 @@ let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
       if and (options.enableConstantFold) (not options.disableOptimizations)
       then constantFold ast else ast
     in
-    endPhaseStatsExpr log "constant folding" ast;
+    endPhaseStatsExpr log "constant-folding" ast;
     (if options.debugConstantFold then
       printLn (expr2str ast) else ());
 
@@ -317,6 +317,7 @@ let compile = lam files. lam options : Options. lam args.
 
       -- If option --debug-parse, then pretty print the AST
       (if options.debugParse then printLn (expr2str ast) else ());
+      endPhaseStatsExpr log "debug-parse" ast;
 
       compileWithUtests options file ast; ()
     in

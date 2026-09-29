@@ -86,9 +86,9 @@ lang EvalF = Ast
   | Nil _ -> error "env lookup failed!"
   | Cons ((s2, val), env) -> if eqi s1 s2 then val else evalFEnvLookup s1 env
 
-  sem mkEvalF : (Option (Ref Callstack)) -> Expr -> EvalFEnv -> Val
+  sem evalFStage : (Option (Ref Callstack)) -> Expr -> EvalFEnv -> Val
 
-  sem mkEvalDeclF : (Option (Ref Callstack)) -> Decl -> EvalFEnv -> EvalFEnv
+  sem evalFStageDecl : (Option (Ref Callstack)) -> Decl -> EvalFEnv -> EvalFEnv
 end
 
 ---------------------
@@ -103,11 +103,11 @@ let _sid_4 = stringToSid "4"
 let _sid_5 = stringToSid "5"
 
 lang VarEvalF = EvalF + VarAst
-  sem mkEvalF cs +=
+  sem evalFStage cs +=
   | TmVar r ->
     match nameGetSym r.ident with Some s1 then
       evalFEnvLookup (sym2hash s1)
-    else errorSingle [r.info] "Unsymbolized TmVarin mkEvalF!"
+    else errorSingle [r.info] "Unsymbolized TmVarin evalFStage!"
 end
 
 lang AppEvalF = EvalF + AppAst + ConstAst + UnknownTypeAst
@@ -121,7 +121,7 @@ lang AppEvalF = EvalF + AppAst + ConstAst + UnknownTypeAst
 
   sem mkDeltaF : (Option (Ref Callstack)) -> Const -> Val
 
-  sem mkEvalF cs +=
+  sem evalFStage cs +=
   | TmApp r ->
     -- A constant applied to exactly as many arguments as it takes: resolve the
     -- delta function once, while compiling, and emit a closure that calls it
@@ -136,19 +136,19 @@ lang AppEvalF = EvalF + AppAst + ConstAst + UnknownTypeAst
       let val = mkDeltaF cs c.val in
       switch val
       case VConst3 (_, f) then
-        let a = mkEvalF cs a in
-        let b = mkEvalF cs b in
-        let d = mkEvalF cs d in
+        let a = evalFStage cs a in
+        let b = evalFStage cs b in
+        let d = evalFStage cs d in
         lam env. f (a env) (b env) (d env)
       case VConstInfo3 (_, f) then
-        let a = mkEvalF cs a in
-        let b = mkEvalF cs b in
-        let d = mkEvalF cs d in
+        let a = evalFStage cs a in
+        let b = evalFStage cs b in
+        let d = evalFStage cs d in
         lam env. f r.info (a env) (b env) (d env)
       case _ then
-        let a = mkEvalF cs a in
-        let b = mkEvalF cs b in
-        let d = mkEvalF cs d in
+        let a = evalFStage cs a in
+        let b = evalFStage cs b in
+        let d = evalFStage cs d in
         lam env.
           applyF
             (r.info, applyF (r.info, applyF (r.info, val, a env), b env), d env)
@@ -157,29 +157,29 @@ lang AppEvalF = EvalF + AppAst + ConstAst + UnknownTypeAst
       let val = mkDeltaF cs c.val in
       switch val
       case VConst2 (_, f) then
-        let a = mkEvalF cs a in
-        let b = mkEvalF cs b in
+        let a = evalFStage cs a in
+        let b = evalFStage cs b in
         lam env. f (a env) (b env)
       case VConstInfo2 (_, f) then
-        let a = mkEvalF cs a in
-        let b = mkEvalF cs b in
+        let a = evalFStage cs a in
+        let b = evalFStage cs b in
         lam env. f r.info (a env) (b env)
       case _ then
-        let a = mkEvalF cs a in
-        let b = mkEvalF cs b in
+        let a = evalFStage cs a in
+        let b = evalFStage cs b in
         lam env. applyF (r.info, applyF (r.info, val, a env), b env)
       end
     case {lhs = TmConst c, rhs = a} then
       let val = mkDeltaF cs c.val in
       switch val
       case VConst1 (_, f) then
-        let a = mkEvalF cs a in
+        let a = evalFStage cs a in
         lam env. f (a env)
       case VConstInfo1 (_, f) then
-        let a = mkEvalF cs a in
+        let a = evalFStage cs a in
         lam env. f r.info (a env)
       case _ then
-        let a = mkEvalF cs a in
+        let a = evalFStage cs a in
         lam env. applyF (r.info, val, a env)
       end
     case _ then mkEvalFApp cs r
@@ -190,8 +190,8 @@ lang AppEvalF = EvalF + AppAst + ConstAst + UnknownTypeAst
                 -> EvalFEnv -> Val
   sem mkEvalFApp cs =
   | r ->
-    let lhs = mkEvalF cs r.lhs in
-    let rhs = mkEvalF cs r.rhs in
+    let lhs = evalFStage cs r.lhs in
+    let rhs = evalFStage cs r.rhs in
     let info = r.info in
     lam env. applyF (info, lhs env, rhs env)
 
@@ -215,18 +215,18 @@ lang LamEvalF = AppEvalF + LamAst
   sem readback +=
   | VCls _ | VClsInfo _ -> None ()
 
-  sem mkEvalF cs +=
+  sem evalFStage cs +=
   | TmLam r ->
     match nameGetSym r.ident with Some s then
       let s = sym2hash s in
-      let body = mkEvalF cs r.body in
+      let body = evalFStage cs r.body in
       switch cs
       case None _ then
         lam env. VCls (lam val. body (Cons ((s, val), env)))
       case Some csr then
         lam env. clsUsingCallstack csr (lam val. body (Cons ((s, val), env)))
       end
-    else errorSingle [r.info] "Unsymbolized TmLam in mkEvalF!"
+    else errorSingle [r.info] "Unsymbolized TmLam in evalFStage!"
 
   sem clsUsingCallstack : (Ref Callstack) -> (Val -> Val) -> Val
   sem clsUsingCallstack csr =| cls ->
@@ -244,10 +244,10 @@ lang LamEvalF = AppEvalF + LamAst
 end
 
 lang DeclEvalF = EvalF + DeclAst
-  sem mkEvalF cs +=
+  sem evalFStage cs +=
   | TmDecl r ->
-    let inexpr = mkEvalF cs r.inexpr in
-    let decl = mkEvalDeclF cs r.decl in
+    let inexpr = evalFStage cs r.inexpr in
+    let decl = evalFStageDecl cs r.decl in
     lam env. inexpr (decl env)
 end
 
@@ -258,7 +258,7 @@ lang ConstEvalF = AppEvalF + ConstAst + UnknownTypeAst
     Some(TmConst
       { val = c, ty = TyUnknown { info = NoInfo () }, info = NoInfo () })
 
-  sem mkEvalF cs +=
+  sem evalFStage cs +=
   | TmConst r -> let val = mkDeltaF cs r.val in lam. val
 end
 
@@ -267,11 +267,11 @@ lang MatchEvalF = EvalF
 end
 
 lang MatchEvalF = MatchEvalF + MatchAst
-  sem mkEvalF cs +=
+  sem evalFStage cs +=
   | TmMatch r ->
-    let target = mkEvalF cs r.target in
-    let thn = mkEvalF cs r.thn in
-    let els = mkEvalF cs r.els in
+    let target = evalFStage cs r.target in
+    let thn = evalFStage cs r.thn in
+    let els = evalFStage cs r.els in
     let tryMatch = mkTryMatch r.pat in
     lam env.
       match tryMatch (target env) env with Some env then thn env else els env
@@ -296,17 +296,17 @@ lang RecordEvalF = EvalF + RecordAst + UnknownTypeAst
         (mapEmpty cmpSID)
         bindings)
 
-  sem mkEvalF cs +=
+  sem evalFStage cs +=
   | TmRecord r ->
-    let bindings = mapMap (mkEvalF cs) r.bindings in
+    let bindings = mapMap (evalFStage cs) r.bindings in
     lam env. VRecord (mapMap (lam x. x env) bindings)
   | TmRecordUpdate r ->
-    let rec = mkEvalF cs r.rec in
+    let rec = evalFStage cs r.rec in
     let key = r.key in
-    let value = mkEvalF cs r.value in
+    let value = evalFStage cs r.value in
     lam env.
       match rec env with VRecord rec then VRecord (mapInsert key (value env) rec)
-      else error "TmRecord type error in mkEvalF!"
+      else error "TmRecord type error in evalFStage!"
 end
 
 lang SeqEvalF = EvalF + SeqAst + UnknownTypeAst
@@ -323,14 +323,14 @@ lang SeqEvalF = EvalF + SeqAst + UnknownTypeAst
               })
       (optionMapM readback vals)
 
-  sem mkEvalF cs +=
+  sem evalFStage cs +=
   | TmSeq r ->
-    let vals = map (mkEvalF cs) r.tms in
+    let vals = map (evalFStage cs) r.tms in
     lam env. VSeq (map (lam x. x env) vals)
 end
 
 lang NeverEvalF = EvalF + NeverAst
-  sem mkEvalF cs +=
+  sem evalFStage cs +=
   | TmNever r ->
     let err = lam.
       errorSingle [r.info]
@@ -349,18 +349,18 @@ let nameGetSymOrGetFreshSym = lam n.
   match nameGetSym n with Some s then s else gensym ()
 
 lang LetEvalF = EvalF + LetDeclAst
-  sem mkEvalDeclF cs +=
+  sem evalFStageDecl cs +=
   | DeclLet r ->
     -- NOTE(oerikss, 2026-09-16): We assume here that unsymbolized let bindings
     -- are not referred to en the rest of the code. This can appear for example
     -- in generated code that involves sequencing of expressions.
     let s = sym2hash (nameGetSymOrGetFreshSym r.ident) in
-    let body = mkEvalF cs r.body in
+    let body = evalFStage cs r.body in
     lam env. Cons ((s, body env), env)
 end
 
 lang RecLetsEvalF = EvalF + RecLetsDeclAst + LamEvalF
-  sem mkEvalDeclF cs +=
+  sem evalFStageDecl cs +=
   | DeclRecLets r ->
     let ts = foldl
       (lam acc. lam b.
@@ -369,7 +369,7 @@ lang RecLetsEvalF = EvalF + RecLetsDeclAst + LamEvalF
           -- bindings are not referred to en the rest of the code.
           let s1 = sym2hash (nameGetSymOrGetFreshSym b.ident) in
           let s2 = sym2hash (nameGetSymOrGetFreshSym r.ident) in
-          let body = mkEvalF cs r.body in
+          let body = evalFStage cs r.body in
           Cons ((s1, lam env. lam val. body (Cons ((s2, val), env))), acc)
         else
           errorSingle [infoTm b.body]
@@ -404,7 +404,7 @@ lang RecLetsEvalF = EvalF + RecLetsDeclAst + LamEvalF
 end
 
 lang TypeEvalF = EvalF + TypeDeclAst
-  sem mkEvalDeclF cs +=
+  sem evalFStageDecl cs +=
   | DeclType _ -> lam env. env
 end
 
@@ -412,27 +412,27 @@ lang DataEvalF = EvalF + DataAst + DataDeclAst
   syn Val +=
   | VConApp (Int, Val)
 
-  sem mkEvalF cs +=
+  sem evalFStage cs +=
   | TmConApp r ->
-    let body = mkEvalF cs r.body in
+    let body = evalFStage cs r.body in
     match nameGetSym r.ident with Some s then
       let s = sym2hash s in
       lam env. VConApp (s, body env)
-    else errorSingle [r.info] "Unsymbolized TmConApp in mkEvalF!"
+    else errorSingle [r.info] "Unsymbolized TmConApp in evalFStage!"
 
-  sem mkEvalDeclF cs +=
+  sem evalFStageDecl cs +=
   | DeclConDef _ -> lam env. env
 end
 
 lang UtestEvalF = EvalF + UtestDeclAst
-  sem mkEvalDeclF cs +=
+  sem evalFStageDecl cs +=
   | DeclUtest r ->
     warnSingle [r.info] "Skipping evaluation of utest";
     lam env. env
 end
 
 lang ExtEvalF = EvalF + ExtDeclAst
-  sem mkEvalDeclF cs +=
+  sem evalFStageDecl cs +=
   | DeclExt r ->
     warnSingle [r.info]
       (concat "Skipping external declaration for: " (nameGetStr r.ident));
@@ -447,13 +447,13 @@ lang PlaceholderEvalF = EvalF + PlaceholderAst + UnknownTypeAst
   | VPlaceholder _ -> Some
     (TmPlaceholder { ty = TyUnknown { info = NoInfo () }, info = NoInfo () })
 
-  sem mkEvalF cs +=
+  sem evalFStage cs +=
   | TmPlaceholder _ -> lam env. VPlaceholder {}
 end
 
 lang OpaqueEvalF = EvalF + OpaqueAst
-  sem mkEvalF cs +=
-  | TmOpaque r -> mkEvalF cs r.body
+  sem evalFStage cs +=
+  | TmOpaque r -> evalFStage cs r.body
 end
 
 ---------------
@@ -1173,14 +1173,14 @@ end
 
 lang RecordPatEvalF = MatchEvalF + RecordEvalF + RecordAst + RecordPat +
                      MatchAst + VarAst + NeverAst + NamedPat
-  sem mkEvalF cs +=
+  sem evalFStage cs +=
   | TmMatch (r & {pat = PatRecord p
                  ,thn = TmVar v
                  ,els = TmNever _}) ->
-    let target = mkEvalF cs r.target in
-    let els = mkEvalF cs r.els in
+    let target = evalFStage cs r.target in
+    let els = evalFStage cs r.els in
     let default = lam.
-      let thn = mkEvalF cs r.thn in
+      let thn = evalFStage cs r.thn in
       let tryMatch = mkTryMatch r.pat in
       lam env.
         match tryMatch (target env) env with Some env then thn env
@@ -1356,7 +1356,7 @@ let eq = optionEq eqExpr in
 
 let env : EvalFEnv = Nil () in
 
-let eval : Expr -> Val = lam e. mkEvalF (None ()) (symbolize e) env in
+let eval : Expr -> Val = lam e. evalFStage (None ()) (symbolize e) env in
 
 utest readback (eval (app_ (ulam_ "x" (var_ "x")) (int_ 0)))
 with Some (int_ 0) using eq else toString in
@@ -1830,7 +1830,7 @@ let infoApp = mkInfo 1000 in
 let term = tmApp infoApp tyunknown_ (nulam_ xN (nvar_ xN)) (int_ 42) in
 (match callstackInit 8 with Some cs0 then
   let csr = ref cs0 in
-  let v = mkEvalF (Some csr) (symbolize term) env in
+  let v = evalFStage (Some csr) (symbolize term) env in
   utest readback v with Some (int_ 42) using eq else toString in
   utest callstackPop (deref csr) with None () in
   ()
@@ -1846,7 +1846,7 @@ let term = tmApp info2 tyunknown_
              (tmApp info1 tyunknown_ lam2 (int_ 1)) (int_ 2) in
 (match callstackInit 8 with Some cs0 then
   let csr = ref cs0 in
-  let v = mkEvalF (Some csr) (symbolize term) env in
+  let v = evalFStage (Some csr) (symbolize term) env in
   utest readback v with Some (int_ 3) using eq else toString in
   utest callstackPop (deref csr) with None () in
   ()
@@ -1865,13 +1865,13 @@ let decl = nreclets_ [(countN, tyunknown_, nulam_ nArgN recBody)] in
 let term = bind_ decl (tmApp infoCall tyunknown_ (nvar_ countN) (int_ 5)) in
 (match callstackInit 8 with Some cs0 then
   let csr = ref cs0 in
-  let v = mkEvalF (Some csr) (symbolize term) env in
+  let v = evalFStage (Some csr) (symbolize term) env in
   utest readback v with Some (int_ 0) using eq else toString in
   utest callstackPop (deref csr) with None () in
   ()
 else ());
 
--- Direct nesting test: mkEvalF-driven tests above can only observe
+-- Direct nesting test: evalFStage-driven tests above can only observe
 -- callstack state before/after a *complete* top-level evaluation, since
 -- interpreted MExpr has no way to peek at the host evaluator's Callstack
 -- mid-call. Build closures directly via clsUsingCallstack instead, so the
