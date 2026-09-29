@@ -53,7 +53,7 @@ or begin
 end
 
 function dependenciesIn --argument-names dir
-    string join \n -- $dependencies | rg '^'(string escape --style regex $dir) --replace ''
+    path resolve -- $dependencies | rg '^'(string escape --style regex $dir) --replace ''
 end
 
 
