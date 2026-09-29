@@ -42,7 +42,7 @@ printf '#include "%s"\n' ./cpp/*.cpp >> root.cpp
 
 set includes $workDir $eigenDir $boostDir
 
-set -g dependencies (cpp -M -I$includes root.cpp \
+set -g dependencies (cpp -M -I$includes -DBOOST_MATH_STANDALONE root.cpp \
     | tail --lines=+2 \
     | string trim --chars ' \\' \
     | string split ' ')

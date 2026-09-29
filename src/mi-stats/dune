@@ -6,4 +6,4 @@
   (language cxx)
   (names root)
   (include_dirs cpp vendor vendor/eigen vendor/boost)
-  (flags (:standard -std=c++17))))
+  (flags (:standard -std=c++17 -DBOOST_MATH_STANDALONE))))
