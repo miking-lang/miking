@@ -173,9 +173,9 @@ lang RecordConstantFold = ConstantFold + RecordAst
   | TmRecord r -> mapAll isConstant r.bindings
 end
 
-lang ConstConstantFold = ConstantFold + ConstAst
+lang ConstConstantFold = ConstantFold + ConstAst + SysAst
   sem isConstant +=
-  | TmConst _ -> true
+  | TmConst {val = ! CArgv _} -> true
 end
 
 lang DataConstantFold = ConstantFold + DataAst
@@ -689,6 +689,15 @@ let prog =
     "
 in
 let expected = _parse "lam x. ([1], [2, x])" in
+let actual = constantFold prog in
+utest actual with expected using eqExpr else _toString in
+
+let prog =
+  _parse "
+    match argv with [_] ++ _ then 1 else 2
+    "
+in
+let expected = prog in
 let actual = constantFold prog in
 utest actual with expected using eqExpr else _toString in
 
