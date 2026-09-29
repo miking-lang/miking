@@ -1,7 +1,7 @@
 let rand_float_gauss_boxmuller_many count =
   let rec helpiter i acc =
     if i == count then acc
-    else helpiter (i + 1) (mi_normal_rng 0.0 1.0 :: acc)
+    else helpiter (i + 1) (Mi_stats.mi_normal_rng 0.0 1.0 :: acc)
   in
   helpiter 0 []
 
