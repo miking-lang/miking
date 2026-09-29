@@ -7,7 +7,7 @@
 #include <caml/fail.h>
 #endif
 
-double mi_normal_lpdf(double x, double mu, double sigma) {
+double mi_normal_lpdf(double mu, double sigma, double x) {
   #ifdef TEST
   try {
   #endif
@@ -20,13 +20,13 @@ double mi_normal_lpdf(double x, double mu, double sigma) {
   #endif
 }
 
-extern "C" CAMLprim double mi_normal_lpdf_unwrapped(double x, double mu, double sigma) {
-  return mi_normal_lpdf(x, mu, sigma);
+extern "C" CAMLprim double mi_normal_lpdf_unwrapped(double mu, double sigma,double x) {
+  return mi_normal_lpdf(mu, sigma, x);
 }
 
-extern "C" CAMLprim value mi_normal_lpdf_wrapped(value x, value mu, value sigma) {
-  CAMLparam3(x, mu, sigma);
-  CAMLreturn(caml_copy_double(mi_normal_lpdf(Double_val(x), Double_val(mu), Double_val(sigma))));
+extern "C" CAMLprim value mi_normal_lpdf_wrapped(value mu, value sigma, value x) {
+  CAMLparam3(mu, sigma, x);
+  CAMLreturn(caml_copy_double(mi_normal_lpdf(Double_val(mu), Double_val(sigma), Double_val(x))));
 }
 
 double mi_normal_sample(double mu, double sigma, mi_rng &rng) {
