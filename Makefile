@@ -55,6 +55,24 @@ uninstall-boot:
 	misc/scripts/with-tmp-dir dune uninstall --root=src/boot --build-dir="{}" --prefix=$(prefix) --libdir=$(ocamllibdir) ">/dev/null 2>&1"
 
 
+# The `mi-stats` OCaml library
+
+.PHONY: mi-stats
+mi-stats:
+	misc/scripts/with-tmp-dir dune build --root=src/mi-stats/ --build-dir="{}" \
+	"&&" dune install --root=src/mi-stats/ --build-dir="{}" --prefix=$(current_dir)/build ">/dev/null" "2>&1"
+	rm -f $(current_dir)"/build/lib/mi_stats/dune-package"
+
+.PHONY: install-mi-stats
+install-mi-stats:
+	misc/scripts/with-tmp-dir dune build --root=src/mi-stats/ --build-dir="{}" \
+	"&&" dune install --root=src/mi-stats/ --build-dir="{}" --prefix=$(prefix) --libdir=$(ocamllibdir) ">/dev/null 2>&1"
+
+.PHONY: uninstall-mi-stats
+uninstall-mi-stats:
+	misc/scripts/with-tmp-dir dune uninstall --root=src/mi-stats --build-dir="{}" --prefix=$(prefix) --libdir=$(ocamllibdir) ">/dev/null 2>&1"
+
+
 ## Formatting, checking and autoformatting respectively
 
 .PHONY: lint

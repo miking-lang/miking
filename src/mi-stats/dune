@@ -1,8 +1,9 @@
-(executable
- (name main)
+(library
+ (name mi_stats)
+ (public_name mi_stats)
+ (modules mi_stats)
  (foreign_stubs
   (language cxx)
   (names root)
   (include_dirs cpp vendor vendor/eigen vendor/boost)
-  (flags (:standard -std=c++17)))
- (link_flags (-cclib -lstdc++)))
+  (flags (:standard -std=c++17))))

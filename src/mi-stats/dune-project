@@ -1,1 +1,9 @@
 (lang dune 3.0)
+(generate_opam_files true)
+(name mi_stats)
+
+(package
+ (name mi_stats)
+ (synopsis "External bindings for statistics functions used by Miking")
+ (depends
+  dune))
