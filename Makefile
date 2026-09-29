@@ -103,10 +103,10 @@ build/$(MI_CHEAT_NAME): $(if $(wildcard build/$(MI_CHEAT_NAME)),,cheat)
 # Umbrella install/uninstall targets, for installing and uninstalling everything
 
 .PHONY: install
-install: $(if $(wildcard build/$(MI_NAME)),,bootstrap) install-boot install-stdlib install-mi
+install: $(if $(wildcard build/$(MI_NAME)),,bootstrap) install-boot install-mi-stats install-stdlib install-mi
 
 .PHONY: uninstall
-uninstall: uninstall-boot uninstall-stdlib uninstall-mi
+uninstall: uninstall-boot uninstall-mi-stats uninstall-stdlib uninstall-mi
 
 # Installing and uninstalling `mi` and the standard library
 
