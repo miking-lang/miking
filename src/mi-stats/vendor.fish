@@ -52,8 +52,12 @@ or begin
     exit 1
 end
 
+# NOTE(vipa, 2026-09-29): Add dependencies we know are platform
+# specific, and thus won't be detected by the automatic check above
+set -a dependencies $boostDir/boost/config/{stdlib,platform,compiler}/*.hpp
+
 function dependenciesIn --argument-names dir
-    path resolve -- $dependencies | rg '^'(string escape --style regex $dir) --replace ''
+    path resolve -- $dependencies | sort | uniq | rg '^'(string escape --style regex $dir) --replace ''
 end
 
 
