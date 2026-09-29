@@ -187,7 +187,7 @@ let distExtMap =
           Owl_stats_prng.ziggurat_init ()
         )",
         ty = tyarrows_ [tyint_, otyunit_],
-        libraries = ["owl"],
+        libraries = ["owl", "mi_stats"],
         cLibraries = []
       }
     ])

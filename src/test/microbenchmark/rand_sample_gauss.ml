@@ -1,7 +1,8 @@
+(* TODO(ThimotheeV, 2026-09-29): look into actually using this for comparison *)
 let rand_float_gauss_boxmuller_many count =
   let rec helpiter i acc =
     if i == count then acc
-    else helpiter (i + 1) (Mi_stats.mi_normal_rng 0.0 1.0 :: acc)
+    else helpiter (i + 1) (Mi_stats.mi_normal_rng_ 0.0 1.0 :: acc)
   in
   helpiter 0 []
 
