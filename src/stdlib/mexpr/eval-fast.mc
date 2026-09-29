@@ -22,6 +22,7 @@ include "mexpr/symbolize.mc"
 -- CALLSTACK --
 ---------------
 
+-- Implements a callstack backed by a ringbuffer with O(1) pop and push.
 type Callstack = { _ringbuffer : Tensor[Info]
                  , _idx : Int
                  , _len : Int
@@ -75,19 +76,27 @@ end
 -------------------
 
 lang EvalF = Ast
+  -- Values our terms can take.
   syn Val =
 
+  -- Rebuilds a term from a value, if possible.
   sem readback : Val -> Option Expr
 
+  -- The evaluation environment.
   type EvalFEnv = List (Int, Val)
 
+  -- Looks up symbol hashes in the evaluation environment, gives an error if the
+  -- lookup fails.
   sem evalFEnvLookup : Int -> EvalFEnv -> Val
   sem evalFEnvLookup s1 =
   | Nil _ -> error "env lookup failed!"
   | Cons ((s2, val), env) -> if eqi s1 s2 then val else evalFEnvLookup s1 env
 
+  -- Stages a term for evaluation. Passing a callstack reference will make the
+  -- evaluation function record the call stack which degrades performance.
   sem evalFStage : (Option (Ref Callstack)) -> Expr -> EvalFEnv -> Val
 
+  -- Stages declarations, see `evalFStage`.
   sem evalFStageDecl : (Option (Ref Callstack)) -> Decl -> EvalFEnv -> EvalFEnv
 end
 
@@ -115,6 +124,8 @@ lang AppEvalF = EvalF + AppAst + ConstAst + UnknownTypeAst
   | VConst1 (Const, Val -> Val)
   | VConst2 (Const, Val -> Val -> Val)
   | VConst3 (Const, Val -> Val -> Val -> Val)
+  -- NOTE(oerikss, 2026-09-29): To build a callstack we need to pass info fields
+  -- to higher-order constant functions.
   | VConstInfo1 (Const, Info -> Val -> Val)
   | VConstInfo2 (Const, Info -> Val -> Val -> Val)
   | VConstInfo3 (Const, Info -> Val -> Val -> Val -> Val)
@@ -200,6 +211,9 @@ lang AppEvalF = EvalF + AppAst + ConstAst + UnknownTypeAst
   | (_, VConst1 (_, f), val) -> f val
   | (_, VConst2 (c, f), val) -> VConst1 (c, f val)
   | (_, VConst3 (c, f), val) -> VConst2 (c, f val)
+  -- NOTE(oerikss, 2026-09-29): It only makes sense to pass the info field when
+  -- the constant function is fully applied since that is when its function
+  -- arguments are applied.
   | (info, VConstInfo1 (_, f), val) -> f info val
   | (_, VConstInfo2 (c, f), val) ->
     VConstInfo1 (c, lam info. lam y. f info val y)
@@ -379,9 +393,15 @@ lang RecLetsEvalF = EvalF + RecLetsDeclAst + LamEvalF
     let ts = listReverse ts in
     let errMsg = lam.
       concat "recursive env in DeclRecLets at " (info2str r.info) in
+    -- OPT(oerikss, 2026-09-29): Dispach on the presence of a callstack here
+    -- rather than inside the returned closure. This means a bit of code
+    -- duplication.
     switch cs
     case None _ then
       lam env.
+        -- OPT(oerikss, 2026-09-29): Lazily populate the recursive environment,
+        -- which is safe since our recursive closures does not look at it until
+        -- they are applied.
         let recEnv = ref (lam. error (errMsg ())) in
         let env = listFoldl
           (lam acc. lam t.
@@ -1174,6 +1194,8 @@ end
 lang RecordPatEvalF = MatchEvalF + RecordEvalF + RecordAst + RecordPat +
                      MatchAst + VarAst + NeverAst + NamedPat
   sem evalFStage cs +=
+  -- OPT(oerikss, 2026-09-29): Stage a simpler evaluation function for the
+  -- common special match case expr.label
   | TmMatch (r & {pat = PatRecord p
                  ,thn = TmVar v
                  ,els = TmNever _}) ->
@@ -1772,29 +1794,6 @@ utest
           [ bootParserGetId_ (var_ "t")
           , bootParserGetListLength_ (var_ "t") 0 ])))
 with Some (utuple_ [int_ 106, int_ 3]) using eq else toString in
-
--- `GetTop`/`GetDecl`/`GetCopat` and `ParseMLangString`/`ParseMLangFile`/
--- `ParseMCoreFile` are implemented (identical in shape to the constants
--- tested above) but not separately exercised here: `GetTop`/`GetDecl` are
--- MLang-only, `GetCopat` isn't reached by any `matchTerm`/`matchPat`/
--- `matchConst` case in `boot-parser.mc`, and the other `Parse*` variants
--- need MLang source or a real file on disk. `mi eval --fast-eval --test
--- src/test/mexpr/pprint-eval.mc` exercises the full `matchTerm`/`matchType`/
--- `matchPat` machinery this fragment supports, end to end.
-
--- SysEvalF (remaining constants)
-
--- `CError`, `CArgv`, `CCommand`, and `CExec` are implemented (see the
--- `SysEvalF` fragment above) but deliberately not invoked in a live `utest`
--- here: `CError` halts the whole program, `CArgv`'s value depends on how
--- this file itself was invoked, `CCommand` shells out (unreliable across
--- platforms/CI), and `CExec` replaces the current process image
--- (`Unix.execvp`) and would kill this very test run.
-
--- TypeOpEvalF
-
--- `CTypeOf` is not invoked here since it always errors -- see the
--- `TypeOpEvalF` fragment above.
 
 ------------------------------
 -- UNIT TESTS FOR CALLSTACK --

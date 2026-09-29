@@ -129,6 +129,8 @@ utest reverse [] with [] using eqSeq eqi in
 utest subsequence [1,2,3] 0 2 with [1,2] in
 utest subsequence [1,2,3] 0 10 with [1,2,3] in
 utest subsequence [1,2] 1 1 with [2] in
+utest subsequence [1,2] 1 0 with [] in
+utest subsequence [1,2] 2 0 with [] in
 
 -- 'head s' returns the first element in 's'
 -- [a] -> a
