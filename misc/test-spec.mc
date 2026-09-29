@@ -408,7 +408,7 @@ testMain substituters directories location (lam api.
     [(eval, fail), (compile, fail), (mlangCompile, fail)];
   api.tests []
     (eqString "src/test/meta/recursive-let.mc")
-    [(eval, fail), (compile, succ), (run, succ), (mlangCompile, succ), (mlangRun, succ)];
+    [(eval, succ), (compile, succ), (run, succ), (mlangCompile, succ), (mlangRun, succ)];
 
   -- === Sundials ===
 
