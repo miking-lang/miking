@@ -100,17 +100,17 @@ let distExtMap =
         cLibraries = []
       }
     ]),
-    ("externalGaussianLogPdf", [
-      { expr = "Owl_stats.gaussian_logpdf",
-        ty = tyarrows_ [tyfloat_, otylabel_ "mu" tyfloat_, otylabel_ "sigma" tyfloat_, tyfloat_],
-        libraries = ["owl"],
+    ("externalNormalLogPdf", [
+      { expr = "Mi_stats.mi_normal_lpdf",
+        ty = tyarrows_ [tyfloat_, tyfloat_, tyfloat_, tyfloat_],
+        libraries = ["mi_stats"],
         cLibraries = []
       }
     ]),
-    ("externalGaussianSample", [
-      { expr = "Owl_stats.gaussian_rvs",
-        ty = tyarrows_ [otylabel_ "mu" tyfloat_, otylabel_ "sigma" tyfloat_, tyfloat_],
-        libraries = ["owl"],
+    ("externalNormalSample", [
+      { expr = "Mi_stats.mi_normal_rng",
+        ty = tyarrows_ [tyfloat_, tyfloat_, tyfloat_],
+        libraries = ["mi_stats"],
         cLibraries = []
       }
     ]),

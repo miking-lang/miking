@@ -62,15 +62,15 @@ let betaLogPdf = lam a:Float. lam b:Float. lam x:Float.
 let betaSample = lam a:Float. lam b:Float.
   externalBetaSample a b
 
--- Gaussian
-external externalGaussianLogPdf : Float -> Float -> Float -> Float
-external externalGaussianSample ! : Float -> Float -> Float
-let gaussianPdf = lam mu:Float. lam sigma:Float. lam x:Float.
-  exp (externalGaussianLogPdf x mu sigma)
-let gaussianLogPdf = lam mu:Float. lam sigma:Float. lam x:Float.
-  externalGaussianLogPdf x mu sigma
-let gaussianSample = lam mu:Float. lam sigma:Float.
-  externalGaussianSample mu sigma
+-- Nornal
+external externalNormalLogPdf : Float -> Float -> Float -> Float
+external externalNormalSample ! : Float -> Float -> Float
+let normalPdf = lam mu:Float. lam sigma:Float. lam x:Float.
+  exp (externalNormalLogPdf x mu sigma)
+let normalLogPdf = lam mu:Float. lam sigma:Float. lam x:Float.
+  externalNormalLogPdf x mu sigma
+let normalSample = lam mu:Float. lam sigma:Float.
+  externalNormalSample mu sigma
 
 -- Multinomial and Categorical
 external externalMultinomialLogPmf : [Int] -> [Float] -> Float
@@ -311,10 +311,10 @@ utest betaPdf 2. 2. 0.5 with 1.5 using _eqf in
 utest exp (betaLogPdf 2. 5. 0.2) with 2.4576 using _eqf in
 utest betaSample 2. 2. with 0. using floatRange 0. 1. in
 
--- Testing Gaussian
-utest gaussianPdf 0. 0.4472 0. with 0.892089178 using _eqf in
-utest exp (gaussianLogPdf 2. 1. 2.) with 0.398942280401 using _eqf in
-utest gaussianSample 0. 0.2 with 0. using lam. lam. true in
+-- Testing Normal
+utest normalPdf 0. 0.4472 0. with 0.892089178 using _eqf in
+utest exp (normalLogPdf 2. 1. 2.) with 0.398942280401 using _eqf in
+utest normalSample 0. 0.2 with 0. using lam. lam. true in
 
 -- Testing Multinomial and Categorical
 utest multinomialLogPmf [0.1, 0.3, 0.6] [0,1,0] with log 0.3 using _eqf in
@@ -413,11 +413,11 @@ with true in
 -- Testing seed
 utest setSeed 0; uniformSample (); uniformSample ()
 with setSeed 0; uniformSample (); uniformSample () in
-utest setSeed 0; gaussianSample 0. 1.; gaussianSample 0. 1.
-with  setSeed 0; gaussianSample 0. 1.; gaussianSample 0. 1. in
-utest setSeed 0; uniformSample (); gaussianSample 0. 1.
-with  setSeed 0; uniformSample (); gaussianSample 0. 1. in
-utest setSeed 0; gaussianSample 0. 1.; gaussianSample 0. 1.; uniformSample ()
-with  setSeed 0; gaussianSample 0. 1.; gaussianSample 0. 1.; uniformSample () in
+utest setSeed 0; normalSample 0. 1.; normalSample 0. 1.
+with  setSeed 0; normalSample 0. 1.; normalSample 0. 1. in
+utest setSeed 0; uniformSample (); normalSample 0. 1.
+with  setSeed 0; uniformSample (); normalSample 0. 1. in
+utest setSeed 0; normalSample 0. 1.; normalSample 0. 1.; uniformSample ()
+with  setSeed 0; normalSample 0. 1.; normalSample 0. 1.; uniformSample () in
 
 ()
