@@ -108,7 +108,7 @@ let distExtMap =
       }
     ]),
     ("externalNormalSample", [
-      { expr = "Mi_stats.mi_normal_rng",
+      { expr = "Mi_stats.mi_normal_rng_",
         ty = tyarrows_ [tyfloat_, tyfloat_, tyfloat_],
         libraries = ["mi_stats"],
         cLibraries = []
@@ -181,6 +181,7 @@ let distExtMap =
       { expr = "
         fun seed -> (
           Random.init seed;
+          Mi_stats.mi_set_seed seed;
           Owl_base_stats_prng.init seed;
           Owl_stats_prng.sfmt_seed seed;
           Owl_stats_prng.ziggurat_init ()
