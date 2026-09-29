@@ -39,5 +39,5 @@ type Options = {
   tuneOptions : TuneOptions,
   docgenOptions : DocGenOptions,
   mlangPipeline : Bool,
-  fastEval : Bool
+  slowEval : Bool
 }

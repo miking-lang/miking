@@ -4,7 +4,9 @@
 
 include "bool.mc"
 include "common.mc"
+include "list.mc"
 include "name.mc"
+include "option.mc"
 include "options-type.mc"
 include "options.mc"
 include "parse.mc"
@@ -14,6 +16,7 @@ include "annotate.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/builtin.mc"
+include "mexpr/const-arity.mc"
 include "mexpr/constant-fold.mc"
 include "mexpr/demote-recursive.mc"
 include "mexpr/eval-fast.mc"
@@ -96,10 +99,10 @@ let eval = lam files. lam options : Options. lam args.
     let ast = use ConstantFoldExt in constantFold ast in
     if options.exitBefore then exit 0
     else
-      if options.fastEval then
+      if options.slowEval then eval (evalCtxEmpty ()) (updateArgv args ast); ()
+      else
         let cs = optionBind options.debugStackTrace
           (lam n. optionMap ref (callstackInit n)) in
         let eval = mkEvalF cs (updateArgv args ast) in eval (Nil ()); ()
-      else eval (evalCtxEmpty ()) (updateArgv args ast); ()
   in
   iter evalFile files

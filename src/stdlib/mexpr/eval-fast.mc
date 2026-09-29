@@ -1,9 +1,18 @@
-include "lazy.mc"
+include "basic-types.mc"
+include "common.mc"
+include "error.mc"
+include "info.mc"
+include "int.mc"
 include "list.mc"
 include "map.mc"
+include "name.mc"
 include "option.mc"
+include "seq.mc"
+include "string.mc"
+include "stringid.mc"
 include "utest.mc"
 
+include "mexpr/ast-builder.mc"
 include "mexpr/ast.mc"
 include "mexpr/eq.mc"
 include "mexpr/pprint.mc"
@@ -67,7 +76,6 @@ end
 
 lang EvalF = Ast
   syn Val =
-  | VError (Info, String)
 
   sem readback : Val -> Option Expr
 
@@ -95,7 +103,7 @@ let _sid_4 = stringToSid "4"
 let _sid_5 = stringToSid "5"
 
 lang VarEvalF = EvalF + VarAst
-  sem mkEvalF cs =
+  sem mkEvalF cs +=
   | TmVar r ->
     match nameGetSym r.ident with Some s1 then
       evalFEnvLookup (sym2hash s1)
@@ -103,7 +111,7 @@ lang VarEvalF = EvalF + VarAst
 end
 
 lang AppEvalF = EvalF + AppAst + ConstAst + UnknownTypeAst
-  syn Val =
+  syn Val +=
   | VConst1 (Const, Val -> Val)
   | VConst2 (Const, Val -> Val -> Val)
   | VConst3 (Const, Val -> Val -> Val -> Val)
@@ -113,7 +121,7 @@ lang AppEvalF = EvalF + AppAst + ConstAst + UnknownTypeAst
 
   sem mkDeltaF : (Option (Ref Callstack)) -> Const -> Val
 
-  sem mkEvalF cs =
+  sem mkEvalF cs +=
   | TmApp r ->
     -- A constant applied to exactly as many arguments as it takes: resolve the
     -- delta function once, while compiling, and emit a closure that calls it
@@ -200,14 +208,14 @@ lang AppEvalF = EvalF + AppAst + ConstAst + UnknownTypeAst
 end
 
 lang LamEvalF = AppEvalF + LamAst
-  syn Val =
+  syn Val +=
   | VCls (Val -> Val)
   | VClsInfo (Info -> Val -> Val)
 
-  sem readback =
+  sem readback +=
   | VCls _ | VClsInfo _ -> None ()
 
-  sem mkEvalF cs =
+  sem mkEvalF cs +=
   | TmLam r ->
     match nameGetSym r.ident with Some s then
       let s = sym2hash s in
@@ -230,13 +238,13 @@ lang LamEvalF = AppEvalF + LamAst
       val in
     VClsInfo cls
 
-  sem applyF =
+  sem applyF +=
   | (_, VCls cls, val) -> cls val
   | (info, VClsInfo cls, val) -> cls info val
 end
 
 lang DeclEvalF = EvalF + DeclAst
-  sem mkEvalF cs =
+  sem mkEvalF cs +=
   | TmDecl r ->
     let inexpr = mkEvalF cs r.inexpr in
     let decl = mkEvalDeclF cs r.decl in
@@ -244,13 +252,13 @@ lang DeclEvalF = EvalF + DeclAst
 end
 
 lang ConstEvalF = AppEvalF + ConstAst + UnknownTypeAst
-  sem readback =
+  sem readback +=
   | VConst1 (c, _) | VConst2 (c, _) | VConst3 (c, _)
   | VConstInfo1 (c, _) | VConstInfo2 (c, _) | VConstInfo3 (c, _) ->
     Some(TmConst
       { val = c, ty = TyUnknown { info = NoInfo () }, info = NoInfo () })
 
-  sem mkEvalF cs =
+  sem mkEvalF cs +=
   | TmConst r -> let val = mkDeltaF cs r.val in lam. val
 end
 
@@ -259,7 +267,7 @@ lang MatchEvalF = EvalF
 end
 
 lang MatchEvalF = MatchEvalF + MatchAst
-  sem mkEvalF cs =
+  sem mkEvalF cs +=
   | TmMatch r ->
     let target = mkEvalF cs r.target in
     let thn = mkEvalF cs r.thn in
@@ -270,10 +278,10 @@ lang MatchEvalF = MatchEvalF + MatchAst
 end
 
 lang RecordEvalF = EvalF + RecordAst + UnknownTypeAst
-  syn Val =
+  syn Val +=
   | VRecord (Map SID Val)
 
-  sem readback =
+  sem readback +=
   | VRecord bindings ->
     optionMap
       (lam bindings.
@@ -288,7 +296,7 @@ lang RecordEvalF = EvalF + RecordAst + UnknownTypeAst
         (mapEmpty cmpSID)
         bindings)
 
-  sem mkEvalF cs =
+  sem mkEvalF cs +=
   | TmRecord r ->
     let bindings = mapMap (mkEvalF cs) r.bindings in
     lam env. VRecord (mapMap (lam x. x env) bindings)
@@ -302,10 +310,10 @@ lang RecordEvalF = EvalF + RecordAst + UnknownTypeAst
 end
 
 lang SeqEvalF = EvalF + SeqAst + UnknownTypeAst
-  syn Val =
+  syn Val +=
   | VSeq [Val]
 
-  sem readback =
+  sem readback +=
   | VSeq vals ->
     optionMap
       (lam tms.
@@ -315,14 +323,14 @@ lang SeqEvalF = EvalF + SeqAst + UnknownTypeAst
               })
       (optionMapM readback vals)
 
-  sem mkEvalF cs =
+  sem mkEvalF cs +=
   | TmSeq r ->
     let vals = map (mkEvalF cs) r.tms in
     lam env. VSeq (map (lam x. x env) vals)
 end
 
 lang NeverEvalF = EvalF + NeverAst
-  sem mkEvalF cs =
+  sem mkEvalF cs +=
   | TmNever r ->
     let err = lam.
       errorSingle [r.info]
@@ -341,7 +349,7 @@ let nameGetSymOrGetFreshSym = lam n.
   match nameGetSym n with Some s then s else gensym ()
 
 lang LetEvalF = EvalF + LetDeclAst
-  sem mkEvalDeclF cs =
+  sem mkEvalDeclF cs +=
   | DeclLet r ->
     -- NOTE(oerikss, 2026-09-16): We assume here that unsymbolized let bindings
     -- are not referred to en the rest of the code. This can appear for example
@@ -352,7 +360,7 @@ lang LetEvalF = EvalF + LetDeclAst
 end
 
 lang RecLetsEvalF = EvalF + RecLetsDeclAst + LamEvalF
-  sem mkEvalDeclF cs =
+  sem mkEvalDeclF cs +=
   | DeclRecLets r ->
     let ts = foldl
       (lam acc. lam b.
@@ -396,15 +404,15 @@ lang RecLetsEvalF = EvalF + RecLetsDeclAst + LamEvalF
 end
 
 lang TypeEvalF = EvalF + TypeDeclAst
-  sem mkEvalDeclF cs =
+  sem mkEvalDeclF cs +=
   | DeclType _ -> lam env. env
 end
 
 lang DataEvalF = EvalF + DataAst + DataDeclAst
-  syn Val =
+  syn Val +=
   | VConApp (Int, Val)
 
-  sem mkEvalF cs =
+  sem mkEvalF cs +=
   | TmConApp r ->
     let body = mkEvalF cs r.body in
     match nameGetSym r.ident with Some s then
@@ -412,19 +420,19 @@ lang DataEvalF = EvalF + DataAst + DataDeclAst
       lam env. VConApp (s, body env)
     else errorSingle [r.info] "Unsymbolized TmConApp in mkEvalF!"
 
-  sem mkEvalDeclF cs =
+  sem mkEvalDeclF cs +=
   | DeclConDef _ -> lam env. env
 end
 
 lang UtestEvalF = EvalF + UtestDeclAst
-  sem mkEvalDeclF cs =
+  sem mkEvalDeclF cs +=
   | DeclUtest r ->
     warnSingle [r.info] "Skipping evaluation of utest";
     lam env. env
 end
 
 lang ExtEvalF = EvalF + ExtDeclAst
-  sem mkEvalDeclF cs =
+  sem mkEvalDeclF cs +=
   | DeclExt r ->
     warnSingle [r.info]
       (concat "Skipping external declaration for: " (nameGetStr r.ident));
@@ -432,19 +440,19 @@ lang ExtEvalF = EvalF + ExtDeclAst
 end
 
 lang PlaceholderEvalF = EvalF + PlaceholderAst + UnknownTypeAst
-  syn Val =
+  syn Val +=
   | VPlaceholder {}
 
-  sem readback =
+  sem readback +=
   | VPlaceholder _ -> Some
     (TmPlaceholder { ty = TyUnknown { info = NoInfo () }, info = NoInfo () })
 
-  sem mkEvalF cs =
+  sem mkEvalF cs +=
   | TmPlaceholder _ -> lam env. VPlaceholder {}
 end
 
 lang OpaqueEvalF = EvalF + OpaqueAst
-  sem mkEvalF cs =
+  sem mkEvalF cs +=
   | TmOpaque r -> mkEvalF cs r.body
 end
 
@@ -453,26 +461,26 @@ end
 ---------------
 
 lang UnsafeCoerceEvalF = ConstEvalF + UnsafeCoerceAst
-  sem mkDeltaF cs =
+  sem mkDeltaF cs +=
   | c & CUnsafeCoerce _ -> VConst1 (c, lam x. x)
 end
 
 lang IntEvalF = ConstEvalF + IntAst + UnknownTypeAst
-  syn Val =
+  syn Val +=
   | VInt Int
 
-  sem readback =
+  sem readback +=
   | VInt n -> Some ( TmConst
     { val = CInt { val = n }
     , ty = TyUnknown { info = NoInfo () }
     , info = NoInfo () } )
 
-  sem mkDeltaF cs =
+  sem mkDeltaF cs +=
   | CInt r -> VInt r.val
 end
 
 lang ArithIntEvalF = ConstEvalF + IntEvalF + ArithIntAst
-  sem mkDeltaF cs =
+  sem mkDeltaF cs +=
   | c & CAddi _ -> VConst2
     (c, lam x. lam y. match (x, y) with (VInt x, VInt y) in VInt (addi x y))
   | c & CSubi _ -> VConst2
@@ -488,7 +496,7 @@ lang ArithIntEvalF = ConstEvalF + IntEvalF + ArithIntAst
 end
 
 lang ShiftIntEvalF = ConstEvalF + IntEvalF + ShiftIntAst
-  sem mkDeltaF cs =
+  sem mkDeltaF cs +=
   | c & CSlli _ -> VConst2
     (c, lam x. lam y. match (x, y) with (VInt x, VInt y) in VInt (slli x y))
   | c & CSrli _ -> VConst2
@@ -498,23 +506,23 @@ lang ShiftIntEvalF = ConstEvalF + IntEvalF + ShiftIntAst
 end
 
 lang BoolEvalF = ConstEvalF + BoolAst + UnknownTypeAst
-  syn Val =
+  syn Val +=
   | VBool Bool
 
-  sem readback =
+  sem readback +=
   | VBool b -> Some( TmConst
     { val = CBool { val = b }
     , ty = TyUnknown { info = NoInfo () }
     , info = NoInfo () } )
 
-  sem mkDeltaF cs =
+  sem mkDeltaF cs +=
   | CBool r -> VBool r.val
 end
 
 lang CmpIntEvalF =
   ConstEvalF +  IntEvalF + BoolEvalF + CmpIntAst
 
-  sem mkDeltaF cs =
+  sem mkDeltaF cs +=
   | c & CEqi _ -> VConst2
     (c, lam x. lam y. match (x, y) with (VInt x, VInt y) in VBool (eqi x y))
   | c & CNeqi _ -> VConst2
@@ -530,21 +538,21 @@ lang CmpIntEvalF =
 end
 
 lang CharEvalF = ConstEvalF + CharAst + UnknownTypeAst
-  syn Val =
+  syn Val +=
   | VChar Char
 
-  sem readback =
+  sem readback +=
   | VChar c -> Some( TmConst
     { val = CChar { val = c }
     , ty = TyUnknown { info = NoInfo () }
     , info = NoInfo () } )
 
-  sem mkDeltaF cs =
+  sem mkDeltaF cs +=
   | CChar r -> VChar r.val
 end
 
 lang CmpCharEvalF = ConstEvalF + CharEvalF + BoolEvalF + CmpCharAst
-  sem mkDeltaF cs =
+  sem mkDeltaF cs +=
   | c & CEqc _ -> VConst2
     (c, lam x. lam y. match (x, y) with (VChar x, VChar y) in VBool (eqc x y))
 end
@@ -552,7 +560,7 @@ end
 lang IntCharConversionEvalF =
   ConstEvalF + CharEvalF + IntEvalF + IntCharConversionAst
 
-  sem mkDeltaF cs =
+  sem mkDeltaF cs +=
   | c & CInt2Char _ -> VConst1
     (c, lam x. match x with VInt x in VChar (int2char x))
   | c & CChar2Int _ -> VConst1
@@ -560,21 +568,21 @@ lang IntCharConversionEvalF =
 end
 
 lang FloatEvalF = ConstEvalF + FloatAst + UnknownTypeAst
-  syn Val =
+  syn Val +=
   | VFloat Float
 
-  sem readback =
+  sem readback +=
   | VFloat f -> Some ( TmConst
     { val = CFloat { val = f }
     , ty = TyUnknown { info = NoInfo () }
     , info = NoInfo () } )
 
-  sem mkDeltaF cs =
+  sem mkDeltaF cs +=
   | CFloat r -> VFloat r.val
 end
 
 lang ArithFloatEvalF = ConstEvalF + FloatEvalF + ArithFloatAst
-  sem mkDeltaF cs =
+  sem mkDeltaF cs +=
   | c & CAddf _ -> VConst2
     (c, lam x. lam y. match (x, y) with (VFloat x, VFloat y) in VFloat (addf x y))
   | c & CSubf _ -> VConst2
@@ -588,7 +596,7 @@ lang ArithFloatEvalF = ConstEvalF + FloatEvalF + ArithFloatAst
 end
 
 lang CmpFloatEvalF = ConstEvalF + FloatEvalF + BoolEvalF + CmpFloatAst
-  sem mkDeltaF cs =
+  sem mkDeltaF cs +=
   | c & CEqf _ -> VConst2
     (c, lam x. lam y. match (x, y) with (VFloat x, VFloat y) in VBool (eqf x y))
   | c & CNeqf _ -> VConst2
@@ -606,7 +614,7 @@ end
 lang FloatIntConversionEvalF =
   ConstEvalF + FloatEvalF + IntEvalF + FloatIntConversionAst
 
-  sem mkDeltaF cs =
+  sem mkDeltaF cs +=
   | c & CFloorfi _ -> VConst1
     (c, lam x. match x with VFloat x in VInt (floorfi x))
   | c & CCeilfi _ -> VConst1
@@ -624,7 +632,7 @@ end
 lang SeqOpEvalF =
   ConstEvalF + SeqEvalF + IntEvalF + BoolEvalF + RecordEvalF + SeqOpAst
 
-  sem mkDeltaF cs =
+  sem mkDeltaF cs +=
   -- First order
   | c & CHead _ -> VConst1
     (c, lam s. match s with VSeq s in head s)
@@ -719,7 +727,7 @@ lang StringConvEvalF = SeqEvalF + CharEvalF
 end
 
 lang SysEvalF = ConstEvalF + IntEvalF + StringConvEvalF + SysAst
-  sem mkDeltaF cs =
+  sem mkDeltaF cs +=
   | c & CExit _ -> VConst1 (c, lam x. match x with VInt x in exit x)
   | c & CError _ ->
     switch cs
@@ -739,19 +747,19 @@ lang SysEvalF = ConstEvalF + IntEvalF + StringConvEvalF + SysAst
 end
 
 lang SymbEvalF = ConstEvalF + IntEvalF + SymbAst
-  sem mkDeltaF cs =
+  sem mkDeltaF cs +=
   | c & CGensym _ -> VConst1 (c, lam. VInt (sym2hash (gensym ())))
   | c & CSym2hash _ -> VConst1 (c, lam x. match x with VInt _ in x)
 end
 
 lang CmpSymbEvalF = ConstEvalF + SymbEvalF + BoolEvalF + CmpSymbAst
-  sem mkDeltaF cs =
+  sem mkDeltaF cs +=
   | c & CEqsym _ -> VConst2
     (c, lam x. lam y. match (x, y) with (VInt x, VInt y) in VBool (eqi x y))
 end
 
 lang ConTagEvalF = ConstEvalF + DataEvalF + IntEvalF + ConTagAst
-  sem mkDeltaF cs =
+  sem mkDeltaF cs +=
   | c & CConstructorTag _ -> VConst1
     (c, lam v. match v with VConApp (tag, _) in VInt tag)
 end
@@ -760,7 +768,7 @@ lang FloatStringConversionEvalF =
   ConstEvalF + BoolEvalF + FloatEvalF + StringConvEvalF +
   FloatStringConversionAst
 
-  sem mkDeltaF cs =
+  sem mkDeltaF cs +=
   | c & CStringIsFloat _ ->
     VConst1 (c, lam s. VBool (stringIsFloat (valToString s)))
   | c & CString2float _ ->
@@ -772,7 +780,7 @@ end
 lang FileOpEvalF =
   ConstEvalF + BoolEvalF + RecordEvalF + StringConvEvalF + FileOpAst
 
-  sem mkDeltaF cs =
+  sem mkDeltaF cs +=
   | c & CFileRead _ -> VConst1
     (c, lam f. stringToVal (readFile (valToString f)))
   | c & CFileWrite _ -> VConst2
@@ -784,7 +792,7 @@ lang FileOpEvalF =
 end
 
 lang IOEvalF = ConstEvalF + RecordEvalF + StringConvEvalF + IOAst
-  sem mkDeltaF cs =
+  sem mkDeltaF cs +=
   | c & CPrint _ -> VConst1
     (c, lam s. print (valToString s); VRecord (mapEmpty cmpSID))
   | c & CPrintError _ -> VConst1
@@ -802,7 +810,7 @@ end
 lang RandomNumberGeneratorEvalF =
   ConstEvalF + IntEvalF + RecordEvalF + RandomNumberGeneratorAst
 
-  sem mkDeltaF cs =
+  sem mkDeltaF cs +=
   | c & CRandIntU _ -> VConst2
     (c, lam lo. lam hi.
           match (lo, hi) with (VInt lo, VInt hi) in VInt (randIntU lo hi))
@@ -811,20 +819,20 @@ lang RandomNumberGeneratorEvalF =
 end
 
 lang TimeEvalF = ConstEvalF + IntEvalF + FloatEvalF + RecordEvalF + TimeAst
-  sem mkDeltaF cs =
+  sem mkDeltaF cs +=
   | c & CWallTimeMs _ -> VConst1 (c, lam. VFloat (wallTimeMs ()))
   | c & CSleepMs _ -> VConst1
     (c, lam n. match n with VInt n in sleepMs n; VRecord (mapEmpty cmpSID))
 end
 
 lang RefOpEvalF = ConstEvalF + RecordEvalF + RefOpAst
-  syn Val =
+  syn Val +=
   | VRef (Ref Val)
 
-  sem readback =
+  sem readback +=
   | VRef _ -> None ()
 
-  sem mkDeltaF cs =
+  sem mkDeltaF cs +=
   | c & CRef _ -> VConst1 (c, lam v. VRef (ref v))
   | c & CModRef _ -> VConst2
     (c, lam r. lam v.
@@ -833,7 +841,7 @@ lang RefOpEvalF = ConstEvalF + RecordEvalF + RefOpAst
 end
 
 lang TypeOpEvalF = ConstEvalF + TypeOpAst
-  sem mkDeltaF cs =
+  sem mkDeltaF cs +=
   | c & CTypeOf _ -> VConst1 (c, lam. error "CTypeOf: unimplemented")
 end
 
@@ -841,12 +849,12 @@ lang TensorOpEvalF =
   ConstEvalF + IntEvalF + FloatEvalF + SeqEvalF + BoolEvalF + RecordEvalF +
   StringConvEvalF + TensorOpAst
 
-  syn Val =
+  syn Val +=
   | VTensorInt (Tensor[Int])
   | VTensorFloat (Tensor[Float])
   | VTensorExpr (Tensor[Val])
 
-  sem readback =
+  sem readback +=
   | VTensorInt _ | VTensorFloat _ | VTensorExpr _ -> None ()
 
   sem valSeqToShape : Val -> [Int]
@@ -995,7 +1003,7 @@ lang TensorOpEvalF =
        case _ then error "tensorValEq: not a tensor"
        end)
 
-  sem mkDeltaF cs =
+  sem mkDeltaF cs +=
   | c & CTensorCreateUninitInt _ -> VConst1
     (c, lam shape. VTensorInt (tensorCreateUninitInt (valSeqToShape shape)))
   | c & CTensorCreateUninitFloat _ -> VConst1
@@ -1049,17 +1057,17 @@ lang BootParserEvalF =
   ConstEvalF + IntEvalF + FloatEvalF + BoolEvalF + RecordEvalF +
   StringConvEvalF + BootParserAst
 
-  syn Val =
+  syn Val +=
   | VBootParserTree BootParseTree
 
-  sem readback =
+  sem readback +=
   | VBootParserTree _ -> None ()
 
   sem valSeqToStrings : Val -> [String]
   sem valSeqToStrings =
   | VSeq vals -> map valToString vals
 
-  sem mkDeltaF cs =
+  sem mkDeltaF cs +=
   | c & CBootParserParseMExprString _ -> VConst3
     (c, lam opts. lam keywords. lam src.
       match opts with VRecord bindings in
@@ -1145,7 +1153,7 @@ end
 --------------
 
 lang NamedPatEvalF = MatchEvalF + NamedPat
-  sem mkTryMatch =
+  sem mkTryMatch +=
   | PatNamed {ident = PName name} ->
     match nameGetSym name with Some s then
       let s = sym2hash s in
@@ -1155,7 +1163,7 @@ lang NamedPatEvalF = MatchEvalF + NamedPat
 end
 
 lang BoolPatEvalF = MatchEvalF + BoolEvalF + BoolAst + BoolPat
-  sem mkTryMatch =
+  sem mkTryMatch +=
   | PatBool r -> lam val. lam env.
     match val with VBool b then
       match (b, r.val) with (true, true) | (false, false) then Some env
@@ -1165,7 +1173,7 @@ end
 
 lang RecordPatEvalF = MatchEvalF + RecordEvalF + RecordAst + RecordPat +
                      MatchAst + VarAst + NeverAst + NamedPat
-  sem mkEvalF cs =
+  sem mkEvalF cs +=
   | TmMatch (r & {pat = PatRecord p
                  ,thn = TmVar v
                  ,els = TmNever _}) ->
@@ -1187,7 +1195,7 @@ lang RecordPatEvalF = MatchEvalF + RecordEvalF + RecordAst + RecordPat +
       else default ()
     else default ()
 
-  sem mkTryMatch =
+  sem mkTryMatch +=
   | PatRecord r ->
     let pbindings = mapMap mkTryMatch r.bindings in
     lam val. lam env.
@@ -1202,7 +1210,7 @@ lang RecordPatEvalF = MatchEvalF + RecordEvalF + RecordAst + RecordPat +
 end
 
 lang SeqTotPatEvalF = MatchEvalF + SeqEvalF + SeqTotPat
-  sem mkTryMatch =
+  sem mkTryMatch +=
   | PatSeqTot r ->
     let pats = map mkTryMatch r.pats in
     let n = length pats in
@@ -1218,7 +1226,7 @@ lang SeqTotPatEvalF = MatchEvalF + SeqEvalF + SeqTotPat
 end
 
 lang SeqEdgePatEvalF = MatchEvalF + SeqEvalF + SeqEdgePat
-  sem mkTryMatch =
+  sem mkTryMatch +=
   | PatSeqEdge r ->
     let pats = map mkTryMatch (concat r.prefix r.postfix) in
     let npre = length r.prefix in
@@ -1250,7 +1258,7 @@ lang SeqEdgePatEvalF = MatchEvalF + SeqEvalF + SeqEdgePat
 end
 
 lang DataPatEvalF = MatchEvalF + DataEvalF + DataPat
-  sem mkTryMatch =
+  sem mkTryMatch +=
   | PatCon r ->
     match nameGetSym r.ident with Some s then
       let s = sym2hash s in
@@ -1264,7 +1272,7 @@ lang DataPatEvalF = MatchEvalF + DataEvalF + DataPat
 end
 
 lang IntPatEvalF = MatchEvalF + IntEvalF + IntPat
-  sem mkTryMatch =
+  sem mkTryMatch +=
   | PatInt r -> lam val. lam env.
     match val with VInt i then
       if eqi i r.val then Some env else None ()
@@ -1272,7 +1280,7 @@ lang IntPatEvalF = MatchEvalF + IntEvalF + IntPat
 end
 
 lang CharPatEvalF = MatchEvalF + CharEvalF + CharPat
-  sem mkTryMatch =
+  sem mkTryMatch +=
   | PatChar r -> lam val. lam env.
     match val with VChar c then
       if eqc c r.val then Some env else None ()
@@ -1280,7 +1288,7 @@ lang CharPatEvalF = MatchEvalF + CharEvalF + CharPat
 end
 
 lang AndPatEvalF = MatchEvalF + AndPat
-  sem mkTryMatch =
+  sem mkTryMatch +=
   | PatAnd r ->
     let lpat = mkTryMatch r.lpat in
     let rpat = mkTryMatch r.rpat in
@@ -1290,7 +1298,7 @@ lang AndPatEvalF = MatchEvalF + AndPat
 end
 
 lang OrPatEvalF = MatchEvalF + OrPat
-  sem mkTryMatch =
+  sem mkTryMatch +=
   | PatOr r ->
     let lpat = mkTryMatch r.lpat in
     let rpat = mkTryMatch r.rpat in
@@ -1299,7 +1307,7 @@ lang OrPatEvalF = MatchEvalF + OrPat
 end
 
 lang NotPatEvalF = MatchEvalF + NotPat
-  sem mkTryMatch =
+  sem mkTryMatch +=
   | PatNot r ->
     let subpat = mkTryMatch r.subpat in
     lam val. lam env.

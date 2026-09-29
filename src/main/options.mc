@@ -46,7 +46,7 @@ let optionsDefault : Options = {
   tuneOptions = tuneOptionsDefault,
   docgenOptions = docGenOptionsDefault,    
   mlangPipeline = false,
-  fastEval = false
+  slowEval = false
 }
 
 -- Get the help string for options
