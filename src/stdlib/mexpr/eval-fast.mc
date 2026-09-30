@@ -43,7 +43,7 @@ let callstackPush : Info -> Callstack -> Callstack
 = lam info. lam cs.
     tensorLinearSetExn cs._ringbuffer cs._idx info;
     { cs with _idx = modi (addi cs._idx 1) cs._cap
-    , _len = mini cs._cap (addi cs._len 1)
+    , _len = addi cs._len 1
     }
 
 let callstackPop : Callstack -> Option (Callstack, Info)
@@ -63,13 +63,17 @@ let callstackToSeq : Callstack -> [Info] = lam cs.
     else acc
   in recur [] cs
 
-recursive let callstackPrintTrace : Callstack -> ()
+let callstackPrintTrace : Callstack -> ()
   = lam cs.
-    match callstackPop cs with Some (cs, info) then
-      printLn (concat "TRACE: " (info2str info));
-      callstackPrintTrace cs
-    else ()
-end
+    recursive let recur = lam remaining. lam cs.
+      if leqi remaining 0 then ()
+      else
+        match callstackPop cs with Some (cs, info) then
+          printLn (concat "TRACE: " (info2str info));
+          recur (subi remaining 1) cs
+        else ()
+    in
+    recur (mini cs._cap cs._len) cs
 
 -------------------
 -- BASE FRAGMENT --

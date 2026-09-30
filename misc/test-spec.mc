@@ -284,6 +284,37 @@ testMain substituters directories location (lam api.
       ])
     [(mlangCompile, succ)];
 
+  -- === Stack Trace ===
+
+  let stackTraceExpected = api.file (withExtension ".expected") in
+  let stackTraceEval = api.midStep
+    { uses = [origin]
+    , tag = "stack-trace-eval"
+    , cmd = "%m eval --debug-stack-trace 1000 %i > %o 2>&1 || :"
+    } in
+  let stackTraceFilter = lam tag. lam origin. api.midStep
+    { uses = [origin]
+    , tag = concat "stack-trace-filter-" tag
+    , cmd = "cat %i | ./filter-trace.sh > %o"
+    } in
+  let stackTraceFilterEval = stackTraceFilter "eval" stackTraceEval in
+  let stackTraceRunDiff = api.endStep
+    { uses = [stackTraceFilterEval , stackTraceExpected]
+    , tag = "stack-trace-run-and-diff"
+    , cmd = "diff %i"
+    } in
+
+  api.tests []
+    (and (strStartsWith "src/test/examples/callstack/") (strEndsWith ".mc"))
+    [ (eval, fail)
+    , (compile, succ)
+    , (run, fail)
+    , (mlangCompile, succ)
+    , (mlangRun, fail)
+    , (stackTraceEval, succ)
+    , (stackTraceFilterEval, succ)
+    , (stackTraceRunDiff, succ) ];
+
   -- === Microbenchmark ===
 
   let runBench = api.endStep
