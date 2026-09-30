@@ -44,7 +44,7 @@ let optionsDefault : Options = {
   disableJsTCO = false,
   output = None (),
   tuneOptions = tuneOptionsDefault,
-  docgenOptions = docGenOptionsDefault,    
+  docgenOptions = docGenOptionsDefault,
   mlangPipeline = false
 }
 
