@@ -8,10 +8,7 @@
 -- Assumptions:
 -- * Pattern matches are shallow.
 -- * The target of a `match` is a variable.
--- * There are no first-class functions. All calls are fully applied
---   and to statically known functions.
---   * Exception: function arguments to higher-order builtins must be
---     a partially applied call to a statically known function
+-- * All functions are named.
 -- * Functions are only allowed to close over global values.
 
 -- TODO(vipa, 2026-09-23): Maybe make consts that return `()` return a
@@ -48,6 +45,9 @@ include "mexpr/pprint.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type.mc"
 include "mexpr/type-check.mc"
+include "mexpr/free-vars.mc"
+include "mexpr/resymbolize.mc"
+include "mexpr/keyword-maker.mc"
 
 lang PEvalGraph = Ast + NamedPat + VarAst + RecLetsDeclAst + MExprCmp + PrettyPrint + VarTypeSubstitute
   type SymInt = Int
@@ -640,6 +640,91 @@ lang PEvalGraphConst = PEvalGraph + ConstAst + Cmp + ConstPrettyPrint
         (map (eitherEither (lam. "") (lam v. cons ' ' (pegValToString v)))
           x.args)
       , join (map (eitherEither fToString (lam. "")) x.args)
+      ]
+    )
+end
+
+lang PEvalGraphOpaque =
+  PEvalGraphConst + PEvalGraphLam + OpaqueAst + MExprFreeVars + MExprResymbolize
+
+  -- The body is residualized as is, except that its free variables are
+  -- renamed, and `bindings` gives the value each of them refers to
+  syn PEGInstr +=
+  | IOpaque
+    { bindings : Map Name (Either PEGFunArg PEGVal)
+    , body : Expr
+    }
+
+  sem fixRecursiveInstantiate tyEnv +=
+  | TmOpaque x -> TmOpaque {x with body = fixRecursiveInstantiate tyEnv x.body}
+
+  -- The type and instantiation of the first occurrence of each of
+  -- `names`
+  sem _collectOccurrences : Set Name -> Map Name (Type, Map Name Type) -> Expr -> Map Name (Type, Map Name Type)
+  sem _collectOccurrences names acc =
+  | TmVar x ->
+    if and (setMem x.ident names) (not (mapMem x.ident acc))
+    then mapInsert x.ident (x.ty, x.instantiated) acc
+    else acc
+  | tm -> sfold_Expr_Expr (_collectOccurrences names) acc tm
+
+  sem mkEvalF += | TmOpaque x ->
+    let free = freeVars x.body in
+    let subst = mapFromSeq nameCmp
+      (map (lam n. (n, nameSetNewSym n)) (setToSeq free)) in
+    let body = resymbolizeExpr subst x.body in
+    -- TODO(vipa, 2026-10-05): We assume that each function referenced
+    -- in a `TmOpaque` is only used monomorphically. This is not
+    -- generally true, but tends to be true in practice.
+    let occurrences = _collectOccurrences free (mapEmpty nameCmp) x.body in
+    let prepFree = lam old. lam new.
+      match mapLookup old occurrences with Some (ty, instantiated) in
+      ( new
+      , { sym = nameToSymInt [x.info] "Unsymbolized free variable in TmOpaque in mkEvalF!" old
+        , ty = ty
+        , instantiated = instantiated
+        }
+      ) in
+    let free = mapFromSeq nameCmp (mapValues (mapMapWithKey prepFree subst)) in
+    let ty = x.ty in
+    lam env. lam st.
+      let prepBinding = lam st. lam. lam f.
+        let lookup = lam pair. match pair with (s, v) in
+          if eqi s f.sym then Some v else None () in
+        match listFindMap lookup env.values with Some v in
+        let v = pegInst (mapMap (pegSubstTy env) f.instantiated) v in
+        match v with VLam l then
+          recursive let splitArrows = lam n. lam ty.
+            if eqi n 0 then ([], ty) else
+            match unwrapType ty with TyArrow a in
+            match splitArrows (subi n 1) a.to with (params, ret) in
+            (cons a.from params, ret) in
+          match splitArrows (subi l.arity (length l.applied)) (pegSubstTy env f.ty)
+          with (params, ret) in
+          match pegFunArg env st ret params v with (st, fArg) in
+          (st, Left fArg)
+        else (st, Right v) in
+      match mapMapAccum prepBinding st free with (st, bindings) in
+      pegEmit (pegSubstTy env ty) st (IOpaque {bindings = bindings, body = body})
+
+  sem pegInstrToString firstVRef += | IOpaque x ->
+    let bindingToString = lam b.
+      match b with (n, arg) in
+      switch arg
+      case Right v then join ["\n      ", nameGetStr n, " = ", pegValToString v]
+      case Left fArg then
+        join
+          [ "\n      ", nameGetStr n, " = \\", strJoin " " (map pegValToString fArg.params), " ->\n"
+          , pegInstrsToString "        "
+            (addi firstVRef (length fArg.params)) [fArg.instr]
+          , "        out ", pegValToString fArg.ret
+          ]
+      end in
+    ( 1
+    , join
+      [ "opaque"
+      , join (map bindingToString (mapBindings x.bindings))
+      , "\n      in ", (pprintCode 9 pprintEnvEmpty x.body).1
       ]
     )
 end
@@ -1708,7 +1793,8 @@ lang PEvalGraphTest =
   PEvalGraphCmpChar + PEvalGraphCmpSymb + PEvalGraphSeqOp +
   PEvalGraphSeqHigherOrderOp +
   PEvalGraphFileOp + PEvalGraphSys + PEvalGraphTime +
-  PEvalGraphRandomNumberGenerator + PEvalGraphConTag +
+  PEvalGraphRandomNumberGenerator + PEvalGraphConTag + PEvalGraphOpaque +
+  KeywordMakerOpaque +
 
   BootParser + MExprSym + MExprTypeCheck + MExprPrettyPrint
 
@@ -1720,6 +1806,13 @@ lang PEvalGraphTest =
   sem cmpPEGInstr : PEGInstr -> PEGInstr -> Int
   sem cmpPEGInstr a = | b -> cmpPEGInstrH (a, b)
 
+  sem cmpPEGFunArg : PEGFunArg -> PEGFunArg -> Int
+  sem cmpPEGFunArg l = | r ->
+    let res = seqCmp cmpPEGVal l.params r.params in
+    if neqi res 0 then res else
+    let res = cmpPEGInstr l.instr r.instr in
+    if neqi res 0 then res else cmpPEGVal l.ret r.ret
+
   sem cmpPEGInstrH : (PEGInstr, PEGInstr) -> Int
   sem cmpPEGInstrH =
   | (IConstCall a, IConstCall b) ->
@@ -1728,14 +1821,12 @@ lang PEvalGraphTest =
   | (IConstFCall a, IConstFCall b) ->
     let res = cmpConst a.const b.const in
     if neqi res 0 then res else
-    let cmpFArg = eitherCmp
-      (lam l : PEGFunArg. lam r : PEGFunArg.
-        let res = seqCmp cmpPEGVal l.params r.params in
-        if neqi res 0 then res else
-        let res = cmpPEGInstr l.instr r.instr in
-        if neqi res 0 then res else cmpPEGVal l.ret r.ret)
-      cmpPEGVal in
-    seqCmp cmpFArg a.args b.args
+    seqCmp (eitherCmp cmpPEGFunArg cmpPEGVal) a.args b.args
+  -- The bodies are compared as printed, so that their bound names
+  -- need not have the same symbols
+  | (IOpaque a, IOpaque b) ->
+    let res = mapCmp (eitherCmp cmpPEGFunArg cmpPEGVal) a.bindings b.bindings in
+    if neqi res 0 then res else cmpString (expr2str a.body) (expr2str b.body)
   | (IExtCall a, IExtCall b) ->
     let res = nameCmp a.ident b.ident in
     if neqi res 0 then res else seqCmp cmpPEGVal a.args b.args
@@ -1866,7 +1957,8 @@ let prepare
       (typeCheck
         (symbolize
           (constTransform (snoc builtin ("testResidual", CTestResidual ()))
-            (parseMExprStringExn defaultBootParserParseMExprStringArg src))))
+            (makeKeywords
+              (parseMExprStringExn defaultBootParserParseMExprStringArg src)))))
 in
 
 type InlineF = (PEGVal, [PEGVal]) -> Bool in
@@ -2007,6 +2099,20 @@ recursive let desymbolizeInstr : PEGInstr -> PEGInstr = lam instr.
     {x with ident = desymbolizeName x.ident, args = map desymbolizeVal x.args}
   case IBlockCall x then IBlockCall
     {x with return = eitherMapRight (map desymbolizeType) x.return}
+  case IOpaque x then
+    let desymbolizeArg = eitherBiMap
+      (lam fArg : PEGFunArg.
+        { params = map desymbolizeVal fArg.params
+        , instr = desymbolizeInstr fArg.instr
+        , ret = desymbolizeVal fArg.ret
+        })
+      desymbolizeVal in
+    IOpaque
+    { x with bindings = mapFromSeq nameCmp
+      (map
+        (lam b. (desymbolizeName b.0, desymbolizeArg b.1))
+        (mapBindings x.bindings))
+    }
   case instr then instr
   end in
 
@@ -2068,6 +2174,11 @@ let canonicalizeBlocks
           (map
             (eitherEither (lam fArg : PEGFunArg. referenced fArg.instr) (lam. []))
             x.args)
+      case IOpaque x then
+        join
+          (map
+            (eitherEither (lam fArg : PEGFunArg. referenced fArg.instr) (lam. []))
+            (mapValues x.bindings))
       case _ then []
       end in
     recursive
@@ -2098,6 +2209,13 @@ let canonicalizeBlocks
             (eitherMapLeft
               (lam fArg : PEGFunArg. {fArg with instr = renameInstr fArg.instr}))
             x.args
+        }
+      case IOpaque x then IOpaque
+        { x with bindings =
+          mapMap
+            (eitherMapLeft
+              (lam fArg : PEGFunArg. {fArg with instr = renameInstr fArg.instr}))
+            x.bindings
         }
       case instr then instr
       end in
@@ -3520,6 +3638,194 @@ with
     ]
   )
 using eqBlocksInstrAndVal else ppBlocksInstrAndVal in
+
+
+-- === Opaque terms ===
+
+-- The body is residualized as is, and each free variable is bound to
+-- the value it refers to, residual or not
+utest callEvalF (prepare (strJoin "\n"
+  [ "let x = testResidual 1 in"
+  , "let y = 2 in"
+  , "tmOpaque (addi x y)"
+  ]))
+with
+  ( [ residual_ (VInt 1)
+    , IOpaque
+      { bindings = mapFromSeq nameCmp
+        [ (nameNoSym "x", Right (VRef {ty = tyint_, ref = 0}))
+        , (nameNoSym "y", Right (VInt 2))
+        ]
+      , body = addi_ (var_ "x") (var_ "y")
+      }
+    ]
+  , VRef {ty = tyint_, ref = 1}
+  )
+using eqInstrAndValIgnoringSymbols else ppInstrAndVal in
+
+-- A function is saturated with a `VRef` per argument it is still
+-- missing, here one, since it is partially applied already
+utest callEvalF (prepare (strJoin "\n"
+  [ "let f = lam a. lam b. addi a b in"
+  , "let g = f 1 in"
+  , "tmOpaque (g 2)"
+  ]))
+with
+  ( [ IOpaque
+      { bindings = mapFromSeq nameCmp
+        [ ( nameNoSym "g"
+          , Left
+            { params = [VRef {ty = tyint_, ref = 0}]
+            , instr = blockCall_ "block0" [0] [tyint_]
+            , ret = VRef {ty = tyint_, ref = 1}
+            }
+          )
+        ]
+      , body = app_ (var_ "g") (int_ 2)
+      }
+    ]
+  , [ block_ "block0" [tyint_]
+        [ IConstCall
+          { const = CAddi ()
+          , args = [VInt 1, VRef {ty = tyint_, ref = 0}]
+          }
+        ]
+        [1] (VRef {ty = tyint_, ref = 0})
+    ]
+  , VRef {ty = tyint_, ref = 0}
+  )
+using eqBlocksInstrAndValIgnoringSymbols else ppBlocksInstrAndVal in
+
+utest callEvalF (prepare (strJoin "\n"
+  [ "let f = lam a. lam b. addi a (char2int b) in"
+  , "let g = f 1 in"
+  , "tmOpaque (g 'c')"
+  ]))
+with
+  ( [ IOpaque
+      { bindings = mapFromSeq nameCmp
+        [ ( nameNoSym "g"
+          , Left
+            { params = [VRef {ty = tychar_, ref = 0}]
+            , instr = blockCall_ "block0" [0] [tyint_]
+            , ret = VRef {ty = tyint_, ref = 1}
+            }
+          )
+        ]
+      , body = app_ (var_ "g") (char_ 'c')
+      }
+    ]
+  , [ block_ "block0" [tychar_]
+        [ IConstCall
+          { const = CChar2Int ()
+          , args = [VRef {ty = tychar_, ref = 0}]
+          }
+        , IConstCall
+          { const = CAddi ()
+          , args = [VInt 1, VRef {ty = tyint_, ref = 1}]
+          }
+        ]
+        [2] (VRef {ty = tyint_, ref = 0})
+    ]
+  , VRef {ty = tyint_, ref = 0}
+  )
+using eqBlocksInstrAndValIgnoringSymbols else ppBlocksInstrAndVal in
+
+-- A polymorphic function is used at the instantiation of its
+-- occurrence in the body
+utest callEvalF (prepare (strJoin "\n"
+  [ "let id = lam x. testResidual x in"
+  , "tmOpaque (id 'c')"
+  ]))
+with
+  ( [ IOpaque
+      { bindings = mapFromSeq nameCmp
+        [ ( nameNoSym "id"
+          , Left
+            { params = [VRef {ty = tychar_, ref = 0}]
+            , instr = blockCall_ "block0" [0] [tychar_]
+            , ret = VRef {ty = tychar_, ref = 1}
+            }
+          )
+        ]
+      , body = app_ (var_ "id") (char_ 'c')
+      }
+    ]
+  , [ block_ "block0" [tychar_]
+        [residual_ (VRef {ty = tychar_, ref = 0})]
+        [1] (VRef {ty = tychar_, ref = 0})
+    ]
+  , VRef {ty = tychar_, ref = 0}
+  )
+using eqBlocksInstrAndValIgnoringSymbols else ppBlocksInstrAndVal in
+
+-- Nothing in the body is evaluated, not even the calls to `f`, and the
+-- names it binds itself are left alone
+utest callEvalF (prepare (strJoin "\n"
+  [ "let f = lam x. addi x 1 in"
+  , "tmOpaque (lam y. f (f y))"
+  ]))
+with
+  ( [ IOpaque
+      { bindings = mapFromSeq nameCmp
+        [ ( nameNoSym "f"
+          , Left
+            { params = [VRef {ty = tyint_, ref = 0}]
+            , instr = blockCall_ "block0" [0] [tyint_]
+            , ret = VRef {ty = tyint_, ref = 1}
+            }
+          )
+        ]
+      , body = ulam_ "y" (app_ (var_ "f") (app_ (var_ "f") (var_ "y")))
+      }
+    ]
+  , [ block_ "block0" [tyint_]
+        [ IConstCall
+          { const = CAddi ()
+          , args = [VRef {ty = tyint_, ref = 0}, VInt 1]
+          }
+        ]
+        [1] (VRef {ty = tyint_, ref = 0})
+    ]
+  , VRef {ty = tyarrow_ tyint_ tyint_, ref = 0}
+  )
+using eqBlocksInstrAndValIgnoringSymbols else ppBlocksInstrAndVal in
+
+-- A function partially applied to a residual value, which is passed on
+-- to the block along with the `VRef` for the missing argument. Only
+-- variables free in the body are bound, i.e., not `f` or `a`.
+utest callEvalF (prepare (strJoin "\n"
+  [ "let f = lam a. lam b. addi a b in"
+  , "let a = testResidual 1 in"
+  , "let g = f a in"
+  , "tmOpaque (g 2)"
+  ]))
+with
+  ( [ residual_ (VInt 1)
+    , IOpaque
+      { bindings = mapFromSeq nameCmp
+        [ ( nameNoSym "g"
+          , Left
+            { params = [VRef {ty = tyint_, ref = 1}]
+            , instr = blockCall_ "block0" [0, 1] [tyint_]
+            , ret = VRef {ty = tyint_, ref = 2}
+            }
+          )
+        ]
+      , body = app_ (var_ "g") (int_ 2)
+      }
+    ]
+  , [ block_ "block0" [tyint_, tyint_]
+        [ IConstCall
+          { const = CAddi ()
+          , args = [VRef {ty = tyint_, ref = 0}, VRef {ty = tyint_, ref = 1}]
+          }
+        ]
+        [2] (VRef {ty = tyint_, ref = 0})
+    ]
+  , VRef {ty = tyint_, ref = 1}
+  )
+using eqBlocksInstrAndValIgnoringSymbols else ppBlocksInstrAndVal in
 
 
 -- === Higher-order constants ===
