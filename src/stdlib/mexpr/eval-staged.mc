@@ -1,3 +1,5 @@
+/- This file implement a staged interpreter for MExpr -/
+
 include "basic-types.mc"
 include "common.mc"
 include "error.mc"
@@ -79,29 +81,29 @@ let callstackPrintTrace : Callstack -> ()
 -- BASE FRAGMENT --
 -------------------
 
-lang EvalF = Ast
+lang EvalS = Ast
   -- Values our terms can take.
   syn Val =
 
   -- Rebuilds a term from a value, if possible.
-  sem readback : Val -> Option Expr
+  sem evalSReadback : Val -> Option Expr
 
   -- The evaluation environment.
-  type EvalFEnv = List (Int, Val)
+  type EvalSEnv = List (Int, Val)
 
   -- Looks up symbol hashes in the evaluation environment, gives an error if the
   -- lookup fails.
-  sem evalFEnvLookup : Int -> EvalFEnv -> Val
-  sem evalFEnvLookup s1 =
+  sem evalSEnvLookup : Int -> EvalSEnv -> Val
+  sem evalSEnvLookup s1 =
   | Nil _ -> error "env lookup failed!"
-  | Cons ((s2, val), env) -> if eqi s1 s2 then val else evalFEnvLookup s1 env
+  | Cons ((s2, val), env) -> if eqi s1 s2 then val else evalSEnvLookup s1 env
 
   -- Stages a term for evaluation. Passing a callstack reference will make the
   -- evaluation function record the call stack which degrades performance.
-  sem evalFStage : (Option (Ref Callstack)) -> Expr -> EvalFEnv -> Val
+  sem evalSStageExpr : (Option (Ref Callstack)) -> Expr -> EvalSEnv -> Val
 
-  -- Stages declarations, see `evalFStage`.
-  sem evalFStageDecl : (Option (Ref Callstack)) -> Decl -> EvalFEnv -> EvalFEnv
+  -- Stages declarations, see `evalSStageExpr`.
+  sem evalSStageDecl : (Option (Ref Callstack)) -> Decl -> EvalSEnv -> EvalSEnv
 end
 
 ---------------------
@@ -115,15 +117,15 @@ let _sid_3 = stringToSid "3"
 let _sid_4 = stringToSid "4"
 let _sid_5 = stringToSid "5"
 
-lang VarEvalF = EvalF + VarAst
-  sem evalFStage cs +=
+lang VarEvalF = EvalS + VarAst
+  sem evalSStageExpr cs +=
   | TmVar r ->
     match nameGetSym r.ident with Some s1 then
-      evalFEnvLookup (sym2hash s1)
-    else errorSingle [r.info] "Unsymbolized TmVarin evalFStage!"
+      evalSEnvLookup (sym2hash s1)
+    else errorSingle [r.info] "Unsymbolized TmVarin evalSStageExpr!"
 end
 
-lang AppEvalF = EvalF + AppAst + ConstAst + UnknownTypeAst
+lang AppEvalS = EvalS + AppAst + ConstAst + UnknownTypeAst
   syn Val +=
   | VConst1 (Const, Val -> Val)
   | VConst2 (Const, Val -> Val -> Val)
@@ -134,9 +136,9 @@ lang AppEvalF = EvalF + AppAst + ConstAst + UnknownTypeAst
   | VConstInfo2 (Const, Info -> Val -> Val -> Val)
   | VConstInfo3 (Const, Info -> Val -> Val -> Val -> Val)
 
-  sem mkDeltaF : (Option (Ref Callstack)) -> Const -> Val
+  sem stageDeltaF : (Option (Ref Callstack)) -> Const -> Val
 
-  sem evalFStage cs +=
+  sem evalSStageExpr cs +=
   | TmApp r ->
     -- A constant applied to exactly as many arguments as it takes: resolve the
     -- delta function once, while compiling, and emit a closure that calls it
@@ -144,74 +146,74 @@ lang AppEvalF = EvalF + AppAst + ConstAst + UnknownTypeAst
     -- and take it apart again on every single evaluation.  The three shapes
     -- are disjoint, since each looks through a different number of TmApp
     -- layers before expecting a TmConst, and a constant used as a value still
-    -- falls through to `mkEvalFApp`.
+    -- falls through to `stageApp`.
     switch r
     case {lhs = TmApp {lhs = TmApp {lhs = TmConst c, rhs = a}, rhs = b}, rhs = d}
     then
-      let val = mkDeltaF cs c.val in
+      let val = stageDeltaF cs c.val in
       switch val
       case VConst3 (_, f) then
-        let a = evalFStage cs a in
-        let b = evalFStage cs b in
-        let d = evalFStage cs d in
+        let a = evalSStageExpr cs a in
+        let b = evalSStageExpr cs b in
+        let d = evalSStageExpr cs d in
         lam env. f (a env) (b env) (d env)
       case VConstInfo3 (_, f) then
-        let a = evalFStage cs a in
-        let b = evalFStage cs b in
-        let d = evalFStage cs d in
+        let a = evalSStageExpr cs a in
+        let b = evalSStageExpr cs b in
+        let d = evalSStageExpr cs d in
         lam env. f r.info (a env) (b env) (d env)
       case _ then
-        let a = evalFStage cs a in
-        let b = evalFStage cs b in
-        let d = evalFStage cs d in
+        let a = evalSStageExpr cs a in
+        let b = evalSStageExpr cs b in
+        let d = evalSStageExpr cs d in
         lam env.
-          applyF
-            (r.info, applyF (r.info, applyF (r.info, val, a env), b env), d env)
+          applyS
+            (r.info, applyS (r.info, applyS (r.info, val, a env), b env), d env)
       end
     case {lhs = TmApp {lhs = TmConst c, rhs = a}, rhs = b} then
-      let val = mkDeltaF cs c.val in
+      let val = stageDeltaF cs c.val in
       switch val
       case VConst2 (_, f) then
-        let a = evalFStage cs a in
-        let b = evalFStage cs b in
+        let a = evalSStageExpr cs a in
+        let b = evalSStageExpr cs b in
         lam env. f (a env) (b env)
       case VConstInfo2 (_, f) then
-        let a = evalFStage cs a in
-        let b = evalFStage cs b in
+        let a = evalSStageExpr cs a in
+        let b = evalSStageExpr cs b in
         lam env. f r.info (a env) (b env)
       case _ then
-        let a = evalFStage cs a in
-        let b = evalFStage cs b in
-        lam env. applyF (r.info, applyF (r.info, val, a env), b env)
+        let a = evalSStageExpr cs a in
+        let b = evalSStageExpr cs b in
+        lam env. applyS (r.info, applyS (r.info, val, a env), b env)
       end
     case {lhs = TmConst c, rhs = a} then
-      let val = mkDeltaF cs c.val in
+      let val = stageDeltaF cs c.val in
       switch val
       case VConst1 (_, f) then
-        let a = evalFStage cs a in
+        let a = evalSStageExpr cs a in
         lam env. f (a env)
       case VConstInfo1 (_, f) then
-        let a = evalFStage cs a in
+        let a = evalSStageExpr cs a in
         lam env. f r.info (a env)
       case _ then
-        let a = evalFStage cs a in
-        lam env. applyF (r.info, val, a env)
+        let a = evalSStageExpr cs a in
+        lam env. applyS (r.info, val, a env)
       end
-    case _ then mkEvalFApp cs r
+    case _ then stageApp cs r
     end
 
-  sem mkEvalFApp : (Option (Ref Callstack))
-                -> {lhs : Expr, rhs : Expr, ty : Type, info : Info}
-                -> EvalFEnv -> Val
-  sem mkEvalFApp cs =
+  sem stageApp : (Option (Ref Callstack))
+               -> {lhs : Expr, rhs : Expr, ty : Type, info : Info}
+               -> EvalSEnv -> Val
+  sem stageApp cs =
   | r ->
-    let lhs = evalFStage cs r.lhs in
-    let rhs = evalFStage cs r.rhs in
+    let lhs = evalSStageExpr cs r.lhs in
+    let rhs = evalSStageExpr cs r.rhs in
     let info = r.info in
-    lam env. applyF (info, lhs env, rhs env)
+    lam env. applyS (info, lhs env, rhs env)
 
-  sem applyF : (Info, Val, Val) -> Val
-  sem applyF =
+  sem applyS : (Info, Val, Val) -> Val
+  sem applyS =
   | (_, VConst1 (_, f), val) -> f val
   | (_, VConst2 (c, f), val) -> VConst1 (c, f val)
   | (_, VConst3 (c, f), val) -> VConst2 (c, f val)
@@ -225,26 +227,26 @@ lang AppEvalF = EvalF + AppAst + ConstAst + UnknownTypeAst
     VConstInfo2 (c, lam info. lam y. lam z. f info val y z)
 end
 
-lang LamEvalF = AppEvalF + LamAst
+lang LamEvalS = AppEvalS + LamAst
   syn Val +=
   | VCls (Val -> Val)
   | VClsInfo (Info -> Val -> Val)
 
-  sem readback +=
+  sem evalSReadback +=
   | VCls _ | VClsInfo _ -> None ()
 
-  sem evalFStage cs +=
+  sem evalSStageExpr cs +=
   | TmLam r ->
     match nameGetSym r.ident with Some s then
       let s = sym2hash s in
-      let body = evalFStage cs r.body in
+      let body = evalSStageExpr cs r.body in
       switch cs
       case None _ then
         lam env. VCls (lam val. body (Cons ((s, val), env)))
       case Some csr then
         lam env. clsUsingCallstack csr (lam val. body (Cons ((s, val), env)))
       end
-    else errorSingle [r.info] "Unsymbolized TmLam in evalFStage!"
+    else errorSingle [r.info] "Unsymbolized TmLam in evalSStageExpr!"
 
   sem clsUsingCallstack : (Ref Callstack) -> (Val -> Val) -> Val
   sem clsUsingCallstack csr =| cls ->
@@ -256,50 +258,50 @@ lang LamEvalF = AppEvalF + LamAst
       val in
     VClsInfo cls
 
-  sem applyF +=
+  sem applyS +=
   | (_, VCls cls, val) -> cls val
   | (info, VClsInfo cls, val) -> cls info val
 end
 
-lang DeclEvalF = EvalF + DeclAst
-  sem evalFStage cs +=
+lang DeclEvalS = EvalS + DeclAst
+  sem evalSStageExpr cs +=
   | TmDecl r ->
-    let inexpr = evalFStage cs r.inexpr in
-    let decl = evalFStageDecl cs r.decl in
+    let inexpr = evalSStageExpr cs r.inexpr in
+    let decl = evalSStageDecl cs r.decl in
     lam env. inexpr (decl env)
 end
 
-lang ConstEvalF = AppEvalF + ConstAst + UnknownTypeAst
-  sem readback +=
+lang ConstEvalS = AppEvalS + ConstAst + UnknownTypeAst
+  sem evalSReadback +=
   | VConst1 (c, _) | VConst2 (c, _) | VConst3 (c, _)
   | VConstInfo1 (c, _) | VConstInfo2 (c, _) | VConstInfo3 (c, _) ->
     Some(TmConst
       { val = c, ty = TyUnknown { info = NoInfo () }, info = NoInfo () })
 
-  sem evalFStage cs +=
-  | TmConst r -> let val = mkDeltaF cs r.val in lam. val
+  sem evalSStageExpr cs +=
+  | TmConst r -> let val = stageDeltaF cs r.val in lam. val
 end
 
-lang MatchEvalF = EvalF
-  sem mkTryMatch : Pat -> Val -> EvalFEnv -> Option EvalFEnv
+lang MatchEvalS = EvalS
+  sem stageTryMatch : Pat -> Val -> EvalSEnv -> Option EvalSEnv
 end
 
-lang MatchEvalF = MatchEvalF + MatchAst
-  sem evalFStage cs +=
+lang MatchEvalS = MatchEvalS + MatchAst
+  sem evalSStageExpr cs +=
   | TmMatch r ->
-    let target = evalFStage cs r.target in
-    let thn = evalFStage cs r.thn in
-    let els = evalFStage cs r.els in
-    let tryMatch = mkTryMatch r.pat in
+    let target = evalSStageExpr cs r.target in
+    let thn = evalSStageExpr cs r.thn in
+    let els = evalSStageExpr cs r.els in
+    let tryMatch = stageTryMatch r.pat in
     lam env.
       match tryMatch (target env) env with Some env then thn env else els env
 end
 
-lang RecordEvalF = EvalF + RecordAst + UnknownTypeAst
+lang RecordEvalS = EvalS + RecordAst + UnknownTypeAst
   syn Val +=
   | VRecord (Map SID Val)
 
-  sem readback +=
+  sem evalSReadback +=
   | VRecord bindings ->
     optionMap
       (lam bindings.
@@ -309,29 +311,29 @@ lang RecordEvalF = EvalF + RecordAst + UnknownTypeAst
                  })
       (mapFoldlOption
         (lam acc. lam k. lam v.
-          match readback v with Some e then Some (mapInsert k e acc)
+          match evalSReadback v with Some e then Some (mapInsert k e acc)
           else None ())
         (mapEmpty cmpSID)
         bindings)
 
-  sem evalFStage cs +=
+  sem evalSStageExpr cs +=
   | TmRecord r ->
-    let bindings = mapMap (evalFStage cs) r.bindings in
+    let bindings = mapMap (evalSStageExpr cs) r.bindings in
     lam env. VRecord (mapMap (lam x. x env) bindings)
   | TmRecordUpdate r ->
-    let rec = evalFStage cs r.rec in
+    let rec = evalSStageExpr cs r.rec in
     let key = r.key in
-    let value = evalFStage cs r.value in
+    let value = evalSStageExpr cs r.value in
     lam env.
       match rec env with VRecord rec then VRecord (mapInsert key (value env) rec)
-      else error "TmRecord type error in evalFStage!"
+      else error "TmRecord type error in evalSStageExpr!"
 end
 
-lang SeqEvalF = EvalF + SeqAst + UnknownTypeAst
+lang SeqEvalS = EvalS + SeqAst + UnknownTypeAst
   syn Val +=
   | VSeq [Val]
 
-  sem readback +=
+  sem evalSReadback +=
   | VSeq vals ->
     optionMap
       (lam tms.
@@ -339,16 +341,16 @@ lang SeqEvalF = EvalF + SeqAst + UnknownTypeAst
               , ty = TyUnknown { info = NoInfo () }
               , info = NoInfo ()
               })
-      (optionMapM readback vals)
+      (optionMapM evalSReadback vals)
 
-  sem evalFStage cs +=
+  sem evalSStageExpr cs +=
   | TmSeq r ->
-    let vals = map (evalFStage cs) r.tms in
+    let vals = map (evalSStageExpr cs) r.tms in
     lam env. VSeq (map (lam x. x env) vals)
 end
 
-lang NeverEvalF = EvalF + NeverAst
-  sem evalFStage cs +=
+lang NeverEvalS = EvalS + NeverAst
+  sem evalSStageExpr cs +=
   | TmNever r ->
     let err = lam.
       errorSingle [r.info]
@@ -366,19 +368,19 @@ end
 let nameGetSymOrGetFreshSym = lam n.
   match nameGetSym n with Some s then s else gensym ()
 
-lang LetEvalF = EvalF + LetDeclAst
-  sem evalFStageDecl cs +=
+lang LetEvalS = EvalS + LetDeclAst
+  sem evalSStageDecl cs +=
   | DeclLet r ->
     -- NOTE(oerikss, 2026-09-16): We assume here that unsymbolized let bindings
     -- are not referred to en the rest of the code. This can appear for example
     -- in generated code that involves sequencing of expressions.
     let s = sym2hash (nameGetSymOrGetFreshSym r.ident) in
-    let body = evalFStage cs r.body in
+    let body = evalSStageExpr cs r.body in
     lam env. Cons ((s, body env), env)
 end
 
-lang RecLetsEvalF = EvalF + RecLetsDeclAst + LamEvalF
-  sem evalFStageDecl cs +=
+lang RecLetsEvalS = EvalS + RecLetsDeclAst + LamEvalS
+  sem evalSStageDecl cs +=
   | DeclRecLets r ->
     let ts = foldl
       (lam acc. lam b.
@@ -387,7 +389,7 @@ lang RecLetsEvalF = EvalF + RecLetsDeclAst + LamEvalF
           -- bindings are not referred to en the rest of the code.
           let s1 = sym2hash (nameGetSymOrGetFreshSym b.ident) in
           let s2 = sym2hash (nameGetSymOrGetFreshSym r.ident) in
-          let body = evalFStage cs r.body in
+          let body = evalSStageExpr cs r.body in
           Cons ((s1, lam env. lam val. body (Cons ((s2, val), env))), acc)
         else
           errorSingle [infoTm b.body]
@@ -427,84 +429,84 @@ lang RecLetsEvalF = EvalF + RecLetsDeclAst + LamEvalF
 
 end
 
-lang TypeEvalF = EvalF + TypeDeclAst
-  sem evalFStageDecl cs +=
+lang TypeEvalS = EvalS + TypeDeclAst
+  sem evalSStageDecl cs +=
   | DeclType _ -> lam env. env
 end
 
-lang DataEvalF = EvalF + DataAst + DataDeclAst
+lang DataEvalS = EvalS + DataAst + DataDeclAst
   syn Val +=
   | VConApp (Int, Val)
 
-  sem evalFStage cs +=
+  sem evalSStageExpr cs +=
   | TmConApp r ->
-    let body = evalFStage cs r.body in
+    let body = evalSStageExpr cs r.body in
     match nameGetSym r.ident with Some s then
       let s = sym2hash s in
       lam env. VConApp (s, body env)
-    else errorSingle [r.info] "Unsymbolized TmConApp in evalFStage!"
+    else errorSingle [r.info] "Unsymbolized TmConApp in evalSStageExpr!"
 
-  sem evalFStageDecl cs +=
+  sem evalSStageDecl cs +=
   | DeclConDef _ -> lam env. env
 end
 
-lang UtestEvalF = EvalF + UtestDeclAst
-  sem evalFStageDecl cs +=
+lang UtestEvalS = EvalS + UtestDeclAst
+  sem evalSStageDecl cs +=
   | DeclUtest r ->
     warnSingle [r.info] "Skipping evaluation of utest";
     lam env. env
 end
 
-lang ExtEvalF = EvalF + ExtDeclAst
-  sem evalFStageDecl cs +=
+lang ExtEvalS = EvalS + ExtDeclAst
+  sem evalSStageDecl cs +=
   | DeclExt r ->
     warnSingle [r.info]
       (concat "Skipping external declaration for: " (nameGetStr r.ident));
     lam env. env
 end
 
-lang PlaceholderEvalF = EvalF + PlaceholderAst + UnknownTypeAst
+lang PlaceholderEvalS = EvalS + PlaceholderAst + UnknownTypeAst
   syn Val +=
   | VPlaceholder {}
 
-  sem readback +=
+  sem evalSReadback +=
   | VPlaceholder _ -> Some
     (TmPlaceholder { ty = TyUnknown { info = NoInfo () }, info = NoInfo () })
 
-  sem evalFStage cs +=
+  sem evalSStageExpr cs +=
   | TmPlaceholder _ -> lam env. VPlaceholder {}
 end
 
-lang OpaqueEvalF = EvalF + OpaqueAst
-  sem evalFStage cs +=
-  | TmOpaque r -> evalFStage cs r.body
+lang OpaqueEvalS = EvalS + OpaqueAst
+  sem evalSStageExpr cs +=
+  | TmOpaque r -> evalSStageExpr cs r.body
 end
 
 ---------------
 -- CONSTANTS --
 ---------------
 
-lang UnsafeCoerceEvalF = ConstEvalF + UnsafeCoerceAst
-  sem mkDeltaF cs +=
+lang UnsafeCoerceEvalS = ConstEvalS + UnsafeCoerceAst
+  sem stageDeltaF cs +=
   | c & CUnsafeCoerce _ -> VConst1 (c, lam x. x)
 end
 
-lang IntEvalF = ConstEvalF + IntAst + UnknownTypeAst
+lang IntEvalS = ConstEvalS + IntAst + UnknownTypeAst
   syn Val +=
   | VInt Int
 
-  sem readback +=
+  sem evalSReadback +=
   | VInt n -> Some ( TmConst
     { val = CInt { val = n }
     , ty = TyUnknown { info = NoInfo () }
     , info = NoInfo () } )
 
-  sem mkDeltaF cs +=
+  sem stageDeltaF cs +=
   | CInt r -> VInt r.val
 end
 
-lang ArithIntEvalF = ConstEvalF + IntEvalF + ArithIntAst
-  sem mkDeltaF cs +=
+lang ArithIntEvalS = ConstEvalS + IntEvalS + ArithIntAst
+  sem stageDeltaF cs +=
   | c & CAddi _ -> VConst2
     (c, lam x. lam y. match (x, y) with (VInt x, VInt y) in VInt (addi x y))
   | c & CSubi _ -> VConst2
@@ -519,8 +521,8 @@ lang ArithIntEvalF = ConstEvalF + IntEvalF + ArithIntAst
     (c, lam x. match x with VInt x in VInt (negi x))
 end
 
-lang ShiftIntEvalF = ConstEvalF + IntEvalF + ShiftIntAst
-  sem mkDeltaF cs +=
+lang ShiftIntEvalS = ConstEvalS + IntEvalS + ShiftIntAst
+  sem stageDeltaF cs +=
   | c & CSlli _ -> VConst2
     (c, lam x. lam y. match (x, y) with (VInt x, VInt y) in VInt (slli x y))
   | c & CSrli _ -> VConst2
@@ -529,24 +531,24 @@ lang ShiftIntEvalF = ConstEvalF + IntEvalF + ShiftIntAst
     (c, lam x. lam y. match (x, y) with (VInt x, VInt y) in VInt (srai x y))
 end
 
-lang BoolEvalF = ConstEvalF + BoolAst + UnknownTypeAst
+lang BoolEvalS = ConstEvalS + BoolAst + UnknownTypeAst
   syn Val +=
   | VBool Bool
 
-  sem readback +=
+  sem evalSReadback +=
   | VBool b -> Some( TmConst
     { val = CBool { val = b }
     , ty = TyUnknown { info = NoInfo () }
     , info = NoInfo () } )
 
-  sem mkDeltaF cs +=
+  sem stageDeltaF cs +=
   | CBool r -> VBool r.val
 end
 
-lang CmpIntEvalF =
-  ConstEvalF +  IntEvalF + BoolEvalF + CmpIntAst
+lang CmpIntEvalS =
+  ConstEvalS +  IntEvalS + BoolEvalS + CmpIntAst
 
-  sem mkDeltaF cs +=
+  sem stageDeltaF cs +=
   | c & CEqi _ -> VConst2
     (c, lam x. lam y. match (x, y) with (VInt x, VInt y) in VBool (eqi x y))
   | c & CNeqi _ -> VConst2
@@ -561,52 +563,52 @@ lang CmpIntEvalF =
     (c, lam x. lam y. match (x, y) with (VInt x, VInt y) in VBool (geqi x y))
 end
 
-lang CharEvalF = ConstEvalF + CharAst + UnknownTypeAst
+lang CharEvalS = ConstEvalS + CharAst + UnknownTypeAst
   syn Val +=
   | VChar Char
 
-  sem readback +=
+  sem evalSReadback +=
   | VChar c -> Some( TmConst
     { val = CChar { val = c }
     , ty = TyUnknown { info = NoInfo () }
     , info = NoInfo () } )
 
-  sem mkDeltaF cs +=
+  sem stageDeltaF cs +=
   | CChar r -> VChar r.val
 end
 
-lang CmpCharEvalF = ConstEvalF + CharEvalF + BoolEvalF + CmpCharAst
-  sem mkDeltaF cs +=
+lang CmpCharEvalS = ConstEvalS + CharEvalS + BoolEvalS + CmpCharAst
+  sem stageDeltaF cs +=
   | c & CEqc _ -> VConst2
     (c, lam x. lam y. match (x, y) with (VChar x, VChar y) in VBool (eqc x y))
 end
 
-lang IntCharConversionEvalF =
-  ConstEvalF + CharEvalF + IntEvalF + IntCharConversionAst
+lang IntCharConversionEvalS =
+  ConstEvalS + CharEvalS + IntEvalS + IntCharConversionAst
 
-  sem mkDeltaF cs +=
+  sem stageDeltaF cs +=
   | c & CInt2Char _ -> VConst1
     (c, lam x. match x with VInt x in VChar (int2char x))
   | c & CChar2Int _ -> VConst1
     (c, lam x. match x with VChar x in VInt (char2int x))
 end
 
-lang FloatEvalF = ConstEvalF + FloatAst + UnknownTypeAst
+lang FloatEvalS = ConstEvalS + FloatAst + UnknownTypeAst
   syn Val +=
   | VFloat Float
 
-  sem readback +=
+  sem evalSReadback +=
   | VFloat f -> Some ( TmConst
     { val = CFloat { val = f }
     , ty = TyUnknown { info = NoInfo () }
     , info = NoInfo () } )
 
-  sem mkDeltaF cs +=
+  sem stageDeltaF cs +=
   | CFloat r -> VFloat r.val
 end
 
-lang ArithFloatEvalF = ConstEvalF + FloatEvalF + ArithFloatAst
-  sem mkDeltaF cs +=
+lang ArithFloatEvalS = ConstEvalS + FloatEvalS + ArithFloatAst
+  sem stageDeltaF cs +=
   | c & CAddf _ -> VConst2
     (c, lam x. lam y. match (x, y) with (VFloat x, VFloat y) in VFloat (addf x y))
   | c & CSubf _ -> VConst2
@@ -619,8 +621,8 @@ lang ArithFloatEvalF = ConstEvalF + FloatEvalF + ArithFloatAst
     (c, lam x. match x with VFloat x in VFloat (negf x))
 end
 
-lang CmpFloatEvalF = ConstEvalF + FloatEvalF + BoolEvalF + CmpFloatAst
-  sem mkDeltaF cs +=
+lang CmpFloatEvalS = ConstEvalS + FloatEvalS + BoolEvalS + CmpFloatAst
+  sem stageDeltaF cs +=
   | c & CEqf _ -> VConst2
     (c, lam x. lam y. match (x, y) with (VFloat x, VFloat y) in VBool (eqf x y))
   | c & CNeqf _ -> VConst2
@@ -635,10 +637,10 @@ lang CmpFloatEvalF = ConstEvalF + FloatEvalF + BoolEvalF + CmpFloatAst
     (c, lam x. lam y. match (x, y) with (VFloat x, VFloat y) in VBool (geqf x y))
 end
 
-lang FloatIntConversionEvalF =
-  ConstEvalF + FloatEvalF + IntEvalF + FloatIntConversionAst
+lang FloatIntConversionEvalS =
+  ConstEvalS + FloatEvalS + IntEvalS + FloatIntConversionAst
 
-  sem mkDeltaF cs +=
+  sem stageDeltaF cs +=
   | c & CFloorfi _ -> VConst1
     (c, lam x. match x with VFloat x in VInt (floorfi x))
   | c & CCeilfi _ -> VConst1
@@ -653,10 +655,10 @@ end
 -- SEQUENCE OPERATIONS --
 -------------------------
 
-lang SeqOpEvalF =
-  ConstEvalF + SeqEvalF + IntEvalF + BoolEvalF + RecordEvalF + SeqOpAst
+lang SeqOpEvalS =
+  ConstEvalS + SeqEvalS + IntEvalS + BoolEvalS + RecordEvalS + SeqOpAst
 
-  sem mkDeltaF cs +=
+  sem stageDeltaF cs +=
   -- First order
   | c & CHead _ -> VConst1
     (c, lam s. match s with VSeq s in head s)
@@ -700,47 +702,47 @@ lang SeqOpEvalF =
   | c & CMap _ -> VConstInfo2
     (c, lam info. lam f. lam s.
       match s with VSeq s in
-      VSeq (map (lam x. applyF (info, f, x)) s))
+      VSeq (map (lam x. applyS (info, f, x)) s))
   | c & CMapi _ -> VConstInfo2
     (c, lam info. lam f. lam s.
       match s with VSeq s in
       VSeq
-        (mapi (lam i. lam x. applyF (info, applyF (info, f, VInt i), x)) s))
+        (mapi (lam i. lam x. applyS (info, applyS (info, f, VInt i), x)) s))
   | c & CIter _ -> VConstInfo2
     (c, lam info. lam f. lam s.
       match s with VSeq s in
-      iter (lam x. applyF (info, f, x); ()) s;
+      iter (lam x. applyS (info, f, x); ()) s;
       VRecord (mapEmpty cmpSID))
   | c & CIteri _ -> VConstInfo2
     (c, lam info. lam f. lam s.
       match s with VSeq s in
       iteri
-        (lam i. lam x. applyF (info, applyF (info, f, VInt i), x); ())
+        (lam i. lam x. applyS (info, applyS (info, f, VInt i), x); ())
         s;
       VRecord (mapEmpty cmpSID))
   | c & CCreate _ -> VConstInfo2
     (c, lam info. lam n. lam f.
       match n with VInt n in
-      VSeq (create n (lam i. applyF (info, f, VInt i))))
+      VSeq (create n (lam i. applyS (info, f, VInt i))))
   | c & CCreateList _ -> VConstInfo2
     (c, lam info. lam n. lam f.
       match n with VInt n in
-      VSeq (createList n (lam i. applyF (info, f, VInt i))))
+      VSeq (createList n (lam i. applyS (info, f, VInt i))))
   | c & CCreateRope _ -> VConstInfo2
     (c, lam info. lam n. lam f.
       match n with VInt n in
-      VSeq (createRope n (lam i. applyF (info, f, VInt i))))
+      VSeq (createRope n (lam i. applyS (info, f, VInt i))))
   | c & CFoldl _ -> VConstInfo3
     (c, lam info. lam f. lam acc. lam s.
       match s with VSeq s in
-      foldl (lam acc. lam x. applyF (info, applyF (info, f, acc), x)) acc s)
+      foldl (lam acc. lam x. applyS (info, applyS (info, f, acc), x)) acc s)
   | c & CFoldr _ -> VConstInfo3
     (c, lam info. lam f. lam acc. lam s.
       match s with VSeq s in
-      foldr (lam x. lam acc. applyF (info, applyF (info, f, x), acc)) acc s)
+      foldr (lam x. lam acc. applyS (info, applyS (info, f, x), acc)) acc s)
 end
 
-lang StringConvEvalF = SeqEvalF + CharEvalF
+lang StringConvEvalS = SeqEvalS + CharEvalS
   sem valToString : Val -> String
   sem valToString =
   | VSeq vals -> map (lam v. match v with VChar c in c) vals
@@ -750,8 +752,8 @@ lang StringConvEvalF = SeqEvalF + CharEvalF
   | s -> VSeq (map (lam c. VChar c) s)
 end
 
-lang SysEvalF = ConstEvalF + IntEvalF + StringConvEvalF + SysAst
-  sem mkDeltaF cs +=
+lang SysEvalS = ConstEvalS + IntEvalS + StringConvEvalS + SysAst
+  sem stageDeltaF cs +=
   | c & CExit _ -> VConst1 (c, lam x. match x with VInt x in exit x)
   | c & CError _ ->
     switch cs
@@ -770,29 +772,29 @@ lang SysEvalF = ConstEvalF + IntEvalF + StringConvEvalF + SysAst
       exec (valToString p) (map valToString args))
 end
 
-lang SymbEvalF = ConstEvalF + IntEvalF + SymbAst
-  sem mkDeltaF cs +=
+lang SymbEvalS = ConstEvalS + IntEvalS + SymbAst
+  sem stageDeltaF cs +=
   | c & CGensym _ -> VConst1 (c, lam. VInt (sym2hash (gensym ())))
   | c & CSym2hash _ -> VConst1 (c, lam x. match x with VInt _ in x)
 end
 
-lang CmpSymbEvalF = ConstEvalF + SymbEvalF + BoolEvalF + CmpSymbAst
-  sem mkDeltaF cs +=
+lang CmpSymbEvalS = ConstEvalS + SymbEvalS + BoolEvalS + CmpSymbAst
+  sem stageDeltaF cs +=
   | c & CEqsym _ -> VConst2
     (c, lam x. lam y. match (x, y) with (VInt x, VInt y) in VBool (eqi x y))
 end
 
-lang ConTagEvalF = ConstEvalF + DataEvalF + IntEvalF + ConTagAst
-  sem mkDeltaF cs +=
+lang ConTagEvalS = ConstEvalS + DataEvalS + IntEvalS + ConTagAst
+  sem stageDeltaF cs +=
   | c & CConstructorTag _ -> VConst1
     (c, lam v. match v with VConApp (tag, _) in VInt tag)
 end
 
-lang FloatStringConversionEvalF =
-  ConstEvalF + BoolEvalF + FloatEvalF + StringConvEvalF +
+lang FloatStringConversionEvalS =
+  ConstEvalS + BoolEvalS + FloatEvalS + StringConvEvalS +
   FloatStringConversionAst
 
-  sem mkDeltaF cs +=
+  sem stageDeltaF cs +=
   | c & CStringIsFloat _ ->
     VConst1 (c, lam s. VBool (stringIsFloat (valToString s)))
   | c & CString2float _ ->
@@ -801,10 +803,10 @@ lang FloatStringConversionEvalF =
     (c, lam x. match x with VFloat f in stringToVal (float2string f))
 end
 
-lang FileOpEvalF =
-  ConstEvalF + BoolEvalF + RecordEvalF + StringConvEvalF + FileOpAst
+lang FileOpEvalS =
+  ConstEvalS + BoolEvalS + RecordEvalS + StringConvEvalS + FileOpAst
 
-  sem mkDeltaF cs +=
+  sem stageDeltaF cs +=
   | c & CFileRead _ -> VConst1
     (c, lam f. stringToVal (readFile (valToString f)))
   | c & CFileWrite _ -> VConst2
@@ -815,8 +817,8 @@ lang FileOpEvalF =
     (c, lam f. deleteFile (valToString f); VRecord (mapEmpty cmpSID))
 end
 
-lang IOEvalF = ConstEvalF + RecordEvalF + StringConvEvalF + IOAst
-  sem mkDeltaF cs +=
+lang IOEvalS = ConstEvalS + RecordEvalS + StringConvEvalS + IOAst
+  sem stageDeltaF cs +=
   | c & CPrint _ -> VConst1
     (c, lam s. print (valToString s); VRecord (mapEmpty cmpSID))
   | c & CPrintError _ -> VConst1
@@ -831,10 +833,10 @@ lang IOEvalF = ConstEvalF + RecordEvalF + StringConvEvalF + IOAst
     (c, lam. error "CReadBytesAsString: unimplemented")
 end
 
-lang RandomNumberGeneratorEvalF =
-  ConstEvalF + IntEvalF + RecordEvalF + RandomNumberGeneratorAst
+lang RandomNumberGeneratorEvalS =
+  ConstEvalS + IntEvalS + RecordEvalS + RandomNumberGeneratorAst
 
-  sem mkDeltaF cs +=
+  sem stageDeltaF cs +=
   | c & CRandIntU _ -> VConst2
     (c, lam lo. lam hi.
           match (lo, hi) with (VInt lo, VInt hi) in VInt (randIntU lo hi))
@@ -842,21 +844,21 @@ lang RandomNumberGeneratorEvalF =
     (c, lam n. match n with VInt n in randSetSeed n; VRecord (mapEmpty cmpSID))
 end
 
-lang TimeEvalF = ConstEvalF + IntEvalF + FloatEvalF + RecordEvalF + TimeAst
-  sem mkDeltaF cs +=
+lang TimeEvalS = ConstEvalS + IntEvalS + FloatEvalS + RecordEvalS + TimeAst
+  sem stageDeltaF cs +=
   | c & CWallTimeMs _ -> VConst1 (c, lam. VFloat (wallTimeMs ()))
   | c & CSleepMs _ -> VConst1
     (c, lam n. match n with VInt n in sleepMs n; VRecord (mapEmpty cmpSID))
 end
 
-lang RefOpEvalF = ConstEvalF + RecordEvalF + RefOpAst
+lang RefOpEvalS = ConstEvalS + RecordEvalS + RefOpAst
   syn Val +=
   | VRef (Ref Val)
 
-  sem readback +=
+  sem evalSReadback +=
   | VRef _ -> None ()
 
-  sem mkDeltaF cs +=
+  sem stageDeltaF cs +=
   | c & CRef _ -> VConst1 (c, lam v. VRef (ref v))
   | c & CModRef _ -> VConst2
     (c, lam r. lam v.
@@ -864,21 +866,21 @@ lang RefOpEvalF = ConstEvalF + RecordEvalF + RefOpAst
   | c & CDeRef _ -> VConst1 (c, lam r. match r with VRef r in deref r)
 end
 
-lang TypeOpEvalF = ConstEvalF + TypeOpAst
-  sem mkDeltaF cs +=
+lang TypeOpEvalS = ConstEvalS + TypeOpAst
+  sem stageDeltaF cs +=
   | c & CTypeOf _ -> VConst1 (c, lam. error "CTypeOf: unimplemented")
 end
 
-lang TensorOpEvalF =
-  ConstEvalF + IntEvalF + FloatEvalF + SeqEvalF + BoolEvalF + RecordEvalF +
-  StringConvEvalF + TensorOpAst
+lang TensorOpEvalS =
+  ConstEvalS + IntEvalS + FloatEvalS + SeqEvalS + BoolEvalS + RecordEvalS +
+  StringConvEvalS + TensorOpAst
 
   syn Val +=
   | VTensorInt (Tensor[Int])
   | VTensorFloat (Tensor[Float])
   | VTensorExpr (Tensor[Val])
 
-  sem readback +=
+  sem evalSReadback +=
   | VTensorInt _ | VTensorFloat _ | VTensorExpr _ -> None ()
 
   sem valSeqToShape : Val -> [Int]
@@ -948,19 +950,19 @@ lang TensorOpEvalF =
   | VTensorInt t ->
     tensorIterSlice
       (lam i. lam s.
-        applyF (info, applyF (info, f, VInt i), VTensorInt s); ())
+        applyS (info, applyS (info, f, VInt i), VTensorInt s); ())
       t;
     VRecord (mapEmpty cmpSID)
   | VTensorFloat t ->
     tensorIterSlice
       (lam i. lam s.
-        applyF (info, applyF (info, f, VInt i), VTensorFloat s); ())
+        applyS (info, applyS (info, f, VInt i), VTensorFloat s); ())
       t;
     VRecord (mapEmpty cmpSID)
   | VTensorExpr t ->
     tensorIterSlice
       (lam i. lam s.
-        applyF (info, applyF (info, f, VInt i), VTensorExpr s); ())
+        applyS (info, applyS (info, f, VInt i), VTensorExpr s); ())
       t;
     VRecord (mapEmpty cmpSID)
 
@@ -968,14 +970,14 @@ lang TensorOpEvalF =
   sem tensorValToString info el2str =
   | VTensorInt t ->
     stringToVal
-      (tensor2string (lam x. valToString (applyF (info, el2str, VInt x))) t)
+      (tensor2string (lam x. valToString (applyS (info, el2str, VInt x))) t)
   | VTensorFloat t ->
     stringToVal
       (tensor2string
-        (lam x. valToString (applyF (info, el2str, VFloat x))) t)
+        (lam x. valToString (applyS (info, el2str, VFloat x))) t)
   | VTensorExpr t ->
     stringToVal
-      (tensor2string (lam x. valToString (applyF (info, el2str, x))) t)
+      (tensor2string (lam x. valToString (applyS (info, el2str, x))) t)
 
   sem tensorValSetExn : [Int] -> Val -> Val -> Val
   sem tensorValSetExn is t =
@@ -1003,7 +1005,7 @@ lang TensorOpEvalF =
   sem tensorValEq info eq t1 =
   | t2 ->
     let veq = lam a. lam b.
-      match applyF (info, applyF (info, eq, a), b) with VBool b in b in
+      match applyS (info, applyS (info, eq, a), b) with VBool b in b in
     VBool
       (switch (t1, t2)
        case (VTensorInt t1, VTensorInt t2) then
@@ -1027,7 +1029,7 @@ lang TensorOpEvalF =
        case _ then error "tensorValEq: not a tensor"
        end)
 
-  sem mkDeltaF cs +=
+  sem stageDeltaF cs +=
   | c & CTensorCreateUninitInt _ -> VConst1
     (c, lam shape. VTensorInt (tensorCreateUninitInt (valSeqToShape shape)))
   | c & CTensorCreateUninitFloat _ -> VConst1
@@ -1038,19 +1040,19 @@ lang TensorOpEvalF =
         (tensorCreateCArrayInt
           (valSeqToShape shape)
           (lam is.
-            match applyF (info, f, shapeToValSeq is) with VInt n in n)))
+            match applyS (info, f, shapeToValSeq is) with VInt n in n)))
   | c & CTensorCreateFloat _ -> VConstInfo2
     (c, lam info. lam shape. lam f.
       VTensorFloat
         (tensorCreateCArrayFloat
           (valSeqToShape shape)
           (lam is.
-            match applyF (info, f, shapeToValSeq is) with VFloat x in x)))
+            match applyS (info, f, shapeToValSeq is) with VFloat x in x)))
   | c & CTensorCreate _ -> VConstInfo2
     (c, lam info. lam shape. lam f.
       VTensorExpr
         (tensorCreateDense
-          (valSeqToShape shape) (lam is. applyF (info, f, shapeToValSeq is))))
+          (valSeqToShape shape) (lam is. applyS (info, f, shapeToValSeq is))))
   | c & CTensorGetExn _ -> VConst2
     (c, lam t. lam idx. tensorValGetExn (valSeqToShape idx) t)
   | c & CTensorSetExn _ -> VConst3
@@ -1078,20 +1080,20 @@ lang TensorOpEvalF =
 end
 
 lang BootParserEvalF =
-  ConstEvalF + IntEvalF + FloatEvalF + BoolEvalF + RecordEvalF +
-  StringConvEvalF + BootParserAst
+  ConstEvalS + IntEvalS + FloatEvalS + BoolEvalS + RecordEvalS +
+  StringConvEvalS + BootParserAst
 
   syn Val +=
   | VBootParserTree BootParseTree
 
-  sem readback +=
+  sem evalSReadback +=
   | VBootParserTree _ -> None ()
 
   sem valSeqToStrings : Val -> [String]
   sem valSeqToStrings =
   | VSeq vals -> map valToString vals
 
-  sem mkDeltaF cs +=
+  sem stageDeltaF cs +=
   | c & CBootParserParseMExprString _ -> VConst3
     (c, lam opts. lam keywords. lam src.
       match opts with VRecord bindings in
@@ -1176,18 +1178,18 @@ end
 -- PATTERNS --
 --------------
 
-lang NamedPatEvalF = MatchEvalF + NamedPat
-  sem mkTryMatch +=
+lang NamedPatEvalS = MatchEvalS + NamedPat
+  sem stageTryMatch +=
   | PatNamed {ident = PName name} ->
     match nameGetSym name with Some s then
       let s = sym2hash s in
       lam val. lam env. Some (Cons ((s, val), env))
-    else error "Unsymbolized PatNamed in mkTryMatch!"
+    else error "Unsymbolized PatNamed in stageTryMatch!"
   | PatNamed {ident = PWildcard ()} -> lam. lam env. Some env
 end
 
-lang BoolPatEvalF = MatchEvalF + BoolEvalF + BoolAst + BoolPat
-  sem mkTryMatch +=
+lang BoolPatEvalS = MatchEvalS + BoolEvalS + BoolAst + BoolPat
+  sem stageTryMatch +=
   | PatBool r -> lam val. lam env.
     match val with VBool b then
       match (b, r.val) with (true, true) | (false, false) then Some env
@@ -1195,19 +1197,19 @@ lang BoolPatEvalF = MatchEvalF + BoolEvalF + BoolAst + BoolPat
     else None ()
 end
 
-lang RecordPatEvalF = MatchEvalF + RecordEvalF + RecordAst + RecordPat +
+lang RecordPatEvalS = MatchEvalS + RecordEvalS + RecordAst + RecordPat +
                      MatchAst + VarAst + NeverAst + NamedPat
-  sem evalFStage cs +=
+  sem evalSStageExpr cs +=
   -- OPT(oerikss, 2026-09-29): Stage a simpler evaluation function for the
   -- common special match case expr.label
   | TmMatch (r & {pat = PatRecord p
                  ,thn = TmVar v
                  ,els = TmNever _}) ->
-    let target = evalFStage cs r.target in
-    let els = evalFStage cs r.els in
+    let target = evalSStageExpr cs r.target in
+    let els = evalSStageExpr cs r.els in
     let default = lam.
-      let thn = evalFStage cs r.thn in
-      let tryMatch = mkTryMatch r.pat in
+      let thn = evalSStageExpr cs r.thn in
+      let tryMatch = stageTryMatch r.pat in
       lam env.
         match tryMatch (target env) env with Some env then thn env
         else els env in
@@ -1221,9 +1223,9 @@ lang RecordPatEvalF = MatchEvalF + RecordEvalF + RecordAst + RecordPat +
       else default ()
     else default ()
 
-  sem mkTryMatch +=
+  sem stageTryMatch +=
   | PatRecord r ->
-    let pbindings = mapMap mkTryMatch r.bindings in
+    let pbindings = mapMap stageTryMatch r.bindings in
     lam val. lam env.
       match val with VRecord rbindings then
         mapFoldlOption
@@ -1235,10 +1237,10 @@ lang RecordPatEvalF = MatchEvalF + RecordEvalF + RecordAst + RecordPat +
       else None ()
 end
 
-lang SeqTotPatEvalF = MatchEvalF + SeqEvalF + SeqTotPat
-  sem mkTryMatch +=
+lang SeqTotPatEvalS = MatchEvalS + SeqEvalS + SeqTotPat
+  sem stageTryMatch +=
   | PatSeqTot r ->
-    let pats = map mkTryMatch r.pats in
+    let pats = map stageTryMatch r.pats in
     let n = length pats in
     lam val. lam env.
       match val with VSeq vals then
@@ -1251,10 +1253,10 @@ lang SeqTotPatEvalF = MatchEvalF + SeqEvalF + SeqTotPat
       else None ()
 end
 
-lang SeqEdgePatEvalF = MatchEvalF + SeqEvalF + SeqEdgePat
-  sem mkTryMatch +=
+lang SeqEdgePatEvalS = MatchEvalS + SeqEvalS + SeqEdgePat
+  sem stageTryMatch +=
   | PatSeqEdge r ->
-    let pats = map mkTryMatch (concat r.prefix r.postfix) in
+    let pats = map stageTryMatch (concat r.prefix r.postfix) in
     let npre = length r.prefix in
     let npost = length r.postfix in
     let nfix = addi npre npost in
@@ -1264,7 +1266,7 @@ lang SeqEdgePatEvalF = MatchEvalF + SeqEvalF + SeqEdgePat
         match nameGetSym name with Some s then
           let s = sym2hash s in
           lam vals. lam env. Some (Cons ((s, VSeq vals), env))
-        else error "Unsymbolized PatSeqEdge in mkTryMatch!"
+        else error "Unsymbolized PatSeqEdge in stageTryMatch!"
       else lam. lam env. Some env
     in
     lam val. lam env.
@@ -1283,59 +1285,59 @@ lang SeqEdgePatEvalF = MatchEvalF + SeqEvalF + SeqEdgePat
       else None ()
 end
 
-lang DataPatEvalF = MatchEvalF + DataEvalF + DataPat
-  sem mkTryMatch +=
+lang DataPatEvalS = MatchEvalS + DataEvalS + DataPat
+  sem stageTryMatch +=
   | PatCon r ->
     match nameGetSym r.ident with Some s then
       let s = sym2hash s in
-      let subpat = mkTryMatch r.subpat in
+      let subpat = stageTryMatch r.subpat in
       lam val. lam env.
         match val with VConApp (c, arg) then
           if eqi c s then subpat arg env
           else None ()
         else None ()
-    else error "Unsymbolized PatCon in mkTryMatch!"
+    else error "Unsymbolized PatCon in stageTryMatch!"
 end
 
-lang IntPatEvalF = MatchEvalF + IntEvalF + IntPat
-  sem mkTryMatch +=
+lang IntPatEvalS = MatchEvalS + IntEvalS + IntPat
+  sem stageTryMatch +=
   | PatInt r -> lam val. lam env.
     match val with VInt i then
       if eqi i r.val then Some env else None ()
     else None ()
 end
 
-lang CharPatEvalF = MatchEvalF + CharEvalF + CharPat
-  sem mkTryMatch +=
+lang CharPatEvalS = MatchEvalS + CharEvalS + CharPat
+  sem stageTryMatch +=
   | PatChar r -> lam val. lam env.
     match val with VChar c then
       if eqc c r.val then Some env else None ()
     else None ()
 end
 
-lang AndPatEvalF = MatchEvalF + AndPat
-  sem mkTryMatch +=
+lang AndPatEvalS = MatchEvalS + AndPat
+  sem stageTryMatch +=
   | PatAnd r ->
-    let lpat = mkTryMatch r.lpat in
-    let rpat = mkTryMatch r.rpat in
+    let lpat = stageTryMatch r.lpat in
+    let rpat = stageTryMatch r.rpat in
     lam val. lam env.
       match lpat val env with Some env then rpat val env
       else None ()
 end
 
-lang OrPatEvalF = MatchEvalF + OrPat
-  sem mkTryMatch +=
+lang OrPatEvalS = MatchEvalS + OrPat
+  sem stageTryMatch +=
   | PatOr r ->
-    let lpat = mkTryMatch r.lpat in
-    let rpat = mkTryMatch r.rpat in
+    let lpat = stageTryMatch r.lpat in
+    let rpat = stageTryMatch r.rpat in
     lam val. lam env.
       match lpat val env with Some env then Some env else rpat val env
 end
 
-lang NotPatEvalF = MatchEvalF + NotPat
-  sem mkTryMatch +=
+lang NotPatEvalS = MatchEvalS + NotPat
+  sem stageTryMatch +=
   | PatNot r ->
-    let subpat = mkTryMatch r.subpat in
+    let subpat = stageTryMatch r.subpat in
     lam val. lam env.
       match subpat val env with Some _ then None () else Some env
 end
@@ -1344,31 +1346,31 @@ end
 -- COMPOSITIONS --
 ------------------
 
-lang MExprEvalF =
+lang MExprEvalS =
   -- Terms and Decls
-  VarEvalF + AppEvalF + LamEvalF + DeclEvalF + ConstEvalF + MatchEvalF +
-  RecordEvalF + SeqEvalF + NeverEvalF + DataEvalF + UtestEvalF + ExtEvalF +
-  PlaceholderEvalF + OpaqueEvalF +
+  VarEvalF + AppEvalS + LamEvalS + DeclEvalS + ConstEvalS + MatchEvalS +
+  RecordEvalS + SeqEvalS + NeverEvalS + DataEvalS + UtestEvalS + ExtEvalS +
+  PlaceholderEvalS + OpaqueEvalS +
 
   -- Decls
-  LetEvalF + RecLetsEvalF + TypeEvalF +
+  LetEvalS + RecLetsEvalS + TypeEvalS +
 
   -- Constants
-  UnsafeCoerceEvalF + IntEvalF + ArithIntEvalF + ShiftIntEvalF +  BoolEvalF +
-  CmpIntEvalF + CharEvalF + CmpCharEvalF + IntCharConversionEvalF +
-  FloatEvalF + ArithFloatEvalF + CmpFloatEvalF +
-  FloatIntConversionEvalF + SeqOpEvalF + StringConvEvalF + SysEvalF +
-  SymbEvalF + CmpSymbEvalF + ConTagEvalF + FloatStringConversionEvalF +
-  FileOpEvalF + IOEvalF + RandomNumberGeneratorEvalF + TimeEvalF +
-  RefOpEvalF + TypeOpEvalF + TensorOpEvalF + BootParserEvalF +
+  UnsafeCoerceEvalS + IntEvalS + ArithIntEvalS + ShiftIntEvalS +  BoolEvalS +
+  CmpIntEvalS + CharEvalS + CmpCharEvalS + IntCharConversionEvalS +
+  FloatEvalS + ArithFloatEvalS + CmpFloatEvalS +
+  FloatIntConversionEvalS + SeqOpEvalS + StringConvEvalS + SysEvalS +
+  SymbEvalS + CmpSymbEvalS + ConTagEvalS + FloatStringConversionEvalS +
+  FileOpEvalS + IOEvalS + RandomNumberGeneratorEvalS + TimeEvalS +
+  RefOpEvalS + TypeOpEvalS + TensorOpEvalS + BootParserEvalF +
 
   -- Patterns
-  NamedPatEvalF + BoolPatEvalF + RecordPatEvalF + SeqTotPatEvalF +
-  SeqEdgePatEvalF + DataPatEvalF + IntPatEvalF + CharPatEvalF +
-  AndPatEvalF + OrPatEvalF + NotPatEvalF
+  NamedPatEvalS + BoolPatEvalS + RecordPatEvalS + SeqTotPatEvalS +
+  SeqEdgePatEvalS + DataPatEvalS + IntPatEvalS + CharPatEvalS +
+  AndPatEvalS + OrPatEvalS + NotPatEvalS
 end
 
-lang TestLang = MExprEvalF + MExprEq + MExprPrettyPrint + MExprSym end
+lang TestLang = MExprEvalS + MExprEq + MExprPrettyPrint + MExprSym end
 
 mexpr
 
@@ -1380,64 +1382,64 @@ let toString =
 
 let eq = optionEq eqExpr in
 
-let env : EvalFEnv = Nil () in
+let env : EvalSEnv = Nil () in
 
-let eval : Expr -> Val = lam e. evalFStage (None ()) (symbolize e) env in
+let eval : Expr -> Val = lam e. evalSStageExpr (None ()) (symbolize e) env in
 
-utest readback (eval (app_ (ulam_ "x" (var_ "x")) (int_ 0)))
+utest evalSReadback (eval (app_ (ulam_ "x" (var_ "x")) (int_ 0)))
 with Some (int_ 0) using eq else toString in
 
-utest readback (eval (app_ (ulam_ "x" (addi_ (var_ "x") (int_ 2))) (int_ 1)))
+utest evalSReadback (eval (app_ (ulam_ "x" (addi_ (var_ "x") (int_ 2))) (int_ 1)))
 with Some (int_ 3) using eq else toString in
 
 -------------------------------------------
 -- UNIT TESTS FOR THE CONSTANT FRAGMENTS --
 -------------------------------------------
 
--- SymbEvalF
+-- SymbEvalS
 
 -- `sym2hash` on an already-hash-represented symbol is a no-op.
 utest
-  readback
+  evalSReadback
     (eval (bindall_ [ulet_ "s" (gensym_ uunit_)]
       (eqi_ (var_ "s") (sym2hash_ (var_ "s")))))
 with Some true_ using eq else toString in
 
 -- Reading the same binding's hash twice gives the same value.
 utest
-  readback
+  evalSReadback
     (eval (bindall_ [ulet_ "s" (gensym_ uunit_)]
       (eqi_ (sym2hash_ (var_ "s")) (sym2hash_ (var_ "s")))))
 with Some true_ using eq else toString in
 
 -- Two separate `gensym`s are (almost certainly) distinct.
 utest
-  readback
+  evalSReadback
     (eval (bindall_ [ulet_ "s1" (gensym_ uunit_), ulet_ "s2" (gensym_ uunit_)]
       (eqi_ (var_ "s1") (var_ "s2"))))
 with Some false_ using eq else toString in
 
--- CmpSymbEvalF
+-- CmpSymbEvalS
 
 utest
-  readback
+  evalSReadback
     (eval (bindall_ [ulet_ "s" (gensym_ uunit_)]
       (eqsym_ (var_ "s") (var_ "s"))))
 with Some true_ using eq else toString in
 
 utest
-  readback
+  evalSReadback
     (eval (bindall_ [ulet_ "s1" (gensym_ uunit_), ulet_ "s2" (gensym_ uunit_)]
       (eqsym_ (var_ "s1") (var_ "s2"))))
 with Some false_ using eq else toString in
 
--- ConTagEvalF
+-- ConTagEvalS
 
 let constructorTag_ = lam e. app_ (uconst_ (CConstructorTag ())) e in
 
 -- Same constructor -> same tag, regardless of its argument.
 utest
-  readback
+  evalSReadback
     (eval (bindall_ [ucondef_ "Foo", ucondef_ "Bar"]
       (eqi_
         (constructorTag_ (conapp_ "Foo" (int_ 0)))
@@ -1446,28 +1448,28 @@ with Some true_ using eq else toString in
 
 -- Different constructors -> different tags.
 utest
-  readback
+  evalSReadback
     (eval (bindall_ [ucondef_ "Foo", ucondef_ "Bar"]
       (eqi_
         (constructorTag_ (conapp_ "Foo" (int_ 0)))
         (constructorTag_ (conapp_ "Bar" (int_ 0))))))
 with Some false_ using eq else toString in
 
--- FloatStringConversionEvalF
+-- FloatStringConversionEvalS
 
-utest readback (eval (string2float_ (str_ "1.5")))
+utest evalSReadback (eval (string2float_ (str_ "1.5")))
 with Some (float_ 1.5) using eq else toString in
 
-utest readback (eval (float2string_ (float_ 1.5)))
+utest evalSReadback (eval (float2string_ (float_ 1.5)))
 with Some (str_ "1.5") using eq else toString in
 
-utest readback (eval (stringIsfloat_ (str_ "1.5")))
+utest evalSReadback (eval (stringIsfloat_ (str_ "1.5")))
 with Some true_ using eq else toString in
 
-utest readback (eval (stringIsfloat_ (str_ "abc")))
+utest evalSReadback (eval (stringIsfloat_ (str_ "abc")))
 with Some false_ using eq else toString in
 
--- FileOpEvalF
+-- FileOpEvalS
 
 -- The scratch path is computed as an ordinary host-level string (this outer
 -- `mexpr` block is run by the real evaluator, unrestricted), then spliced in
@@ -1478,28 +1480,28 @@ let scratchFile =
   concat "/tmp/eval-fast-test-" (int2string (sym2hash (gensym ()))) in
 
 utest
-  readback
+  evalSReadback
     (eval (bindall_ [ulet_ "_" (writeFile_ (str_ scratchFile) (str_ "hello"))]
       (readFile_ (str_ scratchFile))))
 with Some (str_ "hello") using eq else toString in
 
-utest readback (eval (fileExists_ (str_ scratchFile)))
+utest evalSReadback (eval (fileExists_ (str_ scratchFile)))
 with Some true_ using eq else toString in
 
 utest
-  readback
+  evalSReadback
     (eval (bindall_ [ulet_ "_" (deleteFile_ (str_ scratchFile))]
       (fileExists_ (str_ scratchFile))))
 with Some false_ using eq else toString in
 
 -- `CReadLine`/`CReadBytesAsString` are not exercised here: the former would
 -- block on stdin (nothing is piped into this test run), and the latter has
--- no runtime semantics -- see the `IOEvalF` fragment's comment above.
+-- no runtime semantics -- see the `IOEvalS` fragment's comment above.
 
--- RandomNumberGeneratorEvalF
+-- RandomNumberGeneratorEvalS
 
 utest
-  readback
+  evalSReadback
     (eval
       (bindall_
         [ ulet_ "_" (randSetSeed_ (int_ 42))
@@ -1507,17 +1509,17 @@ utest
         (and_ (geqi_ (var_ "n") (int_ 10)) (lti_ (var_ "n") (int_ 20)))))
 with Some true_ using eq else toString in
 
--- TimeEvalF
+-- TimeEvalS
 
-utest readback (eval (geqf_ (wallTimeMs_ uunit_) (float_ 0.0)))
+utest evalSReadback (eval (geqf_ (wallTimeMs_ uunit_) (float_ 0.0)))
 with Some true_ using eq else toString in
 
-utest readback (eval (sleepMs_ (int_ 0))) with Some uunit_ using eq else toString in
+utest evalSReadback (eval (sleepMs_ (int_ 0))) with Some uunit_ using eq else toString in
 
--- RefOpEvalF
+-- RefOpEvalS
 
 utest
-  readback
+  evalSReadback
     (eval
       (bindall_
         [ ulet_ "r1" (ref_ (int_ 1))
@@ -1526,7 +1528,7 @@ utest
 with Some (utuple_ [int_ 1, float_ 2.0]) using eq else toString in
 
 utest
-  readback
+  evalSReadback
     (eval
       (bindall_
         [ ulet_ "r" (ref_ (int_ 1))
@@ -1534,20 +1536,20 @@ utest
         (deref_ (var_ "r"))))
 with Some (int_ 2) using eq else toString in
 
--- TensorOpEvalF
+-- TensorOpEvalS
 
 let tensorCreateUninitInt_ = lam shape. app_ (uconst_ (CTensorCreateUninitInt ())) shape in
 let tensorCreateUninitFloat_ = lam shape. app_ (uconst_ (CTensorCreateUninitFloat ())) shape in
 
-utest readback (eval (utensorRank_ (tensorCreateUninitInt_ (seq_ [int_ 2, int_ 3]))))
+utest evalSReadback (eval (utensorRank_ (tensorCreateUninitInt_ (seq_ [int_ 2, int_ 3]))))
 with Some (int_ 2) using eq else toString in
 
-utest readback (eval (utensorShape_ (tensorCreateUninitFloat_ (seq_ [int_ 4]))))
+utest evalSReadback (eval (utensorShape_ (tensorCreateUninitFloat_ (seq_ [int_ 4]))))
 with Some (seq_ [int_ 4]) using eq else toString in
 
 -- create (int/float/generic) + get, rank-1 and rank-0
 utest
-  readback
+  evalSReadback
     (eval
       (bindall_
         [ulet_ "t" (tensorCreateInt_ (seq_ [int_ 3]) (ulam_ "is" (get_ (var_ "is") (int_ 0))))]
@@ -1558,11 +1560,11 @@ utest
 with Some (utuple_ [int_ 0, int_ 1, int_ 2]) using eq else toString in
 
 utest
-  readback (eval (utensorGetExn_ (tensorCreateFloat_ (seq_ []) (ulam_ "is" (float_ 3.14))) (seq_ [])))
+  evalSReadback (eval (utensorGetExn_ (tensorCreateFloat_ (seq_ []) (ulam_ "is" (float_ 3.14))) (seq_ [])))
 with Some (float_ 3.14) using eq else toString in
 
 utest
-  readback
+  evalSReadback
     (eval
       (utensorGetExn_
         (utensorCreate_ (seq_ [int_ 2])
@@ -1572,7 +1574,7 @@ with Some (utuple_ [int_ 1, int_ 1]) using eq else toString in
 
 -- set then get round trip
 utest
-  readback
+  evalSReadback
     (eval
       (bindall_
         [ ulet_ "t" (tensorCreateInt_ (seq_ [int_ 3]) (ulam_ "is" (int_ 0)))
@@ -1582,7 +1584,7 @@ with Some (int_ 42) using eq else toString in
 
 -- linear get/set
 utest
-  readback
+  evalSReadback
     (eval
       (bindall_
         [ ulet_ "t" (tensorCreateInt_ (seq_ [int_ 3]) (ulam_ "is" (int_ 0)))
@@ -1592,7 +1594,7 @@ with Some (int_ 9) using eq else toString in
 
 -- rank and shape
 utest
-  readback
+  evalSReadback
     (eval
       (bindall_
         [ulet_ "t" (tensorCreateInt_ (seq_ [int_ 2, int_ 3]) (ulam_ "is" (int_ 0)))]
@@ -1601,7 +1603,7 @@ with Some (utuple_ [int_ 2, seq_ [int_ 2, int_ 3]]) using eq else toString in
 
 -- reshape's resulting shape
 utest
-  readback
+  evalSReadback
     (eval
       (utensorShape_
         (utensorReshapeExn_
@@ -1611,7 +1613,7 @@ with Some (seq_ [int_ 2, int_ 3]) using eq else toString in
 
 -- copy independence: mutating the copy leaves the original unaffected
 utest
-  readback
+  evalSReadback
     (eval
       (bindall_
         [ ulet_ "t" (tensorCreateInt_ (seq_ [int_ 1]) (ulam_ "is" (int_ 7)))
@@ -1624,7 +1626,7 @@ with Some (utuple_ [int_ 7, int_ 99]) using eq else toString in
 
 -- transpose's resulting shape
 utest
-  readback
+  evalSReadback
     (eval
       (utensorShape_
         (utensorTransposeExn_
@@ -1634,7 +1636,7 @@ with Some (seq_ [int_ 3, int_ 2]) using eq else toString in
 
 -- slice's resulting rank and shape
 utest
-  readback
+  evalSReadback
     (eval
       (bindall_
         [ulet_ "t" (tensorCreateInt_ (seq_ [int_ 2, int_ 3]) (ulam_ "is" (int_ 0)))]
@@ -1645,7 +1647,7 @@ with Some (utuple_ [int_ 1, seq_ [int_ 3]]) using eq else toString in
 
 -- sub's resulting rank and shape
 utest
-  readback
+  evalSReadback
     (eval
       (bindall_
         [ulet_ "t" (tensorCreateInt_ (seq_ [int_ 6]) (ulam_ "is" (int_ 0)))]
@@ -1657,7 +1659,7 @@ with Some (utuple_ [int_ 1, seq_ [int_ 3]]) using eq else toString in
 -- iterSlice: mutating through a slice is visible in the original tensor
 -- (tensors are views, not copies)
 utest
-  readback
+  evalSReadback
     (eval
       (bindall_
         [ ulet_ "t" (tensorCreateInt_ (seq_ [int_ 3]) (ulam_ "is" (int_ 0)))
@@ -1673,7 +1675,7 @@ with Some (utuple_ [int_ 0, int_ 1, int_ 2]) using eq else toString in
 
 -- eq: same-kind equal and unequal
 utest
-  readback
+  evalSReadback
     (eval
       (bindall_
         [ ulet_ "t1" (tensorCreateInt_ (seq_ [int_ 2]) (ulam_ "is" (get_ (var_ "is") (int_ 0))))
@@ -1683,7 +1685,7 @@ utest
 with Some true_ using eq else toString in
 
 utest
-  readback
+  evalSReadback
     (eval
       (bindall_
         [ ulet_ "t1" (tensorCreateInt_ (seq_ [int_ 2]) (ulam_ "is" (int_ 0)))
@@ -1694,7 +1696,7 @@ with Some false_ using eq else toString in
 
 -- eq: mixed kind (int tensor vs. generic tensor storing plain ints)
 utest
-  readback
+  evalSReadback
     (eval
       (bindall_
         [ ulet_ "t1" (tensorCreateInt_ (seq_ [int_ 2])
@@ -1710,7 +1712,7 @@ with Some true_ using eq else toString in
 -- check from int-to-string conversion, which isn't available inside this
 -- restricted expression language)
 utest
-  readback
+  evalSReadback
     (eval
       (utensor2string_
         (ulam_ "x" (str_ "n"))
@@ -1746,7 +1748,7 @@ let bootParserGetListLength_ = lam t. lam n.
 -- test): root tag 100 = TmVar, string field 0 = the identifier, int field 0
 -- = the frozen flag.
 utest
-  readback
+  evalSReadback
     (eval
       (bindall_ [ulet_ "t" (bootParserParseMExprString_ true [] "x")]
         (utuple_
@@ -1760,7 +1762,7 @@ with Some (utuple_ [int_ 100, str_ "x", int_ 0]) using eq else toString in
 -- field 0 = "x" again) -- the one thing the plain-literal tests above don't
 -- reach.
 utest
-  readback
+  evalSReadback
     (eval
       (bindall_
         [ ulet_ "t" (bootParserParseMExprString_ false [] "lam x. x")
@@ -1777,7 +1779,7 @@ using eq else toString in
 -- sub-tree of tag 302 = CFloat, whose float field 0 is the value --
 -- exercises `GetConst`/`GetFloat`.
 utest
-  readback
+  evalSReadback
     (eval
       (bindall_
         [ ulet_ "t" (bootParserParseMExprString_ false [] "3.14")
@@ -1791,7 +1793,7 @@ with Some (utuple_ [int_ 105, int_ 302, float_ 3.14]) using eq else toString in
 -- Parse "[1, 2, 3]": root tag 106 = TmSeq, whose list-length field 0 is the
 -- element count -- exercises `GetListLength`.
 utest
-  readback
+  evalSReadback
     (eval
       (bindall_ [ulet_ "t" (bootParserParseMExprString_ false [] "[1, 2, 3]")]
         (utuple_
@@ -1833,8 +1835,8 @@ let infoApp = mkInfo 1000 in
 let term = tmApp infoApp tyunknown_ (nulam_ xN (nvar_ xN)) (int_ 42) in
 (match callstackInit 8 with Some cs0 then
   let csr = ref cs0 in
-  let v = evalFStage (Some csr) (symbolize term) env in
-  utest readback v with Some (int_ 42) using eq else toString in
+  let v = evalSStageExpr (Some csr) (symbolize term) env in
+  utest evalSReadback v with Some (int_ 42) using eq else toString in
   utest callstackPop (deref csr) with None () in
   ()
 else ());
@@ -1849,13 +1851,13 @@ let term = tmApp info2 tyunknown_
              (tmApp info1 tyunknown_ lam2 (int_ 1)) (int_ 2) in
 (match callstackInit 8 with Some cs0 then
   let csr = ref cs0 in
-  let v = evalFStage (Some csr) (symbolize term) env in
-  utest readback v with Some (int_ 3) using eq else toString in
+  let v = evalSStageExpr (Some csr) (symbolize term) env in
+  utest evalSReadback v with Some (int_ 3) using eq else toString in
   utest callstackPop (deref csr) with None () in
   ()
 else ());
 
--- Recursive let: exercises RecLetsEvalF's `Some cs` branch specifically.
+-- Recursive let: exercises RecLetsEvalS's `Some cs` branch specifically.
 let countN = nameSym "count" in
 let nArgN = nameSym "n" in
 let infoCall = mkInfo 1003 in
@@ -1868,18 +1870,18 @@ let decl = nreclets_ [(countN, tyunknown_, nulam_ nArgN recBody)] in
 let term = bind_ decl (tmApp infoCall tyunknown_ (nvar_ countN) (int_ 5)) in
 (match callstackInit 8 with Some cs0 then
   let csr = ref cs0 in
-  let v = evalFStage (Some csr) (symbolize term) env in
-  utest readback v with Some (int_ 0) using eq else toString in
+  let v = evalSStageExpr (Some csr) (symbolize term) env in
+  utest evalSReadback v with Some (int_ 0) using eq else toString in
   utest callstackPop (deref csr) with None () in
   ()
 else ());
 
--- Direct nesting test: evalFStage-driven tests above can only observe
+-- Direct nesting test: evalSStageExpr-driven tests above can only observe
 -- callstack state before/after a *complete* top-level evaluation, since
 -- interpreted MExpr has no way to peek at the host evaluator's Callstack
 -- mid-call. Build closures directly via clsUsingCallstack instead, so the
--- innermost one's body can inspect the callstack while the outer call is
--- still in flight.
+-- innermost one's body can inspect the callstack while the outer call is still
+-- in flight.
 let csr =
   ref (optionGetOrElse (lam. error "callstack init failed") (callstackInit 8))
 in
@@ -1890,9 +1892,9 @@ let innerCls =
   clsUsingCallstack csr
     (lam val. modref observed (callstackToSeq (deref csr)); val) in
 let outerCls =
-  clsUsingCallstack csr (lam val. applyF (dInfoB, innerCls, val)) in
-let result = applyF (dInfoA, outerCls, VInt 0) in
+  clsUsingCallstack csr (lam val. applyS (dInfoB, innerCls, val)) in
+let result = applyS (dInfoA, outerCls, VInt 0) in
 utest deref observed with [dInfoB, dInfoA] in
-utest readback result with Some (int_ 0) using eq else toString in
+utest evalSReadback result with Some (int_ 0) using eq else toString in
 
 ()

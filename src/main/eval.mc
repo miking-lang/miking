@@ -18,8 +18,7 @@ include "mexpr/builtin.mc"
 include "mexpr/const-arity.mc"
 include "mexpr/constant-fold.mc"
 include "mexpr/demote-recursive.mc"
-include "mexpr/eval-fast.mc"
-include "mexpr/eval.mc"
+include "mexpr/eval-staged.mc"
 include "mexpr/keywords.mc"
 include "mexpr/mexpr.mc"
 include "mexpr/phase-stats.mc"
@@ -36,7 +35,7 @@ include "peval/ast.mc"
 lang ExtMCore =
   BootParser + MExpr + MExprTypeCheck + MExprRemoveTypeAscription +
   MExprTypeCheck + MExprTypeLift + MExprUtestGenerate +
-  MExprProfileInstrument + MExprEval + MExprEvalF + MExprDemoteRecursive +
+  MExprProfileInstrument + MExprEvalS + MExprDemoteRecursive +
   SpecializeAst + PhaseStats
 
   sem updateArgv : [String] -> Expr -> Expr
@@ -117,7 +116,7 @@ let eval = lam files. lam options : Options. lam args.
     endPhaseStatsExpr log "debug-constant-folding" ast;
 
     let cs = optionMap ref (optionBind options.debugStackTrace callstackInit) in
-    let eval = evalFStage cs ast in
+    let eval = evalSStageExpr cs ast in
     endPhaseStatsExpr log "stage-eval" ast;
 
     if options.exitBefore then exit 0
