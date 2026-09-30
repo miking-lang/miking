@@ -10,6 +10,10 @@
 -- * The target of a `match` is a variable.
 -- * All functions are named.
 -- * Functions are only allowed to close over global values.
+-- * Functions are never residual, i.e., a function is never passed to
+--   a constant (other than the higher-order sequence ones) or external
+--   that doesn't compute, and the arms of a residualized `match` never
+--   produce different functions in the same position.
 
 -- TODO(vipa, 2026-09-23): Maybe make consts that return `()` return a
 -- non-residualized value
@@ -447,6 +451,39 @@ lang PEvalGraphLam = PEvalGraph + LamAst
     case Right tys then
       (length tys, join [call, " : ", strJoin ", " (map type2str tys)])
     end
+
+  sem smapAccumL_PEGVal_PEGVal f acc += | VLam x ->
+    match mapAccumL f acc x.applied with (acc, applied) in
+    (acc, VLam {x with applied = applied})
+
+  sem cmpPEGValH += | (VLam a, VLam b) ->
+    let res = subi a.sym b.sym in
+    if neqi res 0 then res else
+    let res = subi (if a.isRecursiveCall then 1 else 0) (if b.isRecursiveCall then 1 else 0) in
+    if neqi res 0 then res else
+    let res = mapCmp cmpType a.instantiated b.instantiated in
+    if neqi res 0 then res else
+    seqCmp cmpPEGVal a.applied b.applied
+
+  -- A function cannot be residual, thus every value must be the same
+  -- function, but they may be applied to different arguments
+  sem homogenizeValues newVRef st += | allVs & [VLam x] ++ _ ->
+    let unapplied = VLam {x with applied = []} in
+    let check = lam v.
+      match v with VLam x2 then
+        if eqi (cmpPEGValH (unapplied, VLam {x2 with applied = []})) 0
+        then if eqi (length x.applied) (length x2.applied) then Some x2.applied else None ()
+        else None ()
+      else None () in
+    match optionMapM check allVs with Some appliedss then
+      let f = lam acc. lam column.
+        match acc with (st, fillers) in
+        match homogenizeValues newVRef st column with (st, v, vs) in
+        ((st, zipWith concat fillers vs), v) in
+      match mapAccumL f (st, make (length allVs) []) (transpose appliedss)
+      with ((st, fillers), applied) in
+      (st, VLam {x with applied = applied}, fillers)
+    else error "Compiler error: different functions flow to the same place, which would require a residual function."
 
   sem pegValToString += | VLam x -> join
     [ "<lambda ", int2string x.sym
@@ -3826,6 +3863,101 @@ with
   , VRef {ty = tyint_, ref = 1}
   )
 using eqBlocksInstrAndValIgnoringSymbols else ppBlocksInstrAndVal in
+
+
+-- === Functions as values ===
+
+-- A function passed to a function that becomes a block is part of
+-- the key of that block
+utest callEvalFWith inlineNone (prepare (strJoin "\n"
+  [ "let f = lam x. addi x 1 in"
+  , "let app = lam g. lam y. g y in"
+  , "app f (testResidual 1)"
+  ]))
+with
+  ( [ residual_ (VInt 1)
+    , blockCall_ "block0" [0] [tyint_]
+    ]
+  , [ block_ "block0" [tyint_]
+        [blockCall_ "block1" [0] [tyint_]]
+        [1] (VRef {ty = tyint_, ref = 0})
+    , block_ "block1" [tyint_]
+        [ IConstCall
+          { const = CAddi ()
+          , args = [VRef {ty = tyint_, ref = 0}, VInt 1]
+          }
+        ]
+        [1] (VRef {ty = tyint_, ref = 0})
+    ]
+  , VRef {ty = tyint_, ref = 1}
+  )
+using eqBlocksInstrAndVal else ppBlocksInstrAndVal in
+
+-- A residual value a function is partially applied to becomes a
+-- parameter of the block, like any other residual argument
+utest callEvalFWith inlineNone (prepare (strJoin "\n"
+  [ "let add = lam a. lam b. addi a b in"
+  , "let app = lam g. lam y. g y in"
+  , "let r = testResidual 1 in"
+  , "app (add r) 2"
+  ]))
+with
+  ( [ residual_ (VInt 1)
+    , blockCall_ "block0" [0] [tyint_]
+    ]
+  , [ block_ "block0" [tyint_]
+        [blockCall_ "block1" [0] [tyint_]]
+        [1] (VRef {ty = tyint_, ref = 0})
+    , block_ "block1" [tyint_]
+        [ IConstCall
+          { const = CAddi ()
+          , args = [VRef {ty = tyint_, ref = 0}, VInt 2]
+          }
+        ]
+        [1] (VRef {ty = tyint_, ref = 0})
+    ]
+  , VRef {ty = tyint_, ref = 1}
+  )
+using eqBlocksInstrAndVal else ppBlocksInstrAndVal in
+
+-- The arms of a residual match produce the same function, so nothing
+-- has to be passed out, and the call after it is known
+utest callEvalF (prepare (strJoin "\n"
+  [ "let f = lam x. addi x 1 in"
+  , "let t = testResidual 0 in"
+  , "let h = match t with 0 then f else f in"
+  , "h 2"
+  ]))
+with
+  ( [ residual_ (VInt 0)
+    , IMatch {target = 0, arms = [(pint_ 0, [], []), (pvarw_, [], [])]}
+    ]
+  , VInt 3
+  )
+using eqInstrAndVal else ppInstrAndVal in
+
+-- As above, but the function is applied to different arguments, which
+-- are passed out as usual
+utest callEvalF (prepare (strJoin "\n"
+  [ "let f = lam a. lam b. addi a b in"
+  , "let t = testResidual 0 in"
+  , "let h = match t with 0 then f 1 else f 2 in"
+  , "h 10"
+  ]))
+with
+  ( [ residual_ (VInt 0)
+    , IMatch
+      { target = 0
+      , arms = [(pint_ 0, [], [VInt 1]), (pvarw_, [], [VInt 2])]
+      }
+    , IConstCall
+      { const = CAddi ()
+      , args = [VRef {ty = tyint_, ref = 1}, VInt 10]
+      }
+    ]
+  , VRef {ty = tyint_, ref = 2}
+  )
+using eqInstrAndVal else ppInstrAndVal in
 
 
 -- === Higher-order constants ===
