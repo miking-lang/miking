@@ -5,27 +5,20 @@ This is the new parser for MCore.
 The parser is designed to be as extensible as possible.
 It is built on top of the breakable library.
 
-The new parser is simply tested against the ocaml boot parser.
-The tests checks that the parsed AST is identical.
-
-`misc/parser-compare.mc` runs more sophisticated tests on full .mc files.
-`misc/test` runs parser-compare on most files in the project.
-
 -/
 
 include "basic-types.mc"
+include "bool.mc"
 include "common.mc"
 include "lexer.mc"
 include "mexpr/info.mc"
 include "mexpr/ast.mc"
 include "mexpr/cmp.mc"
 include "mexpr/ast-builder.mc"
-include "mexpr/boot-parser.mc"
 include "mexpr/json-debug.mc"
 include "mexpr/pprint.mc"
 include "mlang/ast.mc"
 include "mlang/cmp.mc"
-include "mlang/boot-parser.mc"
 include "mlang/pprint.mc"
 include "json.mc"
 include "fileutils.mc"
@@ -879,18 +872,27 @@ lang DataParser = AstParserBase + DataAst + ConTypeAst + AppTypeAst + DataPat + 
   sem parseConTypeRestrictionBody: all w. NextTokenResult -> ParseRes w (Type, Info, NextTokenResult)
   sem parseConTypeRestrictionBody =
   | { token = OperatorTok { val = "!" } } & toknot ->
-    match parseConNameList [] (nextToken toknot.stream) with (names, cur) in
+    match parseConNameList ([], NoInfo ()) (nextToken toknot.stream)
+    with ((names, namesInfo), cur) in
     finishConTypeRestriction
-      (TyData { info = NoInfo (), universe = mapEmpty nameCmp, positive = false, cons = setOfSeq nameCmp names })
+      (TyData {
+        info = mergeInfo toknot.info namesInfo,
+        universe = mapEmpty nameCmp, positive = false,
+        cons = setOfSeq nameCmp names
+      })
       cur
   | { token = LIdentTok { val = val } } & tokvar ->
     finishConTypeRestriction
-      (TyVar { info = NoInfo (), ident = nameNoSym val })
+      (TyVar { info = tokvar.info, ident = nameNoSym val })
       (nextToken tokvar.stream)
-  | cur ->
-    match parseConNameList [] cur with (names, cur) in
+  | start ->
+    match parseConNameList ([], NoInfo ()) start with ((names, namesInfo), cur) in
     finishConTypeRestriction
-      (TyData { info = NoInfo (), universe = mapEmpty nameCmp, positive = true, cons = setOfSeq nameCmp names })
+      (TyData {
+        info = mergeInfo start.info namesInfo,
+        universe = mapEmpty nameCmp, positive = true,
+        cons = setOfSeq nameCmp names
+      })
       cur
 
   sem finishConTypeRestriction: all w. Type -> NextTokenResult -> ParseRes w (Type, Info, NextTokenResult)
@@ -899,10 +901,12 @@ lang DataParser = AstParserBase + DataAst + ConTypeAst + AppTypeAst + DataPat + 
     parseOk (data, tokclose.info, nextToken tokclose.stream)
   | cur -> parseErr (cur.info, "Expected '}' to close the constructor type restriction")
 
-  sem parseConNameList: [Name] -> NextTokenResult -> ([Name], NextTokenResult)
+  sem parseConNameList: ([Name], Info) -> NextTokenResult -> (([Name], Info), NextTokenResult)
   sem parseConNameList acc =
-  | { token = UIdentTok { val = val } } & tok -> parseConNameList (snoc acc (nameNoSym val)) (nextToken tok.stream)
-  | { token = LIdentTok { val = val } } & tok -> parseConNameList (snoc acc (nameNoSym val)) (nextToken tok.stream)
+  | { token = UIdentTok { val = val } } & tok ->
+    parseConNameList (snoc acc.0 (nameNoSym val), mergeInfo acc.1 tok.info) (nextToken tok.stream)
+  | { token = LIdentTok { val = val } } & tok ->
+    parseConNameList (snoc acc.0 (nameNoSym val), mergeInfo acc.1 tok.info) (nextToken tok.stream)
   | cur -> (acc, cur)
 
   sem parsePatROpen state +=
@@ -1284,11 +1288,12 @@ lang StringParser = AstParserBase + SeqAst + CharAst + SeqTotPat + CharPat + Seq
 
   sem parseExprROpen state +=
   | { token = StringTok { val = val } } & cur ->
+    let charInfo = cur.info in
     let expr = TmSeq {
       tms = map (lam ch. TmConst {
         val = CChar { val = ch },
         ty = tyunknown_,
-        info = NoInfo ()
+        info = charInfo
       }) val,
       ty = ityunknown_ cur.info,
       info = cur.info
@@ -1298,17 +1303,18 @@ lang StringParser = AstParserBase + SeqAst + CharAst + SeqTotPat + CharPat + Seq
 
   sem parseTypeROpen state +=
   | { token = UIdentTok { val = "String" } } & cur ->
-    let typ = TySeq { ty = TyChar { info = NoInfo () }, info = cur.info } in
+    let typ = TySeq { ty = tychar_, info = cur.info } in
     let state = breakableAddAtom (configType ()) (OpTypeAtom typ) state in
     parseTypeRClosed state (nextToken cur.stream)
 
   sem parsePatROpen state +=
   | { token = StringTok { val = val } } & cur ->
+    let charInfo = cur.info in
     let pat = PatSeqTot {
       pats = map (lam ch. PatChar {
         val = ch,
         ty = tychar_,
-        info = NoInfo ()
+        info = charInfo
       }) val,
       ty = ityunknown_ cur.info,
       info = cur.info
@@ -1597,13 +1603,14 @@ lang RecordParser = BraceParser + RecordAst + RecordTypeAst + RecordPat + WithKe
           result.bind res (lam res.
             match res with (close, updates) in
             let info = mergeInfo open.info close.info in
+            let typ = ityunknown_ info in
             let expr = foldl
               (lam rec. lam update : (SID, Expr).
                 TmRecordUpdate {
                   rec = rec,
                   key = update.0,
                   value = update.1,
-                  ty = ityunknown_ info,
+                  ty = typ,
                   info = info
                 })
               rec updates
@@ -1872,7 +1879,7 @@ lang TypeDeclParser = AstParserBase + TypeDeclAst + VariantTypeAst + TypeKeyword
         result.map (lam r. match r with (typ, cur) in (typ, infoTy typ, cur)) (parseType cur)
       else
         let typ = TyVariant {
-          info = NoInfo (),
+          info = lastInfo,
           constrs = mapEmpty nameCmp
         } in
         parseOk (typ, lastInfo, cur)
@@ -2039,7 +2046,7 @@ lang MatchParser = AstParserBase + MatchAst + NeverAst + MatchKeyword + WithKeyw
       thn = inexpr,
       els = TmNever {
         ty = tyunknown_,
-        info = NoInfo ()
+        info = info
       },
       ty = ityunknown_ info,
       info = info
@@ -2076,18 +2083,22 @@ lang SwitchParser = AstParserBase + MatchAst + LetDeclAst + VarAst + NeverAst + 
                 let els = parseItems cur in
                 result.bind els (lam els.
                   match els with (els, tokend, cur) in
+                  -- The match reaches to the end of the branch it falls
+                  -- through to, so that each link of the chain contains the
+                  -- next one rather than sitting beside it.
+                  let caseInfo = mergeInfo tokcase.info (infoTm els) in
                   let expr = TmMatch {
                     target = TmVar {
                       ident = nameNoSym "X",
                       ty = tyunknown_,
-                      info = NoInfo (),
+                      info = caseInfo,
                       frozen = false
                     },
                     pat = pat,
                     thn = thn,
                     els = els,
                     ty = tyunknown_,
-                    info = NoInfo ()
+                    info = caseInfo
                   } in
                   parseOk (expr, tokend, cur)
                 )
@@ -2099,7 +2110,7 @@ lang SwitchParser = AstParserBase + MatchAst + LetDeclAst + VarAst + NeverAst + 
           let cur = nextToken tokend.stream in
           let expr = TmNever {
             ty = tyunknown_,
-            info = NoInfo ()
+            info = tokend.info
           } in
           parseOk (expr, tokend, cur)
         case _ then
@@ -2116,16 +2127,17 @@ lang SwitchParser = AstParserBase + MatchAst + LetDeclAst + VarAst + NeverAst + 
       result.bind inexpr (lam inexpr.
         match inexpr with (inexpr, tokend, cur) in
         let info = mergeInfo tokswitch.info tokend.info in
+        let typ = ityunknown_ info in
         let expr = TmDecl {
           decl = DeclLet {
             ident = nameNoSym "X",
-            tyAnnot = ityunknown_ info,
-            tyBody = ityunknown_ info,
+            tyAnnot = typ,
+            tyBody = typ,
             body = body,
             info = info
           },
           inexpr = inexpr,
-          ty = ityunknown_ info, 
+          ty = typ,
           info = info
         } in
 
@@ -2494,13 +2506,13 @@ lang ProjParser = AstParserBase + MatchAst + NeverAst + RecordPat + NamedPat + V
       target = target,
       pat = PatRecord {
         bindings = mapInsert (stringToSid label)
-          (PatNamed { ident = PName tmpIdent, ty = tyunknown_, info = NoInfo () })
+          (PatNamed { ident = PName tmpIdent, ty = tyunknown_, info = fullInfo })
           (mapEmpty cmpSID),
         ty = tyunknown_,
-        info = NoInfo ()
+        info = fullInfo
       },
-      thn = TmVar { ident = tmpIdent, ty = tyunknown_, info = NoInfo (), frozen = false },
-      els = TmNever { ty = tyunknown_, info = NoInfo () },
+      thn = TmVar { ident = tmpIdent, ty = tyunknown_, info = fullInfo, frozen = false },
+      els = TmNever { ty = tyunknown_, info = fullInfo },
       ty = ityunknown_ fullInfo,
       info = fullInfo
     })
@@ -2544,7 +2556,7 @@ lang IfParser = AstParserBase + MatchAst + BoolPat + IfKeyword + ThenKeyword + E
     let info = mergeInfo info (infoTm els) in
     parseOk (TmMatch {
       target = cond,
-      pat = PatBool { val = true, ty = tybool_, info = NoInfo () },
+      pat = PatBool { val = true, ty = tybool_, info = infoTm cond },
       thn = thn,
       els = els,
       ty = ityunknown_ info,
@@ -2572,16 +2584,17 @@ lang SemicolonParser = AstParserBase + LetDeclAst
   sem constructInfixExpr +=
   | (OpExprSemi info, lhs, rhs) ->
     let info = mergeInfo (infoTm lhs) (infoTm rhs) in
+    let typ = ityunknown_ info in
     parseOk (TmDecl {
       decl = DeclLet {
         ident = nameNoSym "",
-        tyAnnot = ityunknown_ info,
-        tyBody = ityunknown_ info,
+        tyAnnot = typ,
+        tyBody = typ,
         body = lhs,
         info = info
       },
       inexpr = rhs,
-      ty = ityunknown_ info,
+      ty = typ,
       info = info
     })
 
@@ -2726,7 +2739,7 @@ lang SynDeclParser = AstParserBase + SynDeclAst + SynKeyword + RecordTypeAst
                 if startsAtomType cur then
                   result.map (lam r. match r with (ty, cur) in (ty, infoTy ty, cur)) (parseType cur)
                 else
-                  parseOk (TyRecord { fields = mapEmpty cmpSID, info = NoInfo () }, tokcon.info, cur)
+                  parseOk (TyRecord { fields = mapEmpty cmpSID, info = tokcon.info }, tokcon.info, cur)
               in
               result.bind tyRes (lam res.
                 match res with (ty, tyEndInfo, cur) in
@@ -2808,7 +2821,8 @@ lang SemDeclParser = AstParserBase + SemDeclAst + SemKeyword
                 parseErr (cur.info, "Expected an identifier after '(' in a 'sem' parameter")
             case { token = LIdentTok { val = pident } | HashStringTok { hash = "var", val = pident } } & tokpident then
               let info = tokpident.info in
-              let param = {ident = nameNoSym pident, tyAnnot = ityunknown_ info, tyParam = ityunknown_ info, info = info} in
+              let typ = ityunknown_ info in
+              let param = {ident = nameNoSym pident, tyAnnot = typ, tyParam = typ, info = info} in
               parseParams (snoc acc param) (nextToken tokpident.stream)
             case _ then
               parseOk (acc, cur)
@@ -2843,10 +2857,11 @@ lang SemDeclParser = AstParserBase + SemDeclAst + SemKeyword
               let kind = if isSum then SemSum { base = nameNoSym ident } else SemBase () in
               let endInfo = match cases with _ ++ [lastCase] then lastCase.info else opInfoFallback in
               let info = mergeInfo toksem.info endInfo in
+              let typ = ityunknown_ info in
               let decl = DeclSem {
                 ident = nameNoSym ident,
-                tyAnnot = ityunknown_ info,
-                tyBody = ityunknown_ info,
+                tyAnnot = typ,
+                tyBody = typ,
                 impl = Some { params = params, cases = cases },
                 info = info,
                 kind = kind
@@ -3068,438 +3083,601 @@ end
 
 mexpr
 
-type TestResult in
-con OkSame: () -> TestResult in        -- Same result
-con OkSameExInfo: () -> TestResult in  -- Same result excluding info field
-con OkFail: () -> TestResult in        -- Both fails
-con Fail: () -> TestResult in          -- Result is different
-
 use TestParser in
-use BootParserMLang in
 
-let lex = lam str. nextToken {pos = initPos "internal", str = str} in
-let parse = lam str. result.map (lam a. a.0) (parseExpr (lex str)) in
+let lex = lam str. nextToken {pos = initPos "t", str = str} in
 
-let bootArg = { _defaultBootParserParseMExprStringArg () with builtin = [] } in
-let parseBoot = lam str. parseMExprString bootArg str in
+let compactSpan = lam s.
+  match s with "<" ++ rest then
+    match index (eqChar ' ') rest with Some i then
+      subsequence rest (addi i 1) (subi (subi (length rest) i) 2)
+    else s
+  else s in
 
-let jsonStr = lam expr. json2string (exprToJson expr) in
-
-let compare = lam str.
-  let a = parse str in
-  let b = parseBoot str in
-  switch (result.toOption a, result.toOption b)
-    case (Some a, Some b) then
-      match eqString (jsonStr a) (jsonStr b) with true then
-        OkSame ()
-      else match eqi (cmpExpr a b) 0 with true then
-        OkSameExInfo ()
-      else
-        Fail ()
-    case (None (), None ()) then
-      OkFail ()
-    case _ then
-      Fail ()
+let scalarStr = lam v.
+  switch v
+  case JsonString s then Some s
+  case JsonBool b then Some (if b then "true" else "false")
+  case JsonInt i then Some (int2string i)
+  case JsonFloat f then Some (float2string f)
+  case JsonNull _ then Some "null"
+  case JsonArray xs then match xs with [JsonString s] ++ _ then Some s else None ()
+  case _ then None ()
   end in
 
-let printAstBoot = lam str.
-  switch result.consume (parseBoot str)
-  case (w, Left e) then
-    printLn "Parse error:";
-    iter (lam e.
-      match e with (info, msg) in printLn (infoErrorString info msg)
-    ) e
-  case (w, Right expr) then
-    printLn (jsonStr expr)
-  end
+recursive
+  let dumpNode = lam ind. lam label. lam fields.
+    let conName = match mapLookup "con" fields with Some (JsonString c) then c else "?" in
+    let span = match mapLookup "info" fields with Some (JsonString i)
+      then concat " " (compactSpan i) else "" in
+    let isInferredSlot = lam k.
+      and (eqString k "ty")
+          (or (isPrefix eqChar "Tm" conName) (isPrefix eqChar "Pat" conName)) in
+    let rest = filter
+      (lam kv. not (or (isInferredSlot kv.0)
+                       (or (eqString kv.0 "con") (eqString kv.0 "info"))))
+      (mapBindings fields) in
+    let scalars = foldl (lam acc. lam kv.
+        match scalarStr kv.1 with Some v then
+          if and (eqString kv.0 "frozen") (eqString v "false") then acc
+          else snoc acc (join [" ", kv.0, "=", v])
+        else acc) [] rest in
+    let kids = foldl (lam acc. lam kv. concat acc (emit (addi ind 2) kv.0 kv.1)) [] rest in
+    cons (join [make ind ' ', label, conName, span, join scalars]) kids
+  let emit = lam ind. lam label. lam v.
+    switch v
+    case JsonObject f then
+      if mapMem "con" f then dumpNode ind (concat label ": ") f
+      else join (map (lam kv. emit ind (join [label, ".", kv.0]) kv.1) (mapBindings f))
+    case JsonArray xs then join (map (emit ind label) xs)
+    case _ then []
+    end
 in
 
-let printAst = lam str.
-  switch result.consume (parse str)
-  case (w, Left e) then
-    printLn "Parse error:";
-    iter (lam e.
-      match e str with (info, msg) in printLn (infoErrorString info msg)
-    ) e
-  case (w, Right expr) then
-    printLn (jsonStr expr)
-  end
-in
-
-let parseProg = lam str. result.map (lam a. a.0) (parseProgram (lex str)) in
-let parseBootProg = lam str. parseMLangString str in
-
-
-let compareProg = lam str.
-  let a = parseProg str in
-  let b = parseBootProg str in
-  switch (result.toOption a, result.toOption b)
-    case (Some a, Some b) then
-      if eqi (cmpProgram a b) 0 then OkSameExInfo () else Fail ()
-    case (None (), None ()) then
-      OkFail ()
-    case _ then
-      Fail ()
+-- One line per node: its constructor, where it sits, and its scalar fields.
+let dumpOf = lam s.
+  switch result.consume (result.map (lam a. a.0) (parseExpr (lex s)))
+  case (_, Right e) then dumpNode 0 "" (match exprToJson e with JsonObject f in f)
+  case (_, Left _) then ["PARSE FAILED"]
   end in
 
-let printProgBoot = lam str.
-  switch result.consume (parseBootProg str)
-  case (w, Left e) then
-    printLn "Parse error:";
-    iter (lam e. match e with (info, msg) in printLn (infoErrorString info msg)) e
-  case (w, Right prog) then
-    printLn (mlang2str prog)
-  end
+-- `declToJson` has no cases for the MLang declarations, so a program is
+-- pinned by its printed form and by a walk of every span it contains.
+let progStrOf = lam s.
+  switch result.consume (result.map (lam a. a.0) (parseProgram (lex s)))
+  case (_, Right p) then strSplit "\n" (mlang2str p)
+  case (_, Left _) then ["PARSE FAILED"]
+  end in
+recursive
+  let sE = lam acc. lam e.
+    let acc = snoc acc (join ["expr ", compactSpan (info2str (infoTm e))]) in
+    let acc = sfold_Expr_Pat sP acc e in
+    sfold_Expr_Expr sE acc e
+  let sP = lam acc. lam q.
+    let acc = snoc acc (join ["pat ", compactSpan (info2str (infoPat q))]) in
+    let acc = sfold_Pat_Expr sE acc q in
+    sfold_Pat_Pat sP acc q
+  let sD = lam acc. lam d.
+    let acc = snoc acc (join ["decl ", compactSpan (info2str (infoDecl d))]) in
+    let acc = sfold_Decl_Decl sD acc d in
+    let acc = sfold_Decl_Pat sP acc d in
+    sfold_Decl_Expr sE acc d
 in
 
-let printProg = lam str.
-  switch result.consume (parseProg str)
-  case (w, Left e) then
-    printLn "Parse error:";
-    iter (lam e. match e str with (info, msg) in printLn (infoErrorString info msg)) e
-  case (w, Right prog) then
-    printLn (mlang2str prog)
-  end
-in
-
-
-
-utest compare "0" with OkSame () in
-utest compare "1" with OkSame () in
-utest compare "-1" with OkSame () in
-
-utest compare "0.0" with OkSame () in
-utest compare "1.0" with OkSame () in
-utest compare "-1.0" with OkSame () in
-
-utest compare "true" with OkSame () in
-utest compare "false" with OkSame () in
-
-utest compare "'a'" with OkSame () in
-utest compare "'😊'" with OkSame () in
-
-utest compare "\"test\"" with OkSameExInfo () in
-
-utest compare "addi 1 2" with OkSame () in
-utest compare "addi 1 2 3" with OkSame () in
-utest compare "addi addi 1 2 3" with OkSame () in
-utest compare "addi (addi 1 2) 3" with OkSameExInfo () in
-utest compare "addi 1 (addi 2 3)" with OkSameExInfo () in
-
-utest compare "a" with OkSame () in
-utest compare "#frozen\"a\"" with OkSame () in
-utest compare "#var\"a\"" with OkSame () in
-
-utest compare "()" with OkSameExInfo () in
-utest compare "(())" with OkSameExInfo () in
-utest compare "addi () ()" with OkSameExInfo () in
-utest compare "(addi ()) ()" with OkSameExInfo () in
-utest compare "(" with OkFail () in
-utest compare ")" with OkFail () in
-
-utest compare "let a = 1 in a" with OkSameExInfo () in
-utest compare "let a = 1 in let b = 2 in addi a b" with OkSameExInfo () in
-utest compare "let a = 1" with OkFail () in
-
-utest compare "let a: Int = 1 in a" with OkSameExInfo () in
-utest compare "let a: Float = 1.0 in a" with OkSameExInfo () in
-utest compare "let a: Bool = true in a" with OkSameExInfo () in
-utest compare "let a: Char = 'a' in a" with OkSameExInfo () in
-utest compare "let a: String = \"test\" in a" with OkSameExInfo () in
-
-utest compare "let a: Tensor[Int] = x in a" with OkSameExInfo () in
-utest compare "let a: Tensor [Int] = x in a" with OkSameExInfo () in
-utest compare "let a: Tensor[Tensor[Int]] = x in a" with OkSameExInfo () in
-
-utest compare "f {a with x = 1}" with OkSame () in
-utest compare "f {a with x = 1, y = 2}" with OkSame () in
-utest compare "f {{a with x = 1} with y = 2}" with OkSame () in
-utest compare "f (a.x)" with OkSameExInfo () in
-utest compare "f (a.0)" with OkSameExInfo () in
-
-utest compare "type T a b in x" with OkSameExInfo () in
-
-utest compare "let a: Unknown = x in a" with OkSameExInfo () in
-utest compare "let a: Unknown -> Int = x in a" with OkSameExInfo () in
-
-utest compare "let a: Int Int = 1 1 in a" with OkSameExInfo () in
-
-utest compare "let a: Int -> Int = addi 1 in a" with OkSameExInfo () in
-utest compare "let a: Int Int -> Int = addi in a" with OkSameExInfo () in
-utest compare "let a: Int -> Int -> Int = f in a" with OkSameExInfo () in
-
-utest compare "let a: Foo = x in a" with OkSameExInfo () in
-utest compare "let a: Foo -> Int = x in a" with OkSameExInfo () in
-utest compare "let a: Map SID Expr = x in a" with OkSameExInfo () in
-
-utest compare "[]" with OkSame () in
-utest compare "[" with OkFail () in
-utest compare "]" with OkFail () in
-utest compare "[1]" with OkSame () in
-utest compare "[1,]" with OkFail () in
-utest compare "[,]" with OkFail () in
-utest compare "[,1]" with OkFail () in
-utest compare "[1, 2]" with OkSame () in
-utest compare "[1, [2, 3]]" with OkSame () in
-utest compare "[[1, 2], 3]" with OkSame () in
-utest compare "cons 0 [1, 2]" with OkSame () in
-utest compare "[1 2]" with OkSame () in
-
-utest compare "let a: [Int] = () in a" with OkSameExInfo () in
-utest compare "let a: [[Int]] = () in a" with OkSameExInfo () in
-
-utest compare "lam. ()" with OkSameExInfo () in
-utest compare "lam a. a" with OkSameExInfo () in
-utest compare "lam a: Int. a" with OkSameExInfo () in
-utest compare "lam. lam. ()" with OkSameExInfo () in
-utest compare "lam a. lam b. addi a b" with OkSameExInfo () in
-
-utest compare "(1, 2)" with OkSame () in
-utest compare "(1, (2, 3))" with OkSame () in
-utest compare "((1, 2), 3)" with OkSame () in
-utest compare "(1,)" with OkSame () in
-utest compare "(1,2,)" with OkFail () in
-utest compare "(,)" with OkFail () in
-utest compare "(,1)" with OkFail () in
-
-utest compare "let a: ((Int, Bool), String) = () in a" with OkSameExInfo () in
-
-utest compare "{a = 1, b = 2}" with OkSame () in
-utest compare "{a = 1, bc = { b = 2, c = 3 } }" with OkSame () in
-utest compare "{#label\"a\" = 1, b = 2}" with OkSameExInfo () in
-utest compare "{" with OkFail () in
-utest compare "}" with OkFail () in
-utest compare "{a}" with OkFail () in
-utest compare "{a = }" with OkFail () in
-utest compare "{a = 1, }" with OkFail () in
-
-utest compare "let a: { a: Int, b: Bool } = () in a" with OkSameExInfo () in
-utest compare "let a: { a: Int, bc: { b: Bool, c: Char } } = () in a" with OkSameExInfo () in
-
-utest compare "{negi 1 with b = 2}" with OkSame () in
-utest compare "{negi 1 with b = 2, c = 3}" with OkSame () in
-utest compare "{{negi 1 with b = 2} with c = 3}" with OkSame () in
-utest compare "{negi 1 with }" with OkFail () in
-
-utest compare "never" with OkSame () in
-
-utest compare "recursive let a = lam b. 1 in c" with OkSameExInfo () in
-
-utest compare "recursive let a = lam b. 1 let c = lam d. 2 in e" with OkSameExInfo () in
-
-utest compare "Test ()" with OkSameExInfo () in
-utest compare "Test (1, 2, 3)" with OkSame () in
-utest compare "Test {}" with OkSame () in
-utest compare "Test {a = 1, b = 2}" with OkSame () in
-
-utest compare "let o: Option a b c = Option 1 2 3 in ()" with OkSameExInfo () in
-
-utest compare "match a with 1 in b" with OkSameExInfo () in
-utest compare "match a with true in b" with OkSameExInfo () in
-utest compare "match a with 'a' in b" with OkSameExInfo () in
-utest compare "match a with \"test\" in b" with OkSameExInfo () in
-
-utest compare "match a with 1 then b else c" with OkSame () in
-
-utest compare "match a" with OkFail () in
-utest compare "match a with 1" with OkFail () in
-utest compare "match a with 1 then" with OkFail () in
-utest compare "match a with 1 then b else" with OkFail () in
-
-utest compare "match () with () in x" with OkSameExInfo () in
-utest compare "match (a) with (1) in x" with OkSameExInfo () in
-utest compare "match (a, b) with (1, 2) in x" with OkSameExInfo () in
-
-utest compare "match a with {} in x" with OkSameExInfo () in
-utest compare "match a with { b = 1 } in x" with OkSameExInfo () in
-utest compare "match a with { b = 1, cd = { c = 2, d = 3 } } in x" with OkSameExInfo () in
-
-utest compare "x.0" with OkSameExInfo () in
-utest compare "x.field" with OkSameExInfo () in
-utest compare "(x.0).1" with OkSameExInfo () in
-utest compare "snoc acc.0 content" with OkSameExInfo () in
-utest compare "f (g a).0 b" with OkSameExInfo () in
-utest compare "lam x. x.0" with OkSameExInfo () in
-
-utest compare "match a with [] in x" with OkSameExInfo () in
-utest compare "match a with [1] in x" with OkSameExInfo () in
-utest compare "match a with [1, 2] in x" with OkSameExInfo () in
-utest compare "match a with [1, [3, 4]] in x" with OkSameExInfo () in
-
-utest compare "match a with [1] ++ rest in x" with OkSameExInfo () in
-utest compare "match a with rest ++ [1] in x" with OkSameExInfo () in
-utest compare "match a with [1] ++ rest ++ [1] in x" with OkSameExInfo () in
-
-utest compare "match a with [1] ++ [1] in x" with OkFail () in
-utest compare "match a with rest ++ rest in x" with OkFail () in
-utest compare "match a with [1] ++ rest ++ [1] ++ rest in x" with OkFail () in
-utest compare "match a with rest ++ [1] ++ rest ++ [1] in x" with OkFail () in
-
-utest compare "match a with 1 & 2 & 3 in b" with OkSameExInfo () in
-utest compare "match a with 1 | 2 | 3 in b" with OkSameExInfo () in
-utest compare "match a with \"/\" ++ _ | \"./\" ++ _ | \"../\" ++ _ in b" with OkSameExInfo () in
-utest compare "match a with c & ([1] ++ rest) in b" with OkSameExInfo () in
-
-utest compare "utest a with 1 in x" with OkSameExInfo () in
-utest compare "utest a with 1" with OkFail () in
-utest compare "utest a with" with OkFail () in
-utest compare "utest a " with OkFail () in
-utest compare "utest" with OkFail () in
-utest compare "utest with" with OkFail () in
-utest compare "utest a with 1 using b in x" with OkSameExInfo () in
-utest compare "utest a with 1 using in x" with OkFail () in
-utest compare "utest a with 1 using eq else b in x" with OkSameExInfo () in
-utest compare "utest a with 1 else" with OkFail () in
-
-utest compare "switch a end" with OkSameExInfo () in
-utest compare "switch a case 1 then b case 2 then c end" with OkSameExInfo () in
-utest compare "switch a case 1 then switch b case 2 then x end end" with OkSameExInfo () in
-utest compare "switch" with OkFail () in
-utest compare "switch a" with OkFail () in
-utest compare "switch end" with OkFail () in
-utest compare "switch a case" with OkFail () in
-utest compare "switch a case 1" with OkFail () in
-utest compare "switch a case end" with OkFail () in
-utest compare "switch a case 1 end" with OkFail () in
-utest compare "switch a case 1 then" with OkFail () in
-utest compare "switch a case 1 then end" with OkFail () in
-
-utest compare "f (if true then 1 else 2) 3" with OkSameExInfo () in
-utest compare "(match a with 1 then b else c) d" with OkSameExInfo () in
-
-utest compare "type T in x" with OkSameExInfo () in
-utest compare "type T a in x" with OkSameExInfo () in
-utest compare "type T a b in x" with OkSameExInfo () in
-utest compare "type T = Int in x" with OkSameExInfo () in
-utest compare "type T = Int Int in x" with OkSameExInfo () in
-utest compare "type T a b = Int Int in x" with OkSameExInfo () in
-utest compare "type in x" with OkFail () in
-utest compare "type T = in x" with OkFail () in
-
-utest compare "con Foo: Int in x" with OkSameExInfo () in
-utest compare "con Foo: Int -> Int in x" with OkSameExInfo () in
-utest compare "con Foo: Int in Foo 1" with OkSameExInfo () in
-utest compare "con Foo in x" with OkSameExInfo () in
-utest compare "con in x" with OkFail () in
-utest compare "con Foo: in x" with OkFail () in
-utest compare "con Foo: Int" with OkFail () in
-
-utest compare "external foo: Int in foo" with OkSameExInfo () in
-utest compare "external foo ! : Int in foo" with OkSameExInfo () in
-utest compare "external foo: Int -> Int in foo 1" with OkSameExInfo () in
-utest compare "external in x" with OkFail () in
-utest compare "external foo in x" with OkFail () in
-utest compare "external foo: in x" with OkFail () in
-utest compare "external foo: Int" with OkFail () in
-
-utest compare "use Foo in x" with OkSameExInfo () in
-utest compare "use foo in x" with OkSameExInfo () in
-utest compare "use in x" with OkFail () in
-utest compare "use Foo" with OkFail () in
-
-utest compare "if true then 1 else 2" with OkSameExInfo () in
-utest compare "if true then 1 else if false then 2 else 3" with OkSameExInfo () in
-utest compare "if true then addi 1 2 else 3" with OkSameExInfo () in
-utest compare "if" with OkFail () in
-utest compare "if true" with OkFail () in
-utest compare "if true then 1" with OkFail () in
-utest compare "if true then 1 else" with OkFail () in
-
-utest compare "1; 2" with OkSameExInfo () in
-utest compare "1; 2; 3" with OkSameExInfo () in
-utest compare "let a = 1 in a; 2" with OkSameExInfo () in
-
-utest compare "let a: all x. x -> x = lam y. y in a" with OkSameExInfo () in
-utest compare "let a: all x. Int = 1 in a" with OkSameExInfo () in
-utest compare "let a: all x. all y. x -> y -> x = lam a. lam b. a in a" with OkSameExInfo () in
-
-utest compare "f a; g b; c" with OkSameExInfo () in
-utest compare "(f a; g b); c" with OkSameExInfo () in
-utest compare "if true then 1 else a; 2" with OkSameExInfo () in
-utest compare "match a with 1 in b; 2" with OkSameExInfo () in
-
-
-
-utest compareProg "lang Foo\n  syn Expr =\n  | CInt Int\n  sem eval =\n  | CInt n -> n\nend\nmexpr\n1" with OkSameExInfo () in
-
-utest compareProg "lang Foo = Bar + Baz\nend\nmexpr\n1" with OkSameExInfo () in
-
-utest compareProg (strJoin "\n" [
-  "lang Bar",
-  "  syn Expr =",
-  "  | CInt Int",
-  "end",
-  "lang Baz",
-  "  syn Expr =",
-  "  | CBool Bool",
-  "end",
-  "lang Foo = Bar + Baz",
-  "  syn Expr +=",
-  "  | CUnit ()",
-  "  sem eval: Expr -> Int",
-  "end",
-  "mexpr",
-  "1"
-]) with OkSameExInfo () in
-
-utest compareProg (strJoin "\n" [
-  "lang Foo",
-  "  sem f (x: Int) (y: Int) =",
-  "  | 1 -> addi x y",
-  "  | n -> n",
-  "end",
-  "mexpr",
-  "1"
-]) with OkSameExInfo () in
-
-utest compareProg (strJoin "\n" [
-  "include \"foo.mc\"",
-  "include \"bar.mc\"",
-  "let x = 1",
-  "type T = Int",
-  "con C: Int",
-  "external ext: Int",
-  "recursive",
-  "  let f = lam x. x",
-  "  let g = lam x. x",
-  "end",
-  "utest 1 with 1",
-  "mexpr",
-  "x"
-]) with OkSameExInfo () in
-
-utest compareProg "mexpr\n1" with OkSameExInfo () in
-utest compareProg "1" with OkFail () in
-utest compareProg "let x = 1\nmexpr\nx" with OkSameExInfo () in
-utest compareProg "lang" with OkFail () in
-utest compareProg "lang Foo" with OkFail () in
-utest compareProg "lang Foo =\nend\nmexpr\n1" with OkFail () in
-utest compareProg "lang Foo\n  syn Expr\nend\nmexpr\n1" with OkFail () in
-
-utest compareProg "lang Foo\nend\nlet a: use Foo in Int = 1\nmexpr\na" with OkSameExInfo () in
-
-utest compareProg (strJoin "\n" [
-  "lang Foo",
-  "  sem f =| 1 -> 2",
-  "  sem g x =| 1 -> x",
-  "end",
-  "mexpr",
-  "1"
-]) with OkSameExInfo () in
-
-utest compareProg (strJoin "\n" [
-  "lang Bar",
-  "  syn X =",
-  "  | C1 Int",
-  "end",
-  "lang Foo = Bar",
-  "  syn X +=| C2 Int",
-  "end",
-  "mexpr",
-  "1"
-]) with OkSameExInfo () in
-
-utest compareProg "lang _foo\nend\nmexpr\n1" with OkSameExInfo () in
-utest compareProg "lang _foo\nend\nlang _bar = _foo\nend\nmexpr\n1" with OkSameExInfo () in
+let progSpansOf = lam s.
+  switch result.consume (result.map (lam a. a.0) (parseProgram (lex s)))
+  case (_, Right p) then sE (foldl sD [] p.decls) p.expr
+  case (_, Left _) then ["PARSE FAILED"]
+  end in
+
+let errOf = lam s.
+  switch result.consume (result.map (lam a. a.0) (parseExpr (lex s)))
+  case (_, Left errs) then
+    match head errs s with (i, msg) in join [compactSpan (info2str i), ": ", msg]
+  case (_, Right _) then "PARSED" end in
+
+let progErrOf = lam s.
+  switch result.consume (result.map (lam a. a.0) (parseProgram (lex s)))
+  case (_, Left errs) then
+    match head errs s with (i, msg) in join [compactSpan (info2str i), ": ", msg]
+  case (_, Right _) then "PARSED" end in
+
+-------------------------------------------------------------------------
+-- Expressions
+-------------------------------------------------------------------------
+
+utest dumpOf "1" with
+[ "TmConst 1:0-1:1 const=1" ] in
+
+utest dumpOf "-1" with
+[ "TmConst 1:0-1:2 const=(negi 1)" ] in
+
+utest dumpOf "1.0" with
+[ "TmConst 1:0-1:3 const=1." ] in
+
+utest dumpOf "true" with
+[ "TmConst 1:0-1:4 const=true" ] in
+
+utest dumpOf "\'a\'" with
+[ "TmConst 1:0-1:3 const=\'a\'" ] in
+
+utest dumpOf "\'😊\'" with
+[ "TmConst 1:0-1:3 const=\'😊\'" ] in
+
+utest dumpOf "\"ab\"" with
+[ "TmSeq 1:0-1:4"
+, "  tms: TmConst 1:0-1:4 const=\'a\'"
+, "  tms: TmConst 1:0-1:4 const=\'b\'" ] in
+
+utest dumpOf "()" with
+[ "TmRecord 1:0-1:2" ] in
+
+utest dumpOf "a" with
+[ "TmVar 1:0-1:1 ident=a" ] in
+
+utest dumpOf "#var\"a\"" with
+[ "TmVar 1:0-1:7 ident=a" ] in
+
+utest dumpOf "#frozen\"a\"" with
+[ "TmVar 1:0-1:10 ident=a frozen=true" ] in
+
+utest dumpOf "addi 1 2" with
+[ "TmApp 1:0-1:8"
+, "  lhs: TmApp 1:0-1:6"
+, "    lhs: TmVar 1:0-1:4 ident=addi"
+, "    rhs: TmConst 1:5-1:6 const=1"
+, "  rhs: TmConst 1:7-1:8 const=2" ] in
+
+utest dumpOf "addi (addi 1 2) 3" with
+[ "TmApp 1:0-1:17"
+, "  lhs: TmApp 1:0-1:15"
+, "    lhs: TmVar 1:0-1:4 ident=addi"
+, "    rhs: TmApp 1:5-1:15"
+, "      lhs: TmApp 1:6-1:12"
+, "        lhs: TmVar 1:6-1:10 ident=addi"
+, "        rhs: TmConst 1:11-1:12 const=1"
+, "      rhs: TmConst 1:13-1:14 const=2"
+, "  rhs: TmConst 1:16-1:17 const=3" ] in
+
+utest dumpOf "let a = 1 in a" with
+[ "TmDecl (merged) 1:0-1:14"
+, "  decls: DeclLet 1:0-1:9 ident=a"
+, "    body: TmConst 1:8-1:9 const=1"
+, "    tyBody: TyUnknown 1:0-1:9"
+, "    tyAnnot: TyUnknown 1:4-1:5"
+, "  inexpr: TmVar 1:13-1:14 ident=a" ] in
+
+utest dumpOf "let a: Int -> Int = f in a" with
+[ "TmDecl (merged) 1:0-1:26"
+, "  decls: DeclLet 1:0-1:21 ident=a"
+, "    body: TmVar 1:20-1:21 ident=f"
+, "    tyBody: TyUnknown 1:0-1:21"
+, "    tyAnnot: TyArrow 1:7-1:17"
+, "      to: TyInt 1:14-1:17"
+, "      from: TyInt 1:7-1:10"
+, "  inexpr: TmVar 1:25-1:26 ident=a" ] in
+
+utest dumpOf "let a: [Int] = x in a" with
+[ "TmDecl (merged) 1:0-1:21"
+, "  decls: DeclLet 1:0-1:16 ident=a"
+, "    body: TmVar 1:15-1:16 ident=x"
+, "    tyBody: TyUnknown 1:0-1:16"
+, "    tyAnnot: TySeq 1:7-1:12"
+, "      ty: TyInt 1:8-1:11"
+, "  inexpr: TmVar 1:20-1:21 ident=a" ] in
+
+utest dumpOf "let a: {x: Int} = y in a" with
+[ "TmDecl (merged) 1:0-1:24"
+, "  decls: DeclLet 1:0-1:19 ident=a"
+, "    body: TmVar 1:18-1:19 ident=y"
+, "    tyBody: TyUnknown 1:0-1:19"
+, "    tyAnnot: TyRecord 1:7-1:15"
+, "      fields.x: TyInt 1:11-1:14"
+, "  inexpr: TmVar 1:23-1:24 ident=a" ] in
+
+utest dumpOf "let a: all x. x -> x = f in a" with
+[ "TmDecl (merged) 1:0-1:29"
+, "  decls: DeclLet 1:0-1:24 ident=a"
+, "    body: TmVar 1:23-1:24 ident=f"
+, "    tyBody: TyUnknown 1:0-1:24"
+, "    tyAnnot: TyAll 1:7-1:20 kind=Poly ident=x"
+, "      ty: TyArrow 1:14-1:20"
+, "        to: TyVar 1:19-1:20 ident=x"
+, "        from: TyVar 1:14-1:15 ident=x"
+, "  inexpr: TmVar 1:28-1:29 ident=a" ] in
+
+utest dumpOf "let a: Tensor[Int] = x in a" with
+[ "TmDecl (merged) 1:0-1:27"
+, "  decls: DeclLet 1:0-1:22 ident=a"
+, "    body: TmVar 1:21-1:22 ident=x"
+, "    tyBody: TyUnknown 1:0-1:22"
+, "    tyAnnot: TyTensor 1:7-1:18"
+, "      ty: TyInt 1:14-1:17"
+, "  inexpr: TmVar 1:26-1:27 ident=a" ] in
+
+utest dumpOf "let a: Map SID Expr = x in a" with
+[ "TmDecl (merged) 1:0-1:28"
+, "  decls: DeclLet 1:0-1:23 ident=a"
+, "    body: TmVar 1:22-1:23 ident=x"
+, "    tyBody: TyUnknown 1:0-1:23"
+, "    tyAnnot: TyApp 1:7-1:19"
+, "      lhs: TyApp 1:7-1:14"
+, "        lhs: TyCon 1:7-1:10 ident=Map"
+, "          data: TyUnknown 1:7-1:10"
+, "        rhs: TyCon 1:11-1:14 ident=SID"
+, "          data: TyUnknown 1:11-1:14"
+, "      rhs: TyCon 1:15-1:19 ident=Expr"
+, "        data: TyUnknown 1:15-1:19"
+, "  inexpr: TmVar 1:27-1:28 ident=a" ] in
+
+utest dumpOf "lam a. a" with
+[ "TmLam 1:0-1:8 ident=a"
+, "  body: TmVar 1:7-1:8 ident=a"
+, "  tyAnnot: TyUnknown file info"
+, "  tyParam: TyUnknown 1:4-1:5" ] in
+
+utest dumpOf "lam a: Int. a" with
+[ "TmLam 1:0-1:13 ident=a"
+, "  body: TmVar 1:12-1:13 ident=a"
+, "  tyAnnot: TyInt 1:7-1:10"
+, "  tyParam: TyUnknown 1:4-1:5" ] in
+
+utest dumpOf "lam. ()" with
+[ "TmLam 1:0-1:7 ident="
+, "  body: TmRecord 1:5-1:7"
+, "  tyAnnot: TyUnknown file info"
+, "  tyParam: TyUnknown file info" ] in
+
+utest dumpOf "[1, 2]" with
+[ "TmSeq 1:0-1:6"
+, "  tms: TmConst 1:1-1:2 const=1"
+, "  tms: TmConst 1:4-1:5 const=2" ] in
+
+utest dumpOf "(1, 2)" with
+[ "TmRecord 1:0-1:6"
+, "  bindings.0: TmConst 1:1-1:2 const=1"
+, "  bindings.1: TmConst 1:4-1:5 const=2" ] in
+
+utest dumpOf "{a = 1, b = 2}" with
+[ "TmRecord 1:0-1:14"
+, "  bindings.a: TmConst 1:5-1:6 const=1"
+, "  bindings.b: TmConst 1:12-1:13 const=2" ] in
+
+utest dumpOf "{a with x = 1, y = 2}" with
+[ "TmRecordUpdate 1:0-1:21 key=y"
+, "  rec: TmRecordUpdate 1:0-1:21 key=x"
+, "    rec: TmVar 1:1-1:2 ident=a"
+, "    value: TmConst 1:12-1:13 const=1"
+, "  value: TmConst 1:19-1:20 const=2" ] in
+
+utest dumpOf "x.0" with
+[ "TmMatch 1:0-1:3"
+, "  els: TmNever 1:0-1:3"
+, "  pat: PatRecord 1:0-1:3"
+, "    bindings.0: PatNamed 1:0-1:3 ident=X"
+, "  thn: TmVar 1:0-1:3 ident=X"
+, "  target: TmVar 1:0-1:1 ident=x" ] in
+
+utest dumpOf "x.field" with
+[ "TmMatch 1:0-1:7"
+, "  els: TmNever 1:0-1:7"
+, "  pat: PatRecord 1:0-1:7"
+, "    bindings.field: PatNamed 1:0-1:7 ident=X"
+, "  thn: TmVar 1:0-1:7 ident=X"
+, "  target: TmVar 1:0-1:1 ident=x" ] in
+
+utest dumpOf "(x.0).1" with
+[ "TmMatch 1:0-1:7"
+, "  els: TmNever 1:0-1:7"
+, "  pat: PatRecord 1:0-1:7"
+, "    bindings.1: PatNamed 1:0-1:7 ident=X"
+, "  thn: TmVar 1:0-1:7 ident=X"
+, "  target: TmMatch 1:0-1:5"
+, "    els: TmNever 1:1-1:4"
+, "    pat: PatRecord 1:1-1:4"
+, "      bindings.0: PatNamed 1:1-1:4 ident=X"
+, "    thn: TmVar 1:1-1:4 ident=X"
+, "    target: TmVar 1:1-1:2 ident=x" ] in
+
+utest dumpOf "never" with
+[ "TmNever 1:0-1:5" ] in
+
+utest dumpOf "recursive let a = lam b. 1 in c" with
+[ "TmDecl (merged) 1:0-1:31"
+, "  decls: DeclRecLets 1:0-1:29"
+, "    bindings.body: TmLam 1:18-1:26 ident=b"
+, "      body: TmConst 1:25-1:26 const=1"
+, "      tyAnnot: TyUnknown file info"
+, "      tyParam: TyUnknown 1:22-1:23"
+, "    bindings.tyBody: TyUnknown 1:10-1:26"
+, "    bindings.tyAnnot: TyUnknown 1:14-1:15"
+, "  inexpr: TmVar 1:30-1:31 ident=c" ] in
+
+utest dumpOf "Test (1, 2)" with
+[ "TmConApp 1:0-1:11 ident=Test"
+, "  body: TmRecord 1:5-1:11"
+, "    bindings.0: TmConst 1:6-1:7 const=1"
+, "    bindings.1: TmConst 1:9-1:10 const=2" ] in
+
+utest dumpOf "match a with 1 then b else c" with
+[ "TmMatch 1:0-1:28"
+, "  els: TmVar 1:27-1:28 ident=c"
+, "  pat: PatInt 1:13-1:14 val=1"
+, "  thn: TmVar 1:20-1:21 ident=b"
+, "  target: TmVar 1:6-1:7 ident=a" ] in
+
+utest dumpOf "match a with 1 in b" with
+[ "TmMatch 1:0-1:19"
+, "  els: TmNever 1:0-1:19"
+, "  pat: PatInt 1:13-1:14 val=1"
+, "  thn: TmVar 1:18-1:19 ident=b"
+, "  target: TmVar 1:6-1:7 ident=a" ] in
+
+utest dumpOf "match a with (1, 2) in x" with
+[ "TmMatch 1:0-1:24"
+, "  els: TmNever 1:0-1:24"
+, "  pat: PatRecord 1:13-1:19"
+, "    bindings.0: PatInt 1:14-1:15 val=1"
+, "    bindings.1: PatInt 1:17-1:18 val=2"
+, "  thn: TmVar 1:23-1:24 ident=x"
+, "  target: TmVar 1:6-1:7 ident=a" ] in
+
+utest dumpOf "match a with {b = 1} in x" with
+[ "TmMatch 1:0-1:25"
+, "  els: TmNever 1:0-1:25"
+, "  pat: PatRecord 1:13-1:20"
+, "    bindings.b: PatInt 1:18-1:19 val=1"
+, "  thn: TmVar 1:24-1:25 ident=x"
+, "  target: TmVar 1:6-1:7 ident=a" ] in
+
+utest dumpOf "match a with [1] ++ rest in x" with
+[ "TmMatch 1:0-1:29"
+, "  els: TmNever 1:0-1:29"
+, "  pat: PatSeqEdge 1:13-1:24 middle=rest"
+, "    prefix: PatInt 1:14-1:15 val=1"
+, "  thn: TmVar 1:28-1:29 ident=x"
+, "  target: TmVar 1:6-1:7 ident=a" ] in
+
+utest dumpOf "match a with 1 & 2 in b" with
+[ "TmMatch 1:0-1:23"
+, "  els: TmNever 1:0-1:23"
+, "  pat: PatAnd 1:13-1:18"
+, "    lpat: PatInt 1:13-1:14 val=1"
+, "    rpat: PatInt 1:17-1:18 val=2"
+, "  thn: TmVar 1:22-1:23 ident=b"
+, "  target: TmVar 1:6-1:7 ident=a" ] in
+
+utest dumpOf "match a with 1 | 2 in b" with
+[ "TmMatch 1:0-1:23"
+, "  els: TmNever 1:0-1:23"
+, "  pat: PatOr 1:13-1:18"
+, "    lpat: PatInt 1:13-1:14 val=1"
+, "    rpat: PatInt 1:17-1:18 val=2"
+, "  thn: TmVar 1:22-1:23 ident=b"
+, "  target: TmVar 1:6-1:7 ident=a" ] in
+
+utest dumpOf "match a with C x in b" with
+[ "TmMatch 1:0-1:21"
+, "  els: TmNever 1:0-1:21"
+, "  pat: PatCon 1:13-1:16 ident=C"
+, "    subpat: PatNamed 1:15-1:16 ident=x"
+, "  thn: TmVar 1:20-1:21 ident=b"
+, "  target: TmVar 1:6-1:7 ident=a" ] in
+
+utest dumpOf "utest a with 1 in x" with
+[ "TmDecl (merged) 1:0-1:19"
+, "  decls: DeclUtest 1:0-1:14 tusing=null"
+, "    test: TmVar 1:6-1:7 ident=a"
+, "    expected: TmConst 1:13-1:14 const=1"
+, "  inexpr: TmVar 1:18-1:19 ident=x" ] in
+
+utest dumpOf "utest a with 1 using eq else b in x" with
+[ "TmDecl (merged) 1:0-1:35"
+, "  decls: DeclUtest 1:0-1:30"
+, "    test: TmVar 1:6-1:7 ident=a"
+, "    tusing: TmVar 1:21-1:23 ident=eq"
+, "    expected: TmConst 1:13-1:14 const=1"
+, "  inexpr: TmVar 1:34-1:35 ident=x" ] in
+
+utest dumpOf "switch a end" with
+[ "TmDecl (merged) 1:0-1:12"
+, "  decls: DeclLet 1:0-1:12 ident=X"
+, "    body: TmVar 1:7-1:8 ident=a"
+, "    tyBody: TyUnknown 1:0-1:12"
+, "    tyAnnot: TyUnknown 1:0-1:12"
+, "  inexpr: TmNever 1:9-1:12" ] in
+
+utest dumpOf "switch a case 1 then b case 2 then c end" with
+[ "TmDecl (merged) 1:0-1:40"
+, "  decls: DeclLet 1:0-1:40 ident=X"
+, "    body: TmVar 1:7-1:8 ident=a"
+, "    tyBody: TyUnknown 1:0-1:40"
+, "    tyAnnot: TyUnknown 1:0-1:40"
+, "  inexpr: TmMatch 1:9-1:40"
+, "    els: TmMatch 1:23-1:40"
+, "      els: TmNever 1:37-1:40"
+, "      pat: PatInt 1:28-1:29 val=2"
+, "      thn: TmVar 1:35-1:36 ident=c"
+, "      target: TmVar 1:23-1:40 ident=X"
+, "    pat: PatInt 1:14-1:15 val=1"
+, "    thn: TmVar 1:21-1:22 ident=b"
+, "    target: TmVar 1:9-1:40 ident=X" ] in
+
+utest dumpOf "if true then 1 else 2" with
+[ "TmMatch 1:0-1:21"
+, "  els: TmConst 1:20-1:21 const=2"
+, "  pat: PatBool 1:3-1:7 val=true"
+, "  thn: TmConst 1:13-1:14 const=1"
+, "  target: TmConst 1:3-1:7 const=true" ] in
+
+utest dumpOf "1; 2" with
+[ "TmDecl (merged) 1:0-1:4"
+, "  decls: DeclLet 1:0-1:4 ident="
+, "    body: TmConst 1:0-1:1 const=1"
+, "    tyBody: TyUnknown 1:0-1:4"
+, "    tyAnnot: TyUnknown 1:0-1:4"
+, "  inexpr: TmConst 1:3-1:4 const=2" ] in
+
+utest dumpOf "type T a = Int in x" with
+[ "TmDecl (merged) 1:0-1:19"
+, "  decls: DeclType 1:0-1:14 ident=T"
+, "    tyIdent: TyInt 1:11-1:14"
+, "  inexpr: TmVar 1:18-1:19 ident=x" ] in
+
+utest dumpOf "con Foo: Int in x" with
+[ "TmDecl (merged) 1:0-1:17"
+, "  decls: DeclConDef 1:0-1:12 ident=Foo"
+, "    tyIdent: TyInt 1:9-1:12"
+, "  inexpr: TmVar 1:16-1:17 ident=x" ] in
+
+utest dumpOf "external foo: Int in foo" with
+[ "TmDecl (merged) 1:0-1:24"
+, "  decls: DeclExt 1:0-1:17 ident=foo effect=false"
+, "    tyIdent: TyInt 1:14-1:17"
+, "  inexpr: TmVar 1:21-1:24 ident=foo" ] in
+
+utest dumpOf "use Foo in x" with
+[ "TmDecl (merged) 1:0-1:12"
+, "  decls: DeclUse 1:0-1:7 ident=Foo"
+, "  inexpr: TmVar 1:11-1:12 ident=x" ] in
+
+-------------------------------------------------------------------------
+-- What a malformed expression reports, and where
+-------------------------------------------------------------------------
+
+utest errOf "(" with "1:1-1:1: Expected the start of an expression" in
+utest errOf ")" with "1:0-1:1: Expected the start of an expression" in
+utest errOf "[1,]" with "1:3-1:4: Expected the start of an expression" in
+utest errOf "{a = }" with "1:5-1:6: Expected the start of an expression" in
+utest errOf "let a = 1" with "1:9-1:9: Expected \'in\' after the \'let\' declaration" in
+utest errOf "lam" with "1:3-1:3: Expected \'.\' after the \'lam\' parameter" in
+utest errOf "match a" with "1:7-1:7: Expected \'with\' after the \'match\' target expression" in
+utest errOf "match a with 1" with "1:14-1:14: Expected \'then\' or \'in\' after the \'match ... with <pattern>\'" in
+utest errOf "match a with 1 then b else" with "1:26-1:26: Expected the start of an expression" in
+utest errOf "utest" with "1:5-1:5: Expected the start of an expression" in
+utest errOf "utest a with" with "1:12-1:12: Expected the start of an expression" in
+utest errOf "switch" with "1:6-1:6: Expected the start of an expression" in
+utest errOf "switch a" with "1:8-1:8: Expected \'case\' or \'end\' in a \'switch\' expression" in
+utest errOf "switch a case 1" with "1:15-1:15: Expected \'then\' after the \'case\' pattern" in
+utest errOf "if" with "1:2-1:2: Expected the start of an expression" in
+utest errOf "if true then 1" with "1:14-1:14: Expected \'else\' after the \'if ... then\' branch" in
+utest errOf "type in x" with "1:5-1:7: Expected a type identifier after \'type\'" in
+utest errOf "con in x" with "1:4-1:6: Expected a constructor identifier after \'con\'" in
+utest errOf "external in x" with "1:9-1:11: Expected an identifier after \'external\'" in
+utest errOf "use in x" with "1:4-1:6: Expected a language identifier after \'use\'" in
+utest errOf "x." with "1:2-1:2: Expected a field label (an identifier or integer) after \'.\'" in
+
+-------------------------------------------------------------------------
+-- Programs
+-------------------------------------------------------------------------
+
+utest progStrOf "mexpr\n1" with
+[ "mexpr"
+, "1" ] in
+
+utest progSpansOf "mexpr\n1" with
+[ "expr 2:0-2:1" ] in
+
+utest progStrOf "let x = 1\nmexpr\nx" with
+[ "let x = 1"
+, "mexpr"
+, "x" ] in
+
+utest progSpansOf "let x = 1\nmexpr\nx" with
+[ "decl 1:0-1:9"
+, "expr 1:8-1:9"
+, "expr 3:0-3:1" ] in
+
+utest progStrOf "lang Foo\n  syn Expr =\n  | CInt Int\n  sem eval =\n  | CInt n -> n\nend\nmexpr\n1" with
+[ "lang Foo"
+, "  syn Expr ="
+, "  | CInt Int"
+, "  sem eval ="
+, "  | CInt n ->"
+, "    n"
+, "end"
+, "mexpr"
+, "1" ] in
+
+utest progSpansOf "lang Foo\n  syn Expr =\n  | CInt Int\n  sem eval =\n  | CInt n -> n\nend\nmexpr\n1" with
+[ "decl 1:0-6:3"
+, "decl 2:2-3:12"
+, "decl 4:2-5:15"
+, "pat 5:4-5:10"
+, "pat 5:9-5:10"
+, "expr 5:14-5:15"
+, "expr 8:0-8:1" ] in
+
+utest progStrOf "lang Foo = Bar + Baz\nend\nmexpr\n1" with
+[ "lang Foo ="
+, "  Bar"
+, "  + Baz"
+, "end"
+, "mexpr"
+, "1" ] in
+
+utest progSpansOf "lang Foo = Bar + Baz\nend\nmexpr\n1" with
+[ "decl 1:0-2:3"
+, "expr 4:0-4:1" ] in
+
+utest progStrOf "lang Foo\n  sem f (x: Int) =\n  | 1 -> x\nend\nmexpr\n1" with
+[ "lang Foo"
+, "  sem f (x : Int) ="
+, "  | 1 ->"
+, "    x"
+, "end"
+, "mexpr"
+, "1" ] in
+
+utest progSpansOf "lang Foo\n  sem f (x: Int) =\n  | 1 -> x\nend\nmexpr\n1" with
+[ "decl 1:0-4:3"
+, "decl 2:2-3:10"
+, "pat 3:4-3:5"
+, "expr 3:9-3:10"
+, "expr 6:0-6:1" ] in
+
+utest progStrOf "include \"foo.mc\"\ntype T = Int\ncon C: Int\nexternal ext: Int\nutest 1 with 1\nmexpr\nx" with
+[ "include \"foo.mc\""
+, "type T ="
+, "  Int"
+, "con C: Int"
+, "external ext : Int"
+, "utest 1"
+, "with 1"
+, "mexpr"
+, "x" ] in
+
+utest progSpansOf "include \"foo.mc\"\ntype T = Int\ncon C: Int\nexternal ext: Int\nutest 1 with 1\nmexpr\nx" with
+[ "decl 1:0-1:16"
+, "decl 2:0-2:12"
+, "decl 3:0-3:10"
+, "decl 4:0-4:17"
+, "decl 5:0-5:14"
+, "expr 5:6-5:7"
+, "expr 5:13-5:14"
+, "expr 7:0-7:1" ] in
+
+utest progStrOf "recursive\n  let f = lam x. x\nend\nmexpr\nf" with
+[ "recursive"
+, "  let f = lam x."
+, "      x"
+, "mexpr"
+, "f" ] in
+
+utest progSpansOf "recursive\n  let f = lam x. x\nend\nmexpr\nf" with
+[ "decl 1:0-3:3"
+, "expr 2:10-2:18"
+, "expr 2:17-2:18"
+, "expr 5:0-5:1" ] in
+
+-------------------------------------------------------------------------
+-- What a malformed program reports, and where
+-------------------------------------------------------------------------
+
+utest progErrOf "1" with "1:0-1:1: Expected the start of a declaration" in
+utest progErrOf "lang" with "1:4-1:4: Expected an identifier after \'lang\'" in
+utest progErrOf "lang Foo" with "1:8-1:8: Expected the start of a declaration" in
+utest progErrOf "lang Foo =\nend\nmexpr\n1" with "2:0-2:3: Expected an included language identifier after \'+\'" in
+utest progErrOf "lang Foo\n  syn Expr\nend\nmexpr\n1" with "3:0-3:3: Expected \'=\' or \'+=\' after the \'syn\' name and parameters" in
 
 ()
