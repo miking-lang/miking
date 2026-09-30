@@ -14,15 +14,14 @@
 --     a partially applied call to a statically known function
 -- * Functions are only allowed to close over global values.
 
--- TODO(vipa, 2026-09-17): It's still a bit of an open question how to
--- ensure there are enough types stored here that you can use the
--- result of some partial evaluation to get a properly `ty` annotated
--- AST. Current best guess: change `TmVar` to store a `Map Name Type`
--- with instantiations, then use those to put stuff in the environment
--- when instantiating blocks.
-
 -- TODO(vipa, 2026-09-23): Maybe make consts that return `()` return a
 -- non-residualized value
+
+-- TODO(vipa, 2026-09-30): The current implementation ends up being
+-- entirely monomorphizing, which is technically overly restrictive,
+-- we should be able to emit polymorphic things, either when the type
+-- doesn't matter to the implementation, or when we use polymorphic
+-- recursion. Leaving it as is for the moment though
 
 include "int.mc"
 include "seq.mc"
@@ -50,7 +49,7 @@ include "mexpr/symbolize.mc"
 include "mexpr/type.mc"
 include "mexpr/type-check.mc"
 
-lang PEvalGraph = Ast + NamedPat + MExprCmp + PrettyPrint
+lang PEvalGraph = Ast + NamedPat + VarAst + RecLetsDeclAst + MExprCmp + PrettyPrint + VarTypeSubstitute
   type SymInt = Int
   type VRef = Int
 
@@ -83,11 +82,14 @@ lang PEvalGraph = Ast + NamedPat + MExprCmp + PrettyPrint
 
   type PEGBlockKey =
     { function : SymInt
+    , instantiation : Map Name Type
     , args : [PEGVal]
     }
   sem cmpPEGBlockKey : PEGBlockKey -> PEGBlockKey -> Int
   sem cmpPEGBlockKey a = | b ->
     let res = subi a.function b.function in
+    if neqi res 0 then res else
+    let res = mapCmp cmpType a.instantiation b.instantiation in
     if neqi res 0 then res else seqCmp cmpPEGVal a.args b.args
 
   sem cmpPEGVal : PEGVal -> PEGVal -> Int
@@ -104,6 +106,7 @@ lang PEvalGraph = Ast + NamedPat + MExprCmp + PrettyPrint
 
   type PEGEnv =
     { values : List (SymInt, PEGVal)
+    , tyValues : Map Name Type
     , finalBlocks : Thunk (Map Name PEGBlock)
     , inline : (PEGVal, [PEGVal]) -> Bool
     }
@@ -121,7 +124,7 @@ lang PEvalGraph = Ast + NamedPat + MExprCmp + PrettyPrint
     , compute : PEGState -> (PEGState, PEGVal)
     }
 
-  sem requestBlock : PEGState -> PEGBlockKey -> [Type] -> (PEGState -> [PEGVal] -> (PEGState, PEGVal)) -> (PEGState, Name)
+  sem requestBlock : PEGState -> PEGBlockKey -> [Type] -> (PEGState -> Map Name Type -> [PEGVal] -> (PEGState, PEGVal)) -> (PEGState, Name)
   sem requestBlock st key residualParamTypes = | body ->
     match mapLookup key st.requestedBlocks with Some (BlockRequest x) then
       (st, x.name)
@@ -130,7 +133,7 @@ lang PEvalGraph = Ast + NamedPat + MExprCmp + PrettyPrint
       let request = BlockRequest
         { name = name
         , residualParamTypes = residualParamTypes
-        , compute = lam st. body st key.args
+        , compute = lam st. body st key.instantiation key.args
         } in
       ({st with requestedBlocks = mapInsert key request st.requestedBlocks}, name)
 
@@ -182,6 +185,52 @@ lang PEvalGraph = Ast + NamedPat + MExprCmp + PrettyPrint
   sem mkPatF : Pat -> PEGEnv -> PEGVal -> Option PEGEnv
   sem mkEvalDeclF : Decl -> PEGEnv -> PEGState -> (PEGState, PEGEnv)
 
+  -- The entry point, which expects a type checked expression
+  sem mkTopEvalF : Expr -> EvalF
+  sem mkTopEvalF = | tm ->
+    mkEvalF (fixRecursiveInstantiate (mapEmpty nameCmp) tm)
+
+  -- TODO(vipa, 2026-09-30): This is a work-around for the current
+  -- handling of instantiation in the type-checker. Due to how
+  -- inference for un-annotated recursive functions work, we never see
+  -- the uninstantiated type _inside_ such a function, thus the
+  -- `instantiated` field of a `TmVar` will be unpopulated. This fixes
+  -- that, but should ideally eventually be removed when this is fixed
+  -- in the type checker itself.
+  sem fixRecursiveInstantiate : Map Name Type -> Expr -> Expr
+  sem fixRecursiveInstantiate tyEnv =
+  | tm -> smap_Expr_Expr (fixRecursiveInstantiate tyEnv) tm
+  | TmDecl (x & {decl = DeclRecLets d}) ->
+    let f = lam tyEnv. lam binding.
+      mapInsert binding.ident binding.tyBody tyEnv in
+    let localTyEnv = foldl f tyEnv d.bindings in
+    let f = lam binding.
+      {binding with body = fixRecursiveInstantiate localTyEnv binding.body} in
+    TmDecl {x with decl = DeclRecLets {d with bindings = map f d.bindings}, inexpr = fixRecursiveInstantiate tyEnv x.inexpr}
+  | TmVar (x & {frozen = false}) ->
+    match mapLookup x.ident tyEnv with Some ty then
+      match stripTyAll ty with (vars, stripped) in
+      let vars = setOfSeq nameCmp (map (lam v. v.0) vars) in
+      TmVar {x with instantiated = _matchTyVars vars (mapEmpty nameCmp) stripped x.ty}
+    else TmVar x
+
+  -- Finds what each of `vars` (as they appear in `pat`) corresponds
+  -- to in `ty`
+  sem _matchTyVars : Set Name -> Map Name Type -> Type -> Type -> Map Name Type
+  sem _matchTyVars vars acc pat = | ty ->
+    let pat = unwrapType pat in
+    let ty = unwrapType ty in
+    match pat with TyVar x then
+      if setMem x.ident vars then mapInsert x.ident ty acc else acc
+    else
+      let children = lam ty. sfold_Type_Type snoc [] ty in
+      let patChildren = children pat in
+      let tyChildren = children ty in
+      if and (eqi (constructorTag pat) (constructorTag ty))
+          (eqi (length patChildren) (length tyChildren))
+      then foldl2 (_matchTyVars vars) acc patChildren tyChildren
+      else acc
+
   -- Errors with the given message if the name is unsymbolized
   sem nameToSymInt : [Info] -> String -> Name -> SymInt
   sem nameToSymInt infos msg = | n ->
@@ -212,8 +261,24 @@ lang PEvalGraph = Ast + NamedPat + MExprCmp + PrettyPrint
   sem pegValTy : PEGVal -> Type
   sem pegValTy = | VRef x -> x.ty
 
+  -- Every type read from the AST goes through this, since it may
+  -- mention type variables of a polymorphic function we're currently
+  -- evaluating an instantiation of
+  sem pegSubstTy : PEGEnv -> Type -> Type
+  sem pegSubstTy env = | ty ->
+    if mapIsEmpty env.tyValues then ty
+    else substituteVars (infoTy ty) env.tyValues ty
+
+  sem pegSubstPat : PEGEnv -> Pat -> Pat
+  sem pegSubstPat env = | pat ->
+    let pat = withTypePat (pegSubstTy env (tyPat pat)) pat in
+    smap_Pat_Pat (pegSubstPat env) pat
+
   -- The `Type` is the type of the result of the application
   sem applyF : PEGEnv -> PEGState -> Type -> (PEGVal, [PEGVal]) -> (PEGState, PEGVal)
+
+  sem pegInst : Map Name Type -> PEGVal -> PEGVal
+  sem pegInst tyValues = | v -> v
 
   sem homogenizeValues : all st. (Type -> st -> (st, PEGVal)) -> st -> [PEGVal] -> (st, PEGVal, [[PEGVal]])
   sem homogenizeValues newVRef st = | vs -> homogenizeValuesDefault newVRef st vs
@@ -276,7 +341,7 @@ end
 
 lang PEvalGraphLam = PEvalGraph + LamAst
   syn PEGVal +=
-  | VLam {sym : SymInt, isRecursiveCall : Bool, arity : Int, applied : [PEGVal], body : PEGState -> [PEGVal] -> (PEGState, PEGVal)}
+  | VLam {sym : SymInt, isRecursiveCall : Bool, arity : Int, applied : [PEGVal], instantiated : Map Name Type, body : PEGState -> Map Name Type -> [PEGVal] -> (PEGState, PEGVal)}
 
   syn PEGInstr +=
   | IBlockCall
@@ -287,7 +352,7 @@ lang PEvalGraphLam = PEvalGraph + LamAst
     , return : Either (Lazy PEGVal) [Type]
     }
 
-  sem mkLam : Expr -> Option (Int, PEGEnv -> PEGState -> [PEGVal] -> (PEGState, PEGVal))
+  sem mkLam : Expr -> Option (Int, PEGEnv -> PEGState -> Map Name Type -> [PEGVal] -> (PEGState, PEGVal))
   sem mkLam =
   | _ -> None ()
   | tm & TmLam _ ->
@@ -298,19 +363,22 @@ lang PEvalGraphLam = PEvalGraph + LamAst
       else (params, tm) in
     match collect [] tm with (params, body) in
     let body = mkEvalF body in
-    let f = lam env. lam st. lam args.
+    let f = lam env. lam st. lam tyValues. lam args.
       if eqi (length params) (length args) then
         let values = foldl2
           (lam values. lam p. lam a. Cons ((p, a), values))
           env.values
           params
           args in
-        body {env with values = values} st
+        body {env with values = values, tyValues = mapUnion env.tyValues tyValues} st
       else error "Applied a function with the wrong number of arguments" in
     Some (length params, f)
 
-  sem _prepBlockKey : SymInt -> [PEGVal] -> (PEGBlockKey, [(VRef, Type)])
-  sem _prepBlockKey function = | args ->
+  sem pegInst tyValues += | VLam x ->
+    VLam {x with instantiated = mapUnion x.instantiated tyValues}
+
+  sem _prepBlockKey : SymInt -> Map Name Type -> [PEGVal] -> (PEGBlockKey, [(VRef, Type)])
+  sem _prepBlockKey function instantiation = | args ->
     recursive let abstract = lam acc. lam val.
       match val with VRef x then
         match acc with (params, nextVRef) in
@@ -318,7 +386,7 @@ lang PEvalGraphLam = PEvalGraph + LamAst
       else smapAccumL_PEGVal_PEGVal abstract acc val
     in
     match mapAccumL abstract ([], 0) args with ((params, _), args) in
-    ({function = function, args = args}, params)
+    ({function = function, instantiation = instantiation, args = args}, params)
 
   sem _blockCall : PEGState -> PEGBlock -> [VRef] -> (PEGState, PEGVal)
   sem _blockCall st block = | args ->
@@ -346,9 +414,9 @@ lang PEvalGraphLam = PEvalGraph + LamAst
     if lti (length applied) x.arity then
       (st, VLam {x with applied = applied})
     else if env.inline app then
-      x.body st applied
+      x.body st x.instantiated applied
     else
-      match _prepBlockKey x.sym applied with (key, args) in
+      match _prepBlockKey x.sym x.instantiated applied with (key, args) in
       match mapLookup key st.computedBlocks with Some block then
         _blockCall st block (map (lam x. x.0) args)
       else
@@ -384,6 +452,15 @@ lang PEvalGraphLam = PEvalGraph + LamAst
     [ "<lambda ", int2string x.sym
     , if null x.applied then ""
       else concat ", applied = " (pegValsToString x.applied)
+    , if mapIsEmpty x.instantiated then ""
+      else join
+        [ ", instantiated = {"
+        , strJoin ", "
+          (map
+            (lam b. join [nameGetStr b.0, " = ", type2str b.1])
+            (mapBindings x.instantiated))
+        , "}"
+        ]
     , ", remaining = ", int2string (subi x.arity (length x.applied))
     , ">"
     ]
@@ -394,7 +471,7 @@ lang PEvalGraphLet = PEvalGraph + LetDeclAst + PEvalGraphLam
     let s = nameToSymInt [x.info] "Unsymbolized DeclLet in mkEvalDeclF!" x.ident in
     match mkLam x.body with Some (arity, f) then
       lam env. lam st.
-        let val = VLam {sym = s, isRecursiveCall = false, body = f env, arity = arity, applied = []} in
+        let val = VLam {sym = s, isRecursiveCall = false, body = f env, arity = arity, applied = [], instantiated = mapEmpty nameCmp} in
         let env = {env with values = Cons ((s, val), env.values)} in
         (st, env)
     else
@@ -418,10 +495,10 @@ lang PEvalGraphRecLets = PEvalGraph + RecLetsDeclAst + PEvalGraphLam
       let recEnv = mkThunk (lazy (lam. concat "recursive env in DeclRecLets at " (info2str x.info))) in
       let f = lam acc. lam pair.
         match (acc, pair) with ((rValues, nValues), (s, (arity, f))) in
-        let body = lam st. lam args.
-          f (recEnv.read ()) st args in
-        ( Cons ((s, VLam {sym = s, isRecursiveCall = true, arity = arity, applied = [], body = body}), rValues)
-        , Cons ((s, VLam {sym = s, isRecursiveCall = false, arity = arity, applied = [], body = body}), nValues)
+        let body = lam st. lam tyValues. lam args.
+          f (recEnv.read ()) st tyValues args in
+        ( Cons ((s, VLam {sym = s, isRecursiveCall = true, arity = arity, applied = [], instantiated = mapEmpty nameCmp, body = body}), rValues)
+        , Cons ((s, VLam {sym = s, isRecursiveCall = false, arity = arity, applied = [], instantiated = mapEmpty nameCmp, body = body}), nValues)
         ) in
       match foldl f (env.values, env.values) pairs with (rValues, nValues) in
       recEnv.write {env with values = rValues};
@@ -435,12 +512,20 @@ end
 lang PEvalGraphVar = PEvalGraph + VarAst
   sem mkEvalF += | TmVar x ->
     let s = nameToSymInt [x.info] "Unsymbolized TmVar in mkEvalF!" x.ident in
+    let instantiated = x.instantiated in
     let lookup = lam pair. match pair with (s2, v) in
       if eqi s s2 then Some v else None () in
-    lam env. lam st.
-      match listFindMap lookup env.values with Some v
-      then (st, v)
-      else errorSingle [x.info] "Unbound variable in mkEvalF!"
+    if mapIsEmpty instantiated then
+      lam env. lam st.
+        match listFindMap lookup env.values with Some v
+        then (st, v)
+        else errorSingle [x.info] "Unbound variable in mkEvalF!"
+    else
+      lam env. lam st.
+        let instantiated = mapMap (pegSubstTy env) instantiated in
+        match listFindMap lookup env.values with Some v
+        then (st, pegInst instantiated v)
+        else errorSingle [x.info] "Unbound variable in mkEvalF!"
 end
 
 lang PEvalGraphApp = PEvalGraph + AppAst
@@ -456,7 +541,7 @@ lang PEvalGraphApp = PEvalGraph + AppAst
     lam env. lam st.
       match f env st with (st, f) in
       match mapAccumL (lam st. lam arg. arg env st) st args with (st, args) in
-      applyF env st ty (f, args)
+      applyF env st (pegSubstTy env ty) (f, args)
 end
 
 lang PEvalGraphConst = PEvalGraph + ConstAst + Cmp + ConstPrettyPrint
@@ -584,7 +669,7 @@ lang PEvalGraphExt = PEvalGraph + ExtDeclAst + FunArity
         (st, {env with values = Cons ((s, val), env.values)})
     else
       lam env. lam st.
-        match pegEmit x.tyIdent st (IExtCall {ident = x.ident, args = []})
+        match pegEmit (pegSubstTy env x.tyIdent) st (IExtCall {ident = x.ident, args = []})
         with (st, val) in
         (st, {env with values = Cons ((s, val), env.values)})
 
@@ -658,7 +743,7 @@ lang PEvalGraphMatch = PEvalGraph + MatchAst + VarAst + NamedPat
         let evalArm = lam st. lam arm.
           let addName = lam acc. lam pair.
             match acc with (st, values) in
-            match pegNewVRef pair.1 st with (st, v) in
+            match pegNewVRef (pegSubstTy env pair.1) st with (st, v) in
             (st, Cons ((pair.0, v), values)) in
           match foldl addName ({st with instructions = [], nextVRef = base}, env.values) arm.patNames
           with (st, values) in
@@ -667,7 +752,7 @@ lang PEvalGraphMatch = PEvalGraph + MatchAst + VarAst + NamedPat
         match mapAccumL evalArm st arms with (st, armResults) in
         let st = {st with instructions = outerInstrs, nextVRef = base} in
         match homogenizeArms st (map (lam r. r.1) armResults) with (st, valss, ret) in
-        let mkArm = lam pat. lam pair. (pat, (pair.0).0, pair.1) in
+        let mkArm = lam pat. lam pair. (pegSubstPat env pat, (pair.0).0, pair.1) in
         let instr = IMatch
           {target = x.ref, arms = zipWith mkArm pats (zip armResults valss)} in
         ({st with instructions = snoc st.instructions instr}, ret)
@@ -883,8 +968,7 @@ lang PEvalGraphData = PEvalGraph + DataAst + DataDeclAst
     let body = mkEvalF x.body in
     lam env. lam st.
       match body env st with (st, body) in
-      -- TODO(vipa, 2026-09-15): This might be a bad type if we're in a polymorphic function
-      (st, VConApp {ty = x.ty, ident = x.ident, body = body})
+      (st, VConApp {ty = pegSubstTy env x.ty, ident = x.ident, body = body})
 
   sem mkEvalDeclF += | DeclConDef _ -> lam env. lam st. (st, env)
 
@@ -973,7 +1057,7 @@ lang PEvalGraphRecord = PEvalGraph + RecordAst
     lam env. lam st.
       match mapMapAccum (lam st. lam. lam f. f env st) st bindings
       with (st, bindings) in
-      (st, VRecord {ty = x.ty, bindings = bindings})
+      (st, VRecord {ty = pegSubstTy env x.ty, bindings = bindings})
 
   sem smapAccumL_PEGVal_PEGVal f acc += | VRecord x ->
     match mapMapAccum (lam acc. lam. lam v. f acc v) acc x.bindings
@@ -1076,8 +1160,7 @@ lang PEvalGraphSeq = PEvalGraph + SeqAst + SeqTypeAst
     let vals = map mkEvalF x.tms in
     lam env. lam st.
       match mapAccumL (lam st. lam v. v env st) st vals with (st, vals) in
-      -- TODO(vipa, 2026-09-15): This might be a bad type if we're inside a polymorphic function
-      (st, VSeq {ty = x.ty, vals = vals})
+      (st, VSeq {ty = pegSubstTy env x.ty, vals = vals})
 
   sem smapAccumL_PEGVal_PEGVal f acc += | VSeq x ->
     match mapAccumL f acc x.vals with (acc, vals) in
@@ -1779,7 +1862,7 @@ checkHomogenizationInvariant
 let prepare
   : String -> EvalF
   = lam src.
-    mkEvalF
+    mkTopEvalF
       (typeCheck
         (symbolize
           (constTransform (snoc builtin ("testResidual", CTestResidual ()))
@@ -1797,6 +1880,7 @@ let callEvalFWith
     let finalBlocks = mkThunk (lazy (lam. "finalBlocks")) in
     let initEnv : PEGEnv =
       { values = listEmpty
+      , tyValues = mapEmpty nameCmp
       , finalBlocks = finalBlocks
       , inline = inline
       } in
@@ -2743,12 +2827,12 @@ with
       { target = 0
       , arms =
         [ ( pint_ 0
-          , [blockCall_ "block0" [0] [tyvar_ "a"]]
-          , [VRef {ty = tyvar_ "a", ref = 1}]
+          , [blockCall_ "block0" [0] [tyint_]]
+          , [VRef {ty = tyint_, ref = 1}]
           )
         , ( pvarw_
-          , [blockCall_ "block1" [] [tyvar_ "a"]]
-          , [VRef {ty = tyvar_ "a", ref = 1}]
+          , [blockCall_ "block1" [] [tyint_]]
+          , [VRef {ty = tyint_, ref = 1}]
           )
         ]
       }
@@ -2760,7 +2844,7 @@ with
         [residual_ (VInt 4)]
         [0] (VRef {ty = tyint_, ref = 0})
     ]
-  , VRef {ty = tyvar_ "a", ref = 1}
+  , VRef {ty = tyint_, ref = 1}
   )
 using eqBlocksInstrAndValIgnoringSymbols else ppBlocksInstrAndVal in
 
@@ -2777,12 +2861,12 @@ with
       { target = 0
       , arms =
         [ ( pint_ 0
-          , [blockCall_ "block0" [0] [tyvar_ "a"]]
-          , [VRef {ty = tyvar_ "a", ref = 1}]
+          , [blockCall_ "block0" [0] [tyint_]]
+          , [VRef {ty = tyint_, ref = 1}]
           )
         , ( pvarw_
-          , [blockCall_ "block1" [] [tyvar_ "a"]]
-          , [VRef {ty = tyvar_ "a", ref = 1}]
+          , [blockCall_ "block1" [] [tyint_]]
+          , [VRef {ty = tyint_, ref = 1}]
           )
         ]
       }
@@ -2811,12 +2895,12 @@ with
       { target = 0
       , arms =
         [ ( pint_ 0
-          , [blockCall_ "block0" [0] [tyvar_ "a"]]
-          , [VRef {ty = tyvar_ "a", ref = 1}]
+          , [blockCall_ "block0" [0] [tyint_]]
+          , [VRef {ty = tyint_, ref = 1}]
           )
         , ( pvarw_
-          , [blockCall_ "block0" [0] [tyvar_ "a"]]
-          , [VRef {ty = tyvar_ "a", ref = 1}]
+          , [blockCall_ "block0" [0] [tyint_]]
+          , [VRef {ty = tyint_, ref = 1}]
           )
         ]
       }
@@ -2825,7 +2909,7 @@ with
         [residual_ (VRef {ty = tyint_, ref = 0})]
         [1] (VRef {ty = tyint_, ref = 0})
     ]
-  , VRef {ty = tyvar_ "a", ref = 1}
+  , VRef {ty = tyint_, ref = 1}
   )
 using eqBlocksInstrAndValIgnoringSymbols else ppBlocksInstrAndVal in
 
@@ -2846,12 +2930,12 @@ with
       { target = 0
       , arms =
         [ ( pint_ 0
-          , [blockCall_ "block0" [0] [tyvar_ "a"]]
-          , [VRef {ty = tyvar_ "a", ref = 2}]
+          , [blockCall_ "block0" [0] [tyint_]]
+          , [VRef {ty = tyint_, ref = 2}]
           )
         , ( pvarw_
-          , [blockCall_ "block0" [1] [tyvar_ "a"]]
-          , [VRef {ty = tyvar_ "a", ref = 2}]
+          , [blockCall_ "block0" [1] [tyint_]]
+          , [VRef {ty = tyint_, ref = 2}]
           )
         ]
       }
@@ -2860,7 +2944,7 @@ with
         [residual_ (VRef {ty = tyint_, ref = 0})]
         [1] (VRef {ty = tyint_, ref = 0})
     ]
-  , VRef {ty = tyvar_ "a", ref = 2}
+  , VRef {ty = tyint_, ref = 2}
   )
 using eqBlocksInstrAndValIgnoringSymbols else ppBlocksInstrAndVal in
 
@@ -2918,12 +3002,12 @@ with
       { target = 0
       , arms =
         [ ( pint_ 0
-          , [blockCall_ "block0" [0, 1] [tyvar_ "a"]]
-          , [VRef {ty = tyvar_ "a", ref = 2}]
+          , [blockCall_ "block0" [0, 1] [tytuple_ [tyint_, tyint_]]]
+          , [VRef {ty = tytuple_ [tyint_, tyint_], ref = 2}]
           )
         , ( pvarw_
-          , [blockCall_ "block0" [1, 0] [tyvar_ "a"]]
-          , [VRef {ty = tyvar_ "a", ref = 2}]
+          , [blockCall_ "block0" [1, 0] [tytuple_ [tyint_, tyint_]]]
+          , [VRef {ty = tytuple_ [tyint_, tyint_], ref = 2}]
           )
         ]
       }
@@ -2935,9 +3019,9 @@ with
             , ("1", VRef {ty = tyint_, ref = 1})
             ])
         ]
-        [2] (VRef {ty = tyint_, ref = 0})
+        [2] (VRef {ty = tytuple_ [tyint_, tyint_], ref = 0})
     ]
-  , VRef {ty = tyvar_ "a", ref = 2}
+  , VRef {ty = tytuple_ [tyint_, tyint_], ref = 2}
   )
 using eqBlocksInstrAndValIgnoringSymbols else ppBlocksInstrAndVal in
 
@@ -2954,12 +3038,12 @@ with
       { target = 0
       , arms =
         [ ( prec_ [("a", pvar_ "a")]
-          , [blockCall_ "block0" [1] [tyvar_ "a"]]
-          , [VRef {ty = tyvar_ "a", ref = 2}]
+          , [blockCall_ "block0" [1] [tyint_]]
+          , [VRef {ty = tyint_, ref = 2}]
           )
         , ( pvarw_
-          , [blockCall_ "block1" [] [tyvar_ "a"]]
-          , [VRef {ty = tyvar_ "a", ref = 1}]
+          , [blockCall_ "block1" [] [tyint_]]
+          , [VRef {ty = tyint_, ref = 1}]
           )
         ]
       }
@@ -2971,7 +3055,7 @@ with
         [residual_ (VInt 0)]
         [0] (VRef {ty = tyint_, ref = 0})
     ]
-  , VRef {ty = tyvar_ "a", ref = 1}
+  , VRef {ty = tyint_, ref = 1}
   )
 using eqBlocksInstrAndValIgnoringSymbols else ppBlocksInstrAndVal in
 
@@ -3084,6 +3168,32 @@ with
   )
 using eqBlocksInstrAndVal else ppBlocksInstrAndVal in
 
+-- The same call, with the same arguments, but at two different
+-- instantiations of `f`, which thus are two different blocks
+utest callEvalFWith inlineNone (prepare (strJoin "\n"
+  [ "let f = lam. testResidual [] in"
+  , "let a : [Int] = f () in"
+  , "let b : [Char] = f () in"
+  , "(a, b)"
+  ]))
+with
+  ( [ blockCall_ "block0" [] [tyseq_ tyint_]
+    , blockCall_ "block1" [] [tyseq_ tychar_]
+    ]
+  , [ block_ "block0" []
+        [residual_ (VSeq {ty = tyseq_ tyint_, vals = []})]
+        [0] (VRef {ty = tyseq_ tyint_, ref = 0})
+    , block_ "block1" []
+        [residual_ (VSeq {ty = tyseq_ tychar_, vals = []})]
+        [0] (VRef {ty = tyseq_ tychar_, ref = 0})
+    ]
+  , vrecord_
+    [ ("0", VRef {ty = tyseq_ tyint_, ref = 0})
+    , ("1", VRef {ty = tyseq_ tychar_, ref = 1})
+    ]
+  )
+using eqBlocksInstrAndVal else ppBlocksInstrAndVal in
+
 
 -- === Inlining predicates ===
 
@@ -3135,14 +3245,12 @@ using eqBlocksInstrAndVal else ppBlocksInstrAndVal in
 -- A recursive call that is not in the body of a `match` arm reaches
 -- the block through `applyF`, and is emitted while its own block is
 -- still being computed, so its return value is only known later. The
--- type of the call is known here, however, and is what `r2` gets;
--- `x` is annotated because that type comes from the AST of the
--- definition, where an unannotated `f` is polymorphic.
+-- type of the call is known here, however, and is what `r2` gets.
 let inlineNonRecursive : InlineF = lam app.
   match app.0 with VLam x then not x.isRecursiveCall else true in
 
 utest callEvalFWith inlineNonRecursive (prepare (strJoin "\n"
-  [ "recursive let f = lam x : Int."
+  [ "recursive let f = lam x."
   , "  let y = testResidual x in"
   , "  addi (f y) 1"
   , "in"
@@ -3202,6 +3310,214 @@ with
         [1] (VRef {ty = tyint_, ref = 0})
     ]
   , VRef {ty = tyint_, ref = 1}
+  )
+using eqBlocksInstrAndVal else ppBlocksInstrAndVal in
+
+
+-- === Instantiations in recursive lets ===
+
+-- Inside a `recursive` group the bindings refer to each other
+-- monomorphically, so the type checker gives such a reference no
+-- instantiation; `fixRecursiveInstantiate` fills it in from the
+-- generalized type of the binding. `h` is defined outside the group, so
+-- calls to it are not recursive, and the parameter type of its block
+-- shows the type of the value passed to it.
+
+-- `f` and `g` share a type variable through the type of `g`, thus the
+-- instantiation of `g` covers it, and `h` sees `[Int]`
+utest callEvalFWith inlineNone (prepare (strJoin "\n"
+  [ "let h = lam z. testResidual z in"
+  , "recursive"
+  , "  let f = lam x. testResidual x"
+  , "  let g = lam y. let z = f y in let w = h z in 1"
+  , "in"
+  , "g (testResidual [1])"
+  ]))
+with
+  ( [ residual_ (VSeq {ty = tyseq_ tyint_, vals = [VInt 1]})
+    , blockCall_ "block0" [0] []
+    ]
+  , [ block_ "block0" [tyseq_ tyint_]
+        [ lazyBlockCall_ "block1" [0] (VRef {ty = tyseq_ tyint_, ref = 0})
+        , blockCall_ "block2" [1] [tyseq_ tyint_]
+        ]
+        [] (VInt 1)
+    , block_ "block1" [tyseq_ tyint_]
+        [residual_ (VRef {ty = tyseq_ tyint_, ref = 0})]
+        [1] (VRef {ty = tyseq_ tyint_, ref = 0})
+    , block_ "block2" [tyseq_ tyint_]
+        [residual_ (VRef {ty = tyseq_ tyint_, ref = 0})]
+        [1] (VRef {ty = tyseq_ tyint_, ref = 0})
+    ]
+  , VInt 1
+  )
+using eqBlocksInstrAndValIgnoringSymbols else ppBlocksInstrAndVal in
+
+-- An annotated `f` is polymorphic in its own body, so the recursive
+-- call is instantiated like any other, and ends up at the same block
+utest callEvalFWith inlineNone (prepare (strJoin "\n"
+  [ "let h = lam z. testResidual z in"
+  , "recursive let f : all a. a -> a = lam x."
+  , "  let y = h x in"
+  , "  let t = testResidual 0 in"
+  , "  match t with 0 then f y else y"
+  , "in"
+  , "f (testResidual 3)"
+  ]))
+with
+  ( [ residual_ (VInt 3)
+    , blockCall_ "block0" [0] [tyint_]
+    ]
+  , [ block_ "block0" [tyint_]
+        [ blockCall_ "block1" [0] [tyint_]
+        , residual_ (VInt 0)
+        , IMatch
+          { target = 2
+          , arms =
+            [ ( pint_ 0
+              , [lazyBlockCall_ "block0" [1] (VRef {ty = tyint_, ref = 0})]
+              , [VRef {ty = tyint_, ref = 3}]
+              )
+            , (pvarw_, [], [VRef {ty = tyint_, ref = 1}])
+            ]
+          }
+        ]
+        [3] (VRef {ty = tyint_, ref = 0})
+    , block_ "block1" [tyint_]
+        [residual_ (VRef {ty = tyint_, ref = 0})]
+        [1] (VRef {ty = tyint_, ref = 0})
+    ]
+  , VRef {ty = tyint_, ref = 1}
+  )
+using eqBlocksInstrAndVal else ppBlocksInstrAndVal in
+
+
+-- TODO(vipa, 2026-09-30): This test essentially documents a flaw in
+-- the type-checker, where a type-variable can leak from one mutually
+-- recursive function to another. See `type-check.mc`, a TODO with the
+-- same date, for details.
+utest callEvalFWith inlineNone (prepare (strJoin "\n"
+  [ "let h = lam z. testResidual z in"
+  , "recursive"
+  , "  let f = lam x. testResidual x"
+  , "  let g = lam n. let y = f [] in let w = h y in n"
+  , "in"
+  , "g (testResidual 1)"
+  ]))
+with
+  ( [ residual_ (VInt 1)
+    , blockCall_ "block0" [0] [tyint_]
+    ]
+  , [ block_ "block0" [tyint_]
+        [ lazyBlockCall_ "block1" [] (VRef {ty = tyunknown_, ref = 0})
+        , blockCall_ "block2" [1] [tyseq_ (tyvar_ "a")]
+        ]
+        [0] (VRef {ty = tyint_, ref = 0})
+    , block_ "block1" []
+        [residual_ (VSeq {ty = tyunknown_, vals = []})]
+        [0] (VRef {ty = tyunknown_, ref = 0})
+    , block_ "block2" [tyseq_ (tyvar_ "a")]
+        [residual_ (VRef {ty = tyunknown_, ref = 0})]
+        [1] (VRef {ty = tyunknown_, ref = 0})
+    ]
+  , VRef {ty = tyint_, ref = 1}
+  )
+using eqBlocksInstrAndValIgnoringSymbols else ppBlocksInstrAndVal in
+
+-- As above, but with `f` annotated, which makes the call to it in `g`
+-- an instantiation of its own. Nothing constrains that instantiation,
+-- so the type checker leaves `Unknown` there, as it would outside a
+-- `recursive` group.
+utest callEvalFWith inlineNone (prepare (strJoin "\n"
+  [ "let h = lam z. testResidual z in"
+  , "recursive"
+  , "  let f : all b. [b] -> [b] = lam x. testResidual x"
+  , "  let g = lam n. let y = f [] in let w = h y in n"
+  , "in"
+  , "g (testResidual 1)"
+  ]))
+with
+  ( [ residual_ (VInt 1)
+    , blockCall_ "block0" [0] [tyint_]
+    ]
+  , [ block_ "block0" [tyint_]
+        [ lazyBlockCall_ "block1" [] (VRef {ty = tyunknown_, ref = 0})
+        , blockCall_ "block2" [1] [tyseq_ tyunknown_]
+        ]
+        [0] (VRef {ty = tyint_, ref = 0})
+    , block_ "block1" []
+        [residual_ (VSeq {ty = tyunknown_, vals = []})]
+        [0] (VRef {ty = tyunknown_, ref = 0})
+    , block_ "block2" [tyseq_ tyunknown_]
+        [residual_ (VRef {ty = tyunknown_, ref = 0})]
+        [1] (VRef {ty = tyunknown_, ref = 0})
+    ]
+  , VRef {ty = tyint_, ref = 1}
+  )
+using eqBlocksInstrAndValIgnoringSymbols else ppBlocksInstrAndVal in
+
+-- `f` is monomorphic, so the call to it in `g` has an empty
+-- instantiation, and the two instantiations of `g` share the block for
+-- `f`
+utest callEvalFWith inlineNone (prepare (strJoin "\n"
+  [ "recursive"
+  , "  let f = lam x. testResidual (addi x 1)"
+  , "  let g = lam y. f 1"
+  , "in"
+  , "let e1 : [Int] = [] in"
+  , "let e2 : [Char] = [] in"
+  , "(g e1, g e2)"
+  ]))
+with
+  ( [ blockCall_ "block0" [] [tyint_]
+    , blockCall_ "block2" [] [tyint_]
+    ]
+  , [ block_ "block0" []
+        [lazyBlockCall_ "block1" [] (VRef {ty = tyint_, ref = 0})]
+        [0] (VRef {ty = tyint_, ref = 0})
+    , block_ "block1" []
+        [residual_ (VInt 2)]
+        [0] (VRef {ty = tyint_, ref = 0})
+    , block_ "block2" []
+        [lazyBlockCall_ "block1" [] (VRef {ty = tyint_, ref = 0})]
+        [0] (VRef {ty = tyint_, ref = 0})
+    ]
+  , vrecord_
+    [ ("0", VRef {ty = tyint_, ref = 0})
+    , ("1", VRef {ty = tyint_, ref = 1})
+    ]
+  )
+using eqBlocksInstrAndVal else ppBlocksInstrAndVal in
+
+-- As above, but with `g` annotated, which changes nothing, since the
+-- call in `g` is to the unannotated, thus monomorphic, `f`
+utest callEvalFWith inlineNone (prepare (strJoin "\n"
+  [ "recursive"
+  , "  let f = lam x. testResidual (addi x 1)"
+  , "  let g : all c. c -> Int = lam y. f 1"
+  , "in"
+  , "let e1 : [Int] = [] in"
+  , "let e2 : [Char] = [] in"
+  , "(g e1, g e2)"
+  ]))
+with
+  ( [ blockCall_ "block0" [] [tyint_]
+    , blockCall_ "block2" [] [tyint_]
+    ]
+  , [ block_ "block0" []
+        [lazyBlockCall_ "block1" [] (VRef {ty = tyint_, ref = 0})]
+        [0] (VRef {ty = tyint_, ref = 0})
+    , block_ "block1" []
+        [residual_ (VInt 2)]
+        [0] (VRef {ty = tyint_, ref = 0})
+    , block_ "block2" []
+        [lazyBlockCall_ "block1" [] (VRef {ty = tyint_, ref = 0})]
+        [0] (VRef {ty = tyint_, ref = 0})
+    ]
+  , vrecord_
+    [ ("0", VRef {ty = tyint_, ref = 0})
+    , ("1", VRef {ty = tyint_, ref = 1})
+    ]
   )
 using eqBlocksInstrAndVal else ppBlocksInstrAndVal in
 
