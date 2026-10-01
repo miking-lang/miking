@@ -59,14 +59,15 @@ let callstackPop : Callstack -> Option (Callstack, Info)
            , info )
     else None ()
 
-let callstackToSeq : Callstack -> [Info] = lam cs.
-  recursive let recur = lam acc. lam cs.
-    match callstackPop cs with Some (cs, info) then recur (snoc acc info) cs
-    else acc
-  in recur [] cs
+let callstackToSeq : Callstack -> [Info]
+= lam cs.
+    recursive let recur = lam acc. lam cs.
+      match callstackPop cs with Some (cs, info) then recur (snoc acc info) cs
+      else acc
+    in recur [] cs
 
 let callstackPrintTrace : Callstack -> ()
-  = lam cs.
+= lam cs.
     recursive let recur = lam remaining. lam cs.
       if leqi remaining 0 then ()
       else
