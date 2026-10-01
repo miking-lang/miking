@@ -1,4 +1,4 @@
-/- This file implement a staged interpreter for MExpr -/
+/- This file implements a staged interpreter for MExpr -/
 
 include "basic-types.mc"
 include "common.mc"
@@ -301,9 +301,6 @@ lang RecordEvalS = EvalS + RecordAst + UnknownTypeAst
   syn Val +=
   | VRecord (Map SID Val)
 
-  sem unitVal : () -> Val
-  sem unitVal =| () -> VRecord (mapEmpty cmpSID)
-
   sem evalSReadback +=
   | VRecord bindings ->
     optionMap
@@ -331,6 +328,8 @@ lang RecordEvalS = EvalS + RecordAst + UnknownTypeAst
       match rec env with VRecord rec then VRecord (mapInsert key (value env) rec)
       else error "TmRecord type error in evalSStageExpr!"
 end
+
+let unitVal = use RecordEvalS in VRecord (mapEmpty cmpSID)
 
 lang SeqEvalS = EvalS + SeqAst + UnknownTypeAst
   syn Val +=
@@ -715,14 +714,14 @@ lang SeqOpEvalS =
     (c, lam info. lam f. lam s.
       match s with VSeq s in
       iter (lam x. applyS (info, f, x); ()) s;
-      unitVal ())
+      unitVal)
   | c & CIteri _ -> VConstInfo2
     (c, lam info. lam f. lam s.
       match s with VSeq s in
       iteri
         (lam i. lam x. applyS (info, applyS (info, f, VInt i), x); ())
         s;
-      unitVal ())
+      unitVal)
   | c & CCreate _ -> VConstInfo2
     (c, lam info. lam n. lam f.
       match n with VInt n in
@@ -814,23 +813,23 @@ lang FileOpEvalS =
     (c, lam f. stringToVal (readFile (valToString f)))
   | c & CFileWrite _ -> VConst2
     (c, lam f. lam d.
-      writeFile (valToString f) (valToString d); unitVal ())
+      writeFile (valToString f) (valToString d); unitVal)
   | c & CFileExists _ -> VConst1 (c, lam f. VBool (fileExists (valToString f)))
   | c & CFileDelete _ -> VConst1
-    (c, lam f. deleteFile (valToString f); unitVal ())
+    (c, lam f. deleteFile (valToString f); unitVal)
 end
 
 lang IOEvalS = ConstEvalS + RecordEvalS + StringConvEvalS + IOAst
   sem stageDeltaF cs +=
   | c & CPrint _ -> VConst1
-    (c, lam s. print (valToString s); unitVal ())
+    (c, lam s. print (valToString s); unitVal)
   | c & CPrintError _ -> VConst1
-    (c, lam s. printError (valToString s); unitVal ())
-  | c & CDPrint _ -> VConst1 (c, lam. unitVal ())
+    (c, lam s. printError (valToString s); unitVal)
+  | c & CDPrint _ -> VConst1 (c, lam. unitVal)
   | c & CFlushStdout _ -> VConst1
-    (c, lam. flushStdout (); unitVal ())
+    (c, lam. flushStdout (); unitVal)
   | c & CFlushStderr _ -> VConst1
-    (c, lam. flushStderr (); unitVal ())
+    (c, lam. flushStderr (); unitVal)
   | c & CReadLine _ -> VConst1 (c, lam. stringToVal (readLine ()))
   | c & CReadBytesAsString _ -> VConst1
     (c, lam. error "CReadBytesAsString: unimplemented")
@@ -844,14 +843,14 @@ lang RandomNumberGeneratorEvalS =
     (c, lam lo. lam hi.
           match (lo, hi) with (VInt lo, VInt hi) in VInt (randIntU lo hi))
   | c & CRandSetSeed _ -> VConst1
-    (c, lam n. match n with VInt n in randSetSeed n; unitVal ())
+    (c, lam n. match n with VInt n in randSetSeed n; unitVal)
 end
 
 lang TimeEvalS = ConstEvalS + IntEvalS + FloatEvalS + RecordEvalS + TimeAst
   sem stageDeltaF cs +=
   | c & CWallTimeMs _ -> VConst1 (c, lam. VFloat (wallTimeMs ()))
   | c & CSleepMs _ -> VConst1
-    (c, lam n. match n with VInt n in sleepMs n; unitVal ())
+    (c, lam n. match n with VInt n in sleepMs n; unitVal)
 end
 
 lang RefOpEvalS = ConstEvalS + RecordEvalS + RefOpAst
@@ -859,13 +858,13 @@ lang RefOpEvalS = ConstEvalS + RecordEvalS + RefOpAst
   | VRef (Ref Val)
 
   sem evalSReadback +=
-  | VRef _ -> None ()
+  | VRef r -> None ()
 
   sem stageDeltaF cs +=
   | c & CRef _ -> VConst1 (c, lam v. VRef (ref v))
   | c & CModRef _ -> VConst2
     (c, lam r. lam v.
-          match r with VRef r in modref r v; unitVal ())
+          match r with VRef r in modref r v; unitVal)
   | c & CDeRef _ -> VConst1 (c, lam r. match r with VRef r in deref r)
 end
 
@@ -955,19 +954,19 @@ lang TensorOpEvalS =
       (lam i. lam s.
         applyS (info, applyS (info, f, VInt i), VTensorInt s); ())
       t;
-    unitVal ()
+    unitVal
   | VTensorFloat t ->
     tensorIterSlice
       (lam i. lam s.
         applyS (info, applyS (info, f, VInt i), VTensorFloat s); ())
       t;
-    unitVal ()
+    unitVal
   | VTensorExpr t ->
     tensorIterSlice
       (lam i. lam s.
         applyS (info, applyS (info, f, VInt i), VTensorExpr s); ())
       t;
-    unitVal ()
+    unitVal
 
   sem tensorValToString : Info -> Val -> Val -> Val
   sem tensorValToString info el2str =
@@ -991,7 +990,7 @@ lang TensorOpEvalS =
      case (VTensorExpr t, v) then tensorSetExn t is v
      case _ then error "tensorValSetExn: type error"
      end);
-    unitVal ()
+    unitVal
 
   sem tensorValLinearSetExn : Int -> Val -> Val -> Val
   sem tensorValLinearSetExn i t =
@@ -1002,7 +1001,7 @@ lang TensorOpEvalS =
      case (VTensorExpr t, v) then tensorLinearSetExn t i v
      case _ then error "tensorValLinearSetExn: type error"
      end);
-    unitVal ()
+    unitVal
 
   sem tensorValEq : Info -> Val -> Val -> Val -> Val
   sem tensorValEq info eq t1 =
