@@ -21,6 +21,10 @@ include "result.mc"
 include "stdlib::parser/parser.mc"
 include "stdlib::mexpr/boot-parser.mc"
 include "stdlib::mlang/boot-parser.mc"
+include "stdlib::mexpr/cmp.mc"
+include "stdlib::mlang/cmp.mc"
+
+lang ParserCompare = MLangParser + MLangCmp end
 
 -- The lexer's `col` is not a raw character index into the line: it
 -- advances differently depending on what is being consumed.
@@ -111,7 +115,7 @@ type CheckAcc = {issues : [String], checked : Int, skipped : Int}
 
 mexpr
 
-use TestParser in
+use ParserCompare in
 use BootParserMLang in
 
 let lex = lam s. nextToken {pos = initPos "reparse", str = s} in

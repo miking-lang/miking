@@ -13,12 +13,10 @@ include "common.mc"
 include "lexer.mc"
 include "mexpr/info.mc"
 include "mexpr/ast.mc"
-include "mexpr/cmp.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/json-debug.mc"
 include "mexpr/pprint.mc"
 include "mlang/ast.mc"
-include "mlang/cmp.mc"
 include "mlang/pprint.mc"
 include "json.mc"
 include "fileutils.mc"
@@ -3058,17 +3056,16 @@ lang MLangParser =
   + ProgramParser
 end
 
-lang TestParser =
+lang MLangTestParser =
     MLangParser
   + MExprPrettyPrint
   + MLangPrettyPrint
-  + MLangCmp
   + MExprToJson
 end
 
 mexpr
 
-use TestParser in
+use MLangTestParser in
 
 let lex = lam str. nextToken {pos = initPos "t", str = str} in
 
