@@ -633,10 +633,12 @@ lang RecordProjectionSyntaxSugarPrettyPrint = MExprIdentifierPrettyPrint +
   MatchPrettyPrint + RecordPat + NeverAst + NamedPat + VarAst
 
   sem isTupleLabel : SID -> Bool
-  sem isTupleLabel =| label -> forAll isDigit (sidToString label)
+  sem isTupleLabel =
+  | label -> forAll isDigit (sidToString label)
 
   sem matchIsProj : Map SID Pat -> Name -> Option SID
-  sem matchIsProj bindings =| exprName ->
+  sem matchIsProj bindings =
+  | exprName ->
     let binds = mapBindings bindings in
     match binds with [(fieldLabel, PatNamed {ident = PName patName})]
     then

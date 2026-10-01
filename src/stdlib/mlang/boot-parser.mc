@@ -30,7 +30,8 @@ include "string.mc"
 
 lang BootParserMLang = BootParser + MLangAst -- + CosemDeclAst
   sem parseMLangFile : all a. String -> Result a (Info, String) MLangProgram
-  sem parseMLangFile =| filepath ->
+  sem parseMLangFile =
+  | filepath ->
     let p = bootParserParseMLangFile filepath in
     if eqi (bootParserGetId p) 600 /- Error -/ then
       let n = glistlen p 0 in
@@ -41,7 +42,8 @@ lang BootParserMLang = BootParser + MLangAst -- + CosemDeclAst
       result.ok (matchProgram p (bootParserGetId p))
 
   sem parseMLangString : all a. String -> Result a (Info, String) MLangProgram
-  sem parseMLangString =| str ->
+  sem parseMLangString =
+  | str ->
     let p = bootParserParseMLangString str in
     if eqi (bootParserGetId p) 600 /- Error -/ then
       let n = glistlen p 0 in
@@ -515,7 +517,8 @@ let p = parseProgram str in
 let str = strJoin "\n" [
   "lang L",
   "  sem f : all a. a -> Int",
-  "  sem f a b =| x -> x",
+  "  sem f a b =",
+  "  | x -> x",
   "end",
   "mexpr",
   "()"

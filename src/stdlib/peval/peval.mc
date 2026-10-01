@@ -69,7 +69,8 @@ lang PEvalCtx = Eval + SideEffect
   }
 
   sem pevalCtxEmpty : () -> PEvalCtx
-  sem pevalCtxEmpty =| _ -> {
+  sem pevalCtxEmpty =
+  | _ -> {
     env = evalEnvEmpty (),
     freeVar = setEmpty nameCmp,
     effectEnv = sideEffectEnvEmpty (),
@@ -80,10 +81,12 @@ end
 
 lang PEval = PEvalCtx + Eval + PrettyPrint
   sem peval : Expr -> Expr
-  sem peval =| t -> pevalExpr (pevalCtxEmpty ()) t
+  sem peval =
+  | t -> pevalExpr (pevalCtxEmpty ()) t
 
   sem pevalExpr : PEvalCtx -> Expr -> Expr
-  sem pevalExpr ctx =| t -> pevalReadback (pevalBindTop ctx (lam x. x) t)
+  sem pevalExpr ctx =
+  | t -> pevalReadback (pevalBindTop ctx (lam x. x) t)
 
   sem pevalWithEnv : EvalEnv -> Expr -> Expr
   sem pevalWithEnv env =
@@ -99,11 +102,13 @@ lang PEval = PEvalCtx + Eval + PrettyPrint
   -- Entry point for top-level expressions, the default case is that this
   -- function calls `pevalBind`
   sem pevalBindTop : PEvalCtx -> (Expr -> Expr) -> Expr -> Expr
-  sem pevalBindTop ctx k =| t -> pevalBind ctx k t
+  sem pevalBindTop ctx k =
+  | t -> pevalBind ctx k t
 
   -- Entry point for partial evaluation of non top-level expressions
   sem pevalBind : PEvalCtx -> (Expr -> Expr) -> Expr -> Expr
-  sem pevalBind ctx k =| t ->
+  sem pevalBind ctx k =
+  | t ->
     pevalEval ctx
       (lam t.
         if pevalBindThis t then
@@ -119,13 +124,16 @@ lang PEval = PEvalCtx + Eval + PrettyPrint
   | t -> errorSingle [infoTm t] (join ["peval: undefined for:\n", expr2str t])
 
   sem pevalReadback : Expr -> Expr
-  sem pevalReadback =| t -> pevalReadbackExpr (pevalCtxEmpty ()) t
+  sem pevalReadback =
+  | t -> pevalReadbackExpr (pevalCtxEmpty ()) t
 
   sem pevalReadbackExpr : PEvalCtx -> Expr -> Expr
-  sem pevalReadbackExpr ctx =| t -> (pevalReadbackH ctx t).1
+  sem pevalReadbackExpr ctx =
+  | t -> (pevalReadbackH ctx t).1
 
   sem pevalReadbackH : PEvalCtx -> Expr -> (PEvalCtx, Expr)
-  sem pevalReadbackH ctx =| t -> smapAccumL_Expr_Expr pevalReadbackH ctx t
+  sem pevalReadbackH ctx =
+  | t -> smapAccumL_Expr_Expr pevalReadbackH ctx t
 end
 
 lang PEvalApply = Ast + PEvalCtx
@@ -696,7 +704,8 @@ lang PEvalLetInline = LetDeclAst + SideEffect + VarAst
   -- Inlines let-bindings that are only referred to once in the expression, and
   -- removes unused let-bindings. Assumes unique let-binding identifiers.
   sem pevalInlineLets : SideEffectEnv -> Expr -> Expr
-  sem pevalInlineLets effectEnv =| t ->
+  sem pevalInlineLets effectEnv =
+  | t ->
     recursive let subs
       : Map Name PEvalLetInlineOrRemove -> Map Name Expr -> Expr -> Expr
       = lam marked. lam env. lam t.

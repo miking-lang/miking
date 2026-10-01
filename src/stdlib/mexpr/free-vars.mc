@@ -15,7 +15,8 @@ lang FreeVars = Ast
   -- that the expression is symbolized (and no Names are defined more
   -- than once).
   sem freeVars : Expr -> Set Name
-  sem freeVars =| t -> freeVarsExpr (setEmpty nameCmp) t
+  sem freeVars =
+  | t -> freeVarsExpr (setEmpty nameCmp) t
 
   sem freeVarsExpr : Set Name -> Expr -> Set Name
   sem freeVarsExpr acc =

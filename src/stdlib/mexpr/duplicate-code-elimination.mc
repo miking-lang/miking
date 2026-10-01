@@ -197,12 +197,12 @@ lang MExprEliminateDuplicateCode = MExprAst
     (replaced, withTypePat patTy p)
 
   sem eliminateDuplicateExternalsWithSummary : Expr -> (Map Name Name, Expr)
-  sem eliminateDuplicateExternalsWithSummary =| tm ->
-    eliminateDuplicateExternalsExpr (mapEmpty cmpString) (mapEmpty nameCmp) tm
+  sem eliminateDuplicateExternalsWithSummary =
+  | tm -> eliminateDuplicateExternalsExpr (mapEmpty cmpString) (mapEmpty nameCmp) tm
 
   sem eliminateDuplicateExternals : Expr -> Expr
-  sem eliminateDuplicateExternals =| tm ->
-    (eliminateDuplicateExternalsWithSummary tm).1
+  sem eliminateDuplicateExternals =
+  | tm -> (eliminateDuplicateExternalsWithSummary tm).1
 
   sem eliminateDuplicateExternalsExpr
     : Map String Name -> Map Name Name -> Expr -> (Map Name Name, Expr)

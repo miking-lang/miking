@@ -452,27 +452,6 @@ lang OperatorTokenParser = TokenParser
 
   sem tokToRepr +=
   | OperatorTok _ -> OperatorRepr ()
-
-  -- Operator characters are lexed by greedily merging a maximal run into a
-  -- single token (e.g. `<&>` lexes as one token, per the utests above),
-  -- which is broader than boot's fixed operator set and can over-merge at
-  -- a grammar position that expects two separate operators back-to-back
-  -- (e.g. `sem f =| pat -> e`, where `=` and `|` are adjacent with no
-  -- space). This splits a known operator prefix off of a token and
-  -- re-lexes the remainder, so callers can recover the intended
-  -- tokenization at the specific grammar positions that need it.
-  sem splitOperatorPrefix: NextTokenResult -> String -> Option NextTokenResult
-  sem splitOperatorPrefix cur =
-  | prefix ->
-    match cur.token with OperatorTok { val = v } then
-      if and (gti (length v) (length prefix)) (isPrefix eqChar prefix v) then
-        match splitAt v (length prefix) with (_, remainder) in
-        match cur.info with Info r then
-          let afterPrefixPos = posVal r.filename r.row1 (addi r.col1 (length prefix)) in
-          Some (nextToken { pos = afterPrefixPos, str = concat remainder cur.stream.str })
-        else None ()
-      else None ()
-    else None ()
 end
 
 lang BracketTokenParser = TokenParser

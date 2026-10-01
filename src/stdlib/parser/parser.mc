@@ -403,23 +403,6 @@ lang AstParserBase = Lexer + Ast + DeclAst
 
   sem getInfoPat +=
   | OpPatAtom pat -> infoPat pat
-
-  -- Matches a `=` or `+=` assignment operator, whether it is its own
-  -- token or the prefix of a merged operator token. Returns whether it
-  -- was `+=` and the token stream right after it.
-  sem matchAssignOp: NextTokenResult -> Option (Bool, NextTokenResult)
-  sem matchAssignOp =
-  | cur ->
-    match cur.token with OperatorTok { val = v } then
-      if eqString v "+=" then Some (true, nextToken cur.stream)
-      else if eqString v "=" then Some (false, nextToken cur.stream)
-      else if isPrefix eqChar "+=" v then
-        optionMap (lam c. (true, c)) (splitOperatorPrefix cur "+=")
-      else if isPrefix eqChar "=" v then
-        optionMap (lam c. (false, c)) (splitOperatorPrefix cur "=")
-      else None ()
-    else None ()
-
 end
 
 lang WithKeyword = Lexer
@@ -2728,8 +2711,9 @@ lang SynDeclParser = AstParserBase + SynDeclAst + SynKeyword + RecordTypeAst
       in
       match parseParams [] cur with (params, cur) in
 
-      let opInfoFallback = cur.info in
-      match matchAssignOp cur with Some (isSum, cur) then
+      match cur with { token = OperatorTok { val = ("=" | "+=") & op } } & tokop then
+        let isSum = eqString op "+=" in
+        let cur = nextToken tokop.stream in
         recursive let parseConstrs = lam acc. lam cur.
           match cur with { token = OperatorTok { val = "|" } } & tokbar then
             let cur = nextToken tokbar.stream in
@@ -2755,7 +2739,7 @@ lang SynDeclParser = AstParserBase + SynDeclAst + SynKeyword + RecordTypeAst
         result.bind (parseConstrs [] cur) (lam res.
           match res with (constrs, cur) in
           let kind = if isSum then SynSum { base = nameNoSym ident } else SynBase () in
-          let endInfo = match constrs with _ ++ [lastConstr] then lastConstr.info else opInfoFallback in
+          let endInfo = match constrs with _ ++ [lastConstr] then lastConstr.info else tokop.info in
           let decl = DeclSyn {
             ident = nameNoSym ident,
             params = params,
@@ -2831,8 +2815,9 @@ lang SemDeclParser = AstParserBase + SemDeclAst + SemKeyword
 
         result.bind (parseParams [] cur) (lam res.
           match res with (params, cur) in
-          let opInfoFallback = cur.info in
-          match matchAssignOp cur with Some (isSum, cur) then
+          match cur with { token = OperatorTok { val = ("=" | "+=") & op } } & tokop then
+            let isSum = eqString op "+=" in
+            let cur = nextToken tokop.stream in
             recursive let parseCases = lam acc. lam cur.
               match cur with { token = OperatorTok { val = "|" } } & tokbar then
                 let cur = nextToken tokbar.stream in
@@ -2855,7 +2840,7 @@ lang SemDeclParser = AstParserBase + SemDeclAst + SemKeyword
             result.bind (parseCases [] cur) (lam res.
               match res with (cases, cur) in
               let kind = if isSum then SemSum { base = nameNoSym ident } else SemBase () in
-              let endInfo = match cases with _ ++ [lastCase] then lastCase.info else opInfoFallback in
+              let endInfo = match cases with _ ++ [lastCase] then lastCase.info else tokop.info in
               let info = mergeInfo toksem.info endInfo in
               let typ = ityunknown_ info in
               let decl = DeclSem {

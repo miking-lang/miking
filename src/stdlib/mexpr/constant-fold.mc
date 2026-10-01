@@ -29,37 +29,41 @@ let constantFoldCountMax = 100
 lang ConstantFold = Eval + Ast
   -- Entry point for constant folding and constant propagation over a program
   sem constantFold : Expr -> Expr
-  sem constantFold =| t ->
-    readback (constantFoldExpr (evalCtxEmpty ()) t)
+  sem constantFold =
+  | t -> readback (constantFoldExpr (evalCtxEmpty ()) t)
 
   -- Language framents should extend this semantic function. Note that the
   -- evaluation environment should, at all time, only contain values that are
   -- constants. See `isConstant` for the definition of a constant.
   sem constantFoldExpr : EvalCtx -> Expr -> Expr
-  sem constantFoldExpr ctx =| t -> smap_Expr_Expr (constantFoldExpr ctx) t
+  sem constantFoldExpr ctx =
+  | t -> smap_Expr_Expr (constantFoldExpr ctx) t
 
   -- This semantic function restricts what is considered constants.
   sem isConstant : Expr -> Bool
-  sem isConstant =| _ -> false
+  sem isConstant =
+  | _ -> false
 
   -- This semantic function restricts what we propagate.
   sem doPropagate : Expr -> Bool
-  sem doPropagate =| t ->
-    and (isConstant t) (lti (countNodes t) constantFoldCountMax)
+  sem doPropagate =
+  | t -> and (isConstant t) (lti (countNodes t) constantFoldCountMax)
 
   -- Constant folding may produce additional evaluation terms such as partial
   -- applications of constants. This semantic function reads those back to
   -- standard terms.
   sem readback : Expr -> Expr
-  sem readback =| t -> smap_Expr_Expr readback t
+  sem readback =
+  | t -> smap_Expr_Expr readback t
 
   -- Counts the number of expression nodes.
   sem countNodes : Expr -> Int
-  sem countNodes =| t -> countNodesH 0 t
+  sem countNodes =
+  | t -> countNodesH 0 t
 
   sem countNodesH : Int -> Expr -> Int
-  sem countNodesH n =| t ->
-    let n = addi n 1 in sfold_Expr_Expr countNodesH n t
+  sem countNodesH n =
+  | t -> let n = addi n 1 in sfold_Expr_Expr countNodesH n t
 end
 
 lang OpaqueConstantFold = ConstantFold + OpaqueAst + FreeVars
