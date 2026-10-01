@@ -1,6 +1,7 @@
 -- Miking is licensed under the MIT license.
 -- Copyright (C) David Broman. See file LICENSE.txt
 
+include "basic-types.mc"
 include "bool.mc"
 include "common.mc"
 include "list.mc"
@@ -115,7 +116,8 @@ let eval = lam files. lam options : Options. lam args.
     (if options.debugConstantFold then printLn (expr2str ast) else ());
     endPhaseStatsExpr log "debug-constant-folding" ast;
 
-    let cs = optionMap ref (optionBind options.debugStackTrace callstackInit) in
+    let cs = if options.debugStackTrace then Some (ref (callstackInit ()))
+             else None () in
     let eval = evalSStageExpr cs ast in
     endPhaseStatsExpr log "stage-eval" ast;
 

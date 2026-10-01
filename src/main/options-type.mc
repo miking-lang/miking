@@ -11,7 +11,7 @@ type Options = {
   debugTypeAnnot : Bool,
   debugTypeCheck : Bool,
   debugProfile : Bool,
-  debugStackTrace : Option Int,
+  debugStackTrace : Bool,
   debugShallow : Bool,
   debugConstantFold : Bool,
   debugDprint : Bool,

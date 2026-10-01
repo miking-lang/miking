@@ -29,11 +29,11 @@ let optionsConfig : ParseConfig Options = [
     "Instrument profiling expressions to AST",
     lam p: ArgPart Options.
       let o: Options = p.options in {o with debugProfile = true}),
-  ([("--debug-stack-trace", " ", "<n>")],
-    "Enable a bounded call-stack trace of capacity <n>",
+  ([("--debug-stack-trace", "", "")],
+    "Enable a call-stack trace>",
     lam p: ArgPart Options.
       let o: Options = p.options in
-      {o with debugStackTrace = Some (argToIntMin p 1)}),
+      {o with debugStackTrace = true}),
   ([("--debug-shallow", "", "")],
     "Print the AST after lowering nested patterns to shallow ones",
     lam p: ArgPart Options.

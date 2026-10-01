@@ -24,59 +24,28 @@ include "mexpr/symbolize.mc"
 -- CALLSTACK --
 ---------------
 
--- Implements a callstack backed by a ringbuffer with O(1) pop and push.
-type Callstack = { _ringbuffer : Tensor[Info]
-                 , _idx : Int
-                 , _len : Int
-                 , _cap : Int
-                 }
+-- Implements a callstack backed by a cons list.
+type Callstack = List Info
 
-let callstackInit : Int -> Option Callstack
-= lam n.
-    if gti n 0 then
-      Some { _ringbuffer = tensorCreateDense [n] (lam. NoInfo ())
-           , _idx = 0
-           , _len = 0
-           , _cap = n
-           }
-    else None ()
+let callstackInit : () -> Callstack
+= lam. Nil ()
 
 let callstackPush : Info -> Callstack -> Callstack
-= lam info. lam cs.
-    tensorLinearSetExn cs._ringbuffer cs._idx info;
-    { cs with _idx = modi (addi cs._idx 1) cs._cap
-    , _len = addi cs._len 1
-    }
+= lam info. lam cs. Cons (info, cs)
 
 let callstackPop : Callstack -> Option (Callstack, Info)
 = lam cs.
-    if gti cs._len 0 then
-      let i = if eqi cs._idx 0 then subi cs._cap 1 else subi cs._idx 1 in
-      let info = tensorLinearGetExn cs._ringbuffer i in
-      Some ( { cs with _idx = i
-             , _len = subi cs._len 1
-             }
-           , info )
-    else None ()
+    switch cs
+    case Cons (info, cs) then Some (cs, info)
+    case Nil _ then None ()
+    end
 
 let callstackToSeq : Callstack -> [Info]
-= lam cs.
-    recursive let recur = lam acc. lam cs.
-      match callstackPop cs with Some (cs, info) then recur (snoc acc info) cs
-      else acc
-    in recur [] cs
+= lam cs. listToSeq cs
 
 let callstackPrintTrace : Callstack -> ()
 = lam cs.
-    recursive let recur = lam remaining. lam cs.
-      if leqi remaining 0 then ()
-      else
-        match callstackPop cs with Some (cs, info) then
-          printLn (concat "TRACE: " (info2str info));
-          recur (subi remaining 1) cs
-        else ()
-    in
-    recur (mini cs._cap cs._len) cs
+    listFoldl (lam. lam info. printLn (concat "TRACE: " (info2str info))) () cs
 
 -------------------
 -- BASE FRAGMENT --
@@ -1810,22 +1779,6 @@ with Some (utuple_ [int_ 106, int_ 3]) using eq else toString in
 
 let mkInfo = lam i. infoVal "" i 0 0 0 in
 
-utest callstackInit -1 with None () in
-utest
-  match callstackInit 4 with Some cs then
-    let cs = foldl (flip callstackPush) cs (create 42 mkInfo) in
-    utest
-      match
-        optionMapAccumLM
-          (lam cs. lam. callstackPop cs) cs (create 4 (lam. 0))
-      with Some (_, infos) then
-        utest infos with create 4 (lam i. mkInfo (subi 41 i)) in
-        true
-      else false
-    with true in
-    true
-else false with true in
-
 ------------------------------------------------
 -- UNIT TESTS FOR CALLSTACK-AWARE EVALUATION  --
 ------------------------------------------------
@@ -1836,13 +1789,11 @@ else false with true in
 let xN = nameSym "x" in
 let infoApp = mkInfo 1000 in
 let term = tmApp infoApp tyunknown_ (nulam_ xN (nvar_ xN)) (int_ 42) in
-(match callstackInit 8 with Some cs0 then
-  let csr = ref cs0 in
-  let v = evalSStageExpr (Some csr) (symbolize term) env in
-  utest evalSReadback v with Some (int_ 42) using eq else toString in
-  utest callstackPop (deref csr) with None () in
-  ()
-else ());
+let cs0 = callstackInit () in
+let csr = ref cs0 in
+let v = evalSStageExpr (Some csr) (symbolize term) env in
+utest evalSReadback v with Some (int_ 42) using eq else toString in
+utest callstackPop (deref csr) with None () in
 
 -- Nested closures, two separate call sites with distinct infos.
 let xN = nameSym "x" in
@@ -1852,13 +1803,11 @@ let info2 = mkInfo 1002 in
 let lam2 = nulam_ xN (nulam_ yN (addi_ (nvar_ xN) (nvar_ yN))) in
 let term = tmApp info2 tyunknown_
              (tmApp info1 tyunknown_ lam2 (int_ 1)) (int_ 2) in
-(match callstackInit 8 with Some cs0 then
-  let csr = ref cs0 in
-  let v = evalSStageExpr (Some csr) (symbolize term) env in
-  utest evalSReadback v with Some (int_ 3) using eq else toString in
-  utest callstackPop (deref csr) with None () in
-  ()
-else ());
+let cs0 = callstackInit () in
+let csr = ref cs0 in
+let v = evalSStageExpr (Some csr) (symbolize term) env in
+utest evalSReadback v with Some (int_ 3) using eq else toString in
+utest callstackPop (deref csr) with None () in
 
 -- Recursive let: exercises RecLetsEvalS's `Some cs` branch specifically.
 let countN = nameSym "count" in
@@ -1871,13 +1820,11 @@ let recBody =
 in
 let decl = nreclets_ [(countN, tyunknown_, nulam_ nArgN recBody)] in
 let term = bind_ decl (tmApp infoCall tyunknown_ (nvar_ countN) (int_ 5)) in
-(match callstackInit 8 with Some cs0 then
-  let csr = ref cs0 in
-  let v = evalSStageExpr (Some csr) (symbolize term) env in
-  utest evalSReadback v with Some (int_ 0) using eq else toString in
-  utest callstackPop (deref csr) with None () in
-  ()
-else ());
+let cs0 = callstackInit () in
+let csr = ref cs0 in
+let v = evalSStageExpr (Some csr) (symbolize term) env in
+utest evalSReadback v with Some (int_ 0) using eq else toString in
+utest callstackPop (deref csr) with None () in
 
 -- Direct nesting test: evalSStageExpr-driven tests above can only observe
 -- callstack state before/after a *complete* top-level evaluation, since
@@ -1885,9 +1832,7 @@ else ());
 -- mid-call. Build closures directly via clsUsingCallstack instead, so the
 -- innermost one's body can inspect the callstack while the outer call is still
 -- in flight.
-let csr =
-  ref (optionGetOrElse (lam. error "callstack init failed") (callstackInit 8))
-in
+let csr = ref (callstackInit ()) in
 let observed = ref [] in
 let dInfoA = mkInfo 2001 in
 let dInfoB = mkInfo 2002 in

@@ -290,7 +290,7 @@ testMain substituters directories location (lam api.
   let stackTraceEval = api.midStep
     { uses = [origin]
     , tag = "stack-trace-eval"
-    , cmd = "%m eval --debug-stack-trace 1000 %i > %o 2>&1 || :"
+    , cmd = "%m eval --debug-stack-trace %i > %o 2>&1 || :"
     } in
   let stackTraceFilter = lam tag. lam origin. api.midStep
     { uses = [origin]
