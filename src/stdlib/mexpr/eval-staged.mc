@@ -219,7 +219,7 @@ lang LamEvalS = AppEvalS + LamAst
     else errorSingle [r.info] "Unsymbolized TmLam in evalSStageExpr!"
 
   sem clsUsingCallstack : (Ref Callstack) -> (Val -> Val) -> Val
-  sem clsUsingCallstack csr =| cls ->
+  sem clsUsingCallstack csr = | cls ->
     let cls = lam info. lam val.
       modref csr (callstackPush info (deref csr));
       let val = cls val in
