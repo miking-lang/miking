@@ -11,7 +11,7 @@ double mi_normal_lpdf(double x, double mu, double sigma) {
    return stan::math::normal_lpdf(x, mu, sigma);
 }
 
-extern "C" CAMLprim double mi_normal_lpdf_unwrapped( double x, double mu, double sigma) {
+extern "C" CAMLprim double mi_normal_lpdf_unwrapped(double x, double mu, double sigma) {
   return mi_normal_lpdf(x, mu, sigma);
 }
 
@@ -21,7 +21,7 @@ extern "C" CAMLprim value mi_normal_lpdf_wrapped(value x, value mu, value sigma)
 }
 
 double mi_normal_rng(double mu, double sigma, mi_rng &rng) {
-    return stan::math::normal_rng(mu, sigma, rng);
+  return stan::math::normal_rng(mu, sigma, rng);
 }
 
 extern "C" CAMLprim double mi_normal_rng_unwrapped(double mu, double sigma, value mt) {

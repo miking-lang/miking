@@ -62,7 +62,7 @@ let betaLogPdf = lam a:Float. lam b:Float. lam x:Float.
 let betaSample = lam a:Float. lam b:Float.
   externalBetaSample a b
 
--- Nornal
+-- Normal
 external externalNormalLogPdf : Float -> Float -> Float -> Float
 external externalNormalSample ! : Float -> Float -> Float
 let normalPdf = lam mu:Float. lam sigma:Float. lam x:Float.

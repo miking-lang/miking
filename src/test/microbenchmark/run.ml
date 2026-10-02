@@ -64,7 +64,7 @@ let generate_dune name =
     \          (ocamlc_flags (-without-runtime))))\n\n\
     \      (executable\n\
     \         (name %s)\n\
-    \         (libraries str owl)\n\
+    \         (libraries str owl mi_stats)\n\
     \         (modes byte exe))" name ;
   close_out oc
 
