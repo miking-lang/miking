@@ -177,9 +177,9 @@ lang RecordConstantFold = ConstantFold + RecordAst
   | TmRecord r -> mapAll isConstant r.bindings
 end
 
-lang ConstConstantFold = ConstantFold + ConstAst
+lang ConstConstantFold = ConstantFold + ConstAst + SysAst
   sem isConstant +=
-  | TmConst _ -> true
+  | TmConst {val = ! CArgv _} -> true
 end
 
 lang DataConstantFold = ConstantFold + DataAst
@@ -276,30 +276,36 @@ lang SeqOpConstantFoldFirstOrder =
   AppConstantFold + SeqOpAst + IntAst + BoolAst + SeqOpArity
 
   sem constantFoldConstAppConsts +=
-  | TmApp {lhs = TmConst {val = CHead _}, rhs = TmSeq r} -> head r.tms
-  | TmApp {lhs = TmConst {val = CTail _}, rhs = TmSeq r} ->
+  | TmApp {lhs = TmConst {val = CHead _}, rhs = TmSeq (r & {tms = ! []})} ->
+    head r.tms
+  | TmApp {lhs = TmConst {val = CTail _}, rhs = TmSeq (r & {tms = ! []})} ->
     TmSeq { r with tms = tail r.tms }
-  | TmApp {
+  | tm & TmApp {
     lhs = TmApp {lhs = TmConst {val = CGet _}, rhs = TmSeq r},
     rhs = TmConst {val = CInt {val = i}}
   } ->
-    get r.tms i
-  | TmApp {
+    if and (geqi i 0) (lti i (length r.tms)) then get r.tms i
+    else tm
+  | tm & TmApp {
     lhs = TmApp {
       lhs = TmApp {lhs = TmConst {val = CSet _}, rhs = TmSeq r},
       rhs = TmConst {val = CInt {val = i}}},
     rhs = val
   } ->
-    TmSeq { r with tms = set r.tms i val }
+    if and (geqi i 0) (lti i (length r.tms)) then
+      TmSeq { r with tms = set r.tms i val }
+    else tm
   | TmApp {lhs = TmConst {val = CReverse _}, rhs = TmSeq r} ->
     TmSeq { r with tms = reverse r.tms }
-  | TmApp {
+  | tm & TmApp {
     lhs = TmApp {
       lhs = TmApp {lhs = TmConst {val = CSubsequence _}, rhs = TmSeq r},
       rhs = TmConst {val = CInt {val = ofs}}},
     rhs = TmConst {val = CInt {val = len}}
   } ->
-    TmSeq { r with tms = subsequence r.tms ofs len }
+    if and (and (geqi ofs 0) (leqi ofs (length r.tms))) (geqi len 0) then
+      TmSeq { r with tms = subsequence r.tms ofs len }
+    else tm
 
   sem constantFoldConstApp +=
   | TmApp {
@@ -323,13 +329,15 @@ lang SeqOpConstantFoldFirstOrder =
       ty = appr.ty,
       info = appr.info
     }
-  | TmApp (appr & {
+  | tm & TmApp (appr & {
     lhs = TmApp {lhs = TmConst {val = CSplitAt _}, rhs = TmSeq seqr},
     rhs = TmConst {val = CInt {val = i}}
   }) ->
-    let t = splitAt seqr.tms i in
-    tmTuple appr.info appr.ty
-      [TmSeq { seqr with tms = t.0 }, TmSeq { seqr with tms = t.1 }]
+    if geqi i 0 then
+      let t = splitAt seqr.tms i in
+      tmTuple appr.info appr.ty
+        [TmSeq { seqr with tms = t.0 }, TmSeq { seqr with tms = t.1 }]
+    else tm
 end
 
 lang MExprConstantFold = MExprAst +
@@ -478,6 +486,15 @@ utest actual with expected using eqExpr else _toString in
 
 let prog =
   _parse "
+    head []
+    "
+in
+let expected = prog in
+let actual = constantFold prog in
+utest actual with expected using eqExpr else _toString in
+
+let prog =
+  _parse "
     lam x.
       head [1, 2, 3]
     "
@@ -490,6 +507,15 @@ let prog =
   _parse "
     lam x.
       head [1, 2, x]
+    "
+in
+let expected = prog in
+let actual = constantFold prog in
+utest actual with expected using eqExpr else _toString in
+
+let prog =
+  _parse "
+    tail []
     "
 in
 let expected = prog in
@@ -518,6 +544,24 @@ utest actual with expected using eqExpr else _toString in
 
 let prog =
   _parse "
+    get [1, 2, 3] 3
+    "
+in
+let expected = prog in
+let actual = constantFold prog in
+utest actual with expected using eqExpr else _toString in
+
+let prog =
+  _parse "
+    get [1, 2, 3] -1
+    "
+in
+let expected = prog in
+let actual = constantFold prog in
+utest actual with expected using eqExpr else _toString in
+
+let prog =
+  _parse "
     lam x.
       get [1, 2, 3] 0
     "
@@ -530,6 +574,24 @@ let prog =
   _parse "
     lam x.
       get [1, 2, x] 0
+    "
+in
+let expected = prog in
+let actual = constantFold prog in
+utest actual with expected using eqExpr else _toString in
+
+let prog =
+  _parse "
+    set [1, 2, 3] -1 2
+    "
+in
+let expected = prog in
+let actual = constantFold prog in
+utest actual with expected using eqExpr else _toString in
+
+let prog =
+  _parse "
+    set [1, 2, 3] 3 2
     "
 in
 let expected = prog in
@@ -668,8 +730,44 @@ utest actual with expected using eqExpr else _toString in
 
 let prog =
   _parse "
+    subsequence [1, 2, 3] -1 0
+    "
+in
+let expected = prog in
+let actual = constantFold prog in
+utest actual with expected using eqExpr else _toString in
+
+let prog =
+  _parse "
+    subsequence [1, 2, 3] 4 0
+    "
+in
+let expected = prog in
+let actual = constantFold prog in
+utest actual with expected using eqExpr else _toString in
+
+let prog =
+  _parse "
+    subsequence [1, 2, 3] 0 -1
+    "
+in
+let expected = prog in
+let actual = constantFold prog in
+utest actual with expected using eqExpr else _toString in
+
+let prog =
+  _parse "
     lam x.
       subsequence [1, 2, x] 1 2
+    "
+in
+let expected = prog in
+let actual = constantFold prog in
+utest actual with expected using eqExpr else _toString in
+
+let prog =
+  _parse "
+    splitAt [1, 2, 3] -1
     "
 in
 let expected = prog in
@@ -693,6 +791,15 @@ let prog =
     "
 in
 let expected = _parse "lam x. ([1], [2, x])" in
+let actual = constantFold prog in
+utest actual with expected using eqExpr else _toString in
+
+let prog =
+  _parse "
+    match argv with [_] ++ _ then 1 else 2
+    "
+in
+let expected = prog in
 let actual = constantFold prog in
 utest actual with expected using eqExpr else _toString in
 
