@@ -24,6 +24,15 @@
 -- doesn't matter to the implementation, or when we use polymorphic
 -- recursion. Leaving it as is for the moment though
 
+-- TODO(vipa, 2026-10-05): There's a discrepancy between `pegGenPairs`
+-- for `Char` vs `Int`, `Float`, and `Symbol`, the former needs exact
+-- match, the latter three always match. It seems unlikely we'd write
+-- a function that does recursion on, e.g., incrementing characters,
+-- so this might be fine. There's a similar argument to be made for
+-- `Symbol`, but then again it's easy to call `gensym` in a loop. Then
+-- again again `gensym` has a side-effect, so we won't ever actually
+-- produce `VSymb`, so it might not matter.
+
 include "int.mc"
 include "seq.mc"
 include "info.mc"
@@ -45,6 +54,7 @@ include "mexpr/ast-builder.mc"
 include "mexpr/boot-parser.mc"
 include "mexpr/builtin.mc"
 include "mexpr/cmp.mc"
+include "mexpr/const-types.mc"
 include "mexpr/pprint.mc"
 include "mexpr/symbolize.mc"
 include "mexpr/type.mc"
@@ -120,12 +130,14 @@ lang PEvalGraph = Ast + NamedPat + VarAst + RecLetsDeclAst + MExprCmp + PrettyPr
     , requestedBlocks : Map PEGBlockKey BlockRequest
     , instructions : [PEGInstr]
     , nextVRef : VRef
+    , callStack : [PEGBlockKey]
     }
 
   syn BlockRequest = | BlockRequest
     { name : Name
     , residualParamTypes : [Type]
     , compute : PEGState -> (PEGState, PEGVal)
+    , callStack : [PEGBlockKey]
     }
 
   sem requestBlock : PEGState -> PEGBlockKey -> [Type] -> (PEGState -> Map Name Type -> [PEGVal] -> (PEGState, PEGVal)) -> (PEGState, Name)
@@ -138,6 +150,7 @@ lang PEvalGraph = Ast + NamedPat + VarAst + RecLetsDeclAst + MExprCmp + PrettyPr
         { name = name
         , residualParamTypes = residualParamTypes
         , compute = lam st. body st key.instantiation key.args
+        , callStack = snoc st.callStack key
         } in
       ({st with requestedBlocks = mapInsert key request st.requestedBlocks}, name)
 
@@ -149,6 +162,7 @@ lang PEvalGraph = Ast + NamedPat + VarAst + RecLetsDeclAst + MExprCmp + PrettyPr
         , requestedBlocks = st.requestedBlocks
         , instructions = []
         , nextVRef = length x.residualParamTypes
+        , callStack = x.callStack
         } in
       match x.compute localSt with (localSt, retValue) in
 
@@ -193,6 +207,25 @@ lang PEvalGraph = Ast + NamedPat + VarAst + RecLetsDeclAst + MExprCmp + PrettyPr
   sem mkTopEvalF : Expr -> EvalF
   sem mkTopEvalF = | tm ->
     mkEvalF (fixRecursiveInstantiate (mapEmpty nameCmp) tm)
+
+  -- The `Type` is the type of the result of the application
+  sem applyF : PEGEnv -> PEGState -> Type -> (PEGVal, [PEGVal]) -> (PEGState, PEGVal)
+
+  sem pegGenPairs : (PEGVal, PEGVal) -> Bool
+  sem pegGenPairs =
+  | (l, r) ->
+    if eqi (constructorTag l) (constructorTag r)
+    then error "Missing case in pegGenPairs"
+    else false
+  | (VRef _, VRef _) -> true
+
+  sem pegGenEmbeds : PEGVal -> PEGVal -> Bool
+  sem pegGenEmbeds needle = | haystack ->
+    if pegGenPairs (needle, haystack) then true else
+    sfold_PEGVal_PEGVal
+      (lam acc. lam c. if acc then true else pegGenEmbeds needle c)
+      false
+      haystack
 
   -- TODO(vipa, 2026-09-30): This is a work-around for the current
   -- handling of instantiation in the type-checker. Due to how
@@ -278,19 +311,13 @@ lang PEvalGraph = Ast + NamedPat + VarAst + RecLetsDeclAst + MExprCmp + PrettyPr
     let pat = withTypePat (pegSubstTy env (tyPat pat)) pat in
     smap_Pat_Pat (pegSubstPat env) pat
 
-  -- The `Type` is the type of the result of the application
-  sem applyF : PEGEnv -> PEGState -> Type -> (PEGVal, [PEGVal]) -> (PEGState, PEGVal)
-
   sem pegInst : Map Name Type -> PEGVal -> PEGVal
   sem pegInst tyValues = | v -> v
 
-  sem homogenizeValues : all st. (Type -> st -> (st, PEGVal)) -> st -> [PEGVal] -> (st, PEGVal, [[PEGVal]])
-  sem homogenizeValues newVRef st = | vs -> homogenizeValuesDefault newVRef st vs
-
-  sem homogenizeValuesDefault : all st. (Type -> st -> (st, PEGVal)) -> st -> [PEGVal] -> (st, PEGVal, [[PEGVal]])
-  sem homogenizeValuesDefault newVRef st = | vs & [v] ++ _ ->
-    match newVRef (pegValTy v) st with (st, v) in
-    (st, v, map (lam x. [x]) vs)
+  -- `replace` is given the values at each place where they differ
+  -- structurally, one per input, and produces what goes there instead
+  sem homogenizeValues : all st. (st -> [PEGVal] -> (st, PEGVal)) -> st -> [PEGVal] -> (st, PEGVal)
+  sem homogenizeValues replace st = | vs -> replace st vs
 
   sem pegValToString : PEGVal -> String
   sem pegValToString =
@@ -343,7 +370,124 @@ lang PEvalGraphDecl = PEvalGraph + DeclAst
       inexpr env st
 end
 
-lang PEvalGraphLam = PEvalGraph + LamAst
+lang PEvalGraphConst = PEvalGraph + ConstAst + Cmp + ConstPrettyPrint + TyConst
+  -- A function passed to a higher-order constant. It has a scope of
+  -- `VRef`s of its own: `params` are the arguments it is applied to
+  -- and `instr` is the single instruction its body compiled to, whose
+  -- result `ret` is built from. The scope continues the numbering of
+  -- the enclosing one, since `instr` may refer to anything emitted
+  -- before the call, but its `VRef`s die with the call, which is why
+  -- the call itself returns into the first of them.
+  type PEGFunArg = {params : [PEGVal], instr : PEGInstr, ret : PEGVal}
+
+  syn PEGInstr +=
+  | IConstCall
+    { const : Const
+    , args : [PEGVal]
+    }
+  | IConstFCall
+    { const : Const
+    , args : [Either PEGFunArg PEGVal]
+    }
+
+  syn PEGVal +=
+  | VConst {const : Const, f : [PEGVal] -> Option PEGVal}
+  | VConstF (PEGEnv -> PEGState -> Type -> [PEGVal] -> (PEGState, PEGVal))
+
+  sem mkDeltaF : Const -> PEGVal
+
+  sem deltaF : Const -> ([PEGVal] -> Option PEGVal) -> PEGVal
+  sem deltaF c = | f -> VConst {const = c, f = f}
+
+  sem mkEvalF += | TmConst x ->
+    let val = mkDeltaF x.val in
+    lam. lam st. (st, val)
+
+  sem applyF env st ty += | (VConst x, args) ->
+    match x.f args with Some v
+    then (st, v)
+    else pegEmit ty st (IConstCall {const = x.const, args = args})
+
+  sem applyF env st ty += | (VConstF f, args) -> f env st ty args
+
+  -- Evaluates `f` applied to one fresh `VRef` per entry in
+  -- `paramTys`, in a scope of its own, where `ty` is the type of the
+  -- result of that application. Inlining is off in there, since the
+  -- body is evaluated once but run many times.
+  sem pegFunArg : PEGEnv -> PEGState -> Type -> [Type] -> PEGVal -> (PEGState, PEGFunArg)
+  sem pegFunArg env st ty paramTys = | f ->
+    let localSt = {st with instructions = []} in
+    let localEnv = {env with inline = lam. false} in
+    match mapAccumL (lam st. lam ty. pegNewVRef ty st) localSt paramTys
+    with (localSt, params) in
+    match applyF localEnv localSt ty (f, params) with (localSt, ret) in
+    match localSt.instructions with [instr] then
+      ( { st with
+          computedBlocks = localSt.computedBlocks
+        , requestedBlocks = localSt.requestedBlocks
+        }
+      , {params = params, instr = instr, ret = ret}
+      )
+    else error "Unexpected function given to a higher-order constant"
+
+  sem pegValTy += | VConst _ -> tyunknown_
+  sem pegValTy += | VConstF _ -> tyunknown_
+
+  -- A delta function for a constant that never computes here
+  sem residualDeltaF : Const -> PEGVal
+  sem residualDeltaF = | c -> deltaF c (lam. None ())
+
+  sem pegValToString += | VConst _ -> "<constant function>"
+  sem pegValToString += | VConstF _ -> "<constant function (higher order)>"
+
+  sem pegGenPairs += | (VConst a, VConst b) -> eqi (cmpConst a.const b.const) 0
+  sem pegGenPairs += | (VConstF _, VConstF _) -> true
+
+  sem pegInstrToString firstVRef += | IConstCall x ->
+    ( 1
+    , join
+      [ getConstStringCode 0 x.const
+      , " "
+      , strJoin " " (map pegValToString x.args)
+      ]
+    )
+
+  -- The function arguments are printed after the value ones, rather
+  -- than in their original position, since each spans several lines
+  sem pegInstrToString firstVRef += | IConstFCall x ->
+    let fToString = lam fArg : PEGFunArg.
+      join
+        [ "\n      \\", strJoin " " (map pegValToString fArg.params), " ->\n"
+        , pegInstrsToString "        "
+          (addi firstVRef (length fArg.params)) [fArg.instr]
+        , "        out ", pegValToString fArg.ret
+        ] in
+    ( 1
+    , join
+      [ getConstStringCode 0 x.const
+      , join
+        (map (eitherEither (lam. "") (lam v. cons ' ' (pegValToString v)))
+          x.args)
+      , join (map (eitherEither fToString (lam. "")) x.args)
+      ]
+    )
+
+  -- The identity function, except that it always residualizes, which
+  -- lets a test produce a residual value of any type.
+  syn Const += | CResidualIdentity {}
+
+  sem tyConstBase d += | CResidualIdentity _ ->
+    tyall_ "a" (tyarrow_ (tyvar_ "a") (tyvar_ "a"))
+
+  sem mkDeltaF += | c & CResidualIdentity _ -> deltaF c (lam args.
+    match args with [v]
+    then None ()
+    else error "Wrong number of arguments to CResidualIdentity in mkDeltaF!")
+
+  sem getConstStringCode indent += | CResidualIdentity _ -> "residualIdentity"
+end
+
+lang PEvalGraphLam = PEvalGraph + LamAst + PEvalGraphConst
   syn PEGVal +=
   | VLam {sym : SymInt, isRecursiveCall : Bool, arity : Int, applied : [PEGVal], instantiated : Map Name Type, body : PEGState -> Map Name Type -> [PEGVal] -> (PEGState, PEGVal)}
 
@@ -381,8 +525,27 @@ lang PEvalGraphLam = PEvalGraph + LamAst
   sem pegInst tyValues += | VLam x ->
     VLam {x with instantiated = mapUnion x.instantiated tyValues}
 
-  sem _prepBlockKey : SymInt -> Map Name Type -> [PEGVal] -> (PEGBlockKey, [(VRef, Type)])
-  sem _prepBlockKey function instantiation = | args ->
+  sem _prepBlockKey : PEGState -> SymInt -> Map Name Type -> [PEGVal] -> (PEGState, PEGBlockKey, [(VRef, Type)])
+  sem _prepBlockKey st function instantiation = | args ->
+    let embedsHere = lam key.
+      if neqi key.function function then false else
+      if neqi (mapCmp cmpType key.instantiation instantiation) 0 then false else
+      eqSeq pegGenEmbeds key.args args in
+    let residualize = lam st. lam vs.
+      match vs with [_, fill] in
+      match fill with VRef _ then (st, fill) else
+      let instr = IConstCall {const = CResidualIdentity (), args = [fill]} in
+      pegEmit (pegValTy fill) st instr in
+    let generalize = lam prev.
+      mapAccumL
+        (lam st. lam pair. homogenizeValues residualize st [pair.0, pair.1])
+        st
+        (zip prev.args args) in
+    match
+      match findLast embedsHere st.callStack with Some prev
+      then generalize prev
+      else (st, args)
+    with (st, args) in
     recursive let abstract = lam acc. lam val.
       match val with VRef x then
         match acc with (params, nextVRef) in
@@ -390,7 +553,7 @@ lang PEvalGraphLam = PEvalGraph + LamAst
       else smapAccumL_PEGVal_PEGVal abstract acc val
     in
     match mapAccumL abstract ([], 0) args with ((params, _), args) in
-    ({function = function, instantiation = instantiation, args = args}, params)
+    (st, {function = function, instantiation = instantiation, args = args}, params)
 
   sem _blockCall : PEGState -> PEGBlock -> [VRef] -> (PEGState, PEGVal)
   sem _blockCall st block = | args ->
@@ -420,7 +583,7 @@ lang PEvalGraphLam = PEvalGraph + LamAst
     else if env.inline app then
       x.body st x.instantiated applied
     else
-      match _prepBlockKey x.sym x.instantiated applied with (key, args) in
+      match _prepBlockKey st x.sym x.instantiated applied with (st, key, args) in
       match mapLookup key st.computedBlocks with Some block then
         _blockCall st block (map (lam x. x.0) args)
       else
@@ -465,9 +628,15 @@ lang PEvalGraphLam = PEvalGraph + LamAst
     if neqi res 0 then res else
     seqCmp cmpPEGVal a.applied b.applied
 
+  sem pegGenPairs += | (VLam a, VLam b) ->
+    if neqi a.sym b.sym then false else
+    if xor a.isRecursiveCall b.isRecursiveCall then false else
+    if neqi (mapCmp cmpType a.instantiated b.instantiated) 0 then false else
+    eqSeq pegGenEmbeds a.applied b.applied
+
   -- A function cannot be residual, thus every value must be the same
   -- function, but they may be applied to different arguments
-  sem homogenizeValues newVRef st += | allVs & [VLam x] ++ _ ->
+  sem homogenizeValues replace st += | allVs & [VLam x] ++ _ ->
     let unapplied = VLam {x with applied = []} in
     let check = lam v.
       match v with VLam x2 then
@@ -476,13 +645,9 @@ lang PEvalGraphLam = PEvalGraph + LamAst
         else None ()
       else None () in
     match optionMapM check allVs with Some appliedss then
-      let f = lam acc. lam column.
-        match acc with (st, fillers) in
-        match homogenizeValues newVRef st column with (st, v, vs) in
-        ((st, zipWith concat fillers vs), v) in
-      match mapAccumL f (st, make (length allVs) []) (transpose appliedss)
-      with ((st, fillers), applied) in
-      (st, VLam {x with applied = applied}, fillers)
+      match mapAccumL (homogenizeValues replace) st (transpose appliedss)
+      with (st, applied) in
+      (st, VLam {x with applied = applied})
     else error "Compiler error: different functions flow to the same place, which would require a residual function."
 
   sem pegValToString += | VLam x -> join
@@ -579,106 +744,6 @@ lang PEvalGraphApp = PEvalGraph + AppAst
       match f env st with (st, f) in
       match mapAccumL (lam st. lam arg. arg env st) st args with (st, args) in
       applyF env st (pegSubstTy env ty) (f, args)
-end
-
-lang PEvalGraphConst = PEvalGraph + ConstAst + Cmp + ConstPrettyPrint
-  -- A function passed to a higher-order constant. It has a scope of
-  -- `VRef`s of its own: `params` are the arguments it is applied to
-  -- and `instr` is the single instruction its body compiled to, whose
-  -- result `ret` is built from. The scope continues the numbering of
-  -- the enclosing one, since `instr` may refer to anything emitted
-  -- before the call, but its `VRef`s die with the call, which is why
-  -- the call itself returns into the first of them.
-  type PEGFunArg = {params : [PEGVal], instr : PEGInstr, ret : PEGVal}
-
-  syn PEGInstr +=
-  | IConstCall
-    { const : Const
-    , args : [PEGVal]
-    }
-  | IConstFCall
-    { const : Const
-    , args : [Either PEGFunArg PEGVal]
-    }
-
-  syn PEGVal +=
-  | VConst {const : Const, f : [PEGVal] -> Option PEGVal}
-  | VConstF (PEGEnv -> PEGState -> Type -> [PEGVal] -> (PEGState, PEGVal))
-
-  sem mkDeltaF : Const -> PEGVal
-
-  sem deltaF : Const -> ([PEGVal] -> Option PEGVal) -> PEGVal
-  sem deltaF c = | f -> VConst {const = c, f = f}
-
-  sem mkEvalF += | TmConst x ->
-    let val = mkDeltaF x.val in
-    lam. lam st. (st, val)
-
-  sem applyF env st ty += | (VConst x, args) ->
-    match x.f args with Some v
-    then (st, v)
-    else pegEmit ty st (IConstCall {const = x.const, args = args})
-
-  sem applyF env st ty += | (VConstF f, args) -> f env st ty args
-
-  -- Evaluates `f` applied to one fresh `VRef` per entry in
-  -- `paramTys`, in a scope of its own, where `ty` is the type of the
-  -- result of that application. Inlining is off in there, since the
-  -- body is evaluated once but run many times.
-  sem pegFunArg : PEGEnv -> PEGState -> Type -> [Type] -> PEGVal -> (PEGState, PEGFunArg)
-  sem pegFunArg env st ty paramTys = | f ->
-    let localSt = {st with instructions = []} in
-    let localEnv = {env with inline = lam. false} in
-    match mapAccumL (lam st. lam ty. pegNewVRef ty st) localSt paramTys
-    with (localSt, params) in
-    match applyF localEnv localSt ty (f, params) with (localSt, ret) in
-    match localSt.instructions with [instr] then
-      ( { st with
-          computedBlocks = localSt.computedBlocks
-        , requestedBlocks = localSt.requestedBlocks
-        }
-      , {params = params, instr = instr, ret = ret}
-      )
-    else error "Unexpected function given to a higher-order constant"
-
-  sem pegValTy += | VConst _ -> tyunknown_
-  sem pegValTy += | VConstF _ -> tyunknown_
-
-  -- A delta function for a constant that never computes here
-  sem residualDeltaF : Const -> PEGVal
-  sem residualDeltaF = | c -> deltaF c (lam. None ())
-
-  sem pegValToString += | VConst _ -> "<constant function>"
-  sem pegValToString += | VConstF _ -> "<constant function (higher order)>"
-
-  sem pegInstrToString firstVRef += | IConstCall x ->
-    ( 1
-    , join
-      [ getConstStringCode 0 x.const
-      , " "
-      , strJoin " " (map pegValToString x.args)
-      ]
-    )
-
-  -- The function arguments are printed after the value ones, rather
-  -- than in their original position, since each spans several lines
-  sem pegInstrToString firstVRef += | IConstFCall x ->
-    let fToString = lam fArg : PEGFunArg.
-      join
-        [ "\n      \\", strJoin " " (map pegValToString fArg.params), " ->\n"
-        , pegInstrsToString "        "
-          (addi firstVRef (length fArg.params)) [fArg.instr]
-        , "        out ", pegValToString fArg.ret
-        ] in
-    ( 1
-    , join
-      [ getConstStringCode 0 x.const
-      , join
-        (map (eitherEither (lam. "") (lam v. cons ' ' (pegValToString v)))
-          x.args)
-      , join (map (eitherEither fToString (lam. "")) x.args)
-      ]
-    )
 end
 
 lang PEvalGraphOpaque =
@@ -797,6 +862,8 @@ lang PEvalGraphExt = PEvalGraph + ExtDeclAst + FunArity
 
   sem pegValToString += | VExtF x -> join ["<external ", nameGetStr x.ident, ">"]
 
+  sem pegGenPairs += | (VExtF a, VExtF b) -> nameEq a.ident b.ident
+
   sem pegInstrToString firstVRef += | IExtCall x ->
     ( 1
     , join [nameGetStr x.ident, " ", strJoin " " (map pegValToString x.args)]
@@ -841,7 +908,12 @@ lang PEvalGraphMatch = PEvalGraph + MatchAst + VarAst + NamedPat
   -- whole produces from them
   sem homogenizeArms : PEGState -> [PEGVal] -> (PEGState, [[PEGVal]], PEGVal)
   sem homogenizeArms st = | vals ->
-    match homogenizeValues pegNewVRef st vals with (st, val, valss) in
+    let replace = lam acc. lam vs.
+      match acc with (st, valss) in
+      match pegNewVRef (pegValTy (head vs)) st with (st, v) in
+      ((st, zipWith snoc valss vs), v) in
+    match homogenizeValues replace (st, map (lam. []) vals) vals
+    with ((st, valss), val) in
     (st, valss, val)
 
   sem mkEvalF += | tm & TmMatch {target = target & TmVar {ident = ident}} ->
@@ -911,19 +983,30 @@ lang PEvalGraphInt = PEvalGraphConst + IntAst
 
   sem cmpPEGValH += | (VInt a, VInt b) -> subi a b
 
+  sem pegGenPairs += | (VInt _, VInt _) -> true
+
   sem pegValTy += | VInt _ -> tyint_
 
-  sem homogenizeValues newVRef st += | allVs & [VInt i] ++ vs ->
+  sem homogenizeValues replace st += | allVs & [VInt i] ++ vs ->
     if forAll (lam v. match v with VInt i2 then eqi i i2 else false) vs
-    then (st, VInt i, (make (length allVs) []))
-    else homogenizeValuesDefault newVRef st allVs
+    then (st, VInt i)
+    else replace st allVs
 
   sem pegValToString += | VInt i -> int2string i
 end
 
--- Small helper for `homogenizeValues` tests
-let _homogenizeTestVRef = use PEvalGraph in
-  lam ty. lam n. (addi n 1, VRef {ty = ty, ref = n})
+-- Small helper for `homogenizeValues` tests, which replaces each
+-- difference with a fresh `VRef`, and returns the number of them
+-- along with what each input had in their place. Only the index of a
+-- `VRef` is compared, so its type does not matter here.
+let _homogenizeTest = use PEvalGraph in
+  lam homogenize. lam vs.
+    let replace = lam acc. lam diff.
+      match acc with (n, fillerss) in
+      ((addi n 1, zipWith snoc fillerss diff), VRef {ty = tyunknown_, ref = n}) in
+    match homogenize replace (0, map (lam. []) vs) vs
+    with ((n, fillerss), v) in
+    (n, v, fillerss)
 
 let _homogenizeTestEq = lam cmp. lam l. lam r.
   match (l, r) with ((n1, v1, fs1), (n2, v2, fs2)) in
@@ -932,21 +1015,21 @@ let _homogenizeTestEq = lam cmp. lam l. lam r.
 
 utest
   use PEvalGraphInt in
-  utest (homogenizeValues _homogenizeTestVRef 0 [VInt 1, VInt 1])
+  utest (_homogenizeTest homogenizeValues [VInt 1, VInt 1])
   with (0, VInt 1, [[], []])
   using _homogenizeTestEq cmpPEGVal
 in () with ()
 
 utest
   use PEvalGraphInt in
-  utest (homogenizeValues _homogenizeTestVRef 0 [VInt 1, VInt 2])
+  utest (_homogenizeTest homogenizeValues [VInt 1, VInt 2])
   with (1, VRef {ty = tyint_, ref = 0}, [[VInt 1], [VInt 2]])
   using _homogenizeTestEq cmpPEGVal
 in () with ()
 
 utest
   use PEvalGraphInt in
-  utest (homogenizeValues _homogenizeTestVRef 0 [VInt 1, VRef {ty = tyint_, ref = 7}])
+  utest (_homogenizeTest homogenizeValues [VInt 1, VRef {ty = tyint_, ref = 7}])
   with
     ( 1
     , VRef {ty = tyint_, ref = 0}
@@ -973,26 +1056,28 @@ lang PEvalGraphChar = PEvalGraphConst + CharAst + CharCmp
 
   sem cmpPEGValH += | (VChar a, VChar b) -> subi (char2int a) (char2int b)
 
+  sem pegGenPairs += | (VChar a, VChar b) -> eqc a b
+
   sem pegValTy += | VChar _ -> tychar_
 
-  sem homogenizeValues newVRef st += | allVs & [VChar c] ++ vs ->
+  sem homogenizeValues replace st += | allVs & [VChar c] ++ vs ->
     if forAll (lam v. match v with VChar c2 then eqc c c2 else false) vs
-    then (st, VChar c, make (length allVs) [])
-    else homogenizeValuesDefault newVRef st allVs
+    then (st, VChar c)
+    else replace st allVs
 
   sem pegValToString += | VChar c -> join ["\'", [c], "\'"]
 end
 
 utest
   use PEvalGraphChar in
-  utest (homogenizeValues _homogenizeTestVRef 0 [VChar 'a', VChar 'a'])
+  utest (_homogenizeTest homogenizeValues [VChar 'a', VChar 'a'])
   with (0, VChar 'a', [[], []])
   using _homogenizeTestEq cmpPEGVal
 in () with ()
 
 utest
   use PEvalGraphChar in
-  utest (homogenizeValues _homogenizeTestVRef 0 [VChar 'a', VChar 'b'])
+  utest (_homogenizeTest homogenizeValues [VChar 'a', VChar 'b'])
   with (1, VRef {ty = tychar_, ref = 0}, [[VChar 'a'], [VChar 'b']])
   using _homogenizeTestEq cmpPEGVal
 in () with ()
@@ -1016,26 +1101,28 @@ lang PEvalGraphFloat = PEvalGraphConst + FloatAst + FloatCmp
   sem cmpPEGValH += | (VFloat a, VFloat b) ->
     if ltf a b then negi 1 else if ltf b a then 1 else 0
 
+  sem pegGenPairs += | (VFloat _, VFloat _) -> true
+
   sem pegValTy += | VFloat _ -> tyfloat_
 
-  sem homogenizeValues newVRef st += | allVs & [VFloat f] ++ vs ->
+  sem homogenizeValues replace st += | allVs & [VFloat f] ++ vs ->
     if forAll (lam v. match v with VFloat f2 then eqf f f2 else false) vs
-    then (st, VFloat f, make (length allVs) [])
-    else homogenizeValuesDefault newVRef st allVs
+    then (st, VFloat f)
+    else replace st allVs
 
   sem pegValToString += | VFloat f -> float2string f
 end
 
 utest
   use PEvalGraphFloat in
-  utest (homogenizeValues _homogenizeTestVRef 0 [VFloat 1.5, VFloat 1.5])
+  utest (_homogenizeTest homogenizeValues [VFloat 1.5, VFloat 1.5])
   with (0, VFloat 1.5, [[], []])
   using _homogenizeTestEq cmpPEGVal
 in () with ()
 
 utest
   use PEvalGraphFloat in
-  utest (homogenizeValues _homogenizeTestVRef 0 [VFloat 1.5, VFloat 2.5])
+  utest (_homogenizeTest homogenizeValues [VFloat 1.5, VFloat 2.5])
   with (1, VRef {ty = tyfloat_, ref = 0}, [[VFloat 1.5], [VFloat 2.5]])
   using _homogenizeTestEq cmpPEGVal
 in () with ()
@@ -1048,26 +1135,28 @@ lang PEvalGraphBool = PEvalGraphConst + BoolAst + BoolCmp
   sem cmpPEGValH += | (VBool a, VBool b) ->
     subi (if a then 1 else 0) (if b then 1 else 0)
 
+  sem pegGenPairs += | (VBool a, VBool b) -> eqBool a b
+
   sem pegValTy += | VBool _ -> tybool_
 
-  sem homogenizeValues newVRef st += | allVs & [VBool b] ++ vs ->
+  sem homogenizeValues replace st += | allVs & [VBool b] ++ vs ->
     if forAll (lam v. match v with VBool b2 then eqBool b b2 else false) vs
-    then (st, VBool b, make (length allVs) [])
-    else homogenizeValuesDefault newVRef st allVs
+    then (st, VBool b)
+    else replace st allVs
 
   sem pegValToString += | VBool b -> if b then "true" else "false"
 end
 
 utest
   use PEvalGraphBool in
-  utest (homogenizeValues _homogenizeTestVRef 0 [VBool true, VBool true])
+  utest (_homogenizeTest homogenizeValues [VBool true, VBool true])
   with (0, VBool true, [[], []])
   using _homogenizeTestEq cmpPEGVal
 in () with ()
 
 utest
   use PEvalGraphBool in
-  utest (homogenizeValues _homogenizeTestVRef 0 [VBool true, VBool false])
+  utest (_homogenizeTest homogenizeValues [VBool true, VBool false])
   with (1, VRef {ty = tybool_, ref = 0}, [[VBool true], [VBool false]])
   using _homogenizeTestEq cmpPEGVal
 in () with ()
@@ -1103,9 +1192,12 @@ lang PEvalGraphData = PEvalGraph + DataAst + DataDeclAst
     if neqi res 0 then res else
     cmpPEGVal a.body b.body
 
+  sem pegGenPairs += | (VConApp a, VConApp b) ->
+    if nameEq a.ident b.ident then pegGenEmbeds a.body b.body else false
+
   sem pegValTy += | VConApp x -> x.ty
 
-  sem homogenizeValues newVRef st += | allVs & [VConApp x] ++ _ ->
+  sem homogenizeValues replace st += | allVs & [VConApp x] ++ _ ->
     let check = lam v.
       match v with VConApp x2
       then if nameEq x.ident x2.ident
@@ -1113,9 +1205,9 @@ lang PEvalGraphData = PEvalGraph + DataAst + DataDeclAst
         else None ()
       else None () in
     match optionMapM check allVs with Some vs then
-      match homogenizeValues newVRef st vs with (st, v, vs) in
-      (st, VConApp {x with body = v}, vs)
-    else homogenizeValuesDefault newVRef st allVs
+      match homogenizeValues replace st vs with (st, v) in
+      (st, VConApp {x with body = v})
+    else replace st allVs
 
   sem pegValToString += | VConApp x ->
     join [nameGetStr x.ident, " (", pegValToString x.body, ")"]
@@ -1126,7 +1218,7 @@ utest
   let ident = nameSym "Foo" in
   let mk = lam r.
     VConApp {ty = tyunknown_, ident = ident, body = VRef {ty = tyint_, ref = r}} in
-  utest (homogenizeValues _homogenizeTestVRef 0 [mk 3, mk 4])
+  utest (_homogenizeTest homogenizeValues [mk 3, mk 4])
   with
     ( 1
     , mk 0
@@ -1145,7 +1237,7 @@ utest
     } in
   let a = mk "Foo" in
   let b = mk "Bar" in
-  utest (homogenizeValues _homogenizeTestVRef 0 [a, b])
+  utest (_homogenizeTest homogenizeValues [a, b])
   with (1, VRef {ty = tyunknown_, ref = 0}, [[a], [b]])
   using _homogenizeTestEq cmpPEGVal
 in () with ()
@@ -1189,9 +1281,12 @@ lang PEvalGraphRecord = PEvalGraph + RecordAst
   sem cmpPEGValH += | (VRecord a, VRecord b) ->
     mapCmp cmpPEGVal a.bindings b.bindings
 
+  sem pegGenPairs += | (VRecord a, VRecord b) ->
+    mapEq pegGenEmbeds a.bindings b.bindings
+
   sem pegValTy += | VRecord x -> x.ty
 
-  sem homogenizeValues newVRef st += | allVs & [VRecord x] ++ _ ->
+  sem homogenizeValues replace st += | allVs & [VRecord x] ++ _ ->
     let check = lam v.
       match v with VRecord x2 then Some x2.bindings else None () in
     match optionMapM check allVs with Some bindingss then
@@ -1203,14 +1298,10 @@ lang PEvalGraphRecord = PEvalGraph + RecordAst
         (lam acc. lam bindings. mapMerge merge acc (mapMap (lam v. [v]) bindings))
         (mapMap (lam. []) x.bindings)
         bindingss in
-      let f = lam acc. lam. lam column.
-        match acc with (st, fillers) in
-        match homogenizeValues newVRef st column with (st, v, vs) in
-        ((st, zipWith concat fillers vs), v) in
-      match mapMapAccum f (st, make (length allVs) []) columns
-      with ((st, fillers), bindings) in
-      (st, VRecord {x with bindings = bindings}, fillers)
-    else homogenizeValuesDefault newVRef st allVs
+      match mapMapAccum (lam st. lam. homogenizeValues replace st) st columns
+      with (st, bindings) in
+      (st, VRecord {x with bindings = bindings})
+    else replace st allVs
 
   sem pegValToString += | VRecord x -> join
     [ "{"
@@ -1228,7 +1319,7 @@ utest
     { ty = tyunknown_
     , bindings = mapFromSeq cmpSID [(stringToSid "a", VRef {ty = tyint_, ref = r})]
     } in
-  utest (homogenizeValues _homogenizeTestVRef 0 [mk 3, mk 4])
+  utest (_homogenizeTest homogenizeValues [mk 3, mk 4])
   with
     ( 1
     , mk 0
@@ -1249,7 +1340,7 @@ utest
       , (stringToSid "b", VRef {ty = tyint_, ref = r})
       ]
     } in
-  utest (homogenizeValues _homogenizeTestVRef 0 [mk 2, mk 3])
+  utest (_homogenizeTest homogenizeValues [mk 2, mk 3])
   with
     ( 1
     , mk 0
@@ -1290,23 +1381,30 @@ lang PEvalGraphSeq = PEvalGraph + SeqAst + SeqTypeAst
 
   sem cmpPEGValH += | (VSeq a, VSeq b) -> seqCmp cmpPEGVal a.vals b.vals
 
+  -- Matching each element as early as possible finds an embedding in
+  -- a subsequence whenever there is one
+  sem pegGenPairs += | (VSeq a, VSeq b) ->
+    recursive let work = lam ls. lam rs.
+      match ls with [l] ++ lsTail then
+        match rs with [r] ++ rsTail then
+          if pegGenEmbeds l r then work lsTail rsTail else work ls rsTail
+        else false
+      else true in
+    work a.vals b.vals
+
   sem pegValTy += | VSeq x -> x.ty
 
-  sem homogenizeValues newVRef st += | allVs & [VSeq x] ++ _ ->
+  sem homogenizeValues replace st += | allVs & [VSeq x] ++ _ ->
     let count = length x.vals in
     let check = lam v.
       match v with VSeq x2
       then if eqi count (length x2.vals) then Some x2.vals else None ()
       else None () in
     match optionMapM check allVs with Some valss then
-      let f = lam acc. lam column.
-        match acc with (st, fillers) in
-        match homogenizeValues newVRef st column with (st, v, vs) in
-        ((st, zipWith concat fillers vs), v) in
-      match mapAccumL f (st, make (length allVs) []) (transpose valss)
-      with ((st, fillers), vals) in
-      (st, VSeq {x with vals = vals}, fillers)
-    else homogenizeValuesDefault newVRef st allVs
+      match mapAccumL (homogenizeValues replace) st (transpose valss)
+      with (st, vals) in
+      (st, VSeq {x with vals = vals})
+    else replace st allVs
 
   sem pegValToString += | VSeq x ->
     join ["[", strJoin ", " (map pegValToString x.vals), "]"]
@@ -1318,7 +1416,7 @@ utest
     { ty = tyunknown_
     , vals = [VRef {ty = tyint_, ref = 1}, VRef {ty = tyint_, ref = r}]
     } in
-  utest (homogenizeValues _homogenizeTestVRef 0 [mk 2, mk 3])
+  utest (_homogenizeTest homogenizeValues [mk 2, mk 3])
   with
     ( 2
     , VSeq
@@ -1336,7 +1434,7 @@ utest
   use PEvalGraphSeq in
   let a = VSeq {ty = tyunknown_, vals = [VRef {ty = tyint_, ref = 1}]} in
   let b = VSeq {ty = tyunknown_, vals = []} in
-  utest (homogenizeValues _homogenizeTestVRef 0 [a, b])
+  utest (_homogenizeTest homogenizeValues [a, b])
   with (1, VRef {ty = tyunknown_, ref = 0}, [[a], [b]])
   using _homogenizeTestEq cmpPEGVal
 in () with ()
@@ -1392,12 +1490,14 @@ lang PEvalGraphSymb = PEvalGraphInt + SymbAst + SymbCmp
 
   sem cmpPEGValH += | (VSymb a, VSymb b) -> subi (sym2hash a) (sym2hash b)
 
+  sem pegGenPairs += | (VSymb _, VSymb _) -> true
+
   sem pegValTy += | VSymb _ -> ntycon_ (mapFindExn "Symbol" builtinTypeNames)
 
-  sem homogenizeValues newVRef st += | allVs & [VSymb s] ++ vs ->
+  sem homogenizeValues replace st += | allVs & [VSymb s] ++ vs ->
     if forAll (lam v. match v with VSymb s2 then eqsym s s2 else false) vs
-    then (st, VSymb s, make (length allVs) [])
-    else homogenizeValuesDefault newVRef st allVs
+    then (st, VSymb s)
+    else replace st allVs
 
   sem pegValToString += | VSymb s -> concat "sym" (int2string (sym2hash s))
 
@@ -1406,7 +1506,7 @@ end
 utest
   use PEvalGraphSymb in
   let s = gensym () in
-  utest (homogenizeValues _homogenizeTestVRef 0 [VSymb s, VSymb s])
+  utest (_homogenizeTest homogenizeValues [VSymb s, VSymb s])
   with (0, VSymb s, [[], []])
   using _homogenizeTestEq cmpPEGVal
 in () with ()
@@ -1415,7 +1515,7 @@ utest
   use PEvalGraphSymb in
   let s1 = gensym () in
   let s2 = gensym () in
-  utest (homogenizeValues _homogenizeTestVRef 0 [VSymb s1, VSymb s2])
+  utest (_homogenizeTest homogenizeValues [VSymb s1, VSymb s2])
   with (1, VRef {ty = pegValTy (VSymb s1), ref = 0}, [[VSymb s1], [VSymb s2]])
   using _homogenizeTestEq cmpPEGVal
 in () with ()
@@ -1891,25 +1991,41 @@ lang PEvalGraphTest =
     if eqi res 0
     then error "Missing case in cmpPEGInstrH for instructions with equal indices."
     else res
-
-  -- The identity function, except that it always residualizes, which
-  -- lets a test produce a residual value of any type.
-  syn Const += | CTestResidual {}
-
-  sem tyConstBase d += | CTestResidual _ ->
-    tyall_ "a" (tyarrow_ (tyvar_ "a") (tyvar_ "a"))
-
-  sem mkDeltaF += | c & CTestResidual _ -> deltaF c (lam args.
-    match args with [v]
-    then None ()
-    else error "Wrong number of arguments to CTestResidual in mkDeltaF!")
-
-  sem getConstStringCode indent += | CTestResidual _ -> "testResidual"
 end
 
 mexpr
 
 use PEvalGraphTest in
+
+
+-- === Embedding values ===
+
+let gseq_ : [PEGVal] -> PEGVal = lam vals. VSeq {ty = tyunknown_, vals = vals} in
+let gcon_ : String -> PEGVal -> PEGVal = lam ident. lam body.
+  VConApp {ty = tyunknown_, ident = nameNoSym ident, body = body} in
+
+-- Values with an infinite domain always pair, others must be equal
+utest pegGenEmbeds (VInt 1) (VInt 2) with true in
+utest pegGenEmbeds (VFloat 1.0) (VFloat 2.0) with true in
+utest pegGenEmbeds (VChar 'a') (VChar 'a') with true in
+utest pegGenEmbeds (VChar 'a') (VChar 'b') with false in
+utest pegGenEmbeds (VBool true) (VBool false) with false in
+utest pegGenEmbeds (VInt 1) (VChar 'a') with false in
+
+-- The needle may be found inside the haystack, and its sub-terms
+-- inside the corresponding sub-terms of the haystack
+utest pegGenEmbeds (gcon_ "Foo" (VChar 'a')) (gcon_ "Foo" (VChar 'a')) with true in
+utest pegGenEmbeds (gcon_ "Foo" (VChar 'a')) (gcon_ "Bar" (VChar 'a')) with false in
+utest pegGenEmbeds (gcon_ "Foo" (VChar 'a')) (gcon_ "Bar" (gcon_ "Foo" (VChar 'a'))) with true in
+utest pegGenEmbeds (gcon_ "Foo" (VChar 'a')) (gcon_ "Foo" (gcon_ "Bar" (VChar 'a'))) with true in
+utest pegGenEmbeds (gcon_ "Foo" (gcon_ "Bar" (VChar 'a'))) (gcon_ "Foo" (VChar 'a')) with false in
+
+-- Sequences embed in any sequence containing them as a subsequence
+utest pegGenEmbeds (gseq_ []) (gseq_ [VChar 'a']) with true in
+utest pegGenEmbeds (gseq_ [VChar 'a', VChar 'c']) (gseq_ [VChar 'a', VChar 'b', VChar 'c']) with true in
+utest pegGenEmbeds (gseq_ [VChar 'c', VChar 'a']) (gseq_ [VChar 'a', VChar 'b', VChar 'c']) with false in
+utest pegGenEmbeds (gseq_ [VChar 'a', VChar 'a']) (gseq_ [VChar 'a']) with false in
+utest pegGenEmbeds (gseq_ [VChar 'a']) (gseq_ [gcon_ "Foo" (VChar 'a')]) with true in
 
 
 -- === Homogenizing values ===
@@ -1922,7 +2038,7 @@ let checkHomogenizationInvariant : [PEGVal] -> () = lam vs.
     match v with VRef {ref = idx}
     then get fillers idx
     else smap_PEGVal_PEGVal (reconstruct fillers) v in
-  match homogenizeValues _homogenizeTestVRef 0 vs with (_, v, fillerss) in
+  match _homogenizeTest homogenizeValues vs with (_, v, fillerss) in
   utest vs with map (lam fillers. reconstruct fillers v) fillerss
   using eqSeq (lam a. lam b. eqi (cmpPEGVal a b) 0)
   in ()
@@ -1993,7 +2109,7 @@ let prepare
     mkTopEvalF
       (typeCheck
         (symbolize
-          (constTransform (snoc builtin ("testResidual", CTestResidual ()))
+          (constTransform (snoc builtin ("testResidual", CResidualIdentity ()))
             (makeKeywords
               (parseMExprStringExn defaultBootParserParseMExprStringArg src)))))
 in
@@ -2018,6 +2134,7 @@ let callEvalFWith
       , requestedBlocks = mapEmpty cmpPEGBlockKey
       , instructions = []
       , nextVRef = 0
+      , callStack = []
       } in
     match f initEnv initState with (st, val) in
     let st = forceAllBlocks st in
@@ -2335,7 +2452,7 @@ let vrecord_ : [(String, PEGVal)] -> PEGVal = lam bs.
 -- A call to `testResidual`, which is most of the instructions a test
 -- writes down
 let residual_ : PEGVal -> PEGInstr = lam arg.
-  IConstCall {const = CTestResidual (), args = [arg]} in
+  IConstCall {const = CResidualIdentity (), args = [arg]} in
 
 -- The name of the block, the `VRef`s passed to it, and the types of
 -- the values it returns
@@ -2403,7 +2520,7 @@ utest callEvalF (prepare (strJoin "\n"
   [ "muli (testResidual 3) 2"
   ]))
 with
-  ( [ IConstCall {const = CTestResidual (), args = [VInt 3]}
+  ( [ IConstCall {const = CResidualIdentity (), args = [VInt 3]}
     , IConstCall
       { const = CMuli ()
       , args = [VRef {ty = tyint_, ref = 0}, VInt 2]
@@ -2417,7 +2534,7 @@ utest callEvalF (prepare (strJoin "\n"
   [ "addf (testResidual 1.5) 2.5"
   ]))
 with
-  ( [ IConstCall {const = CTestResidual (), args = [VFloat 1.5]}
+  ( [ IConstCall {const = CResidualIdentity (), args = [VFloat 1.5]}
     , IConstCall
       { const = CAddf ()
       , args = [VRef {ty = tyfloat_, ref = 0}, VFloat 2.5]
@@ -2431,7 +2548,7 @@ utest callEvalF (prepare (strJoin "\n"
   [ "concat (testResidual \"a\") \"b\""
   ]))
 with
-  ( [ IConstCall {const = CTestResidual (), args = [vstr_ "a"]}
+  ( [ IConstCall {const = CResidualIdentity (), args = [vstr_ "a"]}
     , IConstCall
       { const = CConcat ()
       , args = [VRef {ty = tystr_, ref = 0}, vstr_ "b"]
@@ -2836,7 +2953,7 @@ utest callEvalF (prepare (strJoin "\n"
   , "match x with 0 then 1 else 2"
   ]))
 with
-  ( [ IConstCall {const = CTestResidual (), args = [VInt 3]}
+  ( [ IConstCall {const = CResidualIdentity (), args = [VInt 3]}
     , IMatch
       { target = 0
       , arms =
@@ -2855,7 +2972,7 @@ utest callEvalF (prepare (strJoin "\n"
   , "match x with 0 then 1 else 1"
   ]))
 with
-  ( [ IConstCall {const = CTestResidual (), args = [VInt 3]}
+  ( [ IConstCall {const = CResidualIdentity (), args = [VInt 3]}
     , IMatch
       { target = 0
       , arms = [(pint_ 0, [], []), (pvarw_, [], [])]
@@ -2872,7 +2989,7 @@ utest callEvalF (prepare (strJoin "\n"
   , "match x with 0 then (1, 2) else (1, 3)"
   ]))
 with
-  ( [ IConstCall {const = CTestResidual (), args = [VInt 3]}
+  ( [ IConstCall {const = CResidualIdentity (), args = [VInt 3]}
     , IMatch
       { target = 0
       , arms =
@@ -2892,7 +3009,7 @@ utest callEvalF (prepare (strJoin "\n"
   ]))
 with
   ( [ IConstCall
-      { const = CTestResidual ()
+      { const = CResidualIdentity ()
       , args = [vrecord_ [("a", VInt 1), ("b", VInt 2)]]
       }
     , IMatch
@@ -2920,7 +3037,7 @@ utest callEvalF (prepare (strJoin "\n"
   ]))
 with
   ( [ IConstCall
-      { const = CTestResidual ()
+      { const = CResidualIdentity ()
       , args = [vconapp_ "Foo" "Bar" (VInt 4)]
       }
     , IMatch
@@ -2947,7 +3064,7 @@ utest callEvalF (prepare (strJoin "\n"
   ]))
 with
   ( [ IConstCall
-      { const = CTestResidual ()
+      { const = CResidualIdentity ()
       , args = [vconapp_ "Foo" "Bar" (VInt 4)]
       }
     , IMatch
@@ -3254,6 +3371,71 @@ with
         [2] (VRef {ty = tyint_, ref = 0})
     ]
   , VRef {ty = tyint_, ref = 2}
+  )
+using eqBlocksInstrAndVal else ppBlocksInstrAndVal in
+
+-- A recursive call whose arguments embed those of an enclosing call
+-- is generalized, which is what stops `n` from producing a new block
+-- for each value it takes
+utest callEvalF (prepare (strJoin "\n"
+  [ "recursive let f = lam n. lam x."
+  , "  match x with 0 then n else f (addi n 1) (subi x 1)"
+  , "in"
+  , "f 0 (testResidual 5)"
+  ]))
+with
+  ( [ residual_ (VInt 5)
+    , IMatch
+      { target = 0
+      , arms =
+        [ (pint_ 0, [], [VInt 0])
+        , ( pvarw_
+          , [ IConstCall
+              {const = CSubi (), args = [VRef {ty = tyint_, ref = 0}, VInt 1]}
+            , lazyBlockCall_ "block0" [1] (VRef {ty = tyint_, ref = 0})
+            ]
+          , [VRef {ty = tyint_, ref = 2}]
+          )
+        ]
+      }
+    ]
+  , [ block_ "block0" [tyint_]
+        [ IMatch
+          { target = 0
+          , arms =
+            [ (pint_ 0, [], [VInt 1])
+            , ( pvarw_
+              , [ IConstCall
+                  {const = CSubi (), args = [VRef {ty = tyint_, ref = 0}, VInt 1]}
+                , residual_ (VInt 2)
+                , lazyBlockCall_ "block1" [2, 1] (VRef {ty = tyint_, ref = 0})
+                ]
+              , [VRef {ty = tyint_, ref = 3}]
+              )
+            ]
+          }
+        ]
+        [1] (VRef {ty = tyint_, ref = 0})
+    , block_ "block1" [tyint_, tyint_]
+        [ IMatch
+          { target = 1
+          , arms =
+            [ (pint_ 0, [], [VRef {ty = tyint_, ref = 0}])
+            , ( pvarw_
+              , [ IConstCall
+                  {const = CAddi (), args = [VRef {ty = tyint_, ref = 0}, VInt 1]}
+                , IConstCall
+                  {const = CSubi (), args = [VRef {ty = tyint_, ref = 1}, VInt 1]}
+                , lazyBlockCall_ "block1" [2, 3] (VRef {ty = tyint_, ref = 0})
+                ]
+              , [VRef {ty = tyint_, ref = 4}]
+              )
+            ]
+          }
+        ]
+        [2] (VRef {ty = tyint_, ref = 0})
+    ]
+  , VRef {ty = tyint_, ref = 1}
   )
 using eqBlocksInstrAndVal else ppBlocksInstrAndVal in
 
