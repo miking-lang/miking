@@ -1,10 +1,5 @@
 -- This file provides a rather aggressive partial evaluator.
 --
--- In this file, a _non-strict expression_ refers to an expression
--- that does not examine its free variables. For example, `addi x y`
--- is strict, it needs values for both `x` and `y` to proceed, but
--- `(x, y)` is not.
---
 -- Assumptions:
 -- * Pattern matches are shallow.
 -- * The target of a `match` is a variable.
@@ -14,6 +9,29 @@
 --   a constant (other than the higher-order sequence ones) or external
 --   that doesn't compute, and the arms of a residualized `match` never
 --   produce different functions in the same position.
+--
+-- Two things can happen every time the partial evaluator encounters a
+-- function call:
+-- * The call is computed inline, emitting residual instructions (if
+--   any) in the current body.
+-- * The call is requested as a new function (called "Block" in this
+--   file) and specialized based on the statically known structure of
+--   its arguments. The same original function can give rise to many
+--   blocks if it's called with many statically known and distinct
+--   arguments.
+--
+-- When inlining should occur can be controlled via the `inline`
+-- predicate in `PEGEnv`. Calls under a residualized `match` are never
+-- inlined.
+--
+-- Two things worth knowing about these blocks:
+-- * They are distinguished also by type arguments, i.e., this partial
+--   evaluator will also monomorphize the code. A program that uses
+--   polymorphic recursion might thus not terminate.
+-- * Recursive block requests can be stopped if a call "embeds" an
+--   earlier call to the same function in the current call-stack,
+--   i.e., if each argument embeds the corresponding previous
+--   argument. See `pegGenEmbeds`.
 
 -- TODO(vipa, 2026-09-23): Maybe make consts that return `()` return a
 -- non-residualized value
