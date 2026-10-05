@@ -580,6 +580,14 @@ lang PEvalGraphLam = PEvalGraph + LamAst + PEvalGraphConst
     let applied = concat x.applied args in
     if lti (length applied) x.arity then
       (st, VLam {x with applied = applied})
+    else if gti (length applied) x.arity then
+      -- The type of the intermediate result is unknown, but it only
+      -- matters if that result is residual, which is an error anyway
+      match splitAt applied x.arity with (now, later) in
+      match applyF env st tyunknown_ (VLam {x with applied = []}, now) with (st, f) in
+      match f with VRef _
+      then error "Compiler error: an over-applied function returned a residual value, which would require a residual function."
+      else applyF env st ty (f, later)
     else if env.inline app then
       x.body st x.instantiated applied
     else
@@ -2225,6 +2233,7 @@ recursive let desymbolizeVal : PEGVal -> PEGVal = lam val.
     {x with ty = desymbolizeType x.ty, ident = desymbolizeName x.ident}
   case VRecord x then VRecord {x with ty = desymbolizeType x.ty}
   case VSeq x then VSeq {x with ty = desymbolizeType x.ty}
+  case VLam x then VLam {x with sym = 0}
   case val then val
   end
 in
@@ -2442,6 +2451,18 @@ let vstr_ : String -> PEGVal = lam s.
   VSeq {ty = tystr_, vals = map (lam c. VChar c) s} in
 
 let vunit_ : PEGVal = VRecord {ty = tyunit_, bindings = mapEmpty cmpSID} in
+
+-- A non-recursive function of the given arity, applied to the given
+-- values. Its `sym` and body are placeholders, thus it can only be
+-- compared ignoring symbols.
+let vlam_ : Int -> [PEGVal] -> PEGVal = lam arity. lam applied. VLam
+  { sym = 0
+  , isRecursiveCall = false
+  , arity = arity
+  , applied = applied
+  , instantiated = mapEmpty nameCmp
+  , body = lam. error "vlam_ body"
+  } in
 
 let vrecord_ : [(String, PEGVal)] -> PEGVal = lam bs.
   VRecord
@@ -2748,6 +2769,108 @@ with
   )
 using eqInstrAndVal else ppInstrAndVal in
 
+-- Over-application: the arguments beyond the arity of a function are
+-- passed on to whatever it returns
+utest callEvalF (prepare (strJoin "\n"
+  [ "let g = lam x. lam y. addi x y in"
+  , "let f = lam x. g x in"
+  , "f 1 2"
+  ]))
+with ([], VInt 3)
+using eqInstrAndVal else ppInstrAndVal in
+
+utest callEvalF (prepare (strJoin "\n"
+  [ "let f = lam. addi in"
+  , "f () 1 2"
+  ]))
+with ([], VInt 3)
+using eqInstrAndVal else ppInstrAndVal in
+
+utest callEvalF (prepare (strJoin "\n"
+  [ "let f = lam. addi in"
+  , "f () (testResidual 1) 2"
+  ]))
+with
+  ( [ residual_ (VInt 1)
+    , IConstCall {const = CAddi (), args = [VRef {ty = tyint_, ref = 0}, VInt 2]}
+    ]
+  , VRef {ty = tyint_, ref = 1}
+  )
+using eqInstrAndVal else ppInstrAndVal in
+
+-- A partially applied function that is then over-applied, returning
+-- a function that is itself over-applied
+utest callEvalF (prepare (strJoin "\n"
+  [ "let h = lam a. lam b. lam c. lam d. subi (addi a b) (muli c d) in"
+  , "let g = lam a. lam b. lam c. h a b c in"
+  , "let f = lam a. lam b. g a b in"
+  , "let p = f (testResidual 1) in"
+  , "p 2 3 4"
+  ]))
+with
+  ( [ residual_ (VInt 1)
+    , IConstCall {const = CAddi (), args = [VRef {ty = tyint_, ref = 0}, VInt 2]}
+    , IConstCall {const = CSubi (), args = [VRef {ty = tyint_, ref = 1}, VInt 12]}
+    ]
+  , VRef {ty = tyint_, ref = 2}
+  )
+using eqInstrAndVal else ppInstrAndVal in
+
+-- The same, but without inlining, thus each call is a block, and the
+-- function returned from one is passed out through its return value
+utest callEvalFWith inlineNone (prepare (strJoin "\n"
+  [ "let g = lam x. lam y. addi x y in"
+  , "let f = lam x. g x in"
+  , "f (testResidual 1) 2"
+  ]))
+with
+  ( [ residual_ (VInt 1)
+    , blockCall_ "block0" [0] [tyint_]
+    , blockCall_ "block1" [1] [tyint_]
+    ]
+  , [ block_ "block0" [tyint_]
+        []
+        [0] (vlam_ 2 [VRef {ty = tyint_, ref = 0}])
+    , block_ "block1" [tyint_]
+        [ IConstCall
+          {const = CAddi (), args = [VRef {ty = tyint_, ref = 0}, VInt 2]}
+        ]
+        [1] (VRef {ty = tyint_, ref = 0})
+    ]
+  , VRef {ty = tyint_, ref = 2}
+  )
+using eqBlocksInstrAndValIgnoringSymbols else ppBlocksInstrAndVal in
+
+utest callEvalFWith inlineNone (prepare (strJoin "\n"
+  [ "let h = lam a. lam b. lam c. lam d. subi (addi a b) (muli c d) in"
+  , "let g = lam a. lam b. lam c. h a b c in"
+  , "let f = lam a. lam b. g a b in"
+  , "let p = f (testResidual 1) in"
+  , "p 2 3 4"
+  ]))
+with
+  ( [ residual_ (VInt 1)
+    , blockCall_ "block0" [0] [tyint_]
+    , blockCall_ "block1" [1] [tyint_]
+    , blockCall_ "block2" [2] [tyint_]
+    ]
+  , [ block_ "block0" [tyint_]
+        []
+        [0] (vlam_ 4 [VRef {ty = tyint_, ref = 0}, VInt 2])
+    , block_ "block1" [tyint_]
+        []
+        [0] (vlam_ 4 [VRef {ty = tyint_, ref = 0}, VInt 2, VInt 3])
+    , block_ "block2" [tyint_]
+        [ IConstCall
+          {const = CAddi (), args = [VRef {ty = tyint_, ref = 0}, VInt 2]}
+        , IConstCall
+          {const = CSubi (), args = [VRef {ty = tyint_, ref = 1}, VInt 12]}
+        ]
+        [2] (VRef {ty = tyint_, ref = 0})
+    ]
+  , VRef {ty = tyint_, ref = 3}
+  )
+using eqBlocksInstrAndValIgnoringSymbols else ppBlocksInstrAndVal in
 
 -- === Recursive lets ===
 
