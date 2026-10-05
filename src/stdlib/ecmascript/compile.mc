@@ -524,7 +524,7 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint + MExprArity
         (ctx, join [s0, pre,
           [ESSIf { cond = test, thn = concat binds thn, els = els }]])
   | TmNever t ->
-    (ctx, [esThrow t.info "ecmascript: reached a `never` expression"])
+    (ctx, [esThrow t.info "reached a `never` expression"])
   | TmApp _ & t ->
     -- A saturated tail call to a function this loop serves: rebind that
     -- function's parameters and jump back to the top rather than calling.
@@ -656,7 +656,7 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint + MExprArity
                    , els = concat sEls (esDeliver (ESCAssign tmp) eEls) }]]
         , ESEVar { id = tmp })
   | TmNever t ->
-    (ctx, [esThrow t.info "ecmascript: reached a `never` expression"], esUnit)
+    (ctx, [esThrow t.info "reached a `never` expression"], esUnit)
   | TmSeq t ->
     -- A sequence of character literals is a string. `$S` spreads a JS string
     -- literal, which iterates by codepoint, so the result reads as text in the
