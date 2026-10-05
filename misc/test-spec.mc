@@ -4,6 +4,15 @@ mexpr
 
 use TestSpec in
 
+-- `misc/scripts/parser-compare` is a standalone tool
+let parserCompareSub =
+  ( 'p'
+  , { tup = {actual = "$(ROOT)/misc/scripts/parser-compare", deps = ["$(ROOT)/misc/scripts/<parser-compare>"]}
+    , make = {actual = "$(ROOT)/misc/scripts/parser-compare", deps = ["misc/scripts/parser-compare"]}
+    , friendly = "PARSER-COMPARE"
+    }
+  ) in
+
 let installed : Substituter =
   { flag = "installed"
   , description = "Run tests with a previously installed `mi` on `$PATH`."
@@ -14,6 +23,7 @@ let installed : Substituter =
         , friendly = "INSTALLED MI"
         }
       )
+    , parserCompareSub
     ]
   } in
 let cheated : Substituter =
@@ -32,6 +42,7 @@ let cheated : Substituter =
         , friendly = "CHEAT MI"
         }
       )
+    , parserCompareSub
     ]
   } in
 let bootstrapped : Substituter =
@@ -50,6 +61,7 @@ let bootstrapped : Substituter =
         , friendly = "BOOT MI"
         }
       )
+    , parserCompareSub
     ]
   } in
 
@@ -136,9 +148,34 @@ testMain substituters directories location (lam api.
     , cmd = "command %i"
     } in
 
+  -- Compares the new native parser (src/stdlib/parser/parser.mc)
+  -- against the boot parser: same AST (up to info fields), and every
+  -- info field is self-consistent 
+  let parserCompareRun = api.endStep
+    { uses = [origin]
+    , tag = "parser-compare-run"
+    , cmd = "%p %f"
+    } in
+
   api.tests []
     (strEndsWith ".mc")
-    [(eval, succ), (compile, succ), (run, succ), (mlangCompile, succ), (mlangRun, succ)];
+    [(eval, succ), (compile, succ), (run, succ), (mlangCompile, succ), (mlangRun, succ), (parserCompareRun, succ)];
+
+  -- Skip some files for parser comparision
+  api.tests []
+    (or
+      (elem
+        [ -- very large files
+          "src/stdlib/python/python.mc"
+        , "src/test/py/python.mc"
+        , "src/stdlib/mexpr/nestable-records/merged.mc"
+        , "src/stdlib/mexpr/reptypes.mc"
+        , "src/stdlib/parser/selfhost-gen.mc"
+        ])
+        -- contains some experimental stuff
+      (dirIs "src/test/meta")
+    )
+    [(parserCompareRun, dont)];
 
   -- The compiler itself is tested through the bootstrap process, so
   -- skip it here

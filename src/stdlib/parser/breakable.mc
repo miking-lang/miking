@@ -1070,10 +1070,12 @@ type BreakableErrorHighlightConfig self =
   , rpar : String
   }
 
+type BreakableErrorHighlightOneSpec = {info: Info, partialResolutions: [[Highlight]]}
+
 let breakableToErrorHighlightSpec
   : all self. BreakableErrorHighlightConfig self
   -> [PermanentNode self] -- NonEmpty
-  -> [{info: Info, partialResolutions: [[Highlight]]}]
+  -> [BreakableErrorHighlightOneSpec]
   = lam config. lam tops.
     let pallowed : ParenAllowedFunc self = config.parenAllowed in
     let tallowed : TopAllowedFunc self = config.topAllowed in
@@ -1098,18 +1100,19 @@ let breakableToErrorHighlightSpec
       {info = mergeInfo amb.range.first amb.range.last, partialResolutions = amb.partialResolutions}
     in map fixup res
 
+let breakableHighlightOne: BreakableErrorHighlightOneSpec -> String -> (Info, String) = lam amb. lam content.
+  let alternatives = map (formatHighlights terminalHighlightAddedConfig content) amb.partialResolutions in
+  let body =
+    if match amb.info with Info x then eqi x.row1 x.row2 else false then
+      strJoin "\n" (map (concat "  ") alternatives)
+    else
+      strJoin "\n\n" (mapi (lam i. lam str. join ["Alternative ", int2string (addi i 1), ":\n", str]) alternatives)
+  in (amb.info, join ["Ambiguity error\n", body, "\n"])
+
 let breakableDefaultHighlight
   : all self. BreakableErrorHighlightConfig self
   -> String
   -> [PermanentNode self]
   -> [(Info, String)]
   = lam config. lam content. lam tops.
-    let highlightOne = lam amb: {info: Info, partialResolutions: [[Highlight]]}.
-      let alternatives = map (formatHighlights terminalHighlightAddedConfig content) amb.partialResolutions in
-      let body =
-        if match amb.info with Info x then eqi x.row1 x.row2 else false then
-          strJoin "\n" (map (concat "  ") alternatives)
-        else
-          strJoin "\n\n" (mapi (lam i. lam str. join ["Alternative ", int2string (addi i 1), ":\n", str]) alternatives)
-      in (amb.info, join ["Ambiguity error\n", body, "\n"])
-    in map highlightOne (breakableToErrorHighlightSpec config tops)
+    map (lam amb. breakableHighlightOne amb content) (breakableToErrorHighlightSpec config tops)

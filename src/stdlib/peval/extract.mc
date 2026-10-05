@@ -119,7 +119,8 @@ lang SpecializeExtract = MExprExtract + SpecializeAst
   | ast -> extractAst ids ast
 
   sem extractSeparate : [Name] -> Expr -> Map Name Expr
-  sem extractSeparate ids =| ast ->
+  sem extractSeparate ids =
+  | ast ->
     foldl (lam m. lam id.
       let idset = setOfSeq nameCmp [id] in
       let extracted = extractSpecializeTerms idset ast in

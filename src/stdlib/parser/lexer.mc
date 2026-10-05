@@ -8,6 +8,8 @@ include "mexpr/info.mc"
 include "grammar.mc"
 include "bool.mc"
 include "char.mc"
+include "basic-types.mc"
+include "option.mc"
 
 let tabSpace = 2
 
@@ -155,7 +157,34 @@ with {val = "_asd", str = " ", pos = posVal "" 1 4}
 utest parseIdentCont (initPos "") "Asd12 "
 with {val = "Asd12", str = " ", pos = posVal "" 1 5}
 
-lang LIdentTokenParser = TokenParser
+lang KeywordTokenParser = TokenParser
+  syn Token +=
+  | KeywordTok {info : Info, val : String}
+  syn TokenRepr +=
+  | KeywordRepr ()
+
+  sem identIsKeyword: String -> Bool
+
+  sem identIsKeyword =
+  | _ -> false
+
+  sem tokKindEq (tokRepr : TokenRepr) +=
+  | KeywordTok _ -> match tokRepr with KeywordRepr _ then true else false
+
+  sem tokInfo +=
+  | KeywordTok {info = info} -> info
+
+  sem tokReprToStr +=
+  | KeywordRepr _ -> "<Keyword>"
+
+  sem tokToStr +=
+  | KeywordTok tok -> concat "<Keyword>" tok.val
+
+  sem tokToRepr +=
+  | KeywordTok _ -> KeywordRepr ()
+end
+
+lang LIdentTokenParser = KeywordTokenParser
   syn Token +=
   | LIdentTok {info : Info, val : String}
   syn TokenRepr +=
@@ -169,7 +198,7 @@ lang LIdentTokenParser = TokenParser
     then
       let val = cons c val in
       let info = makeInfo pos pos2 in
-      { token = LIdentTok {info = info, val = val}
+      { token = match identIsKeyword val with true then KeywordTok {info = info, val = val} else LIdentTok {info = info, val = val}
       , lit = val
       , info = info
       , stream = {pos = pos2, str = str}
@@ -192,7 +221,7 @@ lang LIdentTokenParser = TokenParser
   | LIdentTok _ -> LIdentRepr ()
 end
 
-lang UIdentTokenParser = TokenParser
+lang UIdentTokenParser = KeywordTokenParser
   syn Token +=
   | UIdentTok {info : Info, val : String}
   syn TokenRepr +=
@@ -206,7 +235,7 @@ lang UIdentTokenParser = TokenParser
     then
       let val = cons c val in
       let info = makeInfo pos pos2 in
-      { token = UIdentTok {info = info, val = val}
+      { token = match identIsKeyword val with true then KeywordTok {info = info, val = val} else UIdentTok {info = info, val = val}
       , lit = val
       , info = info
       , stream = {pos = pos2, str = str}
@@ -574,13 +603,16 @@ let matchChar : Pos -> String -> {val: Char, pos: Pos, str: String} =
       match xs with "t" ++ xs then ret '\t' xs 2 else
       match xs with "\"" ++ xs then ret '\"' xs 2 else
       match xs with "'" ++ xs then ret '\'' xs 2 else
+      match xs with "?" ++ xs then ret '?' xs 2 else
+      match xs with "a" ++ xs then ret (int2char 7) xs 2 else
+      match xs with "b" ++ xs then ret (int2char 8) xs 2 else
+      match xs with "f" ++ xs then ret (int2char 12) xs 2 else
+      match xs with "r" ++ xs then ret (int2char 13) xs 2 else
+      match xs with "v" ++ xs then ret (int2char 11) xs 2 else
       posErrorExit (advanceCol p 1) "Unknown escape character."
-    else match str with "\n" ++ xs then posErrorExit p "Unexpected newline."
+    else match str with "\n" ++ xs then {val = '\n', pos = advanceRow p 1, str = xs}
     else match str with [x] ++ xs then ret x xs 1
     else posErrorExit p "Unexpected end of file."
-    -- TODO (David, 2020-09-27): Shoud we allow newlines etc. inside strings
-       -- ADDENDUM NOTE(vipa, 2021-02-03): presently not parsing newlines in strings, just to never report an incorrect position, which could happen before
-    -- TODO (David, 2020-09-27): Add all other relevant escape characters
 
 lang StringTokenParser = TokenParser
   syn Token +=

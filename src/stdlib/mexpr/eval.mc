@@ -47,39 +47,47 @@ let _evalStringToSeqOfChars = map char_
 lang Eval = Ast
   type EvalEnv = List (Name, Expr)
   sem evalEnvEmpty : () -> EvalEnv
-  sem evalEnvEmpty =| _ -> listEmpty
+  sem evalEnvEmpty =
+  | _ -> listEmpty
 
   sem evalEnvLookup : Name -> EvalEnv -> Option Expr
-  sem evalEnvLookup id =| env ->
+  sem evalEnvLookup id =
+  | env ->
     let p = lam entry. nameEqSymUnsafe id entry.0 in
     match listFind p env with Some (_, e) then Some e else None ()
 
   sem evalEnvInsert : Name -> Expr -> EvalEnv -> EvalEnv
-  sem evalEnvInsert id e =| env -> listCons (id, e) env
+  sem evalEnvInsert id e =
+  | env -> listCons (id, e) env
 
   sem evalEnvAll : ((Name, Expr) -> Bool) -> EvalEnv -> Bool
-  sem evalEnvAll p =| env -> listAll p env
+  sem evalEnvAll p =
+  | env -> listAll p env
 
   sem evalEnvFilter : ((Name, Expr) -> Bool) -> EvalEnv -> EvalEnv
-  sem evalEnvFilter p =| env -> listFilter p env
+  sem evalEnvFilter p =
+  | env -> listFilter p env
 
   sem evalEnvConcat : EvalEnv -> EvalEnv -> EvalEnv
-  sem evalEnvConcat lhs =| rhs -> listConcat lhs rhs
+  sem evalEnvConcat lhs =
+  | rhs -> listConcat lhs rhs
 
   sem evalEnvIsEmpty : EvalEnv -> Bool
-  sem evalEnvIsEmpty =| env -> listNil env
+  sem evalEnvIsEmpty =
+  | env -> listNil env
 
   type EvalCtx = { env : EvalEnv }
   sem evalCtxEmpty : () -> EvalCtx
-  sem evalCtxEmpty =| _ -> { env = evalEnvEmpty () }
+  sem evalCtxEmpty =
+  | _ -> { env = evalEnvEmpty () }
 
   sem eval : EvalCtx -> Expr -> Expr
-  sem eval ctx =| _ ->
-    error "Unsupported Expr in eval!"
+  sem eval ctx =
+  | _ -> error "Unsupported Expr in eval!"
 
   sem evalDecl : EvalCtx -> Decl -> EvalCtx
-  sem evalDecl ctx =| _ ->
-    error "Unsupported Decl in eval!"
+  sem evalDecl ctx =
+  | _ -> error "Unsupported Decl in eval!"
 end
 
 -----------

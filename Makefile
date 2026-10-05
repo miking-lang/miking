@@ -116,6 +116,9 @@ uninstall-mi:
 misc/test: misc/test-spec.mc build/$(MI_NAME)
 	$(SET_STDLIB) $(SET_OCAMLPATH) build/$(MI_NAME) compile misc/test-spec.mc --output misc/test
 
+misc/scripts/parser-compare: misc/scripts/parser-compare.mc src/stdlib/parser/parser.mc build/$(MI_NAME)
+	$(SET_STDLIB) $(SET_OCAMLPATH) build/$(MI_NAME) compile misc/scripts/parser-compare.mc --output misc/scripts/parser-compare
+
 .PHONY: test test-all test-quick
 test test-all test-quick: lint misc/test build/mi
 test:

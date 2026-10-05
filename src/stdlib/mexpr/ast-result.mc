@@ -50,8 +50,8 @@ lang AstResult = Ast
   -- produce a non-error. Preserves all errors and warnings.
   sem smap_ResultM_Expr_Expr
     : all w. all e. (Expr -> Result w e Expr) -> Expr -> Result w e Expr
-  sem smap_ResultM_Expr_Expr f =| e ->
-    (smapAccumL_ResultM_Expr_Expr (lam. lam e. ((), f e)) () e).1
+  sem smap_ResultM_Expr_Expr f =
+  | e -> (smapAccumL_ResultM_Expr_Expr (lam. lam e. ((), f e)) () e).1
 end
 
 lang TestLang = AstResult + BootParser + MExprEq end

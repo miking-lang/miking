@@ -111,7 +111,8 @@ lang SymLookup = IdentifierPrettyPrint
   type LookupParams = {kind : String, info : [Info], allowFree : Bool}
 
   sem symLookupError : all a. all n. Map String n -> LookupParams -> Name -> a
-  sem symLookupError env lkup =| ident ->
+  sem symLookupError env lkup =
+  | ident ->
     let identStr = nameGetStr ident in
     let f = lam acc : (Int, [String]). lam name. lam.
       if leqi (absi (subi (length identStr) (length name))) acc.0 then
@@ -141,7 +142,8 @@ lang SymLookup = IdentifierPrettyPrint
 
   -- Get a symbol from the environment, or give an error if it is not there.
   sem getSymbol : LookupParams -> Map String Name -> Name -> Name
-  sem getSymbol lkup env =| ident ->
+  sem getSymbol lkup env =
+  | ident ->
     if nameHasSym ident then ident
     else
       optionGetOrElse
@@ -151,7 +153,8 @@ lang SymLookup = IdentifierPrettyPrint
 
   -- Insert a new symbol mapping into the environment, overriding if it exists.
   sem setSymbol : Map String Name -> Name -> (Map String Name, Name)
-  sem setSymbol env =| ident ->
+  sem setSymbol env =
+  | ident ->
     if nameHasSym ident then (env, ident)
     else
       let ident = nameSetNewSym ident in
@@ -166,7 +169,8 @@ lang SymLookup = IdentifierPrettyPrint
       -> Map String a
       -> Name
       -> b
-  sem getSymbolWith cases env =| ident ->
+  sem getSymbolWith cases env =
+  | ident ->
     if nameHasSym ident then cases.hasSym ()
     else
       optionMapOrElse cases.absent cases.present
@@ -178,7 +182,8 @@ lang SymLookup = IdentifierPrettyPrint
     -> Map String a
     -> Name
     -> (Map String a, Name)
-  sem setSymbolWith newElem env =| ident ->
+  sem setSymbolWith newElem env =
+  | ident ->
     if nameHasSym ident then (env, ident)
     else
       let ident = nameSetNewSym ident in
