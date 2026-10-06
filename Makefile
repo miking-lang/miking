@@ -72,6 +72,10 @@ install-mi-stats:
 uninstall-mi-stats:
 	misc/scripts/with-tmp-dir dune uninstall --root=src/mi-stats --build-dir="{}" --prefix=$(prefix) --libdir=$(ocamllibdir) ">/dev/null 2>&1"
 
+.PHONY: vendor-mi-stats
+vendor-mi-stats:
+	cd src/mi-stats; ./vendor.fish
+
 
 ## Formatting, checking and autoformatting respectively
 

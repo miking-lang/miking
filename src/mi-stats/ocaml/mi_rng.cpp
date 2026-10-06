@@ -1,21 +1,15 @@
 #ifndef MI_RNG_CPP
 #define MI_RNG_CPP
 
-#include <boost/random/mersenne_twister.hpp>
-
 #include <caml/mlvalues.h>
 #include <caml/alloc.h>
 #include <caml/memory.h>
 #include <caml/custom.h>
 #include <caml/fail.h>
 
-// NOTE(vipa, 2026-09-22): We happen to know that this has a no-op
-// destructor, so the `mi_rng_finalize` is unnecessary, but we keep it
-// to not accidentally miss it later if we switch to something that
-// actually requires a destructor to run
-using mi_rng = boost::mt19937_64;
+#include "../cpp/mi_rng.hpp"
 
-// Get an lvalue for a rng thing from an OCaml value
+// Get an lvalue for an rng thing from an OCaml value
 #define Mi_rng_val(v) (*(mi_rng*)Data_custom_val(v))
 
 static void mi_rng_finalize(value mi_rng_v) {
