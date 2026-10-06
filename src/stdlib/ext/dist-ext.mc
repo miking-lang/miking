@@ -45,12 +45,14 @@ let binomialLogPmf = lam p:Float. lam n:Int. lam x:Int.
   externalBinomialLogPmf x p n
 let binomialSample = lam p:Float. lam n:Int.
   externalBinomialSample p n
+external externalBernoulliLogPmf : Bool -> Float -> Float
+external externalBernoulliSample ! : Float -> Bool
 let bernoulliPmf = lam p:Float. lam x:Bool.
-  if x then p else subf 1. p
+  exp (externalBernoulliLogPmf x p)
 let bernoulliLogPmf = lam p:Float. lam x:Bool.
-  log (bernoulliPmf p x)
+  externalBernoulliLogPmf x p
 let bernoulliSample = lam p:Float.
-  if eqi 1 (externalBinomialSample p 1) then true else false
+  externalBernoulliSample p
 
 -- Beta
 external externalBetaLogPdf : Float -> Float -> Float -> Float
@@ -303,7 +305,15 @@ utest binomialPmf 0.7 20 15 with 0.17886305057 using _eqf in
 utest exp (binomialLogPmf 0.5 40 20) with 0.12537068762 using _eqf in
 utest binomialSample 0.7 20 with 0 using intRange 0 20 in
 utest bernoulliPmf 0.3 false with 0.7 using _eqf in
+utest bernoulliPmf 0.3 true with 0.3 using _eqf in
 utest exp (bernoulliLogPmf 0.6 true) with 0.6 using _eqf in
+utest exp (bernoulliLogPmf 0.6 false) with 0.4 using _eqf in
+utest bernoulliPmf 0. false with 1. using _eqf in
+utest bernoulliLogPmf 0. true with negf inf using eqf in
+utest bernoulliPmf 1. true with 1. using _eqf in
+utest bernoulliLogPmf 1. false with negf inf using eqf in
+utest bernoulliSample 0. with false in
+utest bernoulliSample 1. with true in
 utest bernoulliSample 0.6 with false using lam. lam. true in
 
 -- Testing Beta
