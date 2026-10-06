@@ -11,3 +11,9 @@ external mi_normal_lpdf : (float [@unboxed]) -> (float [@unboxed]) -> (float [@u
 external mi_normal_rng : (float [@unboxed]) -> (float [@unboxed]) -> mi_rng -> (float [@unboxed])
   = "mi_normal_rng_wrapped" "mi_normal_rng_unwrapped" [@@noalloc]
 let mi_normal_rng_ : float -> float -> float = fun a b -> mi_normal_rng a b !global_rng
+
+external mi_bernoulli_lpmf : bool -> (float [@unboxed]) -> (float [@unboxed])
+  = "mi_bernoulli_lpmf_wrapped" "mi_bernoulli_lpmf_unwrapped" [@@noalloc]
+external mi_bernoulli_rng : (float [@unboxed]) -> mi_rng -> bool
+  = "mi_bernoulli_rng_wrapped" "mi_bernoulli_rng_unwrapped" [@@noalloc]
+let mi_bernoulli_rng_ : float -> bool = fun p -> mi_bernoulli_rng p !global_rng

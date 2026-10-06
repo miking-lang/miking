@@ -86,6 +86,20 @@ let distExtMap =
         cLibraries = []
       }
     ]),
+    ("externalBernoulliLogPmf", [
+      { expr = "Mi_stats.mi_bernoulli_lpmf",
+        ty = tyarrows_ [tybool_, tyfloat_, tyfloat_],
+        libraries = ["mi_stats"],
+        cLibraries = []
+      }
+    ]),
+    ("externalBernoulliSample", [
+      { expr = "Mi_stats.mi_bernoulli_rng_",
+        ty = tyarrows_ [tyfloat_, tybool_],
+        libraries = ["mi_stats"],
+        cLibraries = []
+      }
+    ]),
     ("externalBetaLogPdf", [
       { expr = "Owl_stats.beta_logpdf",
         ty = tyarrows_ [tyfloat_, otylabel_ "a" tyfloat_, otylabel_ "b" tyfloat_, tyfloat_],
