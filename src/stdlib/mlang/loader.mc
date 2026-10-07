@@ -1041,8 +1041,7 @@ lang MLangSem = MLangLoader + SemDeclAst + LetSym + PatTypeCheck + SubstituteUnk
           { tcEnv with matchLvl = addi 1 tcEnv.matchLvl
           , varEnv = mapUnion tcEnv.varEnv patEnv
           } in
-        let body = typeCheckExpr matchEnv c.body in
-        unify tcEnv [infoTy retTy, infoTm body] retTy (tyTm body);
+        let body = typeCheckExpr matchEnv retTy c.body in
         {c with pat = pat, body = body} in
       let cases = map tcCase impl.cases in
 
