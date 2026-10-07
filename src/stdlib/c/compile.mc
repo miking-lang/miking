@@ -528,6 +528,7 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile + RecordTypeUtils
     ) () fields in
     match r with None _ then true else false
   | TyCon { ident = ident } -> any (nameEq ident) acc
+  | TyAlias t -> isPtrType acc t.content
   | _ -> false
 
   -- Generate declarations for all variant types (required because of recursion).
@@ -751,44 +752,47 @@ lang MExprCCompile = MExprCCompileBase + MExprTensorCCompile + RecordTypeUtils
     ] in
     (env, def, init, n)
 
-  | TmRecord _ & t ->
-    errorSingle [infoTm t]
-      "Unhandled case for TmRecord in compileAlloc (should be impossible)."
-  | TmRecord { ty = TyRecord _, bindings = bindings } & t ->
-    -- If the type is TyRecord, it follows from type lifting that this must be
-    -- an empty record.
-    -- TODO(dlunde,2021-10-07): Handle this how?
-    errorSingle [infoTm t] "Empty bindings in TmRecord in compileAlloc"
-  | TmRecord { ty = TyCon { ident = ident } & ty, bindings = bindings } & t ->
-    let orderedLabels = recordOrderedLabels (mapKeys bindings) in
-    let n = match name with Some name then name else nameSym "alloc" in
-    let cTy = compileType env ty in
-    if any (nameEq ident) env.ptrTypes then
-      let def = alloc n cTy in
-      let init = map (lam sid.
-        let expr = mapFindExn sid bindings in
-        CSExpr {
-          expr = _assign
-            (CEArrow {
-              lhs = CEVar { id = n }, id = nameNoSym (sidToString sid)
-            })
-            (compileExpr env expr)
-        }
-      ) orderedLabels in
-      (env, def, init, n)
-    else
-      let def = [{ ty = cTy, id = Some n, init = None ()}] in
-      let init = map (lam sid.
-        let expr = mapFindExn sid bindings in
-        CSExpr {
-          expr = _assign
-            (CEMember {
-              lhs = CEVar { id = n }, id = nameNoSym (sidToString sid)
-            })
-            (compileExpr env expr)
-        }
-      ) orderedLabels in
-      (env, def, init, n)
+  | TmRecord { ty = ty, bindings = bindings } & t ->
+    switch unwrapType ty
+    case TyRecord _ then
+      -- If the type is TyRecord, it follows from type lifting that this must be
+      -- an empty record.
+      -- TODO(dlunde,2021-10-07): Handle this how?
+      errorSingle [infoTm t] "Empty bindings in TmRecord in compileAlloc"
+    case TyCon { ident = ident } & ty then
+      let orderedLabels = recordOrderedLabels (mapKeys bindings) in
+      let n = match name with Some name then name else nameSym "alloc" in
+      let cTy = compileType env ty in
+      if any (nameEq ident) env.ptrTypes then
+        let def = alloc n cTy in
+        let init = map (lam sid.
+          let expr = mapFindExn sid bindings in
+          CSExpr {
+            expr = _assign
+              (CEArrow {
+                lhs = CEVar { id = n }, id = nameNoSym (sidToString sid)
+              })
+              (compileExpr env expr)
+          }
+        ) orderedLabels in
+        (env, def, init, n)
+      else
+        let def = [{ ty = cTy, id = Some n, init = None ()}] in
+        let init = map (lam sid.
+          let expr = mapFindExn sid bindings in
+          CSExpr {
+            expr = _assign
+              (CEMember {
+                lhs = CEVar { id = n }, id = nameNoSym (sidToString sid)
+              })
+              (compileExpr env expr)
+          }
+        ) orderedLabels in
+        (env, def, init, n)
+    case _ then
+      errorSingle [infoTm t]
+        "Unhandled case for TmRecord in compileAlloc (should be impossible)."
+    end
 
   | TmSeq {tms = tms, ty = ty} & t ->
     let uTy = _unwrapType (env.typeEnv) ty in
