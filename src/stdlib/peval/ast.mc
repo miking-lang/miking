@@ -41,9 +41,9 @@ lang SpecializeAst =
   sem withType (ty : Type) +=
   | TmSpecialize t -> TmSpecialize {t with e = withType ty t.e}
 
-  sem typeCheckExpr (env : TCEnv) +=
+  sem typeCheckExpr (env : TCEnv) ty +=
   | TmSpecialize t ->
-    let e = typeCheckExpr env t.e in
+    let e = typeCheckExpr env ty t.e in
     TmSpecialize {t with e = e}
 
   sem smapAccumL_Expr_Expr f acc +=
