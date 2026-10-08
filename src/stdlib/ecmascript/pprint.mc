@@ -212,6 +212,12 @@ lang ESPrettyPrint = ESAst
     (env, join [l, " ", printESBinOp t.op, " ", r])
   | ESEUn t ->
     match printESExprP env indent 14 t.arg with (env, a) in
+    -- A `-` written next to an operand that itself starts with `-` lexes as
+    -- the decrement operator: `--1` is a syntax error, and `--x` silently
+    -- decrements `x`. Parenthesizing the operand keeps the two apart.
+    let a =
+      match (t.op, a) with (ESONeg _, "-" ++ _)
+      then join ["(", a, ")"] else a in
     (env, concat (printESUnOp t.op) a)
   | ESECond t ->
     match printESExprP env indent 3 t.cond with (env, c) in
@@ -419,6 +425,19 @@ utest pp (ESECond { cond = va, thn = vb, els = vc }) with "a ? b : c" in
 utest pp (ESEInstanceOf { lhs = va, rhs = vb }) with "a instanceof b" in
 utest pp (ESEUn { op = ESONot {}, arg = va }) with "!a" in
 utest pp (ESEUn { op = ESONot {}, arg = add va vb }) with "!(a + b)" in
+utest pp (ESEUn { op = ESONeg {}, arg = va }) with "-a" in
+
+-- Negation of something that itself starts with `-`: written together, the two
+-- would lex as the decrement operator rather than as a double negation.
+utest pp (ESEUn { op = ESONeg {}, arg = ESEInt { value = 1 } }) with "-1" in
+utest pp (ESEUn { op = ESONeg {}, arg = ESEInt { value = negi 1 } }) with "-(-1)" in
+utest pp (ESEUn { op = ESONeg {}, arg = ESEFloat { value = negf 1.5 } })
+with "-(-1.5)" in
+utest pp (ESEUn { op = ESONeg {}, arg = ESEUn { op = ESONeg {}, arg = va } })
+with "-(-a)" in
+-- `!` has no such hazard: `!!a` is two tokens either way.
+utest pp (ESEUn { op = ESONot {}, arg = ESEUn { op = ESONot {}, arg = va } })
+with "!!a" in
 
 -- Statements.
 utest pps (ESSConst { id = a, init = ESEInt { value = 1 } }) with "const a = 1;" in
