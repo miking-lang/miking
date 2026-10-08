@@ -283,6 +283,61 @@ lang ESCleanup = ESAst
   | ESSExportDefault t -> esAssignedStmt t.stmt
   | _ -> []
 
+  -- Whether the expression's value can change while the program runs. MExpr
+  -- values are immutable with two exceptions: a `ref`, which this backend
+  -- emits as an object whose `v` holds the value, and a tensor, which the
+  -- `$t`-prefixed helpers read and write. A record field cannot change, so
+  -- reading one says the same thing wherever it stands.
+  sem esReadsHeap : ESExpr -> Bool
+  sem esReadsHeap =
+  | ESEMember t -> if eqString t.prop "v" then true else esReadsHeap t.obj
+  | ESEIndex t -> or (esReadsHeap t.obj) (esReadsHeap t.index)
+  | ESECall t & e ->
+    match t.callee with ESEGlobal g then
+      if match g.name with "$t" ++ _ then true else false
+      then true else any esReadsHeap (esExprChildren e)
+    else any esReadsHeap (esExprChildren e)
+  | e -> any esReadsHeap (esExprChildren e)
+
+  -- Whether evaluating the expression may write the heap. `modref` and the
+  -- tensor writes are calls, as is anything that takes a function and may call
+  -- it, so any call at all is taken to write.
+  sem esMayWriteExpr : ESExpr -> Bool
+  sem esMayWriteExpr =
+  | ESECall _ | ESENew _ -> true
+  | e -> any esMayWriteExpr (esExprChildren e)
+
+  -- The same for a statement. A function declaration writes nothing by being
+  -- declared, and a class even less.
+  sem esMayWriteStmt : ESStmt -> Bool
+  sem esMayWriteStmt =
+  | ESSConst t -> esMayWriteExpr t.init
+  | ESSLet t -> optionMapOr false esMayWriteExpr t.init
+  | ESSAssign t ->
+    or (esMayWriteExpr t.value)
+       (match t.target with ESEVar _ then false else true)
+  | ESSExpr t -> esMayWriteExpr t.expr
+  | ESSReturn t -> optionMapOr false esMayWriteExpr t.expr
+  | ESSThrow t -> esMayWriteExpr t.expr
+  | ESSIf t ->
+    or (esMayWriteExpr t.cond)
+       (or (any esMayWriteStmt t.thn) (any esMayWriteStmt t.els))
+  | ESSBlock t -> any esMayWriteStmt t.stmts
+  | ESSWhile t -> or (esMayWriteExpr t.cond) (any esMayWriteStmt t.body)
+  | ESSExportDefault t -> esMayWriteStmt t.stmt
+  | ESSFunDecl _ | ESSClass _ | ESSContinue _ -> false
+
+  -- The statements an initialiser would have to move across to reach its use:
+  -- those before the first one that mentions the name.
+  sem esCrossedBy : Name -> [ESStmt] -> [ESStmt]
+  sem esCrossedBy id =
+  | stmts ->
+    recursive let work = lam acc. lam ss.
+      match ss with [s] ++ rest then
+        if eqi (esCountStmt id s) 0 then work (snoc acc s) rest else acc
+      else acc
+    in work [] stmts
+
   -- `let x; if (c) { x = a; } else { x = b; }` is a ternary written long-hand.
   --
   -- The compiler cannot always spot this itself: a pattern that binds
@@ -324,11 +379,18 @@ lang ESCleanup = ESAst
       let inNextCond =
         match rest with [ESSIf t] ++ _ then eqi (esCountExpr id t.cond) 1
         else false in
+      -- A value read from the heap cannot be moved past a statement that may
+      -- write to it: `deref` moved after a `modref` would read the new value.
+      let heapSafe =
+        if esReadsHeap e
+        then not (any esMayWriteStmt (esCrossedBy id rest))
+        else true in
       let movable = or inNextCond
         (not (any (lam n. gti (esCountExpr n e) 0)
                 (join (map esAssignedStmt rest)))) in
+      -- Dropping an unused binding moves nothing, so it needs no such care.
       if and (eqi uses 0) movable then rest
-      else if and movable
+      else if and (and movable heapSafe)
                  (and (or (esIsTemporary id) (esIsTrivial e))
                       (and (eqi uses 1) (eqi deferred 0))) then
         map (esSubstStmt id e) rest
@@ -416,6 +478,30 @@ utest esCleanupStmts
                              , els = ESEInt { value = 0 } } } ]
 with [ ESSExpr { expr = ESECond { cond = lt, thn = ESEInt { value = 1 }
                                 , els = ESEInt { value = 0 } } } ] in
+
+-- A `ref` is read through its `v`, and a call might write it, so such a read
+-- stays where it was written rather than moving to its use.
+let cell = ESEMember { obj = vb, prop = "v" } in
+utest esCleanupStmts
+  [ ESSConst { id = a, init = cell }
+  , ESSExpr { expr = call b }
+  , ESSReturn { expr = Some va } ]
+with [ ESSConst { id = a, init = cell }
+     , ESSExpr { expr = call b }
+     , ESSReturn { expr = Some va } ] in
+
+-- With nothing in between there is nothing to move across, so it is inlined.
+utest esCleanupStmts
+  [ ESSConst { id = a, init = cell }, ESSReturn { expr = Some va } ]
+with [ ESSReturn { expr = Some cell } ] in
+
+-- A record field cannot change, so it moves even past a call.
+utest esCleanupStmts
+  [ ESSConst { id = a, init = ESEMember { obj = vb, prop = "x" } }
+  , ESSExpr { expr = call b }
+  , ESSReturn { expr = Some va } ]
+with [ ESSExpr { expr = call b }
+     , ESSReturn { expr = Some (ESEMember { obj = vb, prop = "x" }) } ] in
 
 -- A pure binding never used is dropped.
 utest esCleanupStmts

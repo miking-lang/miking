@@ -574,6 +574,18 @@ utest mutual with join
   , "  env.dprint(even(4));\n"
   , "}\n" ] in
 
+-- A value read from a `ref` is evaluated where it was written: moving it past
+-- the `modref` would read the value written there instead.
+let vRef = nameSym "v" in
+let readBefore = nameSym "a" in
+let astRef = bind_ (nulet_ vRef (ref_ (int_ 0)))
+  (bind_ (nulet_ readBefore (deref_ (nvar_ vRef)))
+    (bind_ (ulet_ "" (modref_ (nvar_ vRef) (int_ 1)))
+      (dprint_ (nvar_ readBefore)))) in
+let refOrder = esCompileToString astRef in
+utest contains "const a = v.v;" refOrder with true in
+utest contains "env.dprint(v.v)" refOrder with false in
+
 -- Recursion that is not in tail position stays a call.
 let h = nameSym "count" in
 let astNonTail = bind_

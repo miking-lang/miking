@@ -630,9 +630,10 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint + MExprArity
         match compileExprs ctx args with (ctx, s, xs) in
         (ctx, s, esCurryApply (ESEVar { id = v.ident }) xs)
     else
-      match compileExpr ctx fn with (ctx, s0, callee) in
-      match compileExprs ctx args with (ctx, s1, xs) in
-      (ctx, concat s0 s1, esCurryApply callee xs)
+      -- The callee is compiled together with the arguments, so that a
+      -- statement hoisted out of an argument cannot cross it either.
+      match compileExprs ctx (cons fn args) with (ctx, stmts, [callee] ++ xs) in
+      (ctx, stmts, esCurryApply callee xs)
   | TmMatch t ->
     match compileExpr ctx t.target with (ctx, s0, target) in
     match esPatCompile ctx target t.pat with (ctx, pre, test, binds) in
@@ -682,9 +683,8 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint + MExprArity
       (ctx, stmts, ESEObject
         { fields = zipWith (lam f. lam x. (f.0, x)) fields xs })
   | TmRecordUpdate t ->
-    match compileExpr ctx t.rec with (ctx, s0, rec) in
-    match compileExpr ctx t.value with (ctx, s1, value) in
-    (ctx, concat s0 s1, ESEObjectWith
+    match compileExprs ctx [t.rec, t.value] with (ctx, stmts, [rec, value]) in
+    (ctx, stmts, ESEObjectWith
       { base = rec, fields = [(sidToString t.key, value)] })
   | t ->
     errorSingle [infoTm t] (concat
@@ -947,16 +947,39 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint + MExprArity
       else compileStmts ctx (ESCBind d.ident) d.body
     else compileStmts ctx (ESCBind d.ident) d.body
 
+  -- Whether statements running later can change what an expression evaluates
+  -- to. A literal cannot, and neither can a name: the statements hoisted out
+  -- of an expression only ever declare temporaries of their own, and assign to
+  -- nothing a program wrote. Anything that reads memory -- a field, an index,
+  -- the result of a call -- can.
+  sem esStableExpr : ESExpr -> Bool
+  sem esStableExpr =
+  | ESEVar _ | ESEGlobal _ | ESEInt _ | ESEFloat _ | ESEBool _ | ESEString _
+  | ESEUndefined _ | ESENull _ | ESEArrow _ -> true
+  | _ -> false
+
   -- Compiles a list of expressions, concatenating the statements each hoists.
+  --
+  -- Hoisting must not carry a statement past an expression compiled before it:
+  -- the statement can write what that expression reads -- a `modref` moved
+  -- ahead of a `deref` -- which would change its value. So an expression that
+  -- hoists statements first binds the values compiled before it to
+  -- temporaries, pinning each to the point it was written.
   sem compileExprs : ESCompileCtx -> [Expr] -> (ESCompileCtx, [ESStmt], [ESExpr])
   sem compileExprs ctx =
   | exprs ->
     let step = lam acc. lam e.
-      match acc with (ctx, stmts) in
+      match acc with (ctx, stmts, done) in
       match compileExpr ctx e with (ctx, s, x) in
-      ((ctx, concat stmts s), x)
+      if null s then (ctx, stmts, snoc done x) else
+      let pin = lam stmts. lam d.
+        if esStableExpr d then (stmts, d) else
+        let n = nameSym "_t" in
+        (snoc stmts (ESSConst { id = n, init = d }), ESEVar { id = n }) in
+      match mapAccumL pin stmts done with (stmts, done) in
+      (ctx, concat stmts s, snoc done x)
     in
-    match mapAccumL step (ctx, []) exprs with ((ctx, stmts), xs) in
+    match foldl step (ctx, [], []) exprs with (ctx, stmts, xs) in
     (ctx, stmts, xs)
 
   -- Applies a name of known arity. A saturated call is a direct n-ary call; a
