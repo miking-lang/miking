@@ -9,6 +9,8 @@
 --   a constant (other than the higher-order sequence ones) or external
 --   that doesn't compute, and the arms of a residualized `match` never
 --   produce different functions in the same position.
+-- * Variables that instantiate a polymorphic type are
+--   `TmInstantiatedVar`s
 --
 -- Two things can happen every time the partial evaluator encounters a
 -- function call:
@@ -80,6 +82,7 @@ include "mexpr/type-check.mc"
 include "mexpr/free-vars.mc"
 include "mexpr/resymbolize.mc"
 include "mexpr/keyword-maker.mc"
+include "mexpr/instantiated-vars.mc"
 
 lang PEvalGraph = Ast + NamedPat + VarAst + RecLetsDeclAst + MExprCmp + PrettyPrint + VarTypeSubstitute
   type SymInt = Int
@@ -224,7 +227,7 @@ lang PEvalGraph = Ast + NamedPat + VarAst + RecLetsDeclAst + MExprCmp + PrettyPr
   -- The entry point, which expects a type checked expression
   sem mkTopEvalF : Expr -> EvalF
   sem mkTopEvalF = | tm ->
-    mkEvalF (fixRecursiveInstantiate (mapEmpty nameCmp) tm)
+    mkEvalF tm
 
   -- The `Type` is the type of the result of the application
   sem applyF : PEGEnv -> PEGState -> Type -> (PEGVal, [PEGVal]) -> (PEGState, PEGVal)
@@ -244,47 +247,6 @@ lang PEvalGraph = Ast + NamedPat + VarAst + RecLetsDeclAst + MExprCmp + PrettyPr
       (lam acc. lam c. if acc then true else pegGenEmbeds needle c)
       false
       haystack
-
-  -- TODO(vipa, 2026-09-30): This is a work-around for the current
-  -- handling of instantiation in the type-checker. Due to how
-  -- inference for un-annotated recursive functions work, we never see
-  -- the uninstantiated type _inside_ such a function, thus the
-  -- `instantiated` field of a `TmVar` will be unpopulated. This fixes
-  -- that, but should ideally eventually be removed when this is fixed
-  -- in the type checker itself.
-  sem fixRecursiveInstantiate : Map Name Type -> Expr -> Expr
-  sem fixRecursiveInstantiate tyEnv =
-  | tm -> smap_Expr_Expr (fixRecursiveInstantiate tyEnv) tm
-  | TmDecl (x & {decl = DeclRecLets d}) ->
-    let f = lam tyEnv. lam binding.
-      mapInsert binding.ident binding.tyBody tyEnv in
-    let localTyEnv = foldl f tyEnv d.bindings in
-    let f = lam binding.
-      {binding with body = fixRecursiveInstantiate localTyEnv binding.body} in
-    TmDecl {x with decl = DeclRecLets {d with bindings = map f d.bindings}, inexpr = fixRecursiveInstantiate tyEnv x.inexpr}
-  | TmVar (x & {frozen = false}) ->
-    match mapLookup x.ident tyEnv with Some ty then
-      match stripTyAll ty with (vars, stripped) in
-      let vars = setOfSeq nameCmp (map (lam v. v.0) vars) in
-      TmVar {x with instantiated = _matchTyVars vars (mapEmpty nameCmp) stripped x.ty}
-    else TmVar x
-
-  -- Finds what each of `vars` (as they appear in `pat`) corresponds
-  -- to in `ty`
-  sem _matchTyVars : Set Name -> Map Name Type -> Type -> Type -> Map Name Type
-  sem _matchTyVars vars acc pat = | ty ->
-    let pat = unwrapType pat in
-    let ty = unwrapType ty in
-    match pat with TyVar x then
-      if setMem x.ident vars then mapInsert x.ident ty acc else acc
-    else
-      let children = lam ty. sfold_Type_Type snoc [] ty in
-      let patChildren = children pat in
-      let tyChildren = children ty in
-      if and (eqi (constructorTag pat) (constructorTag ty))
-          (eqi (length patChildren) (length tyChildren))
-      then foldl2 (_matchTyVars vars) acc patChildren tyChildren
-      else acc
 
   -- Errors with the given message if the name is unsymbolized
   sem nameToSymInt : [Info] -> String -> Name -> SymInt
@@ -740,20 +702,25 @@ end
 lang PEvalGraphVar = PEvalGraph + VarAst
   sem mkEvalF += | TmVar x ->
     let s = nameToSymInt [x.info] "Unsymbolized TmVar in mkEvalF!" x.ident in
+    let lookup = lam pair. match pair with (s2, v) in
+      if eqi s s2 then Some v else None () in
+    lam env. lam st.
+      match listFindMap lookup env.values with Some v
+      then (st, v)
+      else errorSingle [x.info] "Unbound variable in mkEvalF!"
+end
+
+lang PEvalGraphInstantiatedVar = PEvalGraph + InstantiatedVarAst
+  sem mkEvalF += | TmInstantiatedVar x ->
+    let s = nameToSymInt [x.info] "Unsymbolized TmInstantiatedVar in mkEvalF!" x.ident in
     let instantiated = x.instantiated in
     let lookup = lam pair. match pair with (s2, v) in
       if eqi s s2 then Some v else None () in
-    if mapIsEmpty instantiated then
-      lam env. lam st.
-        match listFindMap lookup env.values with Some v
-        then (st, v)
-        else errorSingle [x.info] "Unbound variable in mkEvalF!"
-    else
-      lam env. lam st.
-        let instantiated = mapMap (pegSubstTy env) instantiated in
-        match listFindMap lookup env.values with Some v
-        then (st, pegInst instantiated v)
-        else errorSingle [x.info] "Unbound variable in mkEvalF!"
+    lam env. lam st.
+      let instantiated = mapMap (pegSubstTy env) instantiated in
+      match listFindMap lookup env.values with Some v
+      then (st, pegInst instantiated v)
+      else errorSingle [x.info] "Unbound variable in mkEvalF!"
 end
 
 lang PEvalGraphApp = PEvalGraph + AppAst
@@ -773,7 +740,8 @@ lang PEvalGraphApp = PEvalGraph + AppAst
 end
 
 lang PEvalGraphOpaque =
-  PEvalGraphConst + PEvalGraphLam + OpaqueAst + MExprFreeVars + MExprResymbolize
+  PEvalGraphConst + PEvalGraphLam + OpaqueAst + InstantiatedVarAst + MExprFreeVars
+  + MExprResymbolize
 
   -- The body is residualized as is, except that its free variables are
   -- renamed, and `bindings` gives the value each of them refers to
@@ -783,24 +751,33 @@ lang PEvalGraphOpaque =
     , body : Expr
     }
 
-  sem fixRecursiveInstantiate tyEnv +=
-  | TmOpaque x -> TmOpaque {x with body = fixRecursiveInstantiate tyEnv x.body}
-
   -- The type and instantiation of the first occurrence of each of
   -- `names`
   sem _collectOccurrences : Set Name -> Map Name (Type, Map Name Type) -> Expr -> Map Name (Type, Map Name Type)
   sem _collectOccurrences names acc =
   | TmVar x ->
     if and (setMem x.ident names) (not (mapMem x.ident acc))
+    then mapInsert x.ident (x.ty, mapEmpty nameCmp) acc
+    else acc
+  | TmInstantiatedVar x ->
+    if and (setMem x.ident names) (not (mapMem x.ident acc))
     then mapInsert x.ident (x.ty, x.instantiated) acc
     else acc
   | tm -> sfold_Expr_Expr (_collectOccurrences names) acc tm
 
+  sem _removeInstantiatedVars : Expr -> Expr
+  sem _removeInstantiatedVars =
+  | TmInstantiatedVar x ->
+    TmVar {ident = x.ident, ty = x.ty, info = x.info, frozen = false}
+  | TmOpaque x -> TmOpaque {x with body = _removeInstantiatedVars x.body}
+  | tm -> smap_Expr_Expr _removeInstantiatedVars tm
+
   sem mkEvalF += | TmOpaque x ->
-    let free = freeVars x.body in
+    let plainBody = _removeInstantiatedVars x.body in
+    let free = freeVars plainBody in
     let subst = mapFromSeq nameCmp
       (map (lam n. (n, nameSetNewSym n)) (setToSeq free)) in
-    let body = resymbolizeExpr subst x.body in
+    let body = resymbolizeExpr subst plainBody in
     -- TODO(vipa, 2026-10-05): We assume that each function referenced
     -- in a `TmOpaque` is only used monomorphically. This is not
     -- generally true, but tends to be true in practice.
@@ -1944,7 +1921,8 @@ end
 
 lang PEvalGraphTest =
   PEvalGraphDecl + PEvalGraphLam + PEvalGraphLet + PEvalGraphRecLets +
-  PEvalGraphType + PEvalGraphVar + PEvalGraphApp + PEvalGraphConst +
+  PEvalGraphType + PEvalGraphVar + PEvalGraphInstantiatedVar + PEvalGraphApp +
+  PEvalGraphConst +
   PEvalGraphExt +
   PEvalGraphMatch + PEvalGraphInt + PEvalGraphIntPat +
   PEvalGraphChar + PEvalGraphCharPat + PEvalGraphFloat + PEvalGraphBool +
@@ -1959,7 +1937,8 @@ lang PEvalGraphTest =
   PEvalGraphRandomNumberGenerator + PEvalGraphConTag + PEvalGraphOpaque +
   KeywordMakerOpaque +
 
-  BootParser + MExprSym + MExprTypeCheck + MExprPrettyPrint
+  BootParser + MExprSym + MExprTypeCheck + MExprPrettyPrint +
+  MExprFindInstantiatedVars
 
   -- Comparison of instructions, which only the tests below need. Note
   -- that this forces the return value of an `IBlockCall` that has
@@ -2133,11 +2112,11 @@ let prepare
   : String -> EvalF
   = lam src.
     mkTopEvalF
-      (typeCheck
+      (findInstantiatedVars (mapEmpty nameCmp) (typeCheck
         (symbolize
           (constTransform (snoc builtin ("testResidual", CResidualIdentity ()))
             (makeKeywords
-              (parseMExprStringExn defaultBootParserParseMExprStringArg src)))))
+              (parseMExprStringExn defaultBootParserParseMExprStringArg src))))))
 in
 
 type InlineF = (PEGVal, [PEGVal]) -> Bool in
@@ -3793,13 +3772,6 @@ using eqBlocksInstrAndVal else ppBlocksInstrAndVal in
 
 
 -- === Instantiations in recursive lets ===
-
--- Inside a `recursive` group the bindings refer to each other
--- monomorphically, so the type checker gives such a reference no
--- instantiation; `fixRecursiveInstantiate` fills it in from the
--- generalized type of the binding. `h` is defined outside the group, so
--- calls to it are not recursive, and the parameter type of its block
--- shows the type of the value passed to it.
 
 -- `f` and `g` share a type variable through the type of `g`, thus the
 -- instantiation of `g` covers it, and `h` sees `[Int]`
