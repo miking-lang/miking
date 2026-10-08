@@ -1,5 +1,6 @@
 BOOT_NAME=mi-boot
 MI_LITE_NAME=mi-lite
+MI_ES_LITE_NAME=mi-es-lite
 MI_MID_NAME=mi-mid
 MI_NAME=mi
 MI_CHEAT_NAME=mi-cheat
@@ -81,6 +82,19 @@ cheat:
 	$(SET_STDLIB) $(SET_OCAMLPATH) mi compile src/main/mi.mc --output build/$(MI_CHEAT_NAME)
 
 build/$(MI_CHEAT_NAME): $(if $(wildcard build/$(MI_CHEAT_NAME)),,cheat)
+
+# Bootstrapping the `mi` executable using es-boot
+
+.PHONY: es-boot
+es-boot:
+	$(SET_STDLIB) $(SET_OCAMLPATH) node --stack-size=4096 --max-old-space-size=16384 src/es-boot/mi-es-lite-node.mjs compile src/main/mi.mc --native-parser --output build/$(MI_NAME)
+
+# Self recompile es-boot, might need to run multiple times to reach fixed point.
+
+.PHONY: es-reboot
+es-reboot:
+	$(SET_STDLIB) $(SET_OCAMLPATH) node --stack-size=4096 --max-old-space-size=16384 src/es-boot/mi-es-lite-node.mjs compile src/main/mi-es-lite.mc --to-es --output build/$(MI_ES_LITE_NAME).mjs
+	sed "s|$(CURDIR)|.|g" build/$(MI_ES_LITE_NAME).mjs > src/es-boot/mi-es-lite.mjs
 
 # Umbrella install/uninstall targets, for installing and uninstalling everything
 
