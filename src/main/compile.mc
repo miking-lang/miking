@@ -192,6 +192,8 @@ let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
     endPhaseStatsExpr log "backend" ast;
     res
 
+-- A minimal copy of this function is present in mi-es-lite.mc
+-- Any changes here should also be reflected in the other file.
 let compileViaLoader = lam options : Options. lam sourcePath.
   use MCoreCompile in
   let sourcePath = stdlibMkExplicitPreferLocal sourcePath in
