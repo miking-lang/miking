@@ -10,6 +10,7 @@ include "parse.mc"
 include "javascript/compile.mc"
 include "javascript/mcore.mc"
 include "javascript/util.mc"
+include "ecmascript/mcore.mc"
 include "lazy.mc"
 include "mexpr/ast-builder.mc"
 include "mexpr/boot-parser.mc"
@@ -167,6 +168,9 @@ let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
 
     let res =
       if options.toJVM then compileMCoreToJVM ast else
+      if options.toEcmascript then compileMCoreToES
+        { compileESOptionsEmpty with output = options.output } ast sourcePath
+      else
       if options.toJavaScript then compileMCoreToJS
         { compileJSOptionsEmpty with
           targetPlatform = parseJSTarget options.jsTarget
@@ -273,6 +277,9 @@ let compileViaLoader = lam options : Options. lam sourcePath.
 
   let res =
     if options.toJVM then compileMCoreToJVM ast else
+    if options.toEcmascript then compileMCoreToES
+      { compileESOptionsEmpty with output = options.output } ast sourcePath
+    else
     if options.toJavaScript then compileMCoreToJS
       { compileJSOptionsEmpty with
         targetPlatform = parseJSTarget options.jsTarget
@@ -297,9 +304,12 @@ let compileViaLoader = lam options : Options. lam sourcePath.
 let compile = lam files. lam options : Options. lam args.
   use MCoreCompile in
 
-  -- The native parser is only available through the loader;
-  -- asking for it thus also selects that pipeline.
-  if or options.mlangPipeline options.nativeParser then
+  let options =
+    if options.toEcmascript then {options with nativeParser = true} else options in
+  let options =
+    if options.nativeParser then {options with mlangPipeline = true} else options in
+
+  if options.mlangPipeline then
     printLn " * WARNING: You are using an experimental, unstable pipeline.";
     iter (lam x. compileViaLoader options x; ()) files
   else
