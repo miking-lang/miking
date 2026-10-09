@@ -269,6 +269,11 @@ testMain substituters directories location (lam api.
       ])
     [(eval, fail), (compile, fail), (mlangCompile, fail)];
 
+  -- Programs that should be rejected by the type checker
+  api.tests []
+    (dirIs "src/test/examples/existentials")
+    [(eval, fail), (compile, fail), (mlangCompile, fail)];
+
   -- Files that were too much work to update for now
   api.tests []
     (elem

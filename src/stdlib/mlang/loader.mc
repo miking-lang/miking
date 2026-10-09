@@ -1035,12 +1035,8 @@ lang MLangSem = MLangLoader + SemDeclAst + LetSym + PatTypeCheck + SubstituteUnk
       match mapAccumL tcParam tcEnv (zip impl.params inferredParams) with (tcEnv, params) in
 
       let tcCase = lam c.
-        match typeCheckPat tcEnv (mapEmpty nameCmp) c.pat with (patEnv, pat) in
-        unify tcEnv [infoTy scrutTy, infoPat pat] scrutTy (tyPat pat);
-        let matchEnv =
-          { tcEnv with matchLvl = addi 1 tcEnv.matchLvl
-          , varEnv = mapUnion tcEnv.varEnv patEnv
-          } in
+        match typeCheckMatchPat tcEnv [infoTy scrutTy] scrutTy c.pat with (matchEnv, pat) in
+        let matchEnv = {matchEnv with matchLvl = addi 1 matchEnv.matchLvl} in
         let body = typeCheckExpr matchEnv retTy c.body in
         {c with pat = pat, body = body} in
       let cases = map tcCase impl.cases in

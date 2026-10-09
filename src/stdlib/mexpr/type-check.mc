@@ -372,7 +372,8 @@ lang VarTypeTCUnify = TCUnify + VarTypeAst
         let msg = join [
           "* Encountered a type variable escaping its scope: ",
           nameGetStr t.ident, "\n",
-          "* Perhaps the annotation of the associated let-binding is too general?\n",
+          "* Perhaps the annotation of the associated let-binding is too general,\n",
+          "* or an existential type from a constructor pattern escapes its match?\n",
           "* When type checking the expression\n"
         ] in
         errorSingle info msg
@@ -805,25 +806,35 @@ lang TypeCheck = TCUnify + Generalize + RemoveMetaVar
 end
 
 lang PatTypeCheck = TCUnify
-  -- `typeCheckPat env patEnv pat' type checks `pat' under environment `env'
-  -- supposing the variables in `patEnv' have been bound previously in the
-  -- pattern.  Returns an updated `patEnv' and the type checked `pat'.
-  sem typeCheckPat : TCEnv -> Map Name Type -> Pat -> (Map Name Type, Pat)
+  -- We track the set of variables bound in this pattern to be sure we
+  -- properly report duplicate bindings with differing types as errors
+  type PatTCState = {env : TCEnv, bound : Set Name}
+  sem typeCheckPat : PatTCState -> Pat -> (PatTCState, Pat)
 
   -- Type check a pattern whose subpatterns must all be of the same type as the
   -- pattern itself.
-  sem typeCheckPatSimple : TCEnv -> Map Name Type -> Pat -> (Map Name Type, Pat)
-  sem typeCheckPatSimple env patEnv =
+  sem typeCheckPatSimple : PatTCState -> Pat -> (PatTCState, Pat)
+  sem typeCheckPatSimple st =
   | pat ->
-    let patTy = newpolyvar env.currentLvl (infoPat pat) in
+    let patTy = newpolyvar st.env.currentLvl (infoPat pat) in
     match smapAccumL_Pat_Pat
-            (lam patEnv. lam pat.
-              match typeCheckPat env patEnv pat with (patEnv, pat) in
-              unify env [infoPat pat] patTy (tyPat pat);
-              (patEnv, pat))
-            patEnv pat
-    with (patEnv, pat) in
-    (patEnv, withTypePat patTy pat)
+            (lam st. lam pat.
+              match typeCheckPat st pat with (st, pat) in
+              unify st.env [infoPat pat] patTy (tyPat pat);
+              (st, pat))
+            st pat
+    with (st, pat) in
+    (st, withTypePat patTy pat)
+
+  -- Small helper to make sure we always check a pattern against a
+  -- scrutinee consistently.
+  sem typeCheckMatchPat : TCEnv -> [Info] -> Type -> Pat -> (TCEnv, Pat)
+  sem typeCheckMatchPat env info scrutTy =
+  | pat ->
+    let env = {env with currentLvl = addi 1 env.currentLvl} in
+    match typeCheckPat {env = env, bound = setEmpty nameCmp} pat with ({env = env}, pat) in
+    unify env (snoc info (infoPat pat)) (tyPat pat) scrutTy;
+    (env, pat)
 end
 
 lang IsEmpty =
@@ -1382,8 +1393,7 @@ lang MatchTypeCheck = TypeCheck + PatTypeCheck + MatchAst + NormPatMatch
   sem typeCheckExpr env ty +=
   | TmMatch t ->
     let target = typeInferExpr env t.target in
-    match typeCheckPat env (mapEmpty nameCmp) t.pat with (patEnv, pat) in
-    unify env [infoTm target, infoPat pat] (tyPat pat) (tyTm target);
+    match typeCheckMatchPat env [infoTm target] (tyTm target) t.pat with (env, pat) in
 
     let matchLvl = addi 1 env.matchLvl in
     match
@@ -1410,8 +1420,7 @@ lang MatchTypeCheck = TypeCheck + PatTypeCheck + MatchAst + NormPatMatch
         env.matchVars matches
     in
 
-    let baseEnv = {env with varEnv = mapUnion env.varEnv patEnv,
-                            matchLvl = matchLvl} in
+    let baseEnv = {env with matchLvl = matchLvl} in
     let thnEnv = if env.disableConstructorTypes then baseEnv
                  else {baseEnv with matches = mkMatches posMatches,
                                     matchVars = mkMatchVars posMatches} in
@@ -1704,44 +1713,53 @@ end
 ---------------------------
 
 lang NamedPatTypeCheck = PatTypeCheck + NamedPat
-  sem typeCheckPat env patEnv +=
+  sem typeCheckPat st +=
   | PatNamed t ->
     match t.ident with PName n then
-      match mapLookup n patEnv with Some ty then
-        (patEnv, PatNamed {t with ty = ty})
+      if setMem n st.bound then
+        match mapLookup n st.env.varEnv with Some ty then
+          (st, PatNamed {t with ty = ty})
+        else error "Pattern variable missing from varEnv in typeCheckPat!"
       else
-        let patTy = newpolyvar env.currentLvl t.info in
-        (mapInsert n patTy patEnv, PatNamed {t with ty = patTy})
+        let patTy = newpolyvar st.env.currentLvl t.info in
+        ( { env = {st.env with varEnv = mapInsert n patTy st.env.varEnv}
+          , bound = setInsert n st.bound }
+        , PatNamed {t with ty = patTy} )
     else
-      (patEnv, PatNamed {t with ty = newpolyvar env.currentLvl t.info})
+      (st, PatNamed {t with ty = newpolyvar st.env.currentLvl t.info})
 end
 
 lang SeqTotPatTypeCheck = PatTypeCheck + SeqTotPat
-  sem typeCheckPat env patEnv +=
+  sem typeCheckPat st +=
   | PatSeqTot t ->
-    let elemTy = newvar env.currentLvl t.info in
-    match mapAccumL (typeCheckPat env) patEnv t.pats with (patEnv, pats) in
-    iter (lam pat. unify env [infoPat pat] elemTy (tyPat pat)) pats;
-    (patEnv, PatSeqTot {t with pats = pats, ty = ityseq_ t.info elemTy})
+    let elemTy = newvar st.env.currentLvl t.info in
+    match mapAccumL typeCheckPat st t.pats with (st, pats) in
+    iter (lam pat. unify st.env [infoPat pat] elemTy (tyPat pat)) pats;
+    (st, PatSeqTot {t with pats = pats, ty = ityseq_ t.info elemTy})
 end
 
 lang SeqEdgePatTypeCheck = PatTypeCheck + SeqEdgePat
-  sem typeCheckPat env patEnv +=
+  sem typeCheckPat st +=
   | PatSeqEdge t ->
-    let elemTy = newpolyvar env.currentLvl t.info in
+    let elemTy = newpolyvar st.env.currentLvl t.info in
     let seqTy = ityseq_ t.info elemTy in
-    let unifyPat = lam pat. unify env [infoPat pat] elemTy (tyPat pat) in
-    match mapAccumL (typeCheckPat env) patEnv t.prefix with (patEnv, prefix) in
-    iter unifyPat prefix;
-    match mapAccumL (typeCheckPat env) patEnv t.postfix with (patEnv, postfix) in
-    iter unifyPat postfix;
-    let patEnv =
+    let unifyPat = lam st. lam pat. unify st.env [infoPat pat] elemTy (tyPat pat) in
+    match mapAccumL typeCheckPat st t.prefix with (st, prefix) in
+    iter (unifyPat st) prefix;
+    match mapAccumL typeCheckPat st t.postfix with (st, postfix) in
+    iter (unifyPat st) postfix;
+    let st =
       match t.middle with PName n then
-        mapInsertWith
-          (lam ty1. lam ty2. unify env [t.info] ty1 ty2; ty2) n seqTy patEnv
-      else patEnv
+        if setMem n st.bound then
+          match mapLookup n st.env.varEnv with Some ty then
+            unify st.env [t.info] ty seqTy; st
+          else error "Pattern variable missing from varEnv in typeCheckPat!"
+        else
+          { env = {st.env with varEnv = mapInsert n seqTy st.env.varEnv}
+          , bound = setInsert n st.bound }
+      else st
     in
-    (patEnv, PatSeqEdge {t with prefix = prefix, postfix = postfix, ty = seqTy})
+    (st, PatSeqEdge {t with prefix = prefix, postfix = postfix, ty = seqTy})
 end
 
 lang SeqPatIsEmpty = IsEmpty + SeqTypeAst + SeqNormPat
@@ -1754,12 +1772,12 @@ lang SeqPatIsEmpty = IsEmpty + SeqTypeAst + SeqNormPat
 end
 
 lang RecordPatTypeCheck = PatTypeCheck + RecordPat
-  sem typeCheckPat env patEnv +=
+  sem typeCheckPat st +=
   | PatRecord t ->
-    let typeCheckBinding = lam patEnv. lam. lam pat. typeCheckPat env patEnv pat in
-    match mapMapAccum typeCheckBinding patEnv t.bindings with (patEnv, bindings) in
-    let ty = newrecvar (mapMap tyPat bindings) env.currentLvl t.info in
-    (patEnv, PatRecord {t with bindings = bindings, ty = ty})
+    let typeCheckBinding = lam st. lam. lam pat. typeCheckPat st pat in
+    match mapMapAccum typeCheckBinding st t.bindings with (st, bindings) in
+    let ty = newrecvar (mapMap tyPat bindings) st.env.currentLvl t.info in
+    (st, PatRecord {t with bindings = bindings, ty = ty})
 end
 
 lang RecordPatIsEmpty = IsEmpty + RecordTypeAst + RecordNormPat
@@ -1776,14 +1794,39 @@ lang RecordPatIsEmpty = IsEmpty + RecordTypeAst + RecordNormPat
     else error "Encountered non-unwrapped TyMetaVar in snpatIsEmpty!"
 end
 
-lang DataPatTypeCheck = PatTypeCheck + DataPat + FunTypeAst + Generalize
-  sem typeCheckPat env patEnv +=
+lang DataPatTypeCheck = PatTypeCheck + DataPat + FunTypeAst + VarTypeAst + Generalize
+  sem _tyVarsInType : Set Name -> Type -> Set Name
+  sem _tyVarsInType acc =
+  | TyVar t -> setInsert t.ident acc
+  | ty -> sfold_Type_Type _tyVarsInType acc ty
+
+  sem typeCheckPat st +=
   | PatCon t ->
+    let env = st.env in
     match mapLookup t.ident env.conEnv with Some (_, ty) then
-      match inst t.info env.currentLvl ty with TyArrow {from = from, to = to} then
-        match typeCheckPat env patEnv t.subpat with (patEnv, subpat) in
-        unify env [infoPat subpat] from (tyPat subpat);
-        (patEnv, PatCon {t with subpat = subpat, ty = to})
+      match stripTyAll ty with (vars, stripped & TyArrow {to = to}) then
+        -- The quantified variables occurring in the result type are
+        -- instantiated with unification variables, as when constructing
+        -- a value.  The remaining ones are existential: each match
+        -- introduces a fresh rigid type variable for them, which may not
+        -- escape the match arm (see `typeCheckMatchPat').
+        let resVars = _tyVarsInType (setEmpty nameCmp) to in
+        let instVar = lam acc. lam v : (Name, Kind).
+          let kind = smap_Kind_Type (substituteVars t.info acc.0) v.1 in
+          if setMem v.0 resVars then
+            let mv = newnmetavar (nameGetStr v.0) kind env.currentLvl t.info in
+            (mapInsert v.0 mv acc.0, acc.1)
+          else
+            let sk = nameSetNewSym v.0 in
+            ( mapInsert v.0 (TyVar {info = t.info, ident = sk}) acc.0
+            , mapInsert sk (env.currentLvl, kind) acc.1 ) in
+        match foldl instVar (mapEmpty nameCmp, env.tyVarEnv) vars with (subst, tyVarEnv) in
+        let st = {st with env = {env with tyVarEnv = tyVarEnv}} in
+        match tyWithInfo t.info (substituteVars t.info subst stripped)
+        with TyArrow {from = from, to = to} in
+        match typeCheckPat st t.subpat with (st, subpat) in
+        unify st.env [infoPat subpat] from (tyPat subpat);
+        (st, PatCon {t with subpat = subpat, ty = to})
       else error "Invalid constructor type in typeCheckPat!"
     else
       let msg = join [
@@ -1808,33 +1851,33 @@ lang ConPatIsEmpty = IsEmpty + ConNormPat + FunTypeAst + Generalize
 end
 
 lang IntPatTypeCheck = PatTypeCheck + IntPat + IntTypeAst
-  sem typeCheckPat env patEnv +=
-  | PatInt t -> (patEnv, PatInt {t with ty = TyInt {info = t.info}})
+  sem typeCheckPat st +=
+  | PatInt t -> (st, PatInt {t with ty = TyInt {info = t.info}})
 end
 
 lang CharPatTypeCheck = PatTypeCheck + CharPat + CharTypeAst
-  sem typeCheckPat env patEnv +=
-  | PatChar t -> (patEnv, PatChar {t with ty = TyChar {info = t.info}})
+  sem typeCheckPat st +=
+  | PatChar t -> (st, PatChar {t with ty = TyChar {info = t.info}})
 end
 
 lang BoolPatTypeCheck = PatTypeCheck + BoolPat + BoolTypeAst
-  sem typeCheckPat env patEnv +=
-  | PatBool t -> (patEnv, PatBool {t with ty = TyBool {info = t.info}})
+  sem typeCheckPat st +=
+  | PatBool t -> (st, PatBool {t with ty = TyBool {info = t.info}})
 end
 
 lang AndPatTypeCheck = PatTypeCheck + AndPat
-  sem typeCheckPat env patEnv +=
-  | PatAnd t -> typeCheckPatSimple env patEnv (PatAnd t)
+  sem typeCheckPat st +=
+  | PatAnd t -> typeCheckPatSimple st (PatAnd t)
 end
 
 lang OrPatTypeCheck = PatTypeCheck + OrPat
-  sem typeCheckPat env patEnv +=
-  | PatOr t -> typeCheckPatSimple env patEnv (PatOr t)
+  sem typeCheckPat st +=
+  | PatOr t -> typeCheckPatSimple st (PatOr t)
 end
 
 lang NotPatTypeCheck = PatTypeCheck + NotPat
-  sem typeCheckPat env patEnv +=
-  | PatNot t -> typeCheckPatSimple env patEnv (PatNot t)
+  sem typeCheckPat st +=
+  | PatNot t -> typeCheckPatSimple st (PatNot t)
 end
 
 lang MExprTypeCheckLamLetVar = VarTypeCheck + LamTypeCheck + LetTypeCheck + RecLetsTypeCheck
