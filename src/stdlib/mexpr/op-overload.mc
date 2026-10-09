@@ -43,11 +43,11 @@ lang OverloadedOpAst = Ast
 end
 
 lang OverloadedOpTypeCheck = TypeCheck + OverloadedOpAst
-  sem typeCheckExpr env +=
+  sem typeCheckExpr env ty +=
   | TmOverloadedOp x ->
     let types = opMkTypes x.info env x.op in
-    let ty = tyarrows_ (snoc types.params types.return) in
-    TmOverloadedOp {x with ty = ty}
+    let opTy = tyarrows_ (snoc types.params types.return) in
+    _checkInferred env ty (TmOverloadedOp {x with ty = opTy})
 end
 
 lang OverloadedOpDesugar = Desugar + OverloadedOpAst + FunTypeAst
