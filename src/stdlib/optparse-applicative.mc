@@ -72,10 +72,6 @@ type OptParser a
 con NilP : all a. a -> OptParser a
 con OptP : all a. OptItem a -> OptParser a
 con AltP : all a. (OptParser a, OptParser a) -> OptParser a
--- NOTE(vipa, 2025-03-26): We don't actually handle existentials
--- properly, when we pattern match on `MultP` or `BindP` the `x` will
--- be instantiated to *anything*, instead of some unknowable type. Be
--- *very* cautious when unwrapping it.
 con MultP : all x. all a. (OptParser (x -> a), OptParser x) -> OptParser a
 con BindP : all x. all a. (OptParser x, x -> OptParser a) -> OptParser a
 
@@ -107,16 +103,8 @@ recursive let optMap
     case OptP o then OptP (_optItemMap f o)
     case AltP (a, b) then AltP (optMap f a, optMap f b)
     case MultP (a, b) then
-      -- NOTE(vipa, 2025-03-26): Emulate an existential type by
-      -- creating a new empty type
-      type Never in
-      let a : OptParser (Never -> a) = a in
       MultP (optMap (lam f2. lam x. f (f2 x)) a, b)
     case BindP (a, b) then
-      -- NOTE(vipa, 2025-03-26): Emulate an existential type by
-      -- creating a new empty type
-      type Never in
-      let a : OptParser Never = a in
       BindP (a, lam x. optMap f (b x))
     end
 end
@@ -381,20 +369,12 @@ recursive let optParserEval
       case (Left a, Left b) then Left (_optMissingAlt a b)
       end
     case MultP (a, b) then
-      -- NOTE(vipa, 2025-03-26): Emulate an existential type by
-      -- creating a new empty type
-      type Never in
-      let a : OptParser (Never -> a) = a in
       switch (optParserEval a, optParserEval b)
       case (Right a, Right b) then Right (a b)
       case (Left a, Left b) then Left (_optMissingMult a b)
       case (Left x, _) | (_, Left x) then Left x
       end
     case BindP (a, b) then
-      -- NOTE(vipa, 2025-03-26): Emulate an existential type by
-      -- creating a new empty type
-      type Never in
-      let a : OptParser Never = a in
       switch optParserEval a
       case Right a then optParserEval (b a)
       case Left x then Left x
@@ -424,10 +404,6 @@ recursive let _searchParser
         PSRNotFound ()
       end
     case MultP (a, b) then
-      -- NOTE(vipa, 2025-03-26): Emulate an existential type by
-      -- creating a new empty type
-      type Never in
-      let a : OptParser (Never -> a) = a in
       switch _searchParser #frozen"f" a
       case PSROk (args, a) then
         PSROk (args, optApply a b)
@@ -444,10 +420,6 @@ recursive let _searchParser
         PSRError err
       end
     case BindP (a, b) then
-      -- NOTE(vipa, 2025-03-26): Emulate an existential type by
-      -- creating a new empty type
-      type Never in
-      let a : OptParser Never = a in
       switch _searchParser #frozen"f" a
       case PSROk (args, a) then
         PSROk (args, BindP (a, b))
@@ -707,18 +679,10 @@ recursive let _describeTree : all a. OptParser a -> DescTree
       let bDesc = _describeTree b in
       _optDescTreeAlt aDesc bDesc
     case MultP (a, b) then
-      -- NOTE(vipa, 2025-03-26): Emulate an existential type by
-      -- creating a new empty type
-      type Never in
-      let a : OptParser (Never -> a) = a in
       let aDesc = _describeTree a in
       let bDesc = _describeTree b in
       _optDescTreeMult aDesc bDesc
     case BindP (a, b) then
-      -- NOTE(vipa, 2025-03-26): Emulate an existential type by
-      -- creating a new empty type
-      type Never in
-      let a : OptParser Never = a in
       let aDesc = _describeTree a in
       match optParserEval a with Right a
       then DescTreeBind (_optDescTreeMult aDesc (_describeTree (b a)))
