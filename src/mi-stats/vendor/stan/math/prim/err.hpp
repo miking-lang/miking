@@ -13,6 +13,7 @@
 #include <stan/math/prim/err/check_corr_matrix.hpp>
 #include <stan/math/prim/err/check_cov_matrix.hpp>
 #include <stan/math/prim/err/check_finite.hpp>
+// #include <stan/math/prim/err/check_flag_sundials.hpp> // commented out for miking
 #include <stan/math/prim/err/check_greater.hpp>
 #include <stan/math/prim/err/check_greater_or_equal.hpp>
 #include <stan/math/prim/err/check_ldlt_factor.hpp>

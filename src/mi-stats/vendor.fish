@@ -20,10 +20,10 @@ set eigenDir $workDir/lib/eigen_*/
 set boostDir $workDir/lib/boost_*/
 
 
-# === Remove some includes that we don't need ===
+# === Comment out some includes that we don't need ===
 
 function pruneIncludes --argument-names file target
-  sed --in-place '\@^#include <'(string escape --style regex -- $target)'>$@d' $workDir/$file
+  sed --in-place 's@^#include <'(string escape --style regex -- $target)'>$@// & // commented out for miking@' $workDir/$file
 end
 
 pruneIncludes stan/math/prim/core.hpp stan/math/prim/core/init_threadpool_tbb.hpp
