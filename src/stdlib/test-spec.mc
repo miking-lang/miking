@@ -350,9 +350,10 @@ lang TestSpec
     let colorReset = "\\033[0m" in
     let passMark = join [green, "✓", colorReset] in
     let failMark = join [red, "✗", colorReset] in
+    let ruleOutput = lam rule. cons ' ' (head rule.outputs) in
     let prereq = match tags with Some tags
-      then lam rule. if setMem rule.tag tags then cons ' ' (head rule.outputs) else ""
-      else lam rule. cons ' ' (head rule.outputs) in
+      then lam rule. if setMem rule.tag tags then ruleOutput rule else ""
+      else ruleOutput in
     let rule = lam rule. join
       [ head rule.outputs, " : "
       , strJoin " " rule.inputs
@@ -366,7 +367,8 @@ lang TestSpec
       ] in
     join
       [ "ROOT := $(realpath .)\n"
-      , "__gen_test_rule .PHONY:", join (map prereq rules)
+      , ".PHONY:", join (map ruleOutput rules)
+      , "\n__gen_test_rule:", join (map prereq rules)
       , "\n\n", join (map rule rules)
       ]
 
