@@ -299,13 +299,13 @@ lang AVLTreeImpl
   | Leaf _ ->
     acc
 
-  sem avlEq : all k. all v.
-    (k -> k -> Int) -> (v -> v -> Bool) -> AVL k v -> AVL k v -> Bool
+  sem avlEq : all k. all a. all b.
+    (k -> k -> Int) -> (a -> b -> Bool) -> AVL k a -> AVL k b -> Bool
   sem avlEq cmpk eqv l =
   | r -> avlEqH cmpk eqv (avlToAux (End ()) l, avlToAux (End ()) r)
 
-  sem avlEqH : all k. all v.
-    (k -> k -> Int) -> (v -> v -> Bool) -> (AuxTree k v, AuxTree k v) -> Bool
+  sem avlEqH : all k. all a. all b.
+    (k -> k -> Int) -> (a -> b -> Bool) -> (AuxTree k a, AuxTree k b) -> Bool
   sem avlEqH cmpk eqv =
   | (End _, End _) -> true
   | (End _, Cont _) -> false

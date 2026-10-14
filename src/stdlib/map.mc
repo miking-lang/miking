@@ -169,7 +169,7 @@ let mapMem : all k. all v. k -> Map k v -> Bool = lam k. lam m.
 -- │ Eq/Cmp │
 -- └────────┘
 
-let mapEq : all k. all v. (v -> v -> Bool) -> Map k v -> Map k v -> Bool =
+let mapEq : all k. all a. all b. (a -> b -> Bool) -> Map k a -> Map k b -> Bool =
   lam eqv. lam m1. lam m2.
   use AVLTreeImpl in
   avlEq m1.cmp eqv m1.root m2.root
