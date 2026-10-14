@@ -322,6 +322,22 @@ utest zipWithIndex (lam i. lam a. lam b. addi i (addi a b)) [100, 200, 300] [400
 let zip : all a. all b. [a] -> [b] -> [(a, b)] =
   lam l1. lam l2. zipWith (lam x. lam y. (x, y)) l1 l2
 
+-- Transposes a sequence of sequences. If the inner sequences have
+-- different lengths, then `transpose` works as though all sequences
+-- were truncated to the length of the shortest sequence.
+let transpose : all a. [[a]] -> [[a]] = lam rows.
+  match rows with [first] ++ rest
+  then foldl (zipWith snoc) (map (lam x. [x]) first) rest
+  else []
+
+utest transpose [[1, 2, 3], [4, 5, 6]] with [[1, 4], [2, 5], [3, 6]]
+utest transpose [[1, 2], [4, 5, 6]] with [[1, 4], [2, 5]]
+utest transpose [[1, 2, 3], [4, 5]] with [[1, 4], [2, 5]]
+utest transpose [[1, 2], [3, 4], [5, 6]] with [[1, 3, 5], [2, 4, 6]]
+utest transpose [[1, 2, 3]] with [[1], [2], [3]]
+utest transpose [[], []] with [] using eqSeq (eqSeq eqi)
+utest transpose [] with [] using eqSeq (eqSeq eqi)
+
 -- Accumulating maps
 let mapAccumL : all a. all b. all c. (a -> b -> (a, c)) -> a -> [b] -> (a, [c]) =
   lam f : (a -> b -> (a, c)). lam acc. lam seq.
