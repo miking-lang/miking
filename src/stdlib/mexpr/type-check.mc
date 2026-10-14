@@ -1331,6 +1331,26 @@ lang RecLetsTypeCheck = TypeCheck + RecLetsDeclAst + MetaVarDisableGeneralize + 
        iter (lam b. disableRecordGeneralize env.currentLvl b.tyBody) bindings
      else ());
 
+    -- TODO(vipa, 2026-09-30): The below section will generalize
+    -- properly over all types that appear in the _type_ of a reclet,
+    -- but not necessarily over everything that appears in the _body_
+    -- (it also breaks the symbolize invariant by binding the same
+    -- type variable more than once). Example:
+    --
+    -- recursive
+    --   let f = lam x. g ()
+    --   let g = lam. f []
+    -- in ()
+    --
+    -- These are the types of the definitions:
+    -- f : all a. all b. [a] -> b
+    -- g : all b. () -> b
+    --
+    -- However, the instantiated version of `f` in the body of `g` has
+    -- the type `[a] -> b`, where `a` has leaked from `f`. Ideally the
+    -- instantiated `f` would have type `[Unknown] -> b` or `[_meta]
+    -- -> b`, because there's nothing that actually limits its type.
+
     -- Third: Produce a new environment with generalized types
     let envIteratee = lam acc. lam b : DeclLetRecord.
       match gen env.currentLvl acc.1 b.tyBody with (tyBody, vars) in
