@@ -1,0 +1,9 @@
+(library
+ (name mi_stats)
+ (public_name mi_stats)
+ (modules mi_stats)
+ (foreign_stubs
+  (language cxx)
+  (names ocaml-root)
+  (include_dirs cpp ocaml vendor vendor/eigen vendor/boost)
+  (flags (:standard -std=c++17 -DBOOST_MATH_STANDALONE))))

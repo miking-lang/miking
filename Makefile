@@ -55,6 +55,28 @@ uninstall-boot:
 	misc/scripts/with-tmp-dir dune uninstall --root=src/boot --build-dir="{}" --prefix=$(prefix) --libdir=$(ocamllibdir) ">/dev/null 2>&1"
 
 
+# The `mi-stats` OCaml library
+
+.PHONY: mi-stats
+mi-stats:
+	misc/scripts/with-tmp-dir dune build --root=src/mi-stats/ --build-dir="{}" \
+	"&&" dune install --root=src/mi-stats/ --build-dir="{}" --prefix=$(current_dir)/build ">/dev/null" "2>&1"
+	rm -f $(current_dir)"/build/lib/mi_stats/dune-package"
+
+.PHONY: install-mi-stats
+install-mi-stats:
+	misc/scripts/with-tmp-dir dune build --root=src/mi-stats/ --build-dir="{}" \
+	"&&" dune install --root=src/mi-stats/ --build-dir="{}" --prefix=$(prefix) --libdir=$(ocamllibdir) ">/dev/null 2>&1"
+
+.PHONY: uninstall-mi-stats
+uninstall-mi-stats:
+	misc/scripts/with-tmp-dir dune uninstall --root=src/mi-stats --build-dir="{}" --prefix=$(prefix) --libdir=$(ocamllibdir) ">/dev/null 2>&1"
+
+.PHONY: vendor-mi-stats
+vendor-mi-stats:
+	cd src/mi-stats; ./vendor.fish
+
+
 ## Formatting, checking and autoformatting respectively
 
 .PHONY: lint
@@ -85,10 +107,10 @@ build/$(MI_CHEAT_NAME): $(if $(wildcard build/$(MI_CHEAT_NAME)),,cheat)
 # Umbrella install/uninstall targets, for installing and uninstalling everything
 
 .PHONY: install
-install: $(if $(wildcard build/$(MI_NAME)),,bootstrap) install-boot install-stdlib install-mi
+install: $(if $(wildcard build/$(MI_NAME)),,bootstrap) install-boot install-mi-stats install-stdlib install-mi
 
 .PHONY: uninstall
-uninstall: uninstall-boot uninstall-stdlib uninstall-mi
+uninstall: uninstall-boot uninstall-mi-stats uninstall-stdlib uninstall-mi
 
 # Installing and uninstalling `mi` and the standard library
 
