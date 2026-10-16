@@ -134,13 +134,13 @@ lang HoleAstBase = IntAst + ANF + KeywordMaker + TypeCheck + Sym
 
   sem hty : Info -> Hole -> Type
 
-  sem typeCheckExpr (env: TCEnv) +=
+  sem typeCheckExpr (env: TCEnv) ty +=
   | TmHole t ->
-    let default = typeCheckExpr env t.default in
-    let ty = hty t.info t.inner in
-    unify env [t.info] ty (tyTm default);
-    TmHole {{t with default = default}
-               with ty = ty}
+    let holeTy = hty t.info t.inner in
+    let default = typeCheckExpr env holeTy t.default in
+    _checkInferred env ty
+      (TmHole {{t with default = default}
+                  with ty = holeTy})
 
   sem fromInt =
   | TmHole t -> hfromInt t.inner
@@ -350,10 +350,10 @@ lang IndependentAst = HoleAnnotation + KeywordMaker + ANF + PrettyPrint
     match printParen aindent env t.rhs with (env, rhs) in
     (env, join ["independent ", lhs, pprintNewline aindent, rhs])
 
-  sem typeCheckExpr (env: TCEnv) +=
+  sem typeCheckExpr (env: TCEnv) ty +=
   | TmIndependent t ->
-    let lhs = typeCheckExpr env t.lhs in
-    let rhs = typeCheckExpr env t.rhs in
+    let lhs = typeCheckExpr env ty t.lhs in
+    let rhs = typeInferExpr env t.rhs in
     TmIndependent {{{t with lhs = lhs}
                        with rhs = rhs}
                        with ty = tyTm lhs}
