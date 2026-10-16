@@ -117,6 +117,6 @@ let buildMAstFromFile: Logger -> String -> MAst = lam log. lam file.
         let ast = symbolize ast in
 
         log "Type checking final ast";
-        let ast = typeCheckExpr { typcheckEnvDefault with disableConstructorTypes = true} ast in
+        let ast = typeInferExpr { typcheckEnvDefault with disableConstructorTypes = true} ast in
         ast
     else error "Failed to create temporary file."

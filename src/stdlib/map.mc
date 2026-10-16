@@ -284,6 +284,35 @@ let mapGetMin : all k. all v. Map k v -> Option (k, v) =
       match avlSplitFirst m.root with (k, v, _) in
       Some (k, v)
 
+-- `mapGetMax m` returns the largest key-value pair of `m`, or None ()
+-- if the map is empty.
+let mapGetMax : all k. all v. Map k v -> Option (k, v) =
+  lam m.
+    if mapIsEmpty m then None ()
+    else
+      use AVLTreeImpl in
+      match avlSplitLast m.root with (k, v, _) in
+      Some (k, v)
+
+-- `mapRemoveMin m` returns the smallest key-value pair of `m` together
+-- with `m` without that binding, or None () if the map is empty.
+let mapRemoveMin : all k. all v. Map k v -> Option (k, v, Map k v) =
+  lam m.
+    if mapIsEmpty m then None ()
+    else
+      use AVLTreeImpl in
+      match avlSplitFirst m.root with (k, v, root) in
+      Some (k, v, {m with root = root})
+
+-- `mapRemoveMax m` returns the largest key-value pair of `m` together
+-- with `m` without that binding, or None () if the map is empty.
+let mapRemoveMax : all k. all v. Map k v -> Option (k, v, Map k v) =
+  lam m.
+    if mapIsEmpty m then None ()
+    else
+      use AVLTreeImpl in
+      match avlSplitLast m.root with (k, v, root) in
+      Some (k, v, {m with root = root})
 
 -- ┌─────────────┐
 -- │ Keys/Values │
@@ -381,6 +410,7 @@ let m = mapEmpty subi in
 
 utest let m : Map Int Int = m in mapChoose m with None () in
 utest mapGetMin m with None () in
+utest mapGetMax m with None () in
 
 utest mapLookupOrElse (lam. 2) 1 m with 2 in
 utest mapLookupApplyOrElse (lam. 2) (lam. 3) 1 m with 3 in
@@ -510,6 +540,29 @@ utest
 in
 
 utest mapGetMin m with Some (1, "1") in
+utest mapGetMax m with Some (3, "3") in
+
+let removeMinBindings = lam m.
+  match mapRemoveMin m with Some (k, v, m)
+  then Some (k, v, mapBindings m)
+  else None () in
+let removeMaxBindings = lam m.
+  match mapRemoveMax m with Some (k, v, m)
+  then Some (k, v, mapBindings m)
+  else None () in
+utest removeMinBindings m with Some (1, "1", [(2, "2"), (3, "3")]) in
+utest removeMaxBindings m with Some (3, "3", [(1, "1"), (2, "2")]) in
+let empty : Map Int String = mapEmpty subi in
+utest removeMinBindings empty with None () in
+utest removeMaxBindings empty with None () in
+utest removeMinBindings (mapFromSeq subi [(1, "1")]) with Some (1, "1", []) in
+utest removeMaxBindings (mapFromSeq subi [(1, "1")]) with Some (1, "1", []) in
+
+let big = mapFromSeq subi (map (lam i. (i, i)) (range 0 50 1)) in
+recursive let drain = lam remove. lam acc. lam m.
+  match remove m with Some (k, _, m) then drain remove (snoc acc k) m else acc in
+utest drain mapRemoveMin [] big with range 0 50 1 in
+utest drain mapRemoveMax [] big with reverse (range 0 50 1) in
 
 let m = mapFromSeq subi [
   (1, "1"),

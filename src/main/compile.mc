@@ -123,7 +123,7 @@ let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
 
     let ast =
       removeMetaVarExpr
-        (typeCheckExpr
+        (typeInferExpr
            {typcheckEnvDefault with
             disableConstructorTypes = not options.enableConstructorTypes}
            ast)
