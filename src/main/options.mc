@@ -42,6 +42,7 @@ let optionsDefault : Options = {
   jsTarget = "generic",
   disableJsGeneralOptimizations = false,
   disableJsTCO = false,
+  toEcmascript = false,
   output = None (),
   tuneOptions = tuneOptionsDefault,
   docgenOptions = docGenOptionsDefault,
