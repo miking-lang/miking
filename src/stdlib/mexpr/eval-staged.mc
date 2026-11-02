@@ -12,6 +12,7 @@ include "option.mc"
 include "seq.mc"
 include "string.mc"
 include "stringid.mc"
+include "sys.mc"
 include "utest.mc"
 
 include "mexpr/ast-builder.mc"
@@ -1443,13 +1444,7 @@ with Some false_ using eq else toString in
 
 -- FileOpEvalS
 
--- The scratch path is computed as an ordinary host-level string (this outer
--- `mexpr` block is run by the real evaluator, unrestricted), then spliced in
--- as a literal -- `readFile_`/`writeFile_`/etc. themselves stay inside the
--- fast evaluator's supported subset. Suffixed with a fresh symbol's hash so
--- repeated runs (or a run alongside other test suites) never collide.
-let scratchFile =
-  concat "/tmp/eval-fast-test-" (int2string (sym2hash (gensym ()))) in
+let scratchFile = sysTempFileMake () in
 
 utest
   evalSReadback

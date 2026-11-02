@@ -38,14 +38,41 @@ utest
 
   let m = mutexCreate () in
 
-  let t1 = threadSpawn (lam. mutexLock m; condWait c m; condSignal c; mutexRelease m) in
-  let t2 = threadSpawn (lam. mutexLock m; condSignal c; mutexRelease m) in
+  -- Waiters register (under 'm') before 'condWait', and signallers only
+  -- signal once enough waiters have registered. Since 'condWait' releases
+  -- 'm' atomically, this guarantees the signal reaches threads that are
+  -- actually waiting. 'ready' only guards against spurious wakeups.
+  recursive let waitFor = lam c. lam m. lam ready.
+    if deref ready then () else (condWait c m; waitFor c m ready)
+  in
+  let waiter = lam waiting. lam ready. lam.
+    mutexLock m;
+    modref waiting (addi (deref waiting) 1);
+    waitFor c m ready;
+    mutexRelease m
+  in
+  recursive let lockWhenWaiting = lam waiting. lam n.
+    mutexLock m;
+    if geqi (deref waiting) n then () else
+      (mutexRelease m; threadCPURelax (); lockWhenWaiting waiting n)
+  in
+
+  -- 'condSignal' wakes a waiting thread
+  let waiting = ref 0 in
+  let ready = ref false in
+  let t1 = threadSpawn (waiter waiting ready) in
+  let t2 = threadSpawn (lam.
+    lockWhenWaiting waiting 1; modref ready true; condSignal c; mutexRelease m) in
   threadJoin t1;
   threadJoin t2;
 
-  let t1 = threadSpawn (lam. mutexLock m; condWait c m; condSignal c; mutexRelease m) in
-  let t2 = threadSpawn (lam. mutexLock m; condWait c m; condSignal c; mutexRelease m) in
-  let t3 = threadSpawn (lam. mutexLock m; condBroadcast c; mutexRelease m) in
+  -- 'condBroadcast' wakes *all* waiting threads
+  let waiting = ref 0 in
+  let ready = ref false in
+  let t1 = threadSpawn (waiter waiting ready) in
+  let t2 = threadSpawn (waiter waiting ready) in
+  let t3 = threadSpawn (lam.
+    lockWhenWaiting waiting 2; modref ready true; condBroadcast c; mutexRelease m) in
   threadJoin t1;
   threadJoin t2;
   threadJoin t3;
