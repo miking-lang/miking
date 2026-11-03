@@ -184,6 +184,7 @@ let compileWithUtests = lam options : Options. lam sourcePath. lam ast.
         , exitBefore = lam. if options.exitBefore then exit 0 else ()
         , postprocessOcamlTops = lam tops. if options.runtimeChecks then wrapInTryWith tops else tops
         , compileOcaml = ocamlCompile options sourcePath
+        , externalImpls = globalExternalImplsMap
         } in
     endPhaseStatsExpr log "backend" ast;
     res
@@ -286,6 +287,7 @@ let compileViaLoader = lam options : Options. lam sourcePath.
       , exitBefore = lam. if options.exitBefore then exit 0 else ()
       , postprocessOcamlTops = lam tops. if options.runtimeChecks then wrapInTryWith tops else tops
       , compileOcaml = ocamlCompile options sourcePath
+      , externalImpls = globalExternalImplsMap
       } in
   endPhaseStatsExpr log "backend" ast;
   res
