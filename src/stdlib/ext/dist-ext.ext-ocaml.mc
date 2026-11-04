@@ -86,20 +86,6 @@ let distExtMap =
         cLibraries = []
       }
     ]),
-    ("externalBernoulliLogPmf", [
-      { expr = "Mi_stats.mi_bernoulli_lpmf",
-        ty = tyarrows_ [tybool_, tyfloat_, tyfloat_],
-        libraries = ["mi_stats"],
-        cLibraries = []
-      }
-    ]),
-    ("externalBernoulliSample", [
-      { expr = "Mi_stats.mi_bernoulli_rng_",
-        ty = tyarrows_ [tyfloat_, tybool_],
-        libraries = ["mi_stats"],
-        cLibraries = []
-      }
-    ]),
     ("externalBetaLogPdf", [
       { expr = "Owl_stats.beta_logpdf",
         ty = tyarrows_ [tyfloat_, otylabel_ "a" tyfloat_, otylabel_ "b" tyfloat_, tyfloat_],
@@ -111,20 +97,6 @@ let distExtMap =
       { expr = "Owl_stats.beta_rvs",
         ty = tyarrows_ [otylabel_ "a" tyfloat_, otylabel_ "b" tyfloat_, tyfloat_],
         libraries = ["owl"],
-        cLibraries = []
-      }
-    ]),
-    ("externalNormalLogPdf", [
-      { expr = "Mi_stats.mi_normal_lpdf",
-        ty = tyarrows_ [tyfloat_, tyfloat_, tyfloat_, tyfloat_],
-        libraries = ["mi_stats"],
-        cLibraries = []
-      }
-    ]),
-    ("externalNormalSample", [
-      { expr = "Mi_stats.mi_normal_rng_",
-        ty = tyarrows_ [tyfloat_, tyfloat_, tyfloat_],
-        libraries = ["mi_stats"],
         cLibraries = []
       }
     ]),
@@ -195,13 +167,12 @@ let distExtMap =
       { expr = "
         fun seed -> (
           Random.init seed;
-          Mi_stats.mi_set_seed seed;
           Owl_base_stats_prng.init seed;
           Owl_stats_prng.sfmt_seed seed;
           Owl_stats_prng.ziggurat_init ()
         )",
         ty = tyarrows_ [tyint_, otyunit_],
-        libraries = ["owl", "mi_stats"],
+        libraries = ["owl"],
         cLibraries = []
       }
     ])

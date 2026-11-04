@@ -20,9 +20,9 @@ stdenv.mkDerivation (finalAttrs: {
 
   makeFlags = [ "prefix=$(out)" "ocamllibdir=$(out)/lib/ocaml/${ocaml.version}/site-lib" ];
 
-  buildFlags = [ "boot" "mi-stats" ];
+  buildFlags = [ "boot" ];
 
-  installTargets = "install-boot install-stdlib install-mi-stats";
+  installTargets = "install-boot install-stdlib";
 
   preConfigure = ''
     for f in $(find misc -type f -a -executable); do patchShebangs --build $f; done

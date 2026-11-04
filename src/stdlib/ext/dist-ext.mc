@@ -36,7 +36,7 @@ let gammaCdf = lam shape:Float. lam scale:Float. lam x:Float.
 let gammaPpf = lam shape:Float. lam scale:Float. lam q:Float.
   externalGammaPpf q shape scale
 
--- Binomial and Bernoulli
+-- Binomial
 external externalBinomialLogPmf : Int -> Float -> Int -> Float
 external externalBinomialSample ! : Float -> Int -> Int
 let binomialPmf = lam p:Float. lam n:Int. lam x:Int.
@@ -45,14 +45,6 @@ let binomialLogPmf = lam p:Float. lam n:Int. lam x:Int.
   externalBinomialLogPmf x p n
 let binomialSample = lam p:Float. lam n:Int.
   externalBinomialSample p n
-external externalBernoulliLogPmf : Bool -> Float -> Float
-external externalBernoulliSample ! : Float -> Bool
-let bernoulliPmf = lam p:Float. lam x:Bool.
-  exp (externalBernoulliLogPmf x p)
-let bernoulliLogPmf = lam p:Float. lam x:Bool.
-  externalBernoulliLogPmf x p
-let bernoulliSample = lam p:Float.
-  externalBernoulliSample p
 
 -- Beta
 external externalBetaLogPdf : Float -> Float -> Float -> Float
@@ -63,16 +55,6 @@ let betaLogPdf = lam a:Float. lam b:Float. lam x:Float.
   externalBetaLogPdf x a b
 let betaSample = lam a:Float. lam b:Float.
   externalBetaSample a b
-
--- Normal
-external externalNormalLogPdf : Float -> Float -> Float -> Float
-external externalNormalSample ! : Float -> Float -> Float
-let normalPdf = lam mu:Float. lam sigma:Float. lam x:Float.
-  exp (externalNormalLogPdf x mu sigma)
-let normalLogPdf = lam mu:Float. lam sigma:Float. lam x:Float.
-  externalNormalLogPdf x mu sigma
-let normalSample = lam mu:Float. lam sigma:Float.
-  externalNormalSample mu sigma
 
 -- Multinomial and Categorical
 external externalMultinomialLogPmf : [Int] -> [Float] -> Float
@@ -300,32 +282,15 @@ utest gammaSample 1. 2. with 1. using floatRange 0. inf in
 utest gammaCdf 1. 2. 1. with 0.393469340287 using _eqf in
 utest gammaPpf 0.5 1. 0.5 with 0.227468211559 using _eqf in
 
--- Testing Binomial and Bernoulli
+-- Testing Binomial
 utest binomialPmf 0.7 20 15 with 0.17886305057 using _eqf in
 utest exp (binomialLogPmf 0.5 40 20) with 0.12537068762 using _eqf in
 utest binomialSample 0.7 20 with 0 using intRange 0 20 in
-utest bernoulliPmf 0.3 false with 0.7 using _eqf in
-utest bernoulliPmf 0.3 true with 0.3 using _eqf in
-utest exp (bernoulliLogPmf 0.6 true) with 0.6 using _eqf in
-utest exp (bernoulliLogPmf 0.6 false) with 0.4 using _eqf in
-utest bernoulliPmf 0. false with 1. using _eqf in
-utest bernoulliLogPmf 0. true with negf inf using eqf in
-utest bernoulliPmf 1. true with 1. using _eqf in
-utest bernoulliLogPmf 1. false with negf inf using eqf in
-utest bernoulliSample 0. with false in
-utest bernoulliSample 1. with true in
-utest bernoulliSample 0.6 with false using lam. lam. true in
 
 -- Testing Beta
 utest betaPdf 2. 2. 0.5 with 1.5 using _eqf in
 utest exp (betaLogPdf 2. 5. 0.2) with 2.4576 using _eqf in
 utest betaSample 2. 2. with 0. using floatRange 0. 1. in
-
--- Testing Normal
-utest normalPdf 0. 0.4472 0. with 0.8920891779996 using _eqf in
-utest exp (normalLogPdf 2. 1. 2.) with 0.3989422804 using _eqf in
-utest exp (normalLogPdf 1. 2. 3.) with 0.12098536226 using _eqf in
-utest normalSample 0. 0.2 with 0. using lam a. lam b. or (leqf a b) (geqf a b) in
 
 -- Testing Multinomial and Categorical
 utest multinomialLogPmf [0.1, 0.3, 0.6] [0,1,0] with log 0.3 using _eqf in
@@ -424,11 +389,5 @@ with true in
 -- Testing seed
 utest setSeed 0; uniformSample (); uniformSample ()
 with setSeed 0; uniformSample (); uniformSample () in
-utest setSeed 0; normalSample 0. 1.; normalSample 0. 1.
-with  setSeed 0; normalSample 0. 1.; normalSample 0. 1. in
-utest setSeed 0; uniformSample (); normalSample 0. 1.
-with  setSeed 0; uniformSample (); normalSample 0. 1. in
-utest setSeed 0; normalSample 0. 1.; normalSample 0. 1.; uniformSample ()
-with  setSeed 0; normalSample 0. 1.; normalSample 0. 1.; uniformSample () in
 
 ()
