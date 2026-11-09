@@ -29,11 +29,10 @@ jobs:
           # Install dependencies of owl
           sudo apt-get install -y liblapacke-dev libopenblas-dev
 
-          # Use the latest owl from GitHub
-          git clone --depth 1 https://github.com/owlbarn/owl.git "$RUNNER_TEMP/owl"
-          git -C "$RUNNER_TEMP/owl" log -1 --oneline
-          opam pin add -y -n --kind=path owl-base "$RUNNER_TEMP/owl"
-          opam pin add -y -n --kind=path owl "$RUNNER_TEMP/owl"
+          # Use a fixed commit of owl from GitHub
+          OWL_URL="git+https://github.com/owlbarn/owl.git#cb198b9e3c9b0c0fee4ba7e8f760be825632ac4b"
+          opam pin add -y -n owl-base "$OWL_URL"
+          opam pin add -y -n owl "$OWL_URL"
           
           # Enable OpenMP explicitly for owl
           export OWL_ENABLE_OPENMP=1
@@ -76,11 +75,10 @@ jobs:
           # Install dependencies of owl
           brew install pkg-config autoconf openblas libomp fftw
 
-          # Use the latest owl from GitHub
-          git clone --depth 1 https://github.com/owlbarn/owl.git "$RUNNER_TEMP/owl"
-          git -C "$RUNNER_TEMP/owl" log -1 --oneline
-          opam pin add -y -n --kind=path owl-base "$RUNNER_TEMP/owl"
-          opam pin add -y -n --kind=path owl "$RUNNER_TEMP/owl"
+          # Use a fixed commit of owl from GitHub
+          OWL_URL="git+https://github.com/owlbarn/owl.git#cb198b9e3c9b0c0fee4ba7e8f760be825632ac4b"
+          opam pin add -y -n owl-base "$OWL_URL"
+          opam pin add -y -n owl "$OWL_URL"
 
           # Export environment variable needed by openblas
           export OWL_LDFLAGS="-L/opt/homebrew/opt/libomp/lib -lomp"
