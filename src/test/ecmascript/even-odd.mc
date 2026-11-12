@@ -1,3 +1,9 @@
+-- Mutual tail recursion, four million deep.
+--
+-- JavaScript eliminates no tail calls at all, so each step would cost a frame
+-- if these two compiled to plain calls. Members of a recursive group that
+-- tail-call each other share one loop instead, which is what this depth
+-- checks.
 mexpr
 
 recursive
@@ -11,4 +17,6 @@ recursive
         else even (subi x 1)
 in
 
-print (if even 4000000 then "even" else "odd")
+utest even 4000000 with true in
+utest odd 4000001 with true in
+()

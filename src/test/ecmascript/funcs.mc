@@ -10,19 +10,20 @@ let apply = lam f. lam v. f v in
 let twice = lam f. lam v. f (f v) in
 let alias = add in
 
-dprint (add 2 3);
-dprint (inc 41);
-dprint (apply (add 10) 5);
-dprint (twice inc 0);
-dprint (alias 20 22);
-dprint ((lam x. muli x x) 7);
+utest add 2 3 with 5 in
+utest inc 41 with 42 in
+utest apply (add 10) 5 with 15 in
+utest twice inc 0 with 2 in
+utest alias 20 22 with 42 in
+utest (lam x. muli x x) 7 with 49 in
 
 -- Over-application: a function returning a function, then applied again.
 let mkAdder = lam x. lam y. addi x y in
-dprint (mkAdder 3 4);
-dprint ((mkAdder 3) 4);
+utest mkAdder 3 4 with 7 in
+utest (mkAdder 3) 4 with 7 in
 
 -- A constant used as a value rather than applied directly.
 let combine = lam op. lam a. lam b. op a b in
-dprint (combine addi 5 6);
-dprint (combine muli 5 6)
+utest combine addi 5 6 with 11 in
+utest combine muli 5 6 with 30 in
+()

@@ -1,62 +1,57 @@
 -- Scalar intrinsics.
---
--- Every value printed here is an integer. `dprint` renders bools, chars and
--- floats differently in the OCaml backend than anywhere else -- bools print as
--- 1/0, chars as codepoints, and 1.0 as "1." -- so results of those types are
--- reduced to integers rather than printed directly.
 mexpr
-dprint (addi 1 2);
-dprint (subi 1 2);
-dprint (muli 3 4);
-dprint (negi 5);
+utest addi 1 2 with 3 in
+utest subi 1 2 with negi 1 in
+utest muli 3 4 with 12 in
+utest negi 5 with negi 5 in
 
 -- Integer division truncates towards zero, and modulo takes the sign of the
 -- dividend. `Math.floor` would disagree with both on negative operands.
-dprint (divi 7 2);
-dprint (divi (negi 7) 2);
-dprint (modi 7 2);
-dprint (modi (negi 7) 2);
+utest divi 7 2 with 3 in
+utest divi (negi 7) 2 with negi 3 in
+utest modi 7 2 with 1 in
+utest modi (negi 7) 2 with negi 1 in
 
-dprint (if lti 1 2 then 1 else 0);
-dprint (if gti 1 2 then 1 else 0);
-dprint (if eqi 2 2 then 1 else 0);
-dprint (if neqi 2 2 then 1 else 0);
-dprint (if leqi 2 2 then 1 else 0);
-dprint (if geqi 1 2 then 1 else 0);
+utest lti 1 2 with true in
+utest gti 1 2 with false in
+utest eqi 2 2 with true in
+utest neqi 2 2 with false in
+utest leqi 2 2 with true in
+utest geqi 1 2 with false in
 
--- Shifts use OCaml's 63-bit semantics. Only results inside 2^53 are printed;
--- anything wider cannot be represented as a JS number and raises instead.
-dprint (slli 2 5);
-dprint (slli (negi 1) 1);
-dprint (srli 4 2);
-dprint (srli 64 5);
-dprint (srai 4 2);
-dprint (srai (negi 8) 1);
+-- Shifts are JavaScript's, which are 32-bit, where the reference backend's are
+-- 63-bit. Only results the two agree on are exercised here.
+utest slli 2 5 with 64 in
+utest slli (negi 1) 1 with negi 2 in
+utest srli 4 2 with 1 in
+utest srli 64 5 with 2 in
+utest srai 4 2 with 1 in
+utest srai (negi 8) 1 with negi 4 in
 
 -- Floats share the `number` representation; `int2float` is a no-op.
-dprint (floorfi (addf 1.5 2.25));
-dprint (floorfi (subf 5.0 1.5));
-dprint (floorfi (mulf 2.0 3.5));
-dprint (floorfi (divf 7.0 2.0));
-dprint (floorfi (negf 1.5));
-dprint (ceilfi (negf 1.5));
--- NOTE: `ceilfi (negf 0.2)` and friends land on JS negative zero, which this
--- backend accepts as an alternative encoding of the Int 0. `dprint` is the one
--- thing that can see the difference, and its format is unspecified, so those
--- cases are deliberately not exercised here.
-dprint (floorfi (int2float 3));
-dprint (if ltf 1.0 2.0 then 1 else 0);
-dprint (if geqf 2.0 2.0 then 1 else 0);
+utest addf 1.5 2.25 with 3.75 in
+utest subf 5.0 1.5 with 3.5 in
+utest mulf 2.0 3.5 with 7.0 in
+utest divf 7.0 2.0 with 3.5 in
+utest negf 1.5 with negf 1.5 in
+utest floorfi (negf 1.5) with negi 2 in
+utest ceilfi (negf 1.5) with negi 1 in
+utest int2float 3 with 3.0 in
+utest floorfi (int2float 3) with 3 in
+utest ltf 1.0 2.0 with true in
+utest geqf 2.0 2.0 with true in
 
 -- OCaml rounds half away from zero; JS `Math.round` rounds half towards
 -- +Infinity, so these two disagree without the runtime helper.
-dprint (roundfi 0.5);
-dprint (roundfi (negf 0.5));
-dprint (roundfi 1.5);
-dprint (roundfi (negf 1.5));
+utest roundfi 0.5 with 1 in
+utest roundfi (negf 0.5) with negi 1 in
+utest roundfi 1.5 with 2 in
+utest roundfi (negf 1.5) with negi 2 in
 
 -- A Char is a one-character string, so `char2int` is a codepoint lookup.
-dprint (char2int 'a');
-dprint (char2int (int2char 98));
-dprint (if eqc 'a' 'a' then 1 else 0);
-dprint (if eqc 'a' 'b' then 1 else 0)
+utest char2int 'a' with 97 in
+utest int2char 98 with 'b' in
+utest char2int (int2char 98) with 98 in
+utest eqc 'a' 'a' with true in
+utest eqc 'a' 'b' with false in
+()

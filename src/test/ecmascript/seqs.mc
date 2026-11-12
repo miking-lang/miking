@@ -1,110 +1,103 @@
 -- Sequences and strings.
 --
--- No stdlib includes: `int2string` and friends use `recursive let`, not implemented yet.
--- Small integers are printed through a local digit helper, and larger
--- values through `float2string`, which is a builtin.
+-- The values are checked with utests; the printing at the end is deliberate,
+-- since what reaches the host is its own question: a string has to be
+-- marshalled out of the sequence representation, and a float has to be
+-- formatted the way the reference backend formats it.
 mexpr
-let nl = "\n" in
-let puts = lam s. print (concat s nl) in
-let digit = lam n. [int2char (addi n (char2int '0'))] in
-let putn = lam n. puts (digit n) in
-let putf = lam x. puts (float2string x) in
 
 -- Strings are ordinary sequences of characters.
-puts "hello world";
-puts (concat "ab" "cd");
-puts (cons 'x' "yz");
-puts (snoc "ab" 'c');
-puts (reverse "abc");
-puts (subsequence "hello" 1 3);
-puts (tail "abc");
-puts [head "abc"];
-putn (length "hello");
-putn (if null "" then 1 else 0);
-putn (if null "a" then 1 else 0);
-puts (map (lam c. int2char (addi (char2int c) 1)) "abc");
-puts (set "abc" 1 'X');
+utest concat "ab" "cd" with "abcd" in
+utest cons 'x' "yz" with "xyz" in
+utest snoc "ab" 'c' with "abc" in
+utest reverse "abc" with "cba" in
+utest subsequence "hello" 1 3 with "ell" in
+utest tail "abc" with "bc" in
+utest head "abc" with 'a' in
+utest length "hello" with 5 in
+utest null "" with true in
+utest null "a" with false in
+utest map (lam c. int2char (addi (char2int c) 1)) "abc" with "bcd" in
+utest set "abc" 1 'X' with "aXc" in
 
 -- Miking strings are codepoint sequences. This one is five characters, where
 -- a JS string would report six, because the emoji is a surrogate pair there.
 -- MCore has no \u escape, so the codepoint is built with int2char.
 let emoji = [int2char 128512] in
 let mixed = concat "ab" (concat emoji "cd") in
-putn (length mixed);
-putn (char2int (get mixed 2));
+utest length mixed with 5 in
+utest char2int (get mixed 2) with 128512 in
 
 -- Sequences of other element types behave the same way.
 let s = [1, 2, 3, 4, 5] in
-putn (length s);
-putn (get s 0);
-putn (head s);
-putn (length (tail s));
-putn (length (concat s [6]));
-putn (length (cons 0 s));
-putn (length (snoc s 6));
-putn (get (reverse s) 0);
-putn (length (subsequence s 1 2));
-putn (length (create 4 (lam i. i)));
-putn (get (create 4 (lam i. muli i 2)) 3);
-putn (length (splitAt s 2).0);
-putn (length (splitAt s 2).1);
-putn (if isList s then 1 else 0);
-putn (if isRope s then 1 else 0);
+utest length s with 5 in
+utest get s 0 with 1 in
+utest head s with 1 in
+utest tail s with [2, 3, 4, 5] in
+utest concat s [6] with [1, 2, 3, 4, 5, 6] in
+utest cons 0 s with [0, 1, 2, 3, 4, 5] in
+utest snoc s 6 with [1, 2, 3, 4, 5, 6] in
+utest reverse s with [5, 4, 3, 2, 1] in
+utest subsequence s 1 2 with [2, 3] in
+utest create 4 (lam i. i) with [0, 1, 2, 3] in
+utest get (create 4 (lam i. muli i 2)) 3 with 6 in
+utest (splitAt s 2).0 with [1, 2] in
+utest (splitAt s 2).1 with [3, 4, 5] in
 
 -- A sequence is a rope or a list, and every operation keeps the one it was
 -- given; only `concat` can change it, and only into a list.
 let rope = createRope 3 (lam i. i) in
 let list = createList 3 (lam i. i) in
-let rep = lam s. if isList s then 1 else if isRope s then 2 else 0 in
-putn (rep rope);
-putn (rep list);
-putn (rep (concat rope rope));
-putn (rep (concat list list));
-putn (rep (concat list rope));
-putn (rep (concat rope list));
-putn (rep (cons 9 list));
-putn (rep (snoc list 9));
-putn (rep (tail list));
-putn (rep (reverse list));
-putn (rep (map (lam x. x) list));
-putn (rep (mapi (lam. lam x. x) list));
-putn (rep (set list 1 9));
-putn (rep (subsequence list 1 2));
-putn (rep (splitAt list 1).0);
-putn (rep (splitAt list 1).1);
-putn (rep (create 3 (lam i. i)));
+utest isRope s with true in
+utest isList s with false in
+utest isRope rope with true in
+utest isList list with true in
+utest isRope (concat rope rope) with true in
+utest isList (concat list list) with true in
+utest isList (concat list rope) with true in
+utest isList (concat rope list) with true in
+utest isList (cons 9 list) with true in
+utest isList (snoc list 9) with true in
+utest isList (tail list) with true in
+utest isList (reverse list) with true in
+utest isList (map (lam x. x) list) with true in
+utest isList (mapi (lam. lam x. x) list) with true in
+utest isList (set list 1 9) with true in
+utest isList (subsequence list 1 2) with true in
+utest isList (splitAt list 1).0 with true in
+utest isList (splitAt list 1).1 with true in
+utest isRope (create 3 (lam i. i)) with true in
 
 -- The elements survive the representation, whichever it is.
-putn (length list);
-putn (get list 2);
-putn (head list);
-putn (get (reverse list) 0);
-putn (get (snoc list 7) 3);
-putn (get (cons 7 list) 0);
-putn (get (set list 1 7) 1);
-putn (get (concat list rope) 4);
-putn (get (concat rope list) 4);
-putn (length (concat list rope));
-putn (if null (createList 0 (lam i. i)) then 1 else 0);
-putn (if null list then 1 else 0);
-putn (foldl (lam acc. lam x. addi acc x) 0 list);
-putn (foldr (lam x. lam acc. addi x acc) 0 list);
-putn (get (subsequence list 1 2) 0);
+utest list with [0, 1, 2] in
+utest length list with 3 in
+utest get list 2 with 2 in
+utest head list with 0 in
+utest reverse list with [2, 1, 0] in
+utest snoc list 7 with [0, 1, 2, 7] in
+utest cons 7 list with [7, 0, 1, 2] in
+utest set list 1 7 with [0, 7, 2] in
+utest concat list rope with [0, 1, 2, 0, 1, 2] in
+utest concat rope list with [0, 1, 2, 0, 1, 2] in
+utest null (createList 0 (lam i. i)) with true in
+utest null list with false in
+utest foldl (lam acc. lam x. addi acc x) 0 list with 3 in
+utest foldr (lam x. lam acc. addi x acc) 0 list with 3 in
+utest subsequence list 1 2 with [1, 2] in
+utest mapi (lam i. lam x. addi i x) list with [0, 2, 4] in
 
 -- Walking a list with an edge pattern, the way a list is meant to be used.
 recursive let sum = lam acc. lam xs.
   match xs with [a] ++ rest then sum (addi acc a) rest else acc
 in
-putn (sum 0 list);
-putn (sum 0 rope);
+utest sum 0 list with 3 in
+utest sum 0 rope with 3 in
 
 -- Higher-order operations. The callbacks are curried, as MExpr requires.
-putn (foldl (lam acc. lam x. addi acc x) 0 [1, 2, 3]);
-putn (foldr (lam x. lam acc. subi x acc) 0 [1, 2, 3]);
-puts (foldl (lam acc. lam c. cons c acc) "" "abc");
-putn (get (mapi (lam i. lam x. addi i x) [10, 20, 30]) 2);
-iter (lam c. print [c]) "iter"; print nl;
-iteri (lam i. lam c. print (concat (digit i) [c])) "ab"; print nl;
+utest foldl (lam acc. lam x. addi acc x) 0 [1, 2, 3] with 6 in
+utest foldr (lam x. lam acc. subi x acc) 0 [1, 2, 3] with 2 in
+utest foldl (lam acc. lam c. cons c acc) "" "abc" with "cba" in
+utest mapi (lam i. lam x. addi i x) [10, 20, 30] with [10, 21, 32] in
 
 -- Sequence patterns.
 let classify = lam xs.
@@ -114,21 +107,32 @@ let classify = lam xs.
   else match xs with [a] ++ rest then addi a (length rest)
   else 99
 in
-putn (classify []);
-putn (classify [7]);
-putn (classify [3, 4]);
-putn (classify [1, 1, 1, 1]);
+utest classify [] with 0 in
+utest classify [7] with 7 in
+utest classify [3, 4] with 7 in
+utest classify [1, 1, 1, 1] with 4 in
 
 -- An edge pattern with a postfix.
 let ends = lam xs. match xs with [a] ++ _ ++ [b] then addi a b else 0 in
-putn (ends [1, 9, 9, 2]);
+utest ends [1, 9, 9, 2] with 3 in
 
--- Float and string conversions.
+utest string2float "2.5" with 2.5 in
+utest stringIsFloat "2.5" with true in
+utest stringIsFloat "abc" with false in
+
+-- What reaches the host. A string has to leave the sequence representation on
+-- the way out, and a float has to be formatted as the reference backend
+-- formats it, so these are printed rather than compared here.
+let nl = "\n" in
+let puts = lam s. print (concat s nl) in
+let putf = lam x. puts (float2string x) in
+puts "hello world";
+puts mixed;
+iter (lam c. print [c]) "iter"; print nl;
+iteri (lam i. lam c. print (concat (if eqi i 0 then "0" else "1") [c])) "ab"; print nl;
 putf 1.0;
 putf 0.1;
 putf (divf 1.0 3.0);
 putf 1e300;
 putf (negf 2.5);
-putf (string2float "2.5");
-putn (if stringIsFloat "2.5" then 1 else 0);
-putn (if stringIsFloat "abc" then 1 else 0)
+putf (string2float "2.5")
