@@ -51,6 +51,53 @@ putn (length (splitAt s 2).1);
 putn (if isList s then 1 else 0);
 putn (if isRope s then 1 else 0);
 
+-- A sequence is a rope or a list, and every operation keeps the one it was
+-- given; only `concat` can change it, and only into a list.
+let rope = createRope 3 (lam i. i) in
+let list = createList 3 (lam i. i) in
+let rep = lam s. if isList s then 1 else if isRope s then 2 else 0 in
+putn (rep rope);
+putn (rep list);
+putn (rep (concat rope rope));
+putn (rep (concat list list));
+putn (rep (concat list rope));
+putn (rep (concat rope list));
+putn (rep (cons 9 list));
+putn (rep (snoc list 9));
+putn (rep (tail list));
+putn (rep (reverse list));
+putn (rep (map (lam x. x) list));
+putn (rep (mapi (lam. lam x. x) list));
+putn (rep (set list 1 9));
+putn (rep (subsequence list 1 2));
+putn (rep (splitAt list 1).0);
+putn (rep (splitAt list 1).1);
+putn (rep (create 3 (lam i. i)));
+
+-- The elements survive the representation, whichever it is.
+putn (length list);
+putn (get list 2);
+putn (head list);
+putn (get (reverse list) 0);
+putn (get (snoc list 7) 3);
+putn (get (cons 7 list) 0);
+putn (get (set list 1 7) 1);
+putn (get (concat list rope) 4);
+putn (get (concat rope list) 4);
+putn (length (concat list rope));
+putn (if null (createList 0 (lam i. i)) then 1 else 0);
+putn (if null list then 1 else 0);
+putn (foldl (lam acc. lam x. addi acc x) 0 list);
+putn (foldr (lam x. lam acc. addi x acc) 0 list);
+putn (get (subsequence list 1 2) 0);
+
+-- Walking a list with an edge pattern, the way a list is meant to be used.
+recursive let sum = lam acc. lam xs.
+  match xs with [a] ++ rest then sum (addi acc a) rest else acc
+in
+putn (sum 0 list);
+putn (sum 0 rope);
+
 -- Higher-order operations. The callbacks are curried, as MExpr requires.
 putn (foldl (lam acc. lam x. addi acc x) 0 [1, 2, 3]);
 putn (foldr (lam x. lam acc. subi x acc) 0 [1, 2, 3]);

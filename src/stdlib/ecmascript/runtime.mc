@@ -147,28 +147,38 @@ function $gensym() {
   return $symCounter;
 }" },
 
-  -- A sequence, represented as boot's `Rope` is: either the elements of `a` from
-  -- `o` for `n` of them, or the concatenation of `l` and `r` when `a` is null.
-  --
-  -- Concatenating is therefore O(1), and so are `cons`, `snoc` and taking a
-  -- subsequence -- a subsequence shares the array it is cut from. Reading an
-  -- element flattens the tree first, rewriting this node in place so the cost is
-  -- paid once. Boot uses a mutable `ref` for the same purpose; a JavaScript
-  -- object cannot change class, so the node carries its own tag instead.
-  --
-  -- Keeping one class, rather than one per case, keeps every field access in the
-  -- program monomorphic, which is what the JIT rewards.
+  -- A sequence is one of two representations.
   { name = "$Seq", deps = [], source =
-"class $Seq {
+"class $Seq {}" },
+
+  -- A rope is a tree. A leaf or slice owns `a`, reading `n` elements from `o`;
+  -- any other node is the concatenation of `l` and `r`, which is why `concat`
+  -- costs nothing. `$col` flattens the tree in place before indexing.
+  { name = "$Rope", deps = ["$Seq"], source =
+"class $Rope extends $Seq {
   constructor(a, o, n, l, r) {
-    this.a = a; this.o = o; this.n = n; this.l = l; this.r = r;
+    super(); this.a = a; this.o = o; this.n = n; this.l = l; this.r = r;
   }
 }" },
 
-  -- Flattens a sequence into a single array, in place.
+  -- A list is a chain of cons cells, two fields apiece as in the reference
+  -- backend. There is deliberately no length field: `length` walks, the way
+  -- `List.length` does, and a cell is never rewritten, so a shared suffix
+  -- stays shared.
+  { name = "$List", deps = ["$Seq"], source =
+"class $List extends $Seq {
+  constructor(h, t) { super(); this.h = h; this.t = t; }
+}" },
+
+  -- The empty list. Every operation that produces one returns this, so an
+  -- empty list is recognized by identity.
+  { name = "$nil", deps = ["$List"], source =
+"const $nil = new $List(undefined, null);" },
+
+  -- Flattens a rope into a single array, in place.
   -- An explicit stack: a sequence built by repeated `cons` is a tree as deep
   -- as it is long, which would overflow the call stack.
-  { name = "$col", deps = ["$Seq"], source =
+  { name = "$col", deps = ["$Rope"], source =
 "function $col(s) {
   if (s.a !== null) return s;
   const dst = new Array(s.n);
@@ -187,68 +197,173 @@ function $gensym() {
   return s;
 }" },
 
-  -- A sequence holding exactly the elements of a JavaScript array.
-  { name = "$sq", deps = ["$Seq"], source =
+  -- A rope holding exactly the elements of a JavaScript array.
+  { name = "$sq", deps = ["$Rope"], source =
 "function $sq(a) {
-  return new $Seq(a, 0, a.length, null, null);
+  return new $Rope(a, 0, a.length, null, null);
+}" },
+
+  -- A list holding exactly the elements of a JavaScript array. Built from the
+  -- back, so each cell points at one that already exists.
+  { name = "$lst", deps = ["$List", "$nil"], source =
+"function $lst(a) {
+  let t = $nil;
+  for (let i = a.length - 1; i >= 0; i--) t = new $List(a[i], t);
+  return t;
 }" },
 
   -- The elements of a sequence as a JavaScript array, for the host and for the
-  -- tensor helpers. Copies only when the sequence is a part of a larger array.
-  { name = "$arr", deps = ["$col"], source =
+  -- tensor helpers. For a rope this copies only when the sequence is a part of
+  -- a larger array; for a list the array is always fresh.
+  { name = "$arr", deps = ["$col", "$List", "$nil"], source =
 "function $arr(s) {
+  if (s instanceof $List) {
+    const out = [];
+    for (let c = s; c !== $nil; c = c.t) out.push(c.h);
+    return out;
+  }
   const t = $col(s);
   return t.o === 0 && t.n === t.a.length ? t.a : t.a.slice(t.o, t.o + t.n);
 }" },
 
-  { name = "$len", deps = ["$Seq"], source =
+  -- O(1) on a rope, which stores its length; a walk on a list, as in the
+  -- reference backend.
+  { name = "$len", deps = ["$List", "$nil"], source =
 "function $len(s) {
+  if (s instanceof $List) {
+    let n = 0;
+    for (let c = s; c !== $nil; c = c.t) n++;
+    return n;
+  }
   return s.n;
 }" },
 
-  { name = "$get", deps = ["$col"], source =
+  -- Whether a sequence holds at least `k` elements, without measuring it:
+  -- matching `[a] ++ rest` must not walk the whole list. This is boot's
+  -- `is_length_at_least`, which the reference backend compiles such patterns
+  -- to for the same reason.
+  { name = "$lenAtLeast", deps = ["$List", "$nil"], source =
+"function $lenAtLeast(s, k) {
+  if (s instanceof $List) {
+    let c = s;
+    while (k > 0) { if (c === $nil) return false; c = c.t; k--; }
+    return true;
+  }
+  return s.n >= k;
+}" },
+
+  -- Emptiness without measuring, for the same reason.
+  { name = "$null", deps = ["$List", "$nil"], source =
+"function $null(s) {
+  return s instanceof $List ? s === $nil : s.n === 0;
+}" },
+
+  { name = "$get", deps = ["$col", "$List"], source =
 "function $get(s, i) {
+  if (s instanceof $List) {
+    let c = s;
+    while (i > 0) { c = c.t; i--; }
+    return c.h;
+  }
   return s.a !== null ? s.a[s.o + i] : $col(s).a[i];
 }" },
 
-  { name = "$cat", deps = ["$Seq"], source =
+  -- Two ropes concatenate into a rope in constant time. Any other combination
+  -- is a list, which is what the reference backend does: a list keeps its
+  -- representation, and a rope joined to one is converted into its cells.
+  { name = "$cat", deps = ["$Rope", "$List", "$nil", "$lst", "$arr"], source =
 "function $cat(x, y) {
+  if (x instanceof $List || y instanceof $List) {
+    const tail = y instanceof $List ? y : $lst($arr(y));
+    if (x instanceof $List) {
+      if (x === $nil) return tail;
+      const head = new $List(x.h, $nil);
+      let last = head;
+      for (let c = x.t; c !== $nil; c = c.t) {
+        const cell = new $List(c.h, $nil); last.t = cell; last = cell;
+      }
+      last.t = tail;
+      return head;
+    }
+    const a = $arr(x);
+    let t = tail;
+    for (let i = a.length - 1; i >= 0; i--) t = new $List(a[i], t);
+    return t;
+  }
   if (x.n === 0) return y;
   if (y.n === 0) return x;
-  return new $Seq(null, 0, x.n + y.n, x, y);
+  return new $Rope(null, 0, x.n + y.n, x, y);
 }" },
 
-  { name = "$cons", deps = ["$cat", "$sq"], source =
+  -- Consing onto a list is a single cell, as it is in the reference backend.
+  { name = "$cons", deps = ["$cat", "$sq", "$List"], source =
 "function $cons(v, s) {
-  return $cat($sq([v]), s);
+  return s instanceof $List ? new $List(v, s) : $cat($sq([v]), s);
 }" },
 
-  { name = "$snoc", deps = ["$cat", "$sq"], source =
+  -- Appending to a list copies its cells, since the last one cannot be
+  -- rewritten without disturbing anything sharing it.
+  { name = "$snoc", deps = ["$cat", "$sq", "$List", "$nil"], source =
 "function $snoc(s, v) {
+  if (s instanceof $List) {
+    if (s === $nil) return new $List(v, $nil);
+    const head = new $List(s.h, $nil);
+    let last = head;
+    for (let c = s.t; c !== $nil; c = c.t) {
+      const cell = new $List(c.h, $nil); last.t = cell; last = cell;
+    }
+    last.t = new $List(v, $nil);
+    return head;
+  }
   return $cat(s, $sq([v]));
 }" },
 
   -- Clamped, matching the reference backend for an over-long span. A start past
   -- the end is not well defined there -- it returns a sequence of negative length
   -- -- so this returns empty instead.
-  { name = "$sub", deps = ["$Seq", "$col", "$sq"], source =
+  { name = "$sub", deps = ["$Rope", "$col", "$sq", "$List", "$nil"], source =
 "function $sub(s, off, cnt) {
+  if (s instanceof $List) {
+    let c = s;
+    for (let i = 0; i < off && c !== $nil; i++) c = c.t;
+    if (cnt <= 0 || c === $nil) return $nil;
+    const head = new $List(c.h, $nil);
+    let last = head;
+    c = c.t;
+    for (let i = 1; i < cnt && c !== $nil; i++) {
+      const cell = new $List(c.h, $nil); last.t = cell; last = cell; c = c.t;
+    }
+    return head;
+  }
   if (s.n === 0) return s;
   const start = Math.max(0, Math.min(off, s.n));
   const n = Math.max(0, Math.min(cnt, s.n - start));
   if (n === 0) return $sq([]);
   const t = $col(s);
-  return new $Seq(t.a, t.o + start, n, null, null);
+  return new $Rope(t.a, t.o + start, n, null, null);
 }" },
 
-  { name = "$tail", deps = ["$sub"], source =
+  { name = "$tail", deps = ["$sub", "$List", "$nil"], source =
 "function $tail(s) {
+  if (s instanceof $List) return s === $nil ? s : s.t;
   return $sub(s, 1, s.n - 1);
 }" },
 
-  -- Returns an MExpr pair, which is a record with fields "0" and "1".
-  { name = "$splitAt", deps = ["$sub"], source =
+  -- Returns an MExpr pair, which is a record with fields "0" and "1". A list
+  -- splits by copying the front and sharing the rest, so it never measures the
+  -- whole sequence.
+  { name = "$splitAt", deps = ["$sub", "$List", "$nil"], source =
 "function $splitAt(s, i) {
+  if (s instanceof $List) {
+    if (i <= 0 || s === $nil) return { \"0\": $nil, \"1\": s };
+    const head = new $List(s.h, $nil);
+    let last = head;
+    let c = s.t;
+    for (let k = 1; k < i && c !== $nil; k++) {
+      const cell = new $List(c.h, $nil); last.t = cell; last = cell; c = c.t;
+    }
+    return { \"0\": head, \"1\": c };
+  }
   return { \"0\": $sub(s, 0, i), \"1\": $sub(s, i, s.n - i) };
 }" },
 
@@ -257,8 +372,20 @@ function $gensym() {
   return $sub(s, off, len);
 }" },
 
-  { name = "$set", deps = ["$arr", "$sq"], source =
+  -- A list copies only as far as the element replaced, and shares the rest.
+  { name = "$set", deps = ["$arr", "$sq", "$List", "$nil"], source =
 "function $set(s, i, v) {
+  if (s instanceof $List) {
+    if (i === 0) return new $List(v, s.t);
+    const head = new $List(s.h, $nil);
+    let last = head;
+    let c = s.t;
+    for (let k = 1; k < i; k++) {
+      const cell = new $List(c.h, $nil); last.t = cell; last = cell; c = c.t;
+    }
+    last.t = new $List(v, c.t);
+    return head;
+  }
   const out = $arr(s).slice();
   out[i] = v;
   return $sq(out);
@@ -271,52 +398,121 @@ function $gensym() {
   return $sq(out);
 }" },
 
-  { name = "$map", deps = ["$col", "$sq"], source =
+  -- `f` is applied from the front, as in the reference backend, and the cells
+  -- are linked afterwards.
+  { name = "$createList", deps = ["$List", "$nil"], source =
+"function $createList(n, f) {
+  if (n === 0) return $nil;
+  const head = new $List(f(0), $nil);
+  let last = head;
+  for (let i = 1; i < n; i++) {
+    const cell = new $List(f(i), $nil); last.t = cell; last = cell;
+  }
+  return head;
+}" },
+
+  { name = "$isList", deps = ["$List"], source =
+"function $isList(s) {
+  return s instanceof $List;
+}" },
+
+  { name = "$isRope", deps = ["$Rope"], source =
+"function $isRope(s) {
+  return s instanceof $Rope;
+}" },
+
+  -- Mapping, reversing and slicing all keep the representation they were
+  -- given, so a list stays a list.
+  { name = "$map", deps = ["$col", "$sq", "$List", "$nil"], source =
 "function $map(f, s) {
+  if (s instanceof $List) {
+    if (s === $nil) return $nil;
+    const head = new $List(f(s.h), $nil);
+    let last = head;
+    for (let c = s.t; c !== $nil; c = c.t) {
+      const cell = new $List(f(c.h), $nil); last.t = cell; last = cell;
+    }
+    return head;
+  }
   const t = $col(s), a = t.a, o = t.o, n = t.n;
   const out = new Array(n);
   for (let i = 0; i < n; i++) out[i] = f(a[o + i]);
   return $sq(out);
 }" },
 
-  { name = "$mapi", deps = ["$col", "$sq"], source =
+  { name = "$mapi", deps = ["$col", "$sq", "$List", "$nil"], source =
 "function $mapi(f, s) {
+  if (s instanceof $List) {
+    if (s === $nil) return $nil;
+    const head = new $List(f(0)(s.h), $nil);
+    let last = head;
+    let i = 1;
+    for (let c = s.t; c !== $nil; c = c.t) {
+      const cell = new $List(f(i++)(c.h), $nil); last.t = cell; last = cell;
+    }
+    return head;
+  }
   const t = $col(s), a = t.a, o = t.o, n = t.n;
   const out = new Array(n);
   for (let i = 0; i < n; i++) out[i] = f(i)(a[o + i]);
   return $sq(out);
 }" },
 
-  { name = "$iter", deps = ["$col"], source =
+  { name = "$iter", deps = ["$col", "$List", "$nil"], source =
 "function $iter(f, s) {
+  if (s instanceof $List) {
+    for (let c = s; c !== $nil; c = c.t) f(c.h);
+    return undefined;
+  }
   const t = $col(s), a = t.a, o = t.o, n = t.n;
   for (let i = 0; i < n; i++) f(a[o + i]);
   return undefined;
 }" },
 
-  { name = "$iteri", deps = ["$col"], source =
+  { name = "$iteri", deps = ["$col", "$List", "$nil"], source =
 "function $iteri(f, s) {
+  if (s instanceof $List) {
+    let i = 0;
+    for (let c = s; c !== $nil; c = c.t) f(i++)(c.h);
+    return undefined;
+  }
   const t = $col(s), a = t.a, o = t.o, n = t.n;
   for (let i = 0; i < n; i++) f(i)(a[o + i]);
   return undefined;
 }" },
 
-  { name = "$foldl", deps = ["$col"], source =
+  { name = "$foldl", deps = ["$col", "$List", "$nil"], source =
 "function $foldl(f, acc, s) {
+  if (s instanceof $List) {
+    for (let c = s; c !== $nil; c = c.t) acc = f(acc)(c.h);
+    return acc;
+  }
   const t = $col(s), a = t.a, o = t.o, n = t.n;
   for (let i = 0; i < n; i++) acc = f(acc)(a[o + i]);
   return acc;
 }" },
 
-  { name = "$foldr", deps = ["$col"], source =
+  -- Folding a list from the right walks it into an array first, rather than
+  -- recursing once per element and risking the call stack.
+  { name = "$foldr", deps = ["$col", "$List", "$arr"], source =
 "function $foldr(f, acc, s) {
+  if (s instanceof $List) {
+    const a = $arr(s);
+    for (let i = a.length - 1; i >= 0; i--) acc = f(a[i])(acc);
+    return acc;
+  }
   const t = $col(s), a = t.a, o = t.o, n = t.n;
   for (let i = n - 1; i >= 0; i--) acc = f(a[o + i])(acc);
   return acc;
 }" },
 
-  { name = "$rev", deps = ["$col", "$sq"], source =
+  { name = "$rev", deps = ["$col", "$sq", "$List", "$nil"], source =
 "function $rev(s) {
+  if (s instanceof $List) {
+    let t = $nil;
+    for (let c = s; c !== $nil; c = c.t) t = new $List(c.h, t);
+    return t;
+  }
   const t = $col(s), a = t.a, o = t.o, n = t.n;
   const out = new Array(n);
   for (let i = 0; i < n; i++) out[i] = a[o + n - 1 - i];
@@ -652,7 +848,10 @@ let esRuntimeByName : Map String ESRuntimeIntrinsic =
 
 -- Renders the definitions for `used` plus everything they depend on.
 --
--- Emitted in sorted order, which keeps output stable across runs.
+-- Emitted so that a definition follows the ones it depends on: a class has to
+-- be declared before the class that extends it, and `$nil` before the code
+-- that constructs it runs. Dependencies are visited in sorted order and each
+-- definition is emitted once, so the output stays stable across runs.
 let esRuntimeEmit : [String] -> String = lam used.
   if null used then "" else
   recursive let close = lam pending. lam seen.
@@ -664,6 +863,15 @@ let esRuntimeEmit : [String] -> String = lam used.
     else seen
   in
   let names = setToSeq (close used (setEmpty cmpString)) in
+  recursive let visit = lam acc. lam n.
+    match acc with (seen, out) in
+    if setMem n seen then acc else
+    let acc = (setInsert n seen, out) in
+    match foldl visit acc (sort cmpString (mapFindExn n esRuntimeByName).deps)
+      with (seen, out) in
+    (seen, snoc out n)
+  in
+  match foldl visit (setEmpty cmpString, []) names with (_, names) in
   join
   [ "\n// ---------------------------------------------------------------\n"
   , "// MExpr runtime intrinsics.\n"
@@ -682,8 +890,20 @@ utest mapMem "$roundfi" esRuntimeByName with true in
 utest mapMem "$float2string" esRuntimeByName with true in
 
 -- Dependencies are recorded alongside the definition.
-utest (mapFindExn "$cons" esRuntimeByName).deps with ["$cat", "$sq"] in
+utest (mapFindExn "$cons" esRuntimeByName).deps with ["$cat", "$sq", "$List"] in
 utest (mapFindExn "$roundfi" esRuntimeByName).deps with [] in
+
+-- A definition is emitted after everything it depends on, so that `class
+-- $Rope extends $Seq` and `const $nil` are never read before they exist.
+let indexOf = lam needle. lam s.
+  match strSplit needle s with [before] ++ rest then
+    if null rest then negi 1 else length before
+  else negi 1 in
+let ordered = esRuntimeEmit ["$cons"] in
+utest lti (indexOf "class $Seq" ordered) (indexOf "class $Rope" ordered)
+with true in
+utest lti (indexOf "class $List" ordered) (indexOf "const $nil" ordered)
+with true in
 
 -- Every dependency names an intrinsic that exists.
 utest
@@ -723,6 +943,9 @@ utest contains "function $cons(" out with true in
 utest contains "function $cat(" out with true in
 utest contains "function $sq(" out with true in
 utest contains "class $Seq {" out with true in
+utest contains "class $Rope extends $Seq {" out with true in
+-- `$cons` has to know whether it is given a list, so the class comes too.
+utest contains "class $List extends $Seq {" out with true in
 utest contains "function $roundfi(" out with false in
 
 ()

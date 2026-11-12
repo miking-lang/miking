@@ -1069,9 +1069,20 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint + MExprArity
     match esPatTarget ctx target with (obj, pre) in
     let np = length t.prefix in
     let ns = length t.postfix in
-    let len = esSeqLen obj in
-    let test = ESEBin { op = ESOGe {}, lhs = len
-                      , rhs = ESEInt { value = addi np ns } } in
+    -- Whether the sequence is long enough is asked, not measured: a list has
+    -- no length to read, so measuring one walks the whole chain, and matching
+    -- `[a] ++ rest` along a list would be quadratic. This is what the
+    -- reference backend compiles the pattern to, for the same reason.
+    let test = ESECall { callee = ESEGlobal { name = "$lenAtLeast" }
+                       , args = [obj, ESEInt { value = addi np ns }] } in
+    -- The length itself is only needed to count from the back, or to measure
+    -- the middle; then it is read once and kept, rather than once per use.
+    let usesLen =
+      or (gti ns 0) (match t.middle with PName _ then true else false) in
+    let lenName = nameSym "_n" in
+    let len = if usesLen then ESEVar { id = lenName } else esSeqLen obj in
+    let lenBind =
+      if usesLen then [ESSConst { id = lenName, init = esSeqLen obj }] else [] in
     -- Prefix elements count from the front, postfix from the back, and the
     -- middle is whatever is left between them.
     let front = lam acc. lam ip.
@@ -1080,7 +1091,7 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint + MExprArity
         with (ctx, _, _, b) in
       (ctx, addi i 1, concat binds b)
     in
-    match foldl front (ctx, 0, []) t.prefix with (ctx, _, binds) in
+    match foldl front (ctx, 0, lenBind) t.prefix with (ctx, _, binds) in
     let back = lam acc. lam ip.
       match acc with (ctx, i, binds) in
       let idx = ESEBin { op = ESOSub {}, lhs = len
@@ -1216,10 +1227,8 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint + MExprArity
       Some (ctx, ESECall
         { callee = esMember (ESEVar { id = ctx.runtimeEnv }) "dprint", args = args })
 
-    -- Sequences are ropes (see `$Seq` in the runtime), so every operation is a
-    -- runtime call. That is what buys the complexity the reference backend
-    -- has: concatenating, consing and taking a subsequence are all O(1),
-    -- where a plain JS array would copy.
+    -- A sequence is a rope or a list, as in the reference backend (see `$Seq`
+    -- in the runtime).
     case CLength _ then rt "$len"
     case CGet _ then rt "$get"
     case CHead _ then
@@ -1227,12 +1236,7 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint + MExprArity
       Some (ctx, ESECall { callee = ESEGlobal { name = "$get" }
                          , args = [s, ESEInt { value = 0 }] })
     case CTail _ then rt "$tail"
-    case CNull _ then
-      match args with [s] in
-      Some (ctx, ESEBin
-        { op = ESOEq {}
-        , lhs = ESECall { callee = ESEGlobal { name = "$len" }, args = [s] }
-        , rhs = ESEInt { value = 0 } })
+    case CNull _ then rt "$null"
     case CConcat _ then rt "$cat"
     case CCons _ then rt "$cons"
     case CSnoc _ then rt "$snoc"
@@ -1246,14 +1250,13 @@ lang MExprESCompile = MExprAst + ESAst + MExprPrettyPrint + MExprArity
     case CIteri _ then rt "$iteri"
     case CFoldl _ then rt "$foldl"
     case CFoldr _ then rt "$foldr"
-    -- This backend has a single sequence representation, so the two
-    -- representation predicates answer uniformly.
-    case CIsList _ then Some (ctx, ESEBool { value = false })
-    case CIsRope _ then Some (ctx, ESEBool { value = true })
+    case CIsList _ then rt "$isList"
+    case CIsRope _ then rt "$isRope"
     case CSet _ then rt "$set"
     case CSplitAt _ then rt "$splitAt"
     case CSubsequence _ then rt "$subsequence"
-    case CCreate _ | CCreateList _ | CCreateRope _ then rt "$create"
+    case CCreate _ | CCreateRope _ then rt "$create"
+    case CCreateList _ then rt "$createList"
 
     -- Effects reach the host as ordinary JS strings, so it never has to know
     -- how `[Char]` is represented.

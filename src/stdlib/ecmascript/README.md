@@ -161,7 +161,7 @@ and exposes the direct tail call.
 | `Float` | `number` |
 | `Bool` | `true` / `false` |
 | `Char` | one-character `string` |
-| `[a]` | `$Seq`, custom implementation of a rope |
+| `[a]` | `$Rope` or `$List` |
 | Record | plain object |
 | Tuple | plain object with numeric keys |
 | Unit `()` | `undefined` |
@@ -176,7 +176,7 @@ Noteworthy things are
   it was not chosen since it would make every integer heap allocated.
 
 * Sequences are **not** JavaScript arrays, since the complexity differs for many operations.
-  `$Seq` is a custom implementation of a rope.
+  `$Rope` and `$List` are custom implementations of sequences.
 
 * Strings are **not** plain JavaScript strings, whey are a sequence of chars.
   However when the program calls and returns from JavaScript land (environment functions),
