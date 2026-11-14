@@ -24,10 +24,14 @@ let _recordConversionCost = 1
 let _seqtostringcost = 2
 
 lang OCamlChooseExternalImpl = Ast
-  -- `chooseExternalImpls impls env t` chooses external definitions from
-  -- `impls` for each external in `t` and adds these to `env`.
+  -- `chooseExternalImpls allImpls impls env t` chooses external definitions
+  -- from `impls` for each external in `t` and adds these to `env`. `allImpls`
+  -- should contain all known implementations, including those not supported
+  -- on the current system, and is used to suggest missing OCaml packages
+  -- when no implementation in `impls` is available.
   sem chooseExternalImpls
-    : Map String [ExternalImpl] -> GenerateEnv -> Expr -> GenerateEnv
+    : Map String [ExternalImpl] -> Map String [ExternalImpl] -> GenerateEnv
+    -> Expr -> GenerateEnv
 end
 
 lang OCamlDataConversion = Ast
@@ -585,7 +589,7 @@ end
 lang OCamlGenerateExternalNaive =
   OCamlDataConversionMExpr + OCamlChooseExternalImpl + ExtDeclAst
 
-  sem chooseExternalImpls implsMap env +=
+  sem chooseExternalImpls allImplsMap implsMap env +=
   | TmDecl {decl = DeclExt {ident = ident, tyIdent = tyIdent}, inexpr = inexpr, info = info} ->
     let identStr = nameGetStr ident in
     let impls = mapLookup identStr implsMap in
@@ -605,11 +609,11 @@ lang OCamlGenerateExternalNaive =
         impls
       in
       let env = { env with exts = mapInsert ident [impl] env.exts } in
-      chooseExternalImpls implsMap env inexpr
+      chooseExternalImpls allImplsMap implsMap env inexpr
     else
       let errMsg = join ["No implementation for external ", identStr, "."] in
       let errMsg =
-        match mapLookup identStr globalExternalImplsMap with Some impls then
+        match mapLookup identStr allImplsMap with Some impls then
           join [
             errMsg,
             " Try to install one of the following set of OCaml packages: ",
@@ -621,5 +625,5 @@ lang OCamlGenerateExternalNaive =
         else errMsg
       in
       errorSingle [info] errMsg
-  | t -> sfold_Expr_Expr (chooseExternalImpls implsMap) env t
+  | t -> sfold_Expr_Expr (chooseExternalImpls allImplsMap implsMap) env t
 end

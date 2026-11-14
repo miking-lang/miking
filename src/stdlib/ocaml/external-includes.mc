@@ -94,16 +94,17 @@ let externalListOcamlPackages : () -> [(String, String)] = lam.
     flushStderr;
     []
 
--- Filters all external implementations defined in `globalExternalImplsMap` to
+-- Filters all external implementations defined in `implsMap` to
 -- implementations supported on the current system.
-let externalGetSupportedExternalImpls : () -> Map String [ExternalImpl] = lam.
+let externalFilterSupportedExternalImpls
+  : Map String [ExternalImpl] -> Map String [ExternalImpl] = lam implsMap.
   let syslibs =
     setOfSeq cmpString
       (map (lam x : (String, String). x.0) (externalListOcamlPackages ()))
   in
   -- We are unable to list available OCaml packages for this system so we
   -- assume that all dependencies are met.
-  if setIsEmpty syslibs then globalExternalImplsMap
+  if setIsEmpty syslibs then implsMap
   -- Filter implementations to include only those with met dependencies on this
   -- system.
   else
@@ -120,4 +121,9 @@ let externalGetSupportedExternalImpls : () -> Map String [ExternalImpl] = lam.
         in
         match impls with [] then acc else mapInsert x impls acc)
         (mapEmpty cmpString)
-        globalExternalImplsMap
+        implsMap
+
+-- Filters all external implementations defined in `globalExternalImplsMap` to
+-- implementations supported on the current system.
+let externalGetSupportedExternalImpls : () -> Map String [ExternalImpl] = lam.
+  externalFilterSupportedExternalImpls globalExternalImplsMap
