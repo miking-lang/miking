@@ -29,6 +29,14 @@ jobs:
           # Install dependencies of owl
           sudo apt-get install -y liblapacke-dev libopenblas-dev
 
+          # Use a fixed commit of owl from GitHub
+          OWL_URL="git+https://github.com/owlbarn/owl.git#cb198b9e3c9b0c0fee4ba7e8f760be825632ac4b"
+          opam pin add -y -n owl-base "$OWL_URL"
+          opam pin add -y -n owl "$OWL_URL"
+          
+          # Enable OpenMP explicitly for owl
+          export OWL_ENABLE_OPENMP=1
+
           # Install all opam packages used in make test
           opam install -y dune linenoise pyml toml lwt owl ocamlformat.0.29.0
 
@@ -45,7 +53,8 @@ jobs:
           make test
 
   build-and-test-mac-os:
-    runs-on: macos-latest
+    # macos-latest and owl do not like each other
+    runs-on: macos-15
 
     steps:
       - uses: actions/checkout@v4
@@ -65,6 +74,11 @@ jobs:
         run: |
           # Install dependencies of owl
           brew install pkg-config autoconf openblas libomp fftw
+
+          # Use a fixed commit of owl from GitHub
+          OWL_URL="git+https://github.com/owlbarn/owl.git#cb198b9e3c9b0c0fee4ba7e8f760be825632ac4b"
+          opam pin add -y -n owl-base "$OWL_URL"
+          opam pin add -y -n owl "$OWL_URL"
 
           # Export environment variable needed by openblas
           export OWL_LDFLAGS="-L/opt/homebrew/opt/libomp/lib -lomp"
