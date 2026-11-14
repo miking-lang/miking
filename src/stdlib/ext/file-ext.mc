@@ -1,6 +1,7 @@
 
 include "option.mc"
 include "basic-types.mc"
+include "sys.mc"
 
 type WriteChannel
 type ReadChannel
@@ -94,7 +95,7 @@ let fileStderr = externalStderr
 
 mexpr
 
-let filename = "___testfile___.txt" in
+let filename = sysTempFileMake () in
 
 -- Test to open a file and write some lines of text
 utest
