@@ -21,6 +21,7 @@ type Hooks a =
   , exitBefore : () -> ()
   , postprocessOcamlTops : [use OCamlTopAst in Top] -> [use OCamlTopAst in Top]
   , compileOcaml : [String] -> [String] -> String -> a
+  , externalImpls : Map String [ExternalImpl]
   }
 
 let mkEmptyHooks : all a. ([String] -> [String] -> String -> a) -> Hooks a =
@@ -29,6 +30,7 @@ let mkEmptyHooks : all a. ([String] -> [String] -> String -> a) -> Hooks a =
   , exitBefore = lam. ()
   , postprocessOcamlTops = lam tops. tops
   , compileOcaml = compileOcaml
+  , externalImpls = globalExternalImplsMap
   }
 
 lang MCoreCompileLang =
@@ -63,7 +65,9 @@ lang MCoreCompileLang =
     match typeLift ast with (env, ast) in
     match generateTypeDecls env with (env, typeTops) in
     let env : GenerateEnv =
-      chooseExternalImpls (externalGetSupportedExternalImpls ()) env ast
+      chooseExternalImpls
+        hooks.externalImpls
+        (externalFilterSupportedExternalImpls hooks.externalImpls) env ast
     in
     let exprTops = generateTops env ast in
     let exprTops = hooks.postprocessOcamlTops exprTops in
