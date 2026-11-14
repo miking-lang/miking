@@ -142,4 +142,7 @@ preload boot
 : main/mi.mc | mi-lite $(BOOT_LIB_FILES) |> ^ ./mi-lite 1 %f %o^ $(STDLIB) ./%1i 1 %f %o |> mi1
 : main/mi.mc | mi1 $(BOOT_LIB_FILES) |> ^ ./mi1 compile %f --output %o^ $(STDLIB) ./%1i compile %f --output %o |> mi <mi>
 
+: es-boot/mi-es-lite.mjs |> ^ node mi-es-lite-node.mjs compile %f --output %o^ $(STDLIB) node --stack-size=4096 --max-old-space-size=16384 %1i compile %f --output %o |> mi-es-mid
+: mi-es-mid |> ^ ./mi-es-mid compile %f --native-parser --output %o^ $(STDLIB) ./%1i compile %f --native-parser --output %o |> mi-es <mi-es>
+
 : main/mi.mc | mi-boot $(BOOT_LIB_FILES) |> ^ mi compile %f --output %o^ $(STDLIB) mi compile %f --output %o |> mi-cheat <mi-cheat>

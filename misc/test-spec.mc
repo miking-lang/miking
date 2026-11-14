@@ -83,10 +83,31 @@ let bootstrapped : Substituter =
     , esNodeRunSub
     ]
   } in
+let esBootstrapped : Substituter =
+  { flag = "es-boot"
+  , description = "Build a new `mi` by bootstrapping through es-boot, then use it for tests."
+  , substitutions = mapFromSeq cmpChar
+    [ ( 'm'
+      , { tup =
+          { actual = "MCORE_LIBS=stdlib=$(ROOT)/src/stdlib OCAMLPATH=$(ROOT)/build/src/lib${OCAMLPATH:+:}$OCAMLPATH %<mi-es>"
+          , deps = ["$(ROOT)/src/<mi-es>"]
+          }
+        , make =
+          { actual = "MCORE_LIBS=stdlib=$(ROOT)/src/stdlib OCAMLPATH=$(ROOT)/build/lib$${OCAMLPATH:+:}$$OCAMLPATH $(ROOT)/build/mi-es"
+          , deps = ["build/mi-es"]
+          }
+        , friendly = "ES-BOOT MI"
+        }
+      )
+    , parserCompareSub
+    , esNodeRunSub
+    ]
+  } in
 
 let substituters =
   [ cheated
   , bootstrapped
+  , esBootstrapped
   , installed
   ] in
 let directories = ["src"] in
