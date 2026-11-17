@@ -1138,6 +1138,11 @@ lang UnknownTypePrettyPrint = PrettyPrint + UnknownTypeAst
   | TyUnknown _ -> (env,"Unknown")
 end
 
+lang SharedTypePrettyPrint = PrettyPrint + SharedTypeAst
+  sem getTypeStringCode (indent : Int) (env: PprintEnv) +=
+  | TySharedUnknown _ -> (env,"Shared")
+end
+
 lang BoolTypePrettyPrint = PrettyPrint + BoolTypeAst
   sem getTypeStringCode (indent : Int) (env: PprintEnv) +=
   | TyBool _ -> (env,"Bool")
@@ -1476,7 +1481,7 @@ lang MExprPrettyPrint =
   OrPatPrettyPrint + NotPatPrettyPrint +
 
   -- Types
-  UnknownTypePrettyPrint + BoolTypePrettyPrint + IntTypePrettyPrint +
+  UnknownTypePrettyPrint + SharedTypePrettyPrint + BoolTypePrettyPrint + IntTypePrettyPrint +
   FloatTypePrettyPrint + CharTypePrettyPrint + FunTypePrettyPrint +
   SeqTypePrettyPrint + RecordTypePrettyPrint + VariantTypePrettyPrint +
   ConTypePrettyPrint + DataTypePrettyPrint + VarTypePrettyPrint +

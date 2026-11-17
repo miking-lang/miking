@@ -48,7 +48,6 @@ let tyunknown_ = use UnknownTypeAst in
 let ityunknown_ = use UnknownTypeAst in
   lam i: Info.
   TyUnknown {info = i}
-
 let ityseq_ = use SeqTypeAst in
   lam info. lam ty.
   TySeq {ty = ty, info = info}

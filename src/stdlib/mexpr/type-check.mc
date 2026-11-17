@@ -706,10 +706,12 @@ lang ResolveType = ConTypeAst + AppTypeAst + AliasTypeAst + VariantTypeAst +
     smap_Type_Type (resolveType info env closeDatas) ty
 end
 
-lang SubstituteUnknown = UnknownTypeAst + ConTypeAst + AliasTypeAst
+lang SubstituteUnknown = UnknownTypeAst + SharedTypeAst + ConTypeAst + AliasTypeAst
   sem substituteUnknown (info : Info) (env : TCEnv) (kind : Kind) =
   | TyUnknown _ ->
     newmetavar kind env.currentLvl info
+  | TySharedUnknown t ->
+    errorSingle [t.info] "* Shared is only allowed in the definition of a type alias."
   | TyAlias t ->
     TyAlias {t with content = substituteUnknown info env kind t.content}
   | TyCon _ & ty ->
@@ -1450,15 +1452,21 @@ lang RecordUpdateTypeCheck = TypeCheck + RecordAst + RecordTypeAst
     TmRecordUpdate {t with rec = rec, value = value, ty = tyTm rec}
 end
 
-lang TypeTypeCheck = TypeCheck + TypeDeclAst + VariantTypeAst + ResolveType
+lang TypeTypeCheck = TypeCheck + TypeDeclAst + VariantTypeAst + ResolveType + SharedTypeAst + MonoKindAst
+  sem substituteShared : String -> Level -> Type -> Type
+  sem substituteShared name lvl =
+  | TySharedUnknown t -> newnmetavar name (Mono ()) lvl t.info
+  | ty -> smap_Type_Type (substituteShared name lvl) ty
+
   sem typeCheckDecl env +=
   | DeclType t ->
     let tyIdent = resolveType t.info env false t.tyIdent in
+    let def = substituteShared (nameGetStr t.ident) env.currentLvl tyIdent in
     -- NOTE(aathn, 2023-05-08): Aliases are treated as the underlying
     -- type and do not need to be scope checked.
     let newLvl =
-      match tyIdent with !TyVariant _ then addi 1 env.currentLvl else 0 in
-    let newTyConEnv = mapInsert t.ident (newLvl, t.params, tyIdent) env.tyConEnv in
+      match def with !TyVariant _ then addi 1 env.currentLvl else 0 in
+    let newTyConEnv = mapInsert t.ident (newLvl, t.params, def) env.tyConEnv in
     ( {env with currentLvl = addi 1 env.currentLvl, tyConEnv = newTyConEnv}
     , DeclType {t with tyIdent = tyIdent}
     )
@@ -2040,6 +2048,8 @@ let fb = newpolyvar 0 (NoInfo ()) in
 let wa = newmonovar 0 (NoInfo ()) in
 let wb = newmonovar 0 (NoInfo ()) in
 
+let tyshared_ = TySharedUnknown {info = NoInfo ()} in
+
 let tychoose_ = tyall_ "a" (tyarrows_ [a, a, a]) in
 let choose_ = ("choose", tychoose_) in
 
@@ -2399,6 +2409,46 @@ let tests = [
              (ulam_ "x" (var_ "x")))
           (freeze_ (var_ "f")),
    ty = tyarrow_ tyint_ tyint_,
+   env = []},
+
+  {name = "Shared1",
+   tm = bindall_ [
+     type_ "T" [] tyshared_,
+     let_ "f" (tyarrow_ (tycon_ "T") (tycon_ "T")) (ulam_ "x" (var_ "x"))
+   ]
+     (freeze_ (var_ "f")),
+   ty = tyarrow_ wa wa,
+   env = []},
+
+  {name = "Shared2",
+   tm = bindall_ [
+     type_ "T" [] tyshared_,
+     let_ "x" (tycon_ "T") (int_ 1),
+     let_ "f" (tyarrow_ (tycon_ "T") (tycon_ "T")) (ulam_ "y" (var_ "y"))
+   ]
+     (freeze_ (var_ "f")),
+   ty = tyarrow_ tyint_ tyint_,
+   env = []},
+
+  {name = "Shared3",
+   tm = bindall_ [
+     type_ "T" [] (tytuple_ [tyshared_, tyunknown_]),
+     let_ "x" (tycon_ "T") (utuple_ [int_ 1, int_ 2]),
+     let_ "y" (tycon_ "T") (utuple_ [int_ 3, true_])
+   ]
+     (var_ "y"),
+   ty = tytuple_ [tyint_, tybool_],
+   env = []},
+
+  {name = "Shared4",
+   tm = bindall_ [
+     ulet_ "g" (ulam_ "z" (bindall_ [
+       type_ "T" [] tyshared_,
+       let_ "y" (tycon_ "T") (var_ "z")
+     ] (var_ "y")))
+   ]
+     (utuple_ [app_ (var_ "g") (int_ 1), app_ (var_ "g") true_]),
+   ty = tytuple_ [tyint_, tybool_],
    env = []}
 
 ]
