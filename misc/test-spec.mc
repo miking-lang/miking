@@ -466,8 +466,16 @@ testMain substituters directories location (lam api.
     } in
 
   api.tests [node]
-    (and (or (dirIs "src/test/ecmascript") (dirIs "src/stdlib"))
-         (strEndsWith ".mc"))
+    (and 
+      (or 
+        (or
+          (dirIs "src/test/ecmascript")
+          (dirIs "src/test/playground")
+        )
+        (dirIs "src/stdlib")
+      )
+      (strEndsWith ".mc")
+    )
     [(esCompile, succ), (esRun, succ), (esDiff, succ)];
 
   -- === Java ===
