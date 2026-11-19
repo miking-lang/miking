@@ -1,7 +1,9 @@
 BOOT_NAME=mi-boot
 MI_LITE_NAME=mi-lite
+MI_ES_LITE_NAME=mi-es-lite
 MI_MID_NAME=mi-mid
 MI_NAME=mi
+MI_ES_NAME=mi-es
 MI_CHEAT_NAME=mi-cheat
 
 prefix ?= $(HOME)/.local
@@ -52,7 +54,8 @@ install-boot:
 
 .PHONY: uninstall-boot
 uninstall-boot:
-	misc/scripts/with-tmp-dir dune uninstall --root=src/boot --build-dir="{}" --prefix=$(prefix) --libdir=$(ocamllibdir) ">/dev/null 2>&1"
+	misc/scripts/with-tmp-dir dune build --root=src/boot/ --build-dir="{}" @install ">/dev/null 2>&1" \
+	  "&&" dune uninstall --root=src/boot --build-dir="{}" --prefix=$(prefix) --libdir=$(ocamllibdir) ">/dev/null 2>&1"
 
 
 ## Formatting, checking and autoformatting respectively
@@ -81,6 +84,24 @@ cheat:
 	$(SET_STDLIB) $(SET_OCAMLPATH) mi compile src/main/mi.mc --output build/$(MI_CHEAT_NAME)
 
 build/$(MI_CHEAT_NAME): $(if $(wildcard build/$(MI_CHEAT_NAME)),,cheat)
+
+
+# Bootstrapping the `mi` executable using es-boot
+
+.PHONY: es-bootstrap
+es-bootstrap: $(if $(wildcard build/$(BOOT_NAME)),,boot)
+	$(SET_STDLIB) $(SET_OCAMLPATH) node --stack-size=4096 --max-old-space-size=16384 src/es-boot/mi-es-lite-node.mjs compile src/main/mi.mc --output build/$(MI_MID_NAME)
+	$(SET_STDLIB) $(SET_OCAMLPATH) build/$(MI_MID_NAME) compile src/main/mi.mc --native-parser --output build/$(MI_ES_NAME)
+
+build/$(MI_ES_NAME): $(if $(wildcard build/$(MI_ES_NAME)),,es-bootstrap)
+
+# Recompiles es-boot
+
+.PHONY: es-boot
+es-boot: $(if $(wildcard build/$(MI_NAME)),,es-bootstrap)
+	$(SET_STDLIB) $(SET_OCAMLPATH) build/$(MI_ES_NAME) compile src/main/mi-es-lite.mc --to-es --output build/$(MI_ES_LITE_NAME).mjs
+	sed "s|$(CURDIR)|.|g" build/$(MI_ES_LITE_NAME).mjs > src/es-boot/mi-es-lite.mjs
+
 
 # Umbrella install/uninstall targets, for installing and uninstalling everything
 
