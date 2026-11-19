@@ -487,7 +487,7 @@ testMain substituters directories location (lam api.
     } in
 
   api.tests [node]
-    (and (or (dirIs "src/test/ecmascript") (dirIs "src/stdlib"))
+    (and (or (dirIs "src/test/ecmascript") (or (dirIs "src/stdlib") (dirIs "src/stdlib/ecmascript")))
          (strEndsWith ".mc"))
     [(esCompile, succ), (esRun, succ), (esDiff, succ)];
 
