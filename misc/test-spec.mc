@@ -7,7 +7,7 @@ use TestSpec in
 -- `misc/scripts/parser-compare` is a standalone tool
 let parserCompareSub =
   ( 'p'
-  , { tup = {actual = "$(ROOT)/misc/scripts/parser-compare", deps = ["$(ROOT)/misc/scripts/<parser-compare>"]}
+  , { tup = {actual = "$(ROOT)/src/parser-compare", deps = ["$(ROOT)/src/<parser-compare>"]}
     , make = {actual = "$(ROOT)/misc/scripts/parser-compare", deps = ["misc/scripts/parser-compare"]}
     , friendly = "PARSER-COMPARE"
     }
@@ -90,7 +90,7 @@ let esBootstrapped : Substituter =
     [ ( 'm'
       , { tup =
           { actual = "MCORE_LIBS=stdlib=$(ROOT)/src/stdlib OCAMLPATH=$(ROOT)/build/src/lib${OCAMLPATH:+:}$OCAMLPATH %<mi-es>"
-          , deps = ["$(ROOT)/src/<mi-es>"]
+          , deps = ["$(ROOT)/src/<mi-es>", "$(ROOT)/src/<boot-lib>"]
           }
         , make =
           { actual = "MCORE_LIBS=stdlib=$(ROOT)/src/stdlib OCAMLPATH=$(ROOT)/build/lib$${OCAMLPATH:+:}$$OCAMLPATH $(ROOT)/build/mi-es"
