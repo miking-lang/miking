@@ -9,6 +9,7 @@ include "mexpr/symbolize.mc"
 include "mexpr/boot-parser.mc"
 include "seq.mc"
 include "string.mc"
+include "mlang/lazy-ast.mc"
 
 lang FreeVars = Ast
   -- Returns the set of free variables for a given expression. Assumes
@@ -239,6 +240,11 @@ lang MExprFreeNames =
   LamFreeNames + LetFreeNames + RecLetsFreeNames + TypeFreeNames + DataFreeNames +
   ExtFreeNames + MatchFreeNames + NamedPatFreeNames + SeqEdgePatFreeNames +
   DataPatFreeNames + ConTypeFreeNames + VarTypeFreeNames + AllTypeFreeNames + VarFreeNames
+end
+
+lang LazyFreeNames = FreeNames + LazyAst
+  sem freeNamesExpr free +=
+  | TmLazy t -> setUnion free t.freeVars
 end
 
 lang TestLang = MExprFreeVars + MExprSym + BootParser end
