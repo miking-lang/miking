@@ -329,6 +329,14 @@ lang UnknownTypeToJson = AstToJson + UnknownTypeAst
     ] )
 end
 
+lang SharedTypeToJson = AstToJson + SharedTypeAst
+  sem typeToJson +=
+  | TySharedUnknown x -> JsonObject (mapFromSeq cmpString
+    [ ("con", JsonString "TySharedUnknown")
+    , ("info", infoToJson x.info)
+    ] )
+end
+
 lang BoolTypeToJson = AstToJson + BoolTypeAst
   sem typeToJson +=
   | TyBool x -> JsonObject (mapFromSeq cmpString
@@ -651,6 +659,7 @@ lang MExprToJson
   + OrPatToJson
   + NotPatToJson
   + UnknownTypeToJson
+  + SharedTypeToJson
   + BoolTypeToJson
   + IntTypeToJson
   + FloatTypeToJson

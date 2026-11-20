@@ -595,6 +595,13 @@ lang UnknownTypeEq = Eq + UnknownTypeAst
     else None ()
 end
 
+lang SharedTypeEq = Eq + SharedTypeAst
+  sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) +=
+  | TySharedUnknown _ ->
+    match unwrapType lhs with TySharedUnknown _ then Some free
+    else None ()
+end
+
 lang BoolTypeEq = Eq + BoolTypeAst
   sem eqTypeH (typeEnv : EqTypeEnv) (free : EqTypeFreeEnv) (lhs : Type) +=
   | TyBool _ ->
@@ -780,7 +787,7 @@ lang MExprEq =
   CharPatEq + BoolPatEq + AndPatEq + OrPatEq + NotPatEq
 
   -- Types
-  + UnknownTypeEq + BoolTypeEq + IntTypeEq + FloatTypeEq + CharTypeEq +
+  + UnknownTypeEq + SharedTypeEq + BoolTypeEq + IntTypeEq + FloatTypeEq + CharTypeEq +
   FunTypeEq + SeqTypeEq + RecordTypeEq + VariantTypeEq + ConTypeEq + DataTypeEq +
   VarTypeEq + AllTypeEq + AppTypeEq + TensorTypeEq + AliasTypeEq +
 
