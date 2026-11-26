@@ -12,6 +12,9 @@ include "seq.mc"
 include "mexpr/pprint.mc"
 include "mexpr/ast-builder.mc"
 include "bool.mc"
+include "set.mc"
+include "lazy.mc"
+include "mlang/lazy-ast.mc"
 
 lang MExprSubstitute = MExprAst
   -- Applies the substitutions of the provided map to the identifiers of the
@@ -91,6 +94,15 @@ lang MExprSubstitute = MExprAst
   | p ->
     let p = smap_Pat_Pat (substituteIdentifiersPat replacements) p in
     withTypePat (substituteIdentifiersType replacements (tyPat p)) p
+end
+
+lang LazySubstitute = LazyAst + MExprSubstitute
+  sem substituteIdentifiersExpr replacements +=
+  | TmLazy t -> TmLazy
+    { t with thunk = lazyMap (substituteIdentifiersExpr replacements) t.thunk
+    , freeVars = setMap nameCmp (subIdent replacements) t.freeVars
+    , ty = substituteIdentifiersType replacements t.ty
+    }
 end
 
 lang MExprFindSym = MExprAst

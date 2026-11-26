@@ -1389,6 +1389,17 @@ lang UnknownTypeAst = Ast
   | ty -> Some ty
 end
 
+lang SharedTypeAst = Ast
+  syn Type +=
+  | TySharedUnknown {info : Info}
+
+  sem tyWithInfo info +=
+  | TySharedUnknown t -> TySharedUnknown {t with info = info}
+
+  sem infoTy +=
+  | TySharedUnknown r -> r.info
+end
+
 lang BoolTypeAst = Ast
   syn Type +=
   | TyBool {info  : Info}
@@ -1717,7 +1728,7 @@ lang MExprAst =
   BoolPat + AndPat + OrPat + NotPat +
 
   -- Types
-  UnknownTypeAst + BoolTypeAst + IntTypeAst + FloatTypeAst + CharTypeAst +
+  UnknownTypeAst + SharedTypeAst + BoolTypeAst + IntTypeAst + FloatTypeAst + CharTypeAst +
   FunTypeAst + SeqTypeAst + RecordTypeAst + VariantTypeAst + ConTypeAst +
   DataTypeAst + VarTypeAst + AppTypeAst + TensorTypeAst + AllTypeAst +
   AliasTypeAst +
