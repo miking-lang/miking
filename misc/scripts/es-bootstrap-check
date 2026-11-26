@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+
+# Determines if the committed es-boot is up to date by checking if a rebuilt version produces the same final executable.
+# Takes a positional argument for the mi exe to use for rebuilding es-boot.
+# If no positional argument, a temporary mi exe will be bootstrapped and used instead.
+
+set -euo pipefail
+
+export MCORE_LIBS=stdlib=$(pwd)/src/stdlib
+export OCAMLPATH=$(pwd)/build/lib
+
+mi="${1:-build/mi-tmp2}"
+
+if [[ $# -lt 1 ]]; then
+    echo "- Bootstrap"
+    node --stack-size=4096 --max-old-space-size=16384 src/es-boot/mi-es-lite-node.mjs compile src/main/mi.mc --output build/mi-tmp1
+    build/mi-tmp1 compile src/main/mi.mc --native-parser --output build/mi-tmp2
+else
+    echo "- Using existing $mi"
+fi
+
+echo "- Rebuild es-boot"
+$mi compile src/main/mi-es-lite.mc --to-es --output build/mi-tmp3.mjs
+
+echo "- Bootstrap again"
+node --stack-size=4096 --max-old-space-size=16384 misc/node/node-run.mjs build/mi-tmp3.mjs compile src/main/mi.mc --output build/mi-tmp4
+build/mi-tmp4 compile src/main/mi.mc --native-parser --output build/mi-tmp5
+
+echo "- Compare"
+cmp build/mi-tmp2 build/mi-tmp5

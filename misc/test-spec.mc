@@ -7,7 +7,7 @@ use TestSpec in
 -- `misc/scripts/parser-compare` is a standalone tool
 let parserCompareSub =
   ( 'p'
-  , { tup = {actual = "$(ROOT)/misc/scripts/parser-compare", deps = ["$(ROOT)/misc/scripts/<parser-compare>"]}
+  , { tup = {actual = "$(ROOT)/src/parser-compare", deps = ["$(ROOT)/src/<parser-compare>"]}
     , make = {actual = "$(ROOT)/misc/scripts/parser-compare", deps = ["misc/scripts/parser-compare"]}
     , friendly = "PARSER-COMPARE"
     }
@@ -83,10 +83,31 @@ let bootstrapped : Substituter =
     , esNodeRunSub
     ]
   } in
+let esBootstrapped : Substituter =
+  { flag = "es-boot"
+  , description = "Build a new `mi` by bootstrapping through es-boot, then use it for tests."
+  , substitutions = mapFromSeq cmpChar
+    [ ( 'm'
+      , { tup =
+          { actual = "MCORE_LIBS=stdlib=$(ROOT)/src/stdlib OCAMLPATH=$(ROOT)/build/src/lib${OCAMLPATH:+:}$OCAMLPATH %<mi-es>"
+          , deps = ["$(ROOT)/src/<mi-es>", "$(ROOT)/src/<boot-lib>"]
+          }
+        , make =
+          { actual = "MCORE_LIBS=stdlib=$(ROOT)/src/stdlib OCAMLPATH=$(ROOT)/build/lib$${OCAMLPATH:+:}$$OCAMLPATH $(ROOT)/build/mi-es"
+          , deps = ["build/mi-es"]
+          }
+        , friendly = "ES-BOOT MI"
+        }
+      )
+    , parserCompareSub
+    , esNodeRunSub
+    ]
+  } in
 
 let substituters =
   [ cheated
   , bootstrapped
+  , esBootstrapped
   , installed
   ] in
 let directories = ["src"] in
@@ -466,7 +487,7 @@ testMain substituters directories location (lam api.
     } in
 
   api.tests [node]
-    (and (or (dirIs "src/test/ecmascript") (dirIs "src/stdlib"))
+    (and (or (dirIs "src/test/ecmascript") (or (dirIs "src/stdlib") (dirIs "src/stdlib/ecmascript")))
          (strEndsWith ".mc"))
     [(esCompile, succ), (esRun, succ), (esDiff, succ)];
 
